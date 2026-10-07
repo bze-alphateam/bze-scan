@@ -1,0 +1,27 @@
+# Go
+backend/bze-scan
+backend/*.out
+backend/*.test
+
+# Node
+node_modules/
+ui/dist/
+ui/.next/
+ui/out/
+*.tsbuildinfo
+coverage/
+*.log
+
+# Environment files: ignore real values, keep templates
+.env
+.env.*
+!.env.dist
+
+# Local data of the docker setup
+docker/.data/
+
+# Editors and tooling
+.idea/
+.vscode/
+.DS_Store
+.claude/
