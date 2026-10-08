@@ -1,0 +1,62 @@
+// Package server builds the echo instance of the HTTP API and runs it with a
+// graceful shutdown. It lives outside cmd/ so acceptance tests can start the
+// real server in-process.
+package server
+
+import (
+	"context"
+	"net"
+	"time"
+
+	"github.com/labstack/echo/v5"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/bze-alphateam/bze-scan/backend/app/controller"
+	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+)
+
+// ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
+const ShutdownTimeout = 10 * time.Second
+
+// New wires the echo instance: global middleware, the error handler and the
+// routes. Any unknown path answers 404 with the JSON error envelope.
+func New() *echo.Echo {
+	e := echo.New()
+	e.HTTPErrorHandler = appmw.ErrorHandler
+
+	e.Use(appmw.RequestID())
+	e.Use(appmw.Recover())
+
+	health := controller.NewHealthController()
+	e.GET("/health", health.Health)
+
+	return e
+}
+
+// Run serves e on addr until ctx is cancelled, then stops accepting
+// connections and drains in-flight requests for up to ShutdownTimeout. It
+// returns nil after a clean shutdown and an error when the listener cannot be
+// opened. onListen, when not nil, receives the bound address (useful with
+// port 0 in tests).
+func Run(ctx context.Context, e *echo.Echo, addr string, onListen func(net.Addr)) error {
+	sc := echo.StartConfig{
+		Address:         addr,
+		HideBanner:      true,
+		HidePort:        true,
+		GracefulTimeout: ShutdownTimeout,
+		ListenerAddrFunc: func(a net.Addr) {
+			log.WithField("addr", a.String()).Info("HTTP server listening")
+			if onListen != nil {
+				onListen(a)
+			}
+		},
+		OnShutdownError: func(err error) {
+			log.WithError(err).Warn("HTTP server did not drain within the shutdown timeout")
+		},
+	}
+	if err := sc.Start(ctx, e); err != nil {
+		return err
+	}
+	log.Info("HTTP server stopped")
+	return nil
+}
