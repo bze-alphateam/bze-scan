@@ -1,0 +1,6 @@
+version: "2"
+
+run:
+  # Lint the acceptance tests too.
+  build-tags:
+    - e2e
