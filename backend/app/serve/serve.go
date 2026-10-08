@@ -1,5 +1,6 @@
-// Package serve runs the production process: the HTTP API and, when
-// INDEXER_ENABLED is set, the live indexer, as components of one errgroup.
+// Package serve runs the production process: the HTTP API over the explorer
+// tables and, when INDEXER_ENABLED is set, the live indexer, as components of
+// one errgroup.
 // It lives outside cmd/ so acceptance tests can run the real wiring
 // in-process.
 package serve
@@ -13,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
@@ -48,7 +50,22 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		"indexer_enabled": cfg.IndexerEnabled,
 	}).Info("starting bze-scan")
 
-	e := server.New()
+	if err := cfg.RequireDatabase(); err != nil {
+		return err
+	}
+	// The API's own pool; the live writer has another, so a burst of reads
+	// never delays a block. Connections are opened on first use.
+	apiPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("API pool: %w", err)
+	}
+	defer apiPool.Close()
+
+	e := server.New(server.Deps{
+		Explorer:           repository.NewExplorer(apiPool),
+		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
+		Log:                log.StandardLogger(),
+	})
 	components := []component{
 		{name: "http", run: func(ctx context.Context) error {
 			return server.Run(ctx, e, cfg.HTTPAddr, opts.OnListen)
@@ -56,9 +73,6 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 
 	if cfg.IndexerEnabled {
-		if err := cfg.RequireDatabase(); err != nil {
-			return fmt.Errorf("%w (or set INDEXER_ENABLED=false)", err)
-		}
 		nodeClient := node.New(cfg.NodeRPCURL)
 		if err := checkChainID(ctx, nodeClient, cfg.ChainID); err != nil {
 			return err
