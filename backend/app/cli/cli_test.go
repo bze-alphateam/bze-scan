@@ -1,4 +1,4 @@
-package main
+package cli_test
 
 import (
 	"bytes"
@@ -10,10 +10,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bze-alphateam/bze-scan/backend/app/cli"
 )
 
 func TestHelpListsCommands(t *testing.T) {
-	root := newRootCmd()
+	root := cli.NewRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetArgs([]string{"--help"})
@@ -28,7 +30,7 @@ func TestMigrateCommandsRequireDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 
 	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}} {
-		root := newRootCmd()
+		root := cli.NewRootCmd()
 		root.SetArgs(args)
 		root.SetOut(&bytes.Buffer{})
 		root.SetErr(&bytes.Buffer{})
@@ -41,7 +43,7 @@ func TestMigrateCommandsRequireDatabaseURL(t *testing.T) {
 
 func TestMigrateDownRejectsInvalidCount(t *testing.T) {
 	for _, n := range []string{"0", "1.5", "all"} {
-		root := newRootCmd()
+		root := cli.NewRootCmd()
 		root.SetArgs([]string{"migrate", "down", n})
 		root.SetOut(&bytes.Buffer{})
 		root.SetErr(&bytes.Buffer{})
@@ -56,7 +58,7 @@ func TestServeRejectsInvalidConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("LOG_FORMAT", "xml")
 
-	root := newRootCmd()
+	root := cli.NewRootCmd()
 	root.SetArgs([]string{"serve"})
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
@@ -72,7 +74,7 @@ func TestServeWithIndexerRequiresDatabaseURL(t *testing.T) {
 	t.Setenv("INDEXER_ENABLED", "true")
 	t.Setenv("LOG_LEVEL", "warn")
 
-	root := newRootCmd()
+	root := cli.NewRootCmd()
 	root.SetArgs([]string{"serve"})
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
@@ -94,7 +96,7 @@ func TestServeStopsCleanlyOnSIGTERM(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "text")
 	t.Setenv("INDEXER_ENABLED", "false")
 
-	root := newRootCmd()
+	root := cli.NewRootCmd()
 	root.SetArgs([]string{"serve"})
 	done := make(chan error, 1)
 	go func() { done <- root.Execute() }()

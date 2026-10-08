@@ -30,19 +30,27 @@ const maxBody = 64 << 20
 // block (CometBFT's BlockIDFlagCommit).
 const BlockIDFlagCommit = 2
 
+// Doer sends HTTP requests; *http.Client satisfies it.
+type Doer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // Client calls one CometBFT RPC endpoint.
 type Client struct {
 	base string
-	http *http.Client
+	http Doer
 }
 
 // New returns a client for the RPC endpoint at baseURL (scheme, host and
-// port, e.g. http://127.0.0.1:26657).
+// port, e.g. http://127.0.0.1:26657) over an http.Client with Timeout.
 func New(baseURL string) *Client {
-	return &Client{
-		base: strings.TrimRight(baseURL, "/"),
-		http: &http.Client{Timeout: Timeout},
-	}
+	return NewWithDoer(baseURL, &http.Client{Timeout: Timeout})
+}
+
+// NewWithDoer returns a client for baseURL that sends its requests through
+// doer.
+func NewWithDoer(baseURL string, doer Doer) *Client {
+	return &Client{base: strings.TrimRight(baseURL, "/"), http: doer}
 }
 
 // Status is the part of /status the backend uses.

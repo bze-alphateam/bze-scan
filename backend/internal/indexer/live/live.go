@@ -9,10 +9,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -28,12 +26,41 @@ type Node interface {
 	Commit(ctx context.Context, height int64) (*node.Commit, []byte, error)
 }
 
+// Listener opens subscriptions to the block notifications of the sink.
+type Listener interface {
+	// Listen connects and starts listening.
+	Listen(ctx context.Context) (Subscription, error)
+}
+
+// Subscription is one listening connection.
+type Subscription interface {
+	// Wait blocks until the next notification and returns its height (0
+	// when the payload is not a height). An error means the connection is
+	// gone.
+	Wait(ctx context.Context) (int64, error)
+	// Close closes the connection.
+	Close()
+}
+
 // Store is the part of the live writer the indexer uses.
 type Store interface {
 	Cursor(ctx context.Context) (int64, bool, error)
 	LiveFloor(ctx context.Context) (int64, bool, error)
 	WriteBlock(ctx context.Context, ents *transform.Entities) error
 	RecordFailure(ctx context.Context, height int64, attempts int, cause error) error
+}
+
+// Transformer turns the node's answers for one height into entities.
+type Transformer interface {
+	Transform(in transform.Input) (*transform.Entities, error)
+}
+
+// Deps are the indexer's dependencies.
+type Deps struct {
+	Listener    Listener
+	Node        Node
+	Store       Store
+	Transformer Transformer
 }
 
 // Defaults of Config.
@@ -51,8 +78,6 @@ var (
 
 // Config of an Indexer. Zero values take the defaults above.
 type Config struct {
-	// DatabaseURL is where the listening connection goes.
-	DatabaseURL string
 	// RetryDelays are the waits between attempts at one height; the number of
 	// attempts is len(RetryDelays)+1.
 	RetryDelays   []time.Duration
@@ -66,13 +91,15 @@ type Config struct {
 // Indexer is the live indexer. Run it once per database.
 type Indexer struct {
 	cfg         Config
+	listener    Listener
 	node        Node
 	store       Store
-	transformer *transform.Transformer
+	transformer Transformer
 }
 
-// New returns an indexer reading n and writing through store.
-func New(cfg Config, n Node, store Store) *Indexer {
+// New returns an indexer woken by deps.Listener, reading deps.Node,
+// transforming with deps.Transformer and writing through deps.Store.
+func New(cfg Config, deps Deps) *Indexer {
 	if cfg.RetryDelays == nil {
 		cfg.RetryDelays = DefaultRetryDelays
 	}
@@ -88,7 +115,7 @@ func New(cfg Config, n Node, store Store) *Indexer {
 	if cfg.Sleep == nil {
 		cfg.Sleep = sleep
 	}
-	return &Indexer{cfg: cfg, node: n, store: store, transformer: transform.New()}
+	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer}
 }
 
 // Run listens and indexes until ctx is cancelled, reconnecting with backoff
@@ -110,23 +137,14 @@ func (ix *Indexer) Run(ctx context.Context) error {
 	}
 }
 
-// session connects, listens and runs a pass at once and at every
-// notification, until the connection or a pass fails. connected is called
-// once the LISTEN is in place.
+// session listens and runs a pass at once and at every notification, until
+// the connection or a pass fails. connected is called once listening.
 func (ix *Indexer) session(ctx context.Context, connected func()) error {
-	conn, err := pgx.Connect(ctx, ix.cfg.DatabaseURL)
+	sub, err := ix.listener.Listen(ctx)
 	if err != nil {
-		return fmt.Errorf("connect: %w", err)
+		return err
 	}
-	defer func() {
-		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		_ = conn.Close(closeCtx)
-	}()
-
-	if _, err := conn.Exec(ctx, "LISTEN "+migrations.NotifyChannel); err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
+	defer sub.Close()
 	log.WithField("channel", migrations.NotifyChannel).Info("live indexer listening")
 	connected()
 
@@ -136,14 +154,9 @@ func (ix *Indexer) session(ctx context.Context, connected func()) error {
 		return err
 	}
 	for {
-		n, err := conn.WaitForNotification(ctx)
+		h, err := sub.Wait(ctx)
 		if err != nil {
 			return fmt.Errorf("wait for notification: %w", err)
-		}
-		h, err := strconv.ParseInt(n.Payload, 10, 64)
-		if err != nil {
-			log.WithField("payload", n.Payload).Warn("live indexer: notification without a height")
-			h = 0
 		}
 		if err := ix.pass(ctx, h); err != nil {
 			return err
@@ -151,7 +164,7 @@ func (ix *Indexer) session(ctx context.Context, connected func()) error {
 	}
 }
 
-// Range returns the heights a pass indexes, [from, to], or ok false when
+// heightRange returns the heights a pass indexes, [from, to], or ok false when
 // there is nothing to do. cursor is the last indexed height (hasCursor false
 // before the first write), floor the live floor (hasFloor false before the
 // first write), notified the height of the notification that woke the pass
@@ -161,7 +174,7 @@ func (ix *Indexer) session(ctx context.Context, connected func()) error {
 // and begins at the target: the live side starts at the chain's head and the
 // backfill owns everything below. The live side never indexes below the
 // floor.
-func Range(cursor int64, hasCursor bool, floor int64, hasFloor bool, notified, tip int64) (from, to int64, ok bool) {
+func heightRange(cursor int64, hasCursor bool, floor int64, hasFloor bool, notified, tip int64) (from, to int64, ok bool) {
 	to = max(notified, tip)
 	if to <= 0 {
 		return 0, 0, false
@@ -193,7 +206,7 @@ func (ix *Indexer) pass(ctx context.Context, notified int64) error {
 	if err != nil {
 		return err
 	}
-	from, to, ok := Range(cursor, hasCursor, floor, hasFloor, notified, st.LatestBlockHeight)
+	from, to, ok := heightRange(cursor, hasCursor, floor, hasFloor, notified, st.LatestBlockHeight)
 	if !ok {
 		return nil
 	}

@@ -1,4 +1,4 @@
-package transform
+package transform_test
 
 import (
 	"context"
@@ -13,8 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
+	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files from the transformer's output")
@@ -37,7 +39,7 @@ type goldenBlock struct {
 	SignaturesPowerPct  *string         `json:"signatures_power_pct"`
 }
 
-func fetchInput(t *testing.T, n *fakenode.Node, h int64) Input {
+func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	t.Helper()
 	c := node.New(n.URL)
 	ctx := context.Background()
@@ -47,12 +49,12 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) Input {
 	require.NoError(t, err)
 	cm, _, err := c.Commit(ctx, h)
 	require.NoError(t, err)
-	return Input{Block: b, Results: r, Commit: cm}
+	return transform.Input{Block: b, Results: r, Commit: cm}
 }
 
 func TestBlockGolden(t *testing.T) {
 	n := fakenode.New(t)
-	tr := New()
+	tr := transform.New()
 	for _, h := range n.FixtureHeights() {
 		t.Run(fmt.Sprint(h), func(t *testing.T) {
 			ents, err := tr.Transform(fetchInput(t, n, h))
@@ -87,14 +89,19 @@ func TestBlockGolden(t *testing.T) {
 func TestBlockSizeIsTheRawBlockObject(t *testing.T) {
 	n := fakenode.New(t)
 	in := fetchInput(t, n, 24998316)
-	ents, err := New().Transform(in)
+	ents, err := transform.New().Transform(in)
 	require.NoError(t, err)
 	assert.Equal(t, len(in.Block.Raw), ents.Blocks[0].SizeBytes)
 	assert.Positive(t, ents.Blocks[0].SizeBytes)
 }
 
-func baseInput() Input {
-	return Input{
+var (
+	feeCollector = chain.ModuleAddress(chain.FeeCollector)
+	distribution = chain.ModuleAddress(chain.Distribution)
+)
+
+func baseInput() transform.Input {
+	return transform.Input{
 		Block:   &node.Block{Height: 10, Time: time.Unix(100, 0), Hash: "AB", Txs: []string{"a", "b"}, Raw: json.RawMessage(`{}`)},
 		Results: &node.BlockResults{Height: 10, TxsResults: []node.TxResult{{Code: 0}, {Code: 5}}},
 		Commit: &node.Commit{Height: 10, Signatures: []node.CommitSig{
@@ -110,13 +117,13 @@ func transfer(sender, recipient, amount string) node.Event {
 }
 
 func TestCountsAndFees(t *testing.T) {
-	tr := New()
+	tr := transform.New()
 	in := baseInput()
 	in.Results.FinalizeBlockEvents = []node.Event{
-		transfer(tr.feeCollector, tr.distribution, "5ubze,7ibc/ABC"),
-		transfer(tr.feeCollector, "bze1someoneelse", "100ubze"),
-		transfer("bze1someoneelse", tr.distribution, "100ubze"),
-		transfer(tr.feeCollector, tr.distribution, "3ubze"),
+		transfer(feeCollector, distribution, "5ubze,7ibc/ABC"),
+		transfer(feeCollector, "bze1someoneelse", "100ubze"),
+		transfer("bze1someoneelse", distribution, "100ubze"),
+		transfer(feeCollector, distribution, "3ubze"),
 	}
 	ents, err := tr.Transform(in)
 	require.NoError(t, err)
@@ -134,7 +141,7 @@ func TestCountsAndFees(t *testing.T) {
 }
 
 func TestNoFeeTransferIsNull(t *testing.T) {
-	ents, err := New().Transform(baseInput())
+	ents, err := transform.New().Transform(baseInput())
 	require.NoError(t, err)
 	fees, err := ents.Blocks[0].FeesDistributedJSON()
 	require.NoError(t, err)
@@ -142,20 +149,20 @@ func TestNoFeeTransferIsNull(t *testing.T) {
 }
 
 func TestRejectsInconsistentInput(t *testing.T) {
-	tr := New()
-	cases := map[string]func(in *Input){
-		"missing commit": func(in *Input) { in.Commit = nil },
-		"results height": func(in *Input) { in.Results.Height = 11 },
-		"commit height":  func(in *Input) { in.Commit.Height = 9 },
-		"result count":   func(in *Input) { in.Results.TxsResults = in.Results.TxsResults[:1] },
-		"bad mint amount": func(in *Input) {
+	tr := transform.New()
+	cases := map[string]func(in *transform.Input){
+		"missing commit": func(in *transform.Input) { in.Commit = nil },
+		"results height": func(in *transform.Input) { in.Results.Height = 11 },
+		"commit height":  func(in *transform.Input) { in.Commit.Height = 9 },
+		"result count":   func(in *transform.Input) { in.Results.TxsResults = in.Results.TxsResults[:1] },
+		"bad mint amount": func(in *transform.Input) {
 			in.Results.FinalizeBlockEvents = []node.Event{{Type: "mint", Attributes: []node.Attribute{{Key: "amount", Value: "1.5"}}}}
 		},
-		"bad mint inflation": func(in *Input) {
+		"bad mint inflation": func(in *transform.Input) {
 			in.Results.FinalizeBlockEvents = []node.Event{{Type: "mint", Attributes: []node.Attribute{{Key: "inflation", Value: "abc"}}}}
 		},
-		"bad fee distribution": func(in *Input) {
-			in.Results.FinalizeBlockEvents = []node.Event{transfer(tr.feeCollector, tr.distribution, "five ubze")}
+		"bad fee distribution": func(in *transform.Input) {
+			in.Results.FinalizeBlockEvents = []node.Event{transfer(feeCollector, distribution, "five ubze")}
 		},
 	}
 	for name, mutate := range cases {

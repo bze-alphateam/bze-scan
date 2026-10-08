@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
@@ -23,8 +25,7 @@ import (
 type Options struct {
 	// OnListen receives the HTTP server's bound address.
 	OnListen func(net.Addr)
-	// Live overrides the live indexer's tuning (retries, backoff, clock);
-	// DatabaseURL is always taken from the configuration.
+	// Live overrides the live indexer's tuning (retries, backoff, clock).
 	Live live.Config
 }
 
@@ -61,17 +62,20 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		if err := checkChainID(ctx, nodeClient, cfg.ChainID); err != nil {
 			return err
 		}
-		w, err := writer.NewLiveWriter(ctx, cfg.DatabaseURL)
+		pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 		if err != nil {
-			return err
+			return fmt.Errorf("live writer pool: %w", err)
 		}
 		// Closed after every component has returned: the indexer finishes
 		// the height in flight first.
-		defer w.Close()
+		defer pool.Close()
 
-		lc := opts.Live
-		lc.DatabaseURL = cfg.DatabaseURL
-		ix := live.New(lc, nodeClient, w)
+		ix := live.New(opts.Live, live.Deps{
+			Listener:    live.NewPGListener(cfg.DatabaseURL),
+			Node:        nodeClient,
+			Store:       writer.NewLiveWriter(pool),
+			Transformer: transform.New(),
+		})
 		components = append(components, component{name: "live indexer", run: ix.Run})
 	} else {
 		log.Info("live indexer disabled (INDEXER_ENABLED=false)")

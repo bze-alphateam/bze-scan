@@ -1,6 +1,6 @@
 //go:build e2e
 
-package e2e
+package e2e_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -58,15 +59,19 @@ func newLiveEnv(t *testing.T, tip int64) *liveEnv {
 
 func (e *liveEnv) start(t *testing.T) {
 	t.Helper()
-	w, err := writer.NewLiveWriter(context.Background(), e.url)
+	pool, err := pgxpool.New(context.Background(), e.url)
 	require.NoError(t, err)
 
 	ix := live.New(live.Config{
-		DatabaseURL:  e.url,
 		RetryDelays:  []time.Duration{10 * time.Millisecond, 20 * time.Millisecond},
 		ReconnectMin: 50 * time.Millisecond,
 		ReconnectMax: 200 * time.Millisecond,
-	}, node.New(e.node.URL), w)
+	}, live.Deps{
+		Listener:    live.NewPGListener(e.url),
+		Node:        node.New(e.node.URL),
+		Store:       writer.NewLiveWriter(pool),
+		Transformer: transform.New(),
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -84,7 +89,7 @@ func (e *liveEnv) start(t *testing.T) {
 		case <-time.After(15 * time.Second):
 			t.Error("live indexer did not stop")
 		}
-		w.Close()
+		pool.Close()
 	}
 	t.Cleanup(e.stop)
 }
@@ -260,9 +265,10 @@ func TestLiveWriterIsIdempotentAndTopsUpPartitions(t *testing.T) {
 	db := connect(t, url)
 	ctx := context.Background()
 
-	w, err := writer.NewLiveWriter(ctx, url)
+	pool, err := pgxpool.New(ctx, url)
 	require.NoError(t, err)
-	t.Cleanup(w.Close)
+	t.Cleanup(pool.Close)
+	w := writer.NewLiveWriter(pool)
 
 	block := func(h int64) *transform.Entities {
 		return &transform.Entities{Blocks: []transform.Block{{

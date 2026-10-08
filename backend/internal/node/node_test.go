@@ -1,16 +1,19 @@
-package node
+package node_test
 
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
@@ -18,7 +21,7 @@ const fixtureHeight = 24998316
 
 func TestStatus(t *testing.T) {
 	n := fakenode.New(t)
-	st, raw, err := New(n.URL).Status(context.Background())
+	st, raw, err := node.New(n.URL).Status(context.Background())
 	require.NoError(t, err)
 
 	assert.Equal(t, "beezee-1", st.Network)
@@ -27,14 +30,14 @@ func TestStatus(t *testing.T) {
 	assert.NotEmpty(t, raw)
 
 	n.SetStatusHeight(fixtureHeight)
-	st, _, err = New(n.URL + "/").Status(context.Background())
+	st, _, err = node.New(n.URL + "/").Status(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, int64(fixtureHeight), st.LatestBlockHeight)
 }
 
 func TestBlock(t *testing.T) {
 	n := fakenode.New(t)
-	b, raw, err := New(n.URL).Block(context.Background(), fixtureHeight)
+	b, raw, err := node.New(n.URL).Block(context.Background(), fixtureHeight)
 	require.NoError(t, err)
 
 	want, err := n.Fixture(fakenode.RouteBlock, fixtureHeight)
@@ -51,7 +54,7 @@ func TestBlock(t *testing.T) {
 
 func TestBlockResults(t *testing.T) {
 	n := fakenode.New(t)
-	r, raw, err := New(n.URL).BlockResults(context.Background(), fixtureHeight)
+	r, raw, err := node.New(n.URL).BlockResults(context.Background(), fixtureHeight)
 	require.NoError(t, err)
 
 	want, err := n.Fixture(fakenode.RouteBlockResults, fixtureHeight)
@@ -65,7 +68,7 @@ func TestBlockResults(t *testing.T) {
 	assert.Positive(t, r.TxsResults[0].GasWanted)
 	assert.Positive(t, r.TxsResults[0].GasUsed)
 
-	var mint *Event
+	var mint *node.Event
 	for i := range r.FinalizeBlockEvents {
 		if r.FinalizeBlockEvents[i].Type == "mint" {
 			mint = &r.FinalizeBlockEvents[i]
@@ -81,7 +84,7 @@ func TestBlockResults(t *testing.T) {
 
 func TestCommit(t *testing.T) {
 	n := fakenode.New(t)
-	c, raw, err := New(n.URL).Commit(context.Background(), fixtureHeight)
+	c, raw, err := node.New(n.URL).Commit(context.Background(), fixtureHeight)
 	require.NoError(t, err)
 
 	want, err := n.Fixture(fakenode.RouteCommit, fixtureHeight)
@@ -90,29 +93,29 @@ func TestCommit(t *testing.T) {
 
 	assert.Equal(t, int64(fixtureHeight), c.Height)
 	require.Len(t, c.Signatures, 22)
-	assert.Equal(t, BlockIDFlagCommit, c.Signatures[0].BlockIDFlag)
+	assert.Equal(t, node.BlockIDFlagCommit, c.Signatures[0].BlockIDFlag)
 	assert.Equal(t, "101DF52F658F4EF69DA0333BC4FB519E36DC54CA", c.Signatures[0].ValidatorAddress)
 }
 
 func TestAboveTipError(t *testing.T) {
 	n := fakenode.New(t)
-	c := New(n.URL)
+	c := node.New(n.URL)
 	ctx := context.Background()
 
 	_, _, err := c.Block(ctx, 1)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrAboveTip)
-	assert.NotErrorIs(t, err, ErrPruned)
+	assert.ErrorIs(t, err, node.ErrAboveTip)
+	assert.NotErrorIs(t, err, node.ErrPruned)
 
-	var rpcErr *RPCError
+	var rpcErr *node.RPCError
 	require.ErrorAs(t, err, &rpcErr)
 	assert.Equal(t, -32603, rpcErr.Code)
 	assert.Equal(t, "block", rpcErr.Route)
 
 	_, _, err = c.BlockResults(ctx, 1)
-	assert.ErrorIs(t, err, ErrAboveTip)
+	assert.ErrorIs(t, err, node.ErrAboveTip)
 	_, _, err = c.Commit(ctx, 1)
-	assert.ErrorIs(t, err, ErrAboveTip)
+	assert.ErrorIs(t, err, node.ErrAboveTip)
 }
 
 // The pruned answer of a CometBFT 0.38 node (rpc/core/env.go getHeight).
@@ -125,10 +128,10 @@ func TestPrunedError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, err := New(srv.URL).Block(context.Background(), 100)
+	_, _, err := node.New(srv.URL).Block(context.Background(), 100)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrPruned)
-	assert.NotErrorIs(t, err, ErrAboveTip)
+	assert.ErrorIs(t, err, node.ErrPruned)
+	assert.NotErrorIs(t, err, node.ErrAboveTip)
 }
 
 func TestOtherErrors(t *testing.T) {
@@ -149,9 +152,9 @@ func TestOtherErrors(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 
-			_, _, err := New(srv.URL).Block(context.Background(), 100)
+			_, _, err := node.New(srv.URL).Block(context.Background(), 100)
 			require.Error(t, err)
-			assert.False(t, errors.Is(err, ErrAboveTip) || errors.Is(err, ErrPruned))
+			assert.False(t, errors.Is(err, node.ErrAboveTip) || errors.Is(err, node.ErrPruned))
 		})
 	}
 }
@@ -165,7 +168,7 @@ func TestRequestsByHeightOnly(t *testing.T) {
 	}))
 	t.Cleanup(proxy.Close)
 
-	c := New(proxy.URL)
+	c := node.New(proxy.URL)
 	ctx := context.Background()
 	_, _, err := c.Status(ctx)
 	require.NoError(t, err)
@@ -182,4 +185,37 @@ func TestRequestsByHeightOnly(t *testing.T) {
 		"/block_results?height=24998316",
 		"/commit?height=24998316",
 	}, paths)
+}
+
+// mockDoer records requests and answers with a canned body.
+type mockDoer struct {
+	reqs []*http.Request
+	body string
+	err  error
+}
+
+func (d *mockDoer) Do(req *http.Request) (*http.Response, error) {
+	d.reqs = append(d.reqs, req)
+	if d.err != nil {
+		return nil, d.err
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(d.body))}, nil
+}
+
+func TestSendsThroughTheDoer(t *testing.T) {
+	d := &mockDoer{body: `{"jsonrpc":"2.0","id":-1,"result":{"node_info":{"network":"beezee-1"},"sync_info":{"latest_block_height":"7","latest_block_time":"2026-10-08T00:00:00Z"}}}`}
+	st, _, err := node.NewWithDoer("http://node:26657/", d).Status(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), st.LatestBlockHeight)
+	require.Len(t, d.reqs, 1)
+	assert.Equal(t, "http://node:26657/status", d.reqs[0].URL.String())
+	assert.Equal(t, http.MethodGet, d.reqs[0].Method)
+}
+
+func TestTransportErrorIsReturned(t *testing.T) {
+	d := &mockDoer{err: errors.New("dial tcp: connection refused")}
+	_, _, err := node.NewWithDoer("http://node:26657", d).Block(context.Background(), 5)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "connection refused")
+	assert.False(t, errors.Is(err, node.ErrAboveTip) || errors.Is(err, node.ErrPruned))
 }

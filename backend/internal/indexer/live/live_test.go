@@ -1,9 +1,10 @@
-package live
+package live_test
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -11,48 +12,152 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
-	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
 
-func TestRange(t *testing.T) {
-	cases := []struct {
-		name             string
-		cursor           int64
-		hasCursor        bool
-		floor            int64
-		hasFloor         bool
-		notified, tip    int64
-		wantFrom, wantTo int64
-		wantOK           bool
-	}{
-		{name: "no gap", cursor: 99, hasCursor: true, floor: 50, hasFloor: true, notified: 100, tip: 100, wantFrom: 100, wantTo: 100, wantOK: true},
-		{name: "gap", cursor: 95, hasCursor: true, floor: 50, hasFloor: true, notified: 100, tip: 100, wantFrom: 96, wantTo: 100, wantOK: true},
-		{name: "notified behind the node", cursor: 99, hasCursor: true, floor: 50, hasFloor: true, notified: 100, tip: 103, wantFrom: 100, wantTo: 103, wantOK: true},
-		{name: "node behind the notification", cursor: 99, hasCursor: true, floor: 50, hasFloor: true, notified: 102, tip: 100, wantFrom: 100, wantTo: 102, wantOK: true},
-		{name: "reconnect without notification", cursor: 90, hasCursor: true, floor: 50, hasFloor: true, notified: 0, tip: 100, wantFrom: 91, wantTo: 100, wantOK: true},
-		{name: "already up to date", cursor: 100, hasCursor: true, floor: 50, hasFloor: true, notified: 100, tip: 100, wantOK: false},
-		{name: "stale notification", cursor: 100, hasCursor: true, floor: 50, hasFloor: true, notified: 97, tip: 100, wantOK: false},
-		{name: "first start begins at the head", notified: 0, tip: 100, wantFrom: 100, wantTo: 100, wantOK: true},
-		{name: "first start on a notification", notified: 101, tip: 100, wantFrom: 101, wantTo: 101, wantOK: true},
-		{name: "never below the floor", cursor: 10, hasCursor: true, floor: 50, hasFloor: true, notified: 0, tip: 52, wantFrom: 50, wantTo: 52, wantOK: true},
-		{name: "no height known", notified: 0, tip: 0, wantOK: false},
+// mockListener hands out one mockSubscription per successful Listen call.
+// listenErrs are returned, in order, by the first Listen calls.
+type mockListener struct {
+	mu         sync.Mutex
+	listenErrs []error
+	subs       chan *mockSubscription
+}
+
+func newMockListener(listenErrs ...error) *mockListener {
+	return &mockListener{listenErrs: listenErrs, subs: make(chan *mockSubscription, 16)}
+}
+
+func (l *mockListener) Listen(context.Context) (live.Subscription, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.listenErrs) > 0 {
+		err := l.listenErrs[0]
+		l.listenErrs = l.listenErrs[1:]
+		return nil, err
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			from, to, ok := Range(tc.cursor, tc.hasCursor, tc.floor, tc.hasFloor, tc.notified, tc.tip)
-			assert.Equal(t, tc.wantOK, ok)
-			if tc.wantOK {
-				assert.Equal(t, tc.wantFrom, from)
-				assert.Equal(t, tc.wantTo, to)
-			}
-		})
+	s := &mockSubscription{notes: make(chan note, 16)}
+	l.subs <- s
+	return s, nil
+}
+
+// next returns the subscription of the next successful Listen.
+func (l *mockListener) next(t *testing.T) *mockSubscription {
+	t.Helper()
+	select {
+	case s := <-l.subs:
+		return s
+	case <-time.After(5 * time.Second):
+		t.Fatal("the indexer did not listen")
+		return nil
 	}
 }
 
-// fakeStore records the indexer's writes in memory.
-type fakeStore struct {
+type note struct {
+	height int64
+	err    error
+}
+
+type mockSubscription struct {
+	notes chan note
+}
+
+func (s *mockSubscription) notify(h int64) { s.notes <- note{height: h} }
+
+// drop makes the connection fail, as a terminated backend does.
+func (s *mockSubscription) drop() { s.notes <- note{err: errors.New("connection reset")} }
+
+func (s *mockSubscription) Wait(ctx context.Context) (int64, error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case n := <-s.notes:
+		return n.height, n.err
+	}
+}
+
+func (s *mockSubscription) Close() {}
+
+// mockNode answers every height with a minimal block. failBlock queues
+// errors for Block at a height; statusErr fails /status.
+type mockNode struct {
+	mu        sync.Mutex
+	tip       int64
+	statusErr error
+	blockErrs map[int64][]error
+	badBlocks map[int64]bool
+	calls     map[int64]int
+}
+
+func newMockNode(tip int64) *mockNode {
+	return &mockNode{tip: tip, blockErrs: map[int64][]error{}, badBlocks: map[int64]bool{}, calls: map[int64]int{}}
+}
+
+func (n *mockNode) setTip(h int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.tip = h
+}
+
+func (n *mockNode) failBlock(h int64, errs ...error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.blockErrs[h] = append(n.blockErrs[h], errs...)
+}
+
+func (n *mockNode) callsAt(h int64) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.calls[h]
+}
+
+func (n *mockNode) Status(context.Context) (*node.Status, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.statusErr != nil {
+		return nil, nil, n.statusErr
+	}
+	return &node.Status{Network: "beezee-1", LatestBlockHeight: n.tip}, nil, nil
+}
+
+func (n *mockNode) Block(_ context.Context, h int64) (*node.Block, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.calls[h]++
+	if errs := n.blockErrs[h]; len(errs) > 0 {
+		n.blockErrs[h] = errs[1:]
+		return nil, nil, errs[0]
+	}
+	hash := fmt.Sprintf("%064X", h)
+	if n.badBlocks[h] {
+		hash = "bad"
+	}
+	return &node.Block{Height: h, Time: time.Unix(h, 0), Hash: hash}, nil, nil
+}
+
+func (n *mockNode) BlockResults(_ context.Context, h int64) (*node.BlockResults, []byte, error) {
+	return &node.BlockResults{Height: h}, nil, nil
+}
+
+func (n *mockNode) Commit(_ context.Context, h int64) (*node.Commit, []byte, error) {
+	return &node.Commit{Height: h}, nil, nil
+}
+
+// mockTransformer turns a height into a bare blocks row; a block whose hash
+// is "bad" fails.
+type mockTransformer struct{}
+
+func (mockTransformer) Transform(in transform.Input) (*transform.Entities, error) {
+	if in.Block.Hash == "bad" {
+		return nil, errors.New("cannot decode")
+	}
+	return &transform.Entities{Blocks: []transform.Block{{Height: in.Block.Height}}}, nil
+}
+
+// mockStore keeps the indexer state in memory, with the writer's rules: the
+// floor is the first height written, the cursor only moves up.
+type mockStore struct {
 	mu       sync.Mutex
 	cursor   int64
 	floor    int64
@@ -65,19 +170,19 @@ type failure struct {
 	err      error
 }
 
-func (s *fakeStore) Cursor(context.Context) (int64, bool, error) {
+func (s *mockStore) Cursor(context.Context) (int64, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cursor, s.cursor > 0, nil
 }
 
-func (s *fakeStore) LiveFloor(context.Context) (int64, bool, error) {
+func (s *mockStore) LiveFloor(context.Context) (int64, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.floor, s.floor > 0, nil
 }
 
-func (s *fakeStore) WriteBlock(_ context.Context, ents *transform.Entities) error {
+func (s *mockStore) WriteBlock(_ context.Context, ents *transform.Entities) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, b := range ents.Blocks {
@@ -90,134 +195,274 @@ func (s *fakeStore) WriteBlock(_ context.Context, ents *transform.Entities) erro
 	return nil
 }
 
-func (s *fakeStore) RecordFailure(_ context.Context, h int64, attempts int, cause error) error {
+func (s *mockStore) RecordFailure(_ context.Context, h int64, attempts int, cause error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.failures == nil {
-		s.failures = map[int64]failure{}
-	}
 	s.failures[h] = failure{attempts, cause}
 	s.cursor = max(s.cursor, h)
 	return nil
 }
 
-// fakeClock records the waits instead of sleeping.
+func (s *mockStore) writtenHeights() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.written)
+}
+
+func (s *mockStore) liveFloor() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.floor
+}
+
+func (s *mockStore) failure(h int64) (failure, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, ok := s.failures[h]
+	return f, ok
+}
+
+// fakeClock records the waits instead of sleeping. A blocking clock waits
+// until the indexer is stopped instead of returning at once.
 type fakeClock struct {
-	mu    sync.Mutex
-	waits []time.Duration
+	mu       sync.Mutex
+	waits    []time.Duration
+	blocking bool
 }
 
 func (c *fakeClock) Sleep(ctx context.Context, d time.Duration) error {
 	c.mu.Lock()
 	c.waits = append(c.waits, d)
+	blocking := c.blocking
 	c.mu.Unlock()
+	if blocking {
+		<-ctx.Done()
+	}
 	return ctx.Err()
 }
 
-// flakyNode wraps the recorded node and fails Block for chosen heights a
-// chosen number of times.
-type flakyNode struct {
-	*node.Client
-	mu    sync.Mutex
-	fails map[int64]int
-	err   error
-	calls map[int64]int
+func (c *fakeClock) recorded() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.waits)
 }
 
-func (n *flakyNode) Block(ctx context.Context, h int64) (*node.Block, []byte, error) {
-	n.mu.Lock()
-	n.calls[h]++
-	if n.fails[h] > 0 {
-		n.fails[h]--
-		n.mu.Unlock()
-		return nil, nil, n.err
-	}
-	n.mu.Unlock()
-	return n.Client.Block(ctx, h)
+type harness struct {
+	listener *mockListener
+	node     *mockNode
+	store    *mockStore
+	clock    *fakeClock
+	cancel   context.CancelFunc
+	done     chan error
+	stopOnce sync.Once
 }
 
-func newIndexer(t *testing.T, fn *fakenode.Node, fails map[int64]int, err error) (*Indexer, *fakeStore, *fakeClock, *flakyNode) {
+// run starts the indexer with the store at cursor and floor (0: not set) and
+// stops it when the test ends.
+func run(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock, cursor, floor int64) *harness {
 	t.Helper()
-	store := &fakeStore{}
-	clock := &fakeClock{}
-	n := &flakyNode{Client: node.New(fn.URL), fails: fails, err: err, calls: map[int64]int{}}
-	return New(Config{Sleep: clock.Sleep}, n, store), store, clock, n
+	h := &harness{
+		listener: l, node: n, clock: clock, done: make(chan error, 1),
+		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}},
+	}
+	ix := live.New(live.Config{Sleep: clock.Sleep}, live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}})
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel = cancel
+	go func() { h.done <- ix.Run(ctx) }()
+	t.Cleanup(func() { h.stop(t) })
+	return h
 }
 
-func TestRetriesThenSucceeds(t *testing.T) {
-	ix, store, clock, n := newIndexer(t, fakenode.New(t), map[int64]int{24998316: 2}, errors.New("connection refused"))
-
-	require.NoError(t, ix.indexHeight(context.Background(), 24998316))
-	assert.Equal(t, []int64{24998316}, store.written)
-	assert.Empty(t, store.failures)
-	assert.Equal(t, 3, n.calls[24998316])
-	assert.Equal(t, []time.Duration{500 * time.Millisecond, 2 * time.Second}, clock.waits)
+func (h *harness) stop(t *testing.T) {
+	t.Helper()
+	h.stopOnce.Do(func() {
+		h.cancel()
+		select {
+		case err := <-h.done:
+			assert.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Error("the indexer did not stop")
+		}
+	})
 }
 
-func TestGivesUpAfterThreeAttempts(t *testing.T) {
-	fn := fakenode.New(t)
-	ix, store, clock, n := newIndexer(t, fn, nil, nil)
+func (h *harness) waitWritten(t *testing.T, want ...int64) {
+	t.Helper()
+	require.Eventually(t, func() bool { return slices.Equal(h.store.writtenHeights(), want) },
+		5*time.Second, 5*time.Millisecond, "want %v written", want)
+}
 
-	// 24998319 has no fixture: the fake node answers the above-tip error.
-	require.NoError(t, ix.indexHeight(context.Background(), 24998319))
-	assert.Empty(t, store.written)
-	require.Contains(t, store.failures, int64(24998319))
-	f := store.failures[24998319]
+func TestFirstStartBeginsAtTheHead(t *testing.T) {
+	h := run(t, newMockListener(), newMockNode(100), &fakeClock{}, 0, 0)
+
+	h.waitWritten(t, 100)
+	assert.Equal(t, int64(100), h.store.liveFloor())
+}
+
+func TestNotificationWithoutGap(t *testing.T) {
+	h := run(t, newMockListener(), newMockNode(99), &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	h.waitWritten(t, 100)
+}
+
+func TestNotificationAfterAGapIndexesTheGapInOrder(t *testing.T) {
+	h := run(t, newMockListener(), newMockNode(95), &fakeClock{}, 95, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	h.waitWritten(t, 96, 97, 98, 99, 100)
+}
+
+func TestNotifiedHeightBehindTheNode(t *testing.T) {
+	n := newMockNode(99)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	n.setTip(103)
+	sub.notify(100)
+	h.waitWritten(t, 100, 101, 102, 103)
+}
+
+func TestStaleNotificationChangesNothing(t *testing.T) {
+	n := newMockNode(100)
+	h := run(t, newMockListener(), n, &fakeClock{}, 100, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(97)
+	n.setTip(101)
+	sub.notify(101) // handled after the stale one
+	h.waitWritten(t, 101)
+}
+
+func TestNeverIndexesBelowTheFloor(t *testing.T) {
+	h := run(t, newMockListener(), newMockNode(52), &fakeClock{}, 10, 50)
+
+	h.waitWritten(t, 50, 51, 52)
+}
+
+func TestReconnectCatchesUpWithoutANotification(t *testing.T) {
+	n := newMockNode(100)
+	h := run(t, newMockListener(), n, &fakeClock{}, 100, 50)
+	sub := h.listener.next(t)
+
+	n.setTip(103)
+	sub.drop()
+	h.listener.next(t)
+	h.waitWritten(t, 101, 102, 103)
+	assert.Equal(t, []time.Duration{time.Second}, h.clock.recorded())
+}
+
+func TestReconnectBackoffDoublesUpToTheCapAndResets(t *testing.T) {
+	refused := errors.New("connection refused")
+	l := newMockListener()
+	h := run(t, l, newMockNode(100), &fakeClock{}, 100, 50)
+	sub := l.next(t)
+
+	l.mu.Lock()
+	l.listenErrs = []error{refused, refused, refused, refused, refused, refused}
+	l.mu.Unlock()
+	sub.drop()
+	sub = l.next(t)
+	sub.drop()
+	l.next(t)
+
+	assert.Equal(t, []time.Duration{
+		time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second,
+		30 * time.Second, 30 * time.Second, // capped
+		time.Second, // reset after a successful connect
+	}, h.clock.recorded())
+}
+
+func TestRetriesAHeightThenSucceeds(t *testing.T) {
+	n := newMockNode(99)
+	n.failBlock(100, errors.New("timeout"), errors.New("timeout"))
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	h.waitWritten(t, 100)
+	assert.Equal(t, 3, n.callsAt(100))
+	assert.Equal(t, []time.Duration{500 * time.Millisecond, 2 * time.Second}, h.clock.recorded())
+	_, failed := h.store.failure(100)
+	assert.False(t, failed)
+}
+
+func TestGivesUpAfterThreeAttemptsAndMovesOn(t *testing.T) {
+	n := newMockNode(99)
+	aboveTip := fmt.Errorf("block: %w", node.ErrAboveTip)
+	n.failBlock(100, aboveTip, aboveTip, aboveTip)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	n.setTip(101)
+	sub.notify(101)
+	h.waitWritten(t, 101)
+	f, ok := h.store.failure(100)
+	require.True(t, ok)
 	assert.Equal(t, 3, f.attempts)
 	assert.ErrorIs(t, f.err, node.ErrAboveTip)
-	assert.Equal(t, 3, n.calls[24998319])
-	assert.Equal(t, []time.Duration{500 * time.Millisecond, 2 * time.Second}, clock.waits)
-	assert.Equal(t, int64(24998319), store.cursor, "the cursor moves on")
+	assert.Equal(t, 3, n.callsAt(100))
+	assert.Equal(t, []time.Duration{500 * time.Millisecond, 2 * time.Second}, h.clock.recorded())
 }
 
 func TestPrunedHeightIsRecordedWithoutRetry(t *testing.T) {
-	ix, store, clock, n := newIndexer(t, fakenode.New(t), map[int64]int{24998316: 5}, fmt.Errorf("block: %w", node.ErrPruned))
+	n := newMockNode(99)
+	n.failBlock(100, fmt.Errorf("block: %w", node.ErrPruned))
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
 
-	require.NoError(t, ix.indexHeight(context.Background(), 24998316))
-	require.Contains(t, store.failures, int64(24998316))
-	assert.Equal(t, 1, store.failures[24998316].attempts)
-	assert.ErrorIs(t, store.failures[24998316].err, node.ErrPruned)
-	assert.Equal(t, 1, n.calls[24998316])
-	assert.Empty(t, clock.waits)
+	n.setTip(101)
+	sub.notify(101)
+	h.waitWritten(t, 101)
+	f, ok := h.store.failure(100)
+	require.True(t, ok)
+	assert.Equal(t, 1, f.attempts)
+	assert.ErrorIs(t, f.err, node.ErrPruned)
+	assert.Equal(t, 1, n.callsAt(100))
+	assert.Empty(t, h.clock.recorded())
 }
 
-func TestPassIndexesTheGapInOrderAndSkipsFailures(t *testing.T) {
-	fn := fakenode.New(t)
-	fn.SetStatusHeight(24998320)
-	ix, store, _, _ := newIndexer(t, fn, nil, nil)
-	store.cursor, store.floor = 24998316, 24998316
+func TestNodeDownRecordsNoFailure(t *testing.T) {
+	n := newMockNode(100)
+	n.statusErr = errors.New("connection refused")
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
 
-	require.NoError(t, ix.pass(context.Background(), 24998318))
-	assert.Equal(t, []int64{24998317, 24998318, 24998320}, store.written)
-	assert.Contains(t, store.failures, int64(24998319))
-	assert.Equal(t, int64(24998320), store.cursor)
+	h.listener.next(t)
+	h.listener.next(t) // the pass failed and the indexer reconnected
+	assert.Empty(t, h.store.writtenHeights())
+	assert.Zero(t, n.callsAt(100))
+	_, failed := h.store.failure(100)
+	assert.False(t, failed)
 }
 
-func TestFirstPassStartsAtTheHead(t *testing.T) {
-	fn := fakenode.New(t)
-	fn.SetStatusHeight(24998317)
-	ix, store, _, _ := newIndexer(t, fn, nil, nil)
+func TestShutdownBetweenAttemptsRecordsNoFailure(t *testing.T) {
+	n := newMockNode(99)
+	n.failBlock(100, errors.New("timeout"), errors.New("timeout"), errors.New("timeout"))
+	h := run(t, newMockListener(), n, &fakeClock{blocking: true}, 99, 50)
+	sub := h.listener.next(t)
 
-	require.NoError(t, ix.pass(context.Background(), 0))
-	assert.Equal(t, []int64{24998317}, store.written)
-	assert.Equal(t, int64(24998317), store.floor)
+	sub.notify(100)
+	require.Eventually(t, func() bool { return len(h.clock.recorded()) == 1 }, 5*time.Second, time.Millisecond,
+		"the first attempt failed and the indexer waits")
+	h.stop(t)
+	_, failed := h.store.failure(100)
+	assert.False(t, failed, "a height interrupted by shutdown is not a failure")
+	assert.Equal(t, 1, n.callsAt(100))
 }
 
-func TestPassFailsWhenTheNodeIsDown(t *testing.T) {
-	fn := fakenode.New(t)
-	ix, store, _, _ := newIndexer(t, fn, nil, nil)
-	fn.Close()
+func TestTransformErrorIsAFailedAttempt(t *testing.T) {
+	n := newMockNode(99)
+	n.badBlocks[100] = true
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
 
-	assert.Error(t, ix.pass(context.Background(), 24998316))
-	assert.Empty(t, store.written)
-	assert.Empty(t, store.failures)
-}
-
-func TestShutdownStopsBetweenAttempts(t *testing.T) {
-	ix, store, _, _ := newIndexer(t, fakenode.New(t), map[int64]int{24998316: 5}, errors.New("timeout"))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	assert.Error(t, ix.indexHeight(ctx, 24998316))
-	assert.Empty(t, store.failures, "a height interrupted by shutdown is not a failure")
+	n.setTip(101)
+	sub.notify(101)
+	h.waitWritten(t, 101)
+	f, ok := h.store.failure(100)
+	require.True(t, ok)
+	assert.Equal(t, 3, f.attempts)
+	assert.EqualError(t, f.err, "cannot decode")
 }

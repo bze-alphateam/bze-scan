@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+	"github.com/bze-alphateam/bze-scan/backend/app/server"
 )
 
 func serve(t *testing.T, e *echo.Echo, method, path string) *httptest.ResponseRecorder {
@@ -27,7 +28,7 @@ func serve(t *testing.T, e *echo.Echo, method, path string) *httptest.ResponseRe
 }
 
 func TestHealthRoute(t *testing.T) {
-	rec := serve(t, New(), http.MethodGet, "/health")
+	rec := serve(t, server.New(), http.MethodGet, "/health")
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, rec.Body.Bytes())
@@ -35,7 +36,7 @@ func TestHealthRoute(t *testing.T) {
 }
 
 func TestUnknownPathAnswersNotFoundEnvelope(t *testing.T) {
-	rec := serve(t, New(), http.MethodGet, "/nope")
+	rec := serve(t, server.New(), http.MethodGet, "/nope")
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Header().Get(echo.HeaderContentType), echo.MIMEApplicationJSON)
@@ -43,7 +44,7 @@ func TestUnknownPathAnswersNotFoundEnvelope(t *testing.T) {
 }
 
 func TestWrongMethodAnswersEnvelope(t *testing.T) {
-	rec := serve(t, New(), http.MethodPost, "/health")
+	rec := serve(t, server.New(), http.MethodPost, "/health")
 
 	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 	var body appmw.ErrorBody
@@ -57,7 +58,7 @@ func TestRunServesAndShutsDownCleanly(t *testing.T) {
 
 	addrCh := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, New(), "127.0.0.1:0", func(a net.Addr) { addrCh <- a }) }()
+	go func() { done <- server.Run(ctx, server.New(), "127.0.0.1:0", func(a net.Addr) { addrCh <- a }) }()
 
 	var addr net.Addr
 	select {
@@ -79,11 +80,14 @@ func TestRunServesAndShutsDownCleanly(t *testing.T) {
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
-	case <-time.After(ShutdownTimeout + 5*time.Second):
+	case <-time.After(server.ShutdownTimeout + 5*time.Second):
 		t.Fatal("server did not shut down")
 	}
 
-	_, err = http.Get("http://" + addr.String() + "/health")
+	resp, err = http.Get("http://" + addr.String() + "/health")
+	if err == nil {
+		_ = resp.Body.Close()
+	}
 	assert.Error(t, err, "listener must be closed after shutdown")
 }
 
@@ -91,7 +95,7 @@ func TestRunDrainsInFlightRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	e := New()
+	e := server.New()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	e.GET("/slow", func(c *echo.Context) error {
@@ -102,7 +106,7 @@ func TestRunDrainsInFlightRequest(t *testing.T) {
 
 	addrCh := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, e, "127.0.0.1:0", func(a net.Addr) { addrCh <- a }) }()
+	go func() { done <- server.Run(ctx, e, "127.0.0.1:0", func(a net.Addr) { addrCh <- a }) }()
 	addr := <-addrCh
 
 	type result struct {
@@ -142,7 +146,7 @@ func TestRunFailsWhenAddressIsTaken(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = ln.Close() }()
 
-	err = Run(context.Background(), New(), ln.Addr().String(), nil)
+	err = server.Run(context.Background(), server.New(), ln.Addr().String(), nil)
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, context.Canceled))
 }

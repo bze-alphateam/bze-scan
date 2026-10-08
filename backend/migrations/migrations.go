@@ -48,12 +48,20 @@ func Source() (source.Driver, error) {
 	return iofs.New(files, ".")
 }
 
+// engine is the part of golang-migrate the Migrator drives;
+// *migrate.Migrate satisfies it.
+type engine interface {
+	Up() error
+	Steps(n int) error
+	Version() (version uint, dirty bool, err error)
+	Close() (source error, database error)
+}
+
 // Migrator applies the embedded migrations to one database. Close it when
 // done.
 type Migrator struct {
 	url string
-	db  *sql.DB
-	m   *migrate.Migrate
+	m   engine
 }
 
 // Open connects to databaseURL, checks that it holds the sink schema and
@@ -106,7 +114,7 @@ func open(ctx context.Context, databaseURL string, db *sql.DB) (*Migrator, error
 	if err != nil {
 		return nil, fmt.Errorf("prepare migrations: %w", err)
 	}
-	return &Migrator{url: databaseURL, db: db, m: m}, nil
+	return &Migrator{url: databaseURL, m: m}, nil
 }
 
 // Close releases the connections.

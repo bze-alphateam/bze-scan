@@ -1,4 +1,4 @@
-package middleware
+package middleware_test
 
 import (
 	"errors"
@@ -9,15 +9,17 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/bze-alphateam/bze-scan/backend/app/middleware"
 )
 
 // newEcho returns an echo instance with the API's middleware and error
 // handler, plus one route per behaviour under test.
 func newEcho() *echo.Echo {
 	e := echo.New()
-	e.HTTPErrorHandler = ErrorHandler
-	e.Use(RequestID())
-	e.Use(Recover())
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	e.Use(middleware.RequestID())
+	e.Use(middleware.Recover())
 
 	e.GET("/panic", func(c *echo.Context) error { panic("boom") })
 	e.GET("/fail", func(c *echo.Context) error { return errors.New("db password is hunter2") })
@@ -25,7 +27,7 @@ func newEcho() *echo.Echo {
 		return echo.NewHTTPError(http.StatusBadRequest, "height must be a positive integer")
 	})
 	e.GET("/id", func(c *echo.Context) error {
-		id, _ := c.Get(RequestIDContextKey).(string)
+		id, _ := c.Get(middleware.RequestIDContextKey).(string)
 		return c.String(http.StatusOK, id)
 	})
 	return e
@@ -44,23 +46,24 @@ func do(e *echo.Echo, method, path string, header http.Header) *httptest.Respons
 func TestRequestIDGenerated(t *testing.T) {
 	rec := do(newEcho(), http.MethodGet, "/id", nil)
 
-	id := rec.Header().Get(RequestIDHeader)
+	id := rec.Header().Get(middleware.RequestIDHeader)
 	assert.Len(t, id, 32)
 	assert.Equal(t, id, rec.Body.String(), "the id is stored in the context")
 }
 
 func TestRequestIDReusedFromClient(t *testing.T) {
-	rec := do(newEcho(), http.MethodGet, "/id", http.Header{RequestIDHeader: {"abc-123"}})
+	rec := do(newEcho(), http.MethodGet, "/id", http.Header{middleware.RequestIDHeader: {"abc-123"}})
 
-	assert.Equal(t, "abc-123", rec.Header().Get(RequestIDHeader))
+	assert.Equal(t, "abc-123", rec.Header().Get(middleware.RequestIDHeader))
 	assert.Equal(t, "abc-123", rec.Body.String())
 }
 
 func TestRequestIDTooLongIsReplaced(t *testing.T) {
-	long := strings.Repeat("x", maxClientRequestIDLen+1)
-	rec := do(newEcho(), http.MethodGet, "/id", http.Header{RequestIDHeader: {long}})
+	// One character over the 128-character limit.
+	long := strings.Repeat("x", 129)
+	rec := do(newEcho(), http.MethodGet, "/id", http.Header{middleware.RequestIDHeader: {long}})
 
-	assert.Len(t, rec.Header().Get(RequestIDHeader), 32)
+	assert.Len(t, rec.Header().Get(middleware.RequestIDHeader), 32)
 }
 
 func TestRecoverAnswersGeneric500(t *testing.T) {

@@ -1,4 +1,4 @@
-package fakenode
+package fakenode_test
 
 import (
 	"encoding/json"
@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
 func get(t *testing.T, url string) (int, []byte) {
@@ -32,13 +34,20 @@ func readFile(t *testing.T, parts ...string) []byte {
 	return b
 }
 
+// byHeightFiles is the documented fixture layout: route -> file name.
+var byHeightFiles = map[string]string{
+	fakenode.RouteBlock:        "block.json",
+	fakenode.RouteBlockResults: "block_results.json",
+	fakenode.RouteCommit:       "commit.json",
+}
+
 func TestHasAtLeastOneFixtureHeight(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	require.NotEmpty(t, n.FixtureHeights())
 }
 
 func TestServesByHeightFixturesByteForByte(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	for _, h := range n.FixtureHeights() {
 		for route, file := range byHeightFiles {
 			t.Run(fmt.Sprintf("%d%s", h, route), func(t *testing.T) {
@@ -51,15 +60,15 @@ func TestServesByHeightFixturesByteForByte(t *testing.T) {
 }
 
 func TestServesStatusByteForByte(t *testing.T) {
-	n := New(t)
-	code, body := get(t, n.URL+RouteStatus)
+	n := fakenode.New(t)
+	code, body := get(t, n.URL+fakenode.RouteStatus)
 
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, readFile(t, "status.json"), body)
 }
 
 func TestFixturesAreJSONRPCEnvelopes(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	h := n.FixtureHeights()[0]
 	for route := range byHeightFiles {
 		body, err := n.Fixture(route, h)
@@ -75,7 +84,7 @@ func TestFixturesAreJSONRPCEnvelopes(t *testing.T) {
 }
 
 func TestUnknownHeightAnswersAboveTipError(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	for route := range byHeightFiles {
 		code, body := get(t, fmt.Sprintf("%s%s?height=%d", n.URL, route, n.RecordedStatusHeight()+1000))
 		assert.Equal(t, http.StatusInternalServerError, code, route)
@@ -92,59 +101,59 @@ func TestUnknownHeightAnswersAboveTipError(t *testing.T) {
 }
 
 func TestMissingHeightResolvesToStatusHeight(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	h := n.FixtureHeights()[0]
 	n.SetStatusHeight(h)
 
-	code, body := get(t, n.URL+RouteBlock)
+	code, body := get(t, n.URL+fakenode.RouteBlock)
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, readFile(t, strconv.FormatInt(h, 10), "block.json"), body)
 }
 
 func TestInvalidHeightIsRejected(t *testing.T) {
-	n := New(t)
-	resp, err := http.Get(n.URL + RouteBlock + "?height=abc")
+	n := fakenode.New(t)
+	resp, err := http.Get(n.URL + fakenode.RouteBlock + "?height=abc")
 	require.NoError(t, err)
 	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestSetStatusHeight(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	recorded := readFile(t, "status.json")
 
 	n.SetStatusHeight(42)
 	assert.Equal(t, int64(42), n.StatusHeight())
-	_, body := get(t, n.URL+RouteStatus)
+	_, body := get(t, n.URL+fakenode.RouteStatus)
 	assert.Contains(t, string(body), `"latest_block_height":"42"`)
 	assert.Equal(t, len(recorded)-len(strconv.FormatInt(n.RecordedStatusHeight(), 10))+2, len(body),
 		"only the height changes")
 
 	n.SetStatusHeight(0)
-	_, body = get(t, n.URL+RouteStatus)
+	_, body = get(t, n.URL+fakenode.RouteStatus)
 	assert.Equal(t, recorded, body)
 }
 
 func TestRequestCounters(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	h := n.FixtureHeights()[0]
 
-	get(t, n.URL+RouteStatus)
-	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, RouteBlock, h))
-	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, RouteBlock, h+1))
-	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, RouteCommit, h))
+	get(t, n.URL+fakenode.RouteStatus)
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h+1))
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteCommit, h))
 
-	assert.Equal(t, 1, n.Requests(RouteStatus))
-	assert.Equal(t, 2, n.Requests(RouteBlock), "failed lookups count too")
-	assert.Equal(t, 0, n.Requests(RouteBlockResults))
-	assert.Equal(t, 1, n.Requests(RouteCommit))
+	assert.Equal(t, 1, n.Requests(fakenode.RouteStatus))
+	assert.Equal(t, 2, n.Requests(fakenode.RouteBlock), "failed lookups count too")
+	assert.Equal(t, 0, n.Requests(fakenode.RouteBlockResults))
+	assert.Equal(t, 1, n.Requests(fakenode.RouteCommit))
 
 	n.ResetRequests()
-	assert.Equal(t, 0, n.Requests(RouteBlock))
+	assert.Equal(t, 0, n.Requests(fakenode.RouteBlock))
 }
 
 func TestUnknownRouteIsNotFound(t *testing.T) {
-	n := New(t)
+	n := fakenode.New(t)
 	resp, err := http.Get(n.URL + "/tx_search")
 	require.NoError(t, err)
 	_ = resp.Body.Close()
