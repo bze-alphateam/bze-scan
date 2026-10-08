@@ -3,6 +3,7 @@ package chain
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
@@ -35,7 +36,12 @@ type Tx struct {
 
 // Msg is one message of a transaction.
 type Msg struct {
+	// TypeURL is the current type URL: a pre-v8 BZE message is reported
+	// under its current URL (see CanonicalTypeURL).
 	TypeURL string
+	// Signer is the message's first signer, as the SDK sets message.sender;
+	// empty when the message could not be decoded.
+	Signer string
 	// Body is the message as proto JSON; nil when the type URL is not in the
 	// chain's registry.
 	Body json.RawMessage
@@ -66,6 +72,9 @@ func NewCodec() (*Codec, error) {
 		return nil, fmt.Errorf("chain codec: %w", err)
 	}
 	bzeapp.RegisterIBC(registry)
+	if err := registerLegacyTypeURLs(registry); err != nil {
+		return nil, fmt.Errorf("chain codec: %w", err)
+	}
 
 	txConfig, err := authtx.NewTxConfigWithOptions(cdc, authtx.ConfigOptions{
 		EnabledSignModes: []signingtypes.SignMode{signingtypes.SignMode_SIGN_MODE_DIRECT},
@@ -83,9 +92,14 @@ func (c *Codec) DecodeTx(raw []byte) (sdk.Tx, error) {
 }
 
 // MsgJSON renders a message as proto JSON. Nested Any values (the messages of
-// an authz MsgExec, for instance) carry their "@type".
+// an authz MsgExec, for instance) carry their "@type", the current one for a
+// pre-v8 BZE message (see CanonicalTypeURL).
 func (c *Codec) MsgJSON(msg sdk.Msg) ([]byte, error) {
-	return c.cdc.MarshalJSON(msg)
+	out, err := c.cdc.MarshalJSON(msg)
+	if err != nil {
+		return nil, err
+	}
+	return canonicalNestedTypes(out), nil
 }
 
 // TypeURL is the message's type URL, e.g. "/cosmos.bank.v1beta1.MsgSend".
@@ -94,9 +108,12 @@ func TypeURL(msg sdk.Msg) string {
 }
 
 // MsgTypeURLs lists every message type URL registered in the chain's
-// interface registry.
+// interface registry, without the legacy aliases of LegacyTypeURLs.
 func (c *Codec) MsgTypeURLs() []string {
-	return c.registry.ListImplementations(sdk.MsgInterfaceProtoName)
+	return slices.DeleteFunc(c.registry.ListImplementations(sdk.MsgInterfaceProtoName), func(u string) bool {
+		_, legacy := legacyTypeURLs[u]
+		return legacy
+	})
 }
 
 // Decode decodes a transaction into a Tx. A message whose type URL the
@@ -109,8 +126,31 @@ func (c *Codec) Decode(raw []byte) (*Tx, error) {
 	}
 
 	out := &Tx{}
+	// The signers of every message, deduplicated in order of first
+	// appearance as the SDK does: the fallback for transactions whose own
+	// signer lookup fails (pre-v8 type URLs have no descriptor under their
+	// old name, only their current Go type has).
+	var msgSigners []string
+	for _, msg := range decoded.GetMsgs() {
+		m, signers := c.msg(msg)
+		out.Msgs = append(out.Msgs, m)
+		for _, a := range signers {
+			if !slices.Contains(msgSigners, a) {
+				msgSigners = append(msgSigners, a)
+			}
+		}
+	}
 	if m, ok := decoded.(sdk.TxWithMemo); ok {
 		out.Memo = m.GetMemo()
+	}
+	if s, ok := decoded.(authsigning.SigVerifiableTx); ok {
+		if signers, err := s.GetSigners(); err == nil {
+			for _, a := range signers {
+				out.Signers = append(out.Signers, accAddress(a))
+			}
+		} else {
+			out.Signers = msgSigners
+		}
 	}
 	if f, ok := decoded.(sdk.FeeTx); ok {
 		out.Fee = f.GetFee()
@@ -119,22 +159,9 @@ func (c *Codec) Decode(raw []byte) (*Tx, error) {
 			payer = f.FeePayer()
 		}
 		out.FeePayer = accAddress(payer)
-	}
-	if s, ok := decoded.(authsigning.SigVerifiableTx); ok {
-		signers, err := s.GetSigners()
-		if err != nil {
-			return nil, fmt.Errorf("signers: %w", err)
+		if out.FeePayer == "" && len(out.Signers) > 0 {
+			out.FeePayer = out.Signers[0]
 		}
-		for _, a := range signers {
-			out.Signers = append(out.Signers, accAddress(a))
-		}
-	}
-	for _, msg := range decoded.GetMsgs() {
-		m := Msg{TypeURL: TypeURL(msg)}
-		if m.Body, err = c.MsgJSON(msg); err != nil {
-			m.Body, m.Err = nil, err
-		}
-		out.Msgs = append(out.Msgs, m)
 	}
 	return out, nil
 }
@@ -161,16 +188,34 @@ func (c *Codec) decodeLenient(raw []byte, cause error) (*Tx, error) {
 		}
 	}
 	for _, a := range body.Messages {
-		m := Msg{TypeURL: a.TypeUrl}
 		var msg sdk.Msg
 		if err := c.registry.UnpackAny(a, &msg); err != nil {
-			m.Err = err
-		} else if m.Body, err = c.MsgJSON(msg); err != nil {
-			m.Body, m.Err = nil, err
+			out.Msgs = append(out.Msgs, Msg{TypeURL: CanonicalTypeURL(a.TypeUrl), Err: err})
+			continue
 		}
+		m, _ := c.msg(msg)
 		out.Msgs = append(out.Msgs, m)
 	}
 	return out, nil
+}
+
+// msg renders one decoded message and returns its signers.
+func (c *Codec) msg(msg sdk.Msg) (Msg, []string) {
+	m := Msg{TypeURL: TypeURL(msg)}
+	var signers []string
+	if addrs, _, err := c.cdc.GetMsgV1Signers(msg); err == nil {
+		for _, a := range addrs {
+			signers = append(signers, accAddress(a))
+		}
+	}
+	if len(signers) > 0 {
+		m.Signer = signers[0]
+	}
+	var err error
+	if m.Body, err = c.MsgJSON(msg); err != nil {
+		m.Body, m.Err = nil, err
+	}
+	return m, signers
 }
 
 func accAddress(b []byte) string {
