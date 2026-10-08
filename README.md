@@ -6,7 +6,8 @@ generic Cosmos SDK view, so it can explain every transaction in plain words and
 show activity that happens without a transaction (order fills, reward
 distributions, raffles).
 
-Status: repository skeleton, no code yet.
+Status: backend foundation in place (the `serve` command with a health
+endpoint, the test harness and CI); no explorer logic yet. No UI yet.
 
 ## Layout
 
