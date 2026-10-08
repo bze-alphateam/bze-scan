@@ -1,5 +1,6 @@
 # Go
 backend/bze-scan
+backend/build/
 backend/*.out
 backend/*.test
 

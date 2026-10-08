@@ -1,0 +1,28 @@
+# Local development and acceptance tests.
+#
+# `make e2e` (in backend/) starts only the postgres service. The backend and UI
+# services join this file behind a profile in later work, so the plain
+# `up postgres` keeps starting the database alone.
+name: bze-scan
+
+services:
+  # PostgreSQL 17 initialised with the vendored CometBFT psql sink schema, the
+  # shape the production node writes into. Data lives in tmpfs: every start is
+  # a fresh database.
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: bze_index
+      POSTGRES_USER: bze
+      POSTGRES_PASSWORD: bze
+    ports:
+      - "15432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bze -d bze_index -h 127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
