@@ -1,0 +1,94 @@
+package main
+
+import (
+	"bytes"
+	"net"
+	"net/http"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestHelpListsServe(t *testing.T) {
+	root := newRootCmd()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"--help"})
+
+	require.NoError(t, root.Execute())
+	assert.Contains(t, out.String(), "serve")
+}
+
+func TestServeRejectsInvalidConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("LOG_FORMAT", "xml")
+
+	root := newRootCmd()
+	root.SetArgs([]string{"serve"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOG_FORMAT")
+}
+
+// TestServeStopsCleanlyOnSIGTERM runs the real serve command, waits until it
+// answers /health, sends SIGTERM to the test process (caught by serve's
+// signal context) and expects a nil error, i.e. exit code 0.
+func TestServeStopsCleanlyOnSIGTERM(t *testing.T) {
+	t.Chdir(t.TempDir())
+	addr := freeAddr(t)
+	t.Setenv("HTTP_ADDR", addr)
+	t.Setenv("LOG_LEVEL", "warn")
+	t.Setenv("LOG_FORMAT", "text")
+
+	root := newRootCmd()
+	root.SetArgs([]string{"serve"})
+	done := make(chan error, 1)
+	go func() { done <- root.Execute() }()
+
+	waitHealthy(t, "http://"+addr+"/health", done)
+
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("serve did not stop after SIGTERM")
+	}
+}
+
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	require.NoError(t, ln.Close())
+	return addr
+}
+
+func waitHealthy(t *testing.T, url string, done <-chan error) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("serve exited early: %v", err)
+		default:
+		}
+		resp, err := http.Get(url)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("serve did not become healthy")
+}

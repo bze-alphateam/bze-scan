@@ -40,10 +40,76 @@ of both the local node and an archive node; it carries the three heights.
 oldest indexed height. The response is HTTP 200 whenever the process serves;
 the JSON carries the verdict, so a halted chain never blocks a deploy.
 
+Implemented so far: `serve` with the HTTP server and `GET /health` (200, empty
+body, whenever the process serves HTTP; it checks neither the database nor a
+node). Unknown paths answer 404 with the JSON error envelope
+`{"error":{"code":"not_found","message":"Not Found"}}`.
+
+## Configuration
+
+Environment variables; a `.env` in the working directory is loaded when
+present (variables already set in the environment win). `.env.dist` is the
+documented template with the defaults:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `HTTP_ADDR` | `:8080` | listen address of the HTTP API |
+| `LOG_LEVEL` | `info` | logrus level |
+| `LOG_FORMAT` | `text` | `text` or `json` |
+
+Invalid values stop the process at startup with every problem listed.
+
 ## Commands
 
+`make` (or `make help`) lists the targets:
+
+| Target | What it does |
+| --- | --- |
+| `make build` | builds `build/bze-scan` |
+| `make run` | runs `bze-scan serve` |
+| `make test` | unit tests, `go test ./... -race` (no network, no docker) |
+| `make vet` | `go vet ./...` |
+| `make lint` | `golangci-lint run` |
+| `make e2e` | starts PostgreSQL from `../docker/compose.yml`, runs the acceptance tests in `e2e/` (build tag `e2e`), tears the database down; the exit code is the tests' |
+| `make e2e-up` / `make e2e-down` | starts / removes that PostgreSQL by hand |
+| `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
+| `make clean` | removes `build/` |
+
+The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
+database `postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable`.
+CI (`.github/workflows/backend.yml`) runs build, vet, lint, `make test` and
+`make e2e` on every pull request touching `backend/` or `docker/`.
+
+## Layout
+
 ```
-go build ./...
-go vet ./...
-go test ./... -race
+cmd/bze-scan/      cobra root and subcommands (serve)
+config/            environment parsing and validation
+app/server/        echo wiring and the graceful HTTP runner
+app/controller/    thin HTTP handlers
+app/middleware/    request id, panic recovery, JSON error handler
+internal/testutil/fakenode/
+                   fake CometBFT RPC node for tests, fixtures in testdata/
+e2e/               acceptance tests (build tag e2e)
+scripts/           record-fixtures.sh
 ```
+
+## Test fixtures and the fake node
+
+`internal/testutil/fakenode` serves the URI form of the by-height RPC routes
+(`/status`, `/block?height=N`, `/block_results?height=N`, `/commit?height=N`)
+from recorded mainnet responses, byte for byte. A height without a fixture
+answers the JSON-RPC error a real node returns above its tip (HTTP 500,
+`testdata/above_tip.json`). Tests can override the `/status` height and read
+per-route request counters.
+
+Fixtures are committed and re-recorded only on purpose, when a test needs a
+height the existing ones do not cover:
+
+```
+make fixtures HEIGHTS="24998316" ARCHIVE_RPC=https://rpc.getbze.com
+```
+
+The script fetches `/block`, `/block_results` and `/commit` once per height,
+plus `/status` and one above-tip answer. It never calls `/tx`, `/tx_search` or
+`/block_search`.

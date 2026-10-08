@@ -16,3 +16,7 @@ indent_style = tab
 
 [*.md]
 trim_trailing_whitespace = false
+
+# Recorded node responses are stored byte for byte, as the node sent them.
+[backend/internal/testutil/fakenode/testdata/**]
+insert_final_newline = false
