@@ -5,7 +5,8 @@ by the `bze` chain module it imports to decode message types).
 
 One binary, `bze-scan`, with subcommands:
 
-- `serve` — the production process: the read-only HTTP API, the live indexer
+- `serve` — the production process: the read-only HTTP API with its raw-JSON
+  proxy (archive responses cached in memory), the live indexer
   (woken by a PostgreSQL notification at each block the node's `psql` indexer
   commits, with a height cursor as the guarantee), the state sync (driven by
   what the indexer sees, with tickers as a safety net) and, when enabled by
@@ -25,6 +26,11 @@ One binary, `bze-scan`, with subcommands:
 
 Every node call is by height (`/block`, `/block_results`, `/commit`, `/status`
 and gRPC state queries); the search routes are never used, on any node.
+
+The raw-JSON routes serve a block, its results, its commit and a transaction
+(sliced from its block by index) from an in-memory cache that the live indexer
+fills at index time and that is filled from the archive nodes on a miss. The
+local node is never asked for them, and nothing raw is written to the database.
 
 ## Commands
 
