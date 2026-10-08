@@ -1,7 +1,7 @@
 // Package cli holds the cobra commands of the bze-scan binary: serve (the
-// production process: HTTP API and live indexer; the state sync, status
-// checker and backfill join it as later work lands) and migrate (the database
-// schema). It lives outside cmd/ so tests run the commands as users do.
+// production process: HTTP API, status checker, live indexer and backfill;
+// the state sync joins it as later work lands), migrate (the database schema)
+// and backfill (the history backfill standalone). It lives outside cmd/ so tests run the commands as users do.
 package cli
 
 import (
@@ -19,7 +19,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
-	rootCmd.AddCommand(newServeCmd(), newMigrateCmd())
+	rootCmd.AddCommand(newServeCmd(), newMigrateCmd(), newBackfillCmd())
 	return rootCmd
 }
 

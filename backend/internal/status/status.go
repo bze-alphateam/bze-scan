@@ -39,7 +39,13 @@ type Store interface {
 	// OldestHeight is the lowest height in explorer.blocks; false when the
 	// table is empty.
 	OldestHeight(ctx context.Context) (int64, bool, error)
+	// BackfillStatus is the status of the main backfill job's checkpoint;
+	// false when there is no checkpoint.
+	BackfillStatus(ctx context.Context) (string, bool, error)
 }
+
+// BackfillDone is the checkpoint status of a finished main backfill job.
+const BackfillDone = "done"
 
 // Node answers CometBFT's /status; *node.Client satisfies it.
 type Node interface {
@@ -57,6 +63,8 @@ type Config struct {
 	RequestTimeout time.Duration
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time
+	// BackfillEnabled: this process runs the backfill (BACKFILL_ENABLED).
+	BackfillEnabled bool
 }
 
 // Deps are the checker's collaborators, built by the composition root.
@@ -117,8 +125,20 @@ func New(cfg Config, deps Deps) *Checker {
 		deps.ArchiveRetry = deps.Archive
 	}
 	c := &Checker{cfg: cfg, deps: deps}
-	c.last.Store(&Snapshot{BackFill: BackFillFinished})
+	c.last.Store(&Snapshot{BackFill: BackFillState(cfg.BackfillEnabled, "", false)})
 	return c
+}
+
+// BackFillState is the back_fill status: finished when the main job is done,
+// or when no backfill is configured and none ever ran (no checkpoint);
+// in_progress otherwise (running, paused or stopped on an error: older
+// history is still owed). checkpoint is the main job's status, hasCheckpoint
+// whether it exists.
+func BackFillState(enabled bool, checkpoint string, hasCheckpoint bool) string {
+	if hasCheckpoint && checkpoint == BackfillDone || !hasCheckpoint && !enabled {
+		return BackFillFinished
+	}
+	return BackFillInProgress
 }
 
 // Snapshot returns the latest snapshot without any I/O.
@@ -145,9 +165,17 @@ func (c *Checker) Run(ctx context.Context) error {
 // Check runs one tick: it reads the three heights, decides health and stores
 // the snapshot, which it returns. A tick cut short by ctx stores nothing.
 func (c *Checker) Check(ctx context.Context) Snapshot {
-	s := Snapshot{BackFill: BackFillFinished}
+	s := Snapshot{BackFill: c.Snapshot().BackFill}
 	s.DBHeight = c.read(ctx, "explorer height", c.deps.Store.LastIndexedHeight)
 	s.OldestHeight = c.read(ctx, "oldest height", c.deps.Store.OldestHeight)
+	// A failed read keeps the previous verdict.
+	if cp, ok, err := c.deps.Store.BackfillStatus(ctx); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			c.deps.Log.WithError(err).Warn("status: reading the backfill checkpoint")
+		}
+	} else {
+		s.BackFill = BackFillState(c.cfg.BackfillEnabled, cp, ok)
+	}
 	s.NodeHeight = c.tip(ctx, "local node", c.deps.Local)
 	if c.deps.Archive != nil {
 		if s.ArchiveHeight = c.tip(ctx, "archive node", c.deps.Archive); s.ArchiveHeight == nil {

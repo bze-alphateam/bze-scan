@@ -32,6 +32,7 @@ type mockTx struct {
 	stmts      []statement
 	committed  bool
 	rolledBack bool
+	batches    int
 }
 
 func (tx *mockTx) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
@@ -41,6 +42,27 @@ func (tx *mockTx) Exec(_ context.Context, sql string, args ...any) (pgconn.Comma
 	}
 	return pgconn.CommandTag{}, nil
 }
+
+// SendBatch records the queued statements like Execs; Close fails when one
+// of them matches the configured error.
+func (tx *mockTx) SendBatch(_ context.Context, b *pgx.Batch) pgx.BatchResults {
+	tx.batches++
+	var err error
+	for _, q := range b.QueuedQueries {
+		tx.stmts = append(tx.stmts, statement{q.SQL, q.Arguments})
+		if err == nil && tx.db.execErr != nil && strings.Contains(q.SQL, tx.db.execErrOn) {
+			err = tx.db.execErr
+		}
+	}
+	return mockBatchResults{err: err}
+}
+
+type mockBatchResults struct {
+	pgx.BatchResults
+	err error
+}
+
+func (r mockBatchResults) Close() error { return r.err }
 
 func (tx *mockTx) Commit(context.Context) error {
 	tx.committed = true
@@ -125,6 +147,8 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "messages")
 		case strings.Contains(s.sql, "INSERT INTO explorer.blocks"):
 			out = append(out, "block")
+		case strings.Contains(s.sql, "UPDATE explorer.blocks"):
+			out = append(out, "block times")
 		case strings.Contains(s.sql, "index_failures"):
 			out = append(out, "failure")
 		case strings.Contains(s.sql, "DO NOTHING") && strings.Contains(s.sql, "indexer_state"):

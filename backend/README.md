@@ -49,13 +49,14 @@ Implemented so far:
   `{"error":{"code":"not_found","message":"Not Found"}}`.
 - The read API under `/api/v1`: blocks, transactions and search (see HTTP
   API below).
-- `GET /api/v1/status` with its checker (see HTTP API below); `back_fill.status`
-  is `finished` until the backfill lands.
+- `GET /api/v1/status` with its checker (see HTTP API below).
 - The raw-JSON routes under `/api/v1/raw` with their in-memory cache (see
   HTTP API below).
 - `migrate` (see Migrations below).
-- The live indexer inside `serve`, writing `explorer.blocks` (see Live
-  indexer below). Transactions, messages and everything else follow.
+- The live indexer inside `serve`, writing `explorer.blocks`, transactions
+  and messages, with the catch-up through the archive after a long outage
+  (see Live indexer below).
+- `backfill`, standalone or inside `serve` (see Backfill below).
 
 ## Configuration
 
@@ -73,12 +74,18 @@ documented template with the defaults:
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
 | `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
-| `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node; the status checker compares its tip, the raw-JSON routes fetch their misses from it |
+| `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node, by height only; the status checker compares its tip, the raw-JSON routes fetch their misses from it, the backfill and the catch-up read history from it |
 | `ARCHIVE_RPC_RETRY_URL` | empty | tried when `ARCHIVE_RPC_URL` fails; empty means `ARCHIVE_RPC_URL` again |
 | `STATUS_INTERVAL` | `60s` | period of the status checker's ticks (a Go duration) |
 | `STATUS_HEIGHT_TOLERANCE` | `5` | largest spread, in blocks, between the explorer, the local node and the archive that is still healthy |
 | `RAW_CACHE_MAX_ENTRIES` | `300` | entries kept per raw-JSON route (one per height) |
 | `RAW_CACHE_TTL` | `20m` | how long a raw-JSON entry lives after it was stored (a Go duration) |
+| `BACKFILL_ENABLED` | `false` | run the main backfill job inside `serve`; when `false`, an unfinished job is marked `paused`. The `backfill` command ignores it |
+| `BACKFILL_FLOOR` | `genesis` | lowest height the backfill indexes: `genesis`, a height, or a `YYYY-MM-DD` date (the first block at or after that UTC midnight) |
+| `BACKFILL_WORKERS` | `10` | heights fetched in parallel (X) |
+| `BACKFILL_BATCH` | `50` | heights per flush (M), one transaction each |
+| `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
+| `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -91,6 +98,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make build` | builds `build/bze-scan` |
 | `make run` | runs `bze-scan serve` |
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
+| `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet -tags=e2e ./...` |
@@ -119,11 +127,12 @@ CI runs three independent workflows on every pull request touching
 
 ```
 cmd/bze-scan/      main: runs app/cli
-app/cli/           cobra root and subcommands (serve, migrate)
+app/cli/           cobra root and subcommands (serve, migrate, backfill)
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
-app/serve/         the serve process: its components in one errgroup
+app/serve/         the serve process: its components in one errgroup; the
+                   standalone backfill
 app/server/        echo wiring and the graceful HTTP runner
 app/controller/    thin HTTP handlers: parsing, validation, status codes
 app/dto/           JSON shapes of the API and the keyset cursor
@@ -137,9 +146,13 @@ internal/classify/ message and block-event classification (Go source of
 internal/node/     CometBFT RPC client, by-height routes only
 internal/transform/
                    node answers of one height -> explorer rows (no I/O)
-internal/writer/   transactional, idempotent writes (the live writer)
+internal/writer/   transactional, idempotent writes (the live writer, the
+                   batch writer of the backfill)
 internal/indexer/live/
                    LISTEN/NOTIFY listener, height cursor, retries
+internal/indexer/backfill/
+                   the fetch-parallel, write-serial pipeline, the main job
+                   (checkpoint, advisory lock) and the catch-up
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
@@ -209,6 +222,10 @@ ticks at start and then every `STATUS_INTERVAL`, reading
 primary fails; 5 s per call). `healthy` needs all three heights, a spread of
 at most `STATUS_HEIGHT_TOLERANCE`, and the explorer's height above the
 previous tick's; the first tick after a start judges the spread only.
+`back_fill.status` is `finished` when the main backfill job's checkpoint is
+`done`, or when the backfill is disabled and never ran (no checkpoint);
+otherwise (`running`, `paused`, `error`, or enabled and waiting) it is
+`in_progress`: older history is still owed.
 
 | Raw route | Answers |
 | --- | --- |
@@ -292,6 +309,13 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   row therefore proves its height is complete. After the commit the three
   response bodies go to the raw-JSON cache. When a height enters the last existing partition, the same
   transaction calls `explorer.ensure_partitions(height, height + 20000000)`.
+- Heights below the node's `earliest_block_height` (an outage longer than
+  its retained window) go to the catch-up job before the pass reads the
+  rest from the node: the backfill pipeline walking upward through the
+  archive (same writer pool, rate limiter and retries, failures recorded
+  with source `live`), skipping heights already present, which then moves
+  the cursor past them. A failed catch-up leaves the cursor and reconnects,
+  so the next pass starts over.
 - A height is tried three times (waits of 0.5 s and 2 s). Then, or at once
   when the node reports the height pruned, it is recorded in
   `explorer.index_failures` with source `live`, logged, and the cursor moves
@@ -301,6 +325,49 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the
   height, the node supplies the data.
+
+## Backfill
+
+History from the archive node, from the live floor down to `BACKFILL_FLOOR`.
+`bze-scan backfill` runs it standalone; `serve` runs the same job as one of
+its components when `BACKFILL_ENABLED=true` (a job that fails or is locked
+elsewhere ends without stopping the process, and the next start resumes it).
+
+- **Lock.** One backfill per database: the job first takes a session-level
+  `pg_try_advisory_lock` keyed on its name on a connection of its own. A
+  process that cannot take it logs and skips (the command exits 1).
+- **Ceiling and floor.** The ceiling is `indexer_state.live_floor - 1`; on a
+  fresh install the job polls every 10 s until the live indexer has recorded
+  the floor. The floor is a height, `genesis` (1) or a date, resolved by a
+  binary search over `/block` header times on the archive (about 25 probes).
+- **Pipeline.** The dispatcher walks the heights down and hands each to a
+  worker the moment one of X semaphore slots frees. A worker fetches
+  `/block`, `/block_results` and `/commit` under one rate limiter shared by
+  every worker, retries three times (0.5 s, 1 s, 2 s) against
+  `ARCHIVE_RPC_RETRY_URL` (or the primary again), runs the archive adapter
+  hook and the transformer, and sends one result into the writer's channel
+  (capacity X). Its slot frees once the result is queued, so memory holds at
+  most X in flight, X queued and M held.
+- **Writer.** A batch writer of its own (own pool, never the live writer's)
+  holds results in arrival order and flushes when it holds M heights, after
+  `BACKFILL_QUIET` without a result, and when the channel closes after the
+  last worker, even on shutdown: nothing fetched is left unwritten. A flush
+  is one transaction sent as one pgx batch: multi-row `INSERT … ON CONFLICT
+  DO NOTHING` per table in chunks of 1,000 rows, `block_time_ms` filled for
+  the flushed heights and the one above them wherever the previous block is
+  now present, then the `PostFlush` hooks. It never writes the live floor,
+  the cursor, the sink or the state tables. A failed flush is fatal (the
+  database is gone): the run stops with checkpoint status `error`.
+- **Failures.** After the retries a height is upserted into
+  `explorer.index_failures` with source `backfill`, logged, and skipped.
+- **Checkpoint.** `explorer.backfill_checkpoints` row `main` (ceiling, floor,
+  `lowest_dispatched`, `blocks_done`, status, last error), saved every 5 s
+  and after every flush. Dispatch is monotonic, so on restart the dispatcher
+  starts X + M heights above `lowest_dispatched` and skips the heights
+  already in `explorer.blocks` (one query per 1,000 heights). Status:
+  `running`, `done` at the floor, `error` after a fatal error (resumed at the
+  next start), `paused` while `BACKFILL_ENABLED=false`. A done job is not
+  rerun unless the floor moves lower.
 
 ### Transactions and messages
 
@@ -337,19 +404,23 @@ registers by hand. `go.mod` repeats the chain's `replace` directives.
 (`/status`, `/block?height=N`, `/block_results?height=N`, `/commit?height=N`)
 from recorded mainnet responses, byte for byte. A height without a fixture
 answers the JSON-RPC error a real node returns above its tip (HTTP 500,
-`testdata/above_tip.json`). Tests can override the `/status` height and read
-per-route request counters.
+`testdata/above_tip.json`). Tests can override the `/status` height, make the
+node pruned below a height (`SetEarliestHeight`: `/status` reports it and
+lower heights answer the node's "not available" error), and read request
+counters per route and per height.
 
 Fixtures are committed and re-recorded only on purpose, when a test needs a
 height the existing ones do not cover:
 
 ```
-make fixtures HEIGHTS="24998316" ARCHIVE_RPC=https://rpc.getbze.com
+make fixtures HEIGHTS="24998316 24998321..24998330" ARCHIVE_RPC=https://rpc.getbze.com
 ```
 
-Recorded today: 24998316 to 24998318 and 24998320. 24998319 is left out on
+Recorded today: 24998316 to 24998330 except 24998319, which is left out on
 purpose: the fake node answers it with the above-tip error, which the live
-indexer tests use as a failing height between good ones. Heights with
+indexer and backfill tests use as a failing height between good ones. The
+backfill tests walk that whole range (24998316, 24998321 and 24998326 carry
+tradebin transactions). Heights with
 transactions: 24999004 (multi-message `MsgCancelOrder` transactions and an
 out-of-gas `MsgCreateOrder`), 24999134 (multi-message `MsgCreateOrder`),
 24999205 (IBC `MsgTransfer`), 24999209 (relayer `MsgUpdateClient` with

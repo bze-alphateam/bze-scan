@@ -15,7 +15,9 @@
 # Only by-height routes are ever called. Never /tx, /tx_search or
 # /block_search, on any node.
 #
-# Usage: HEIGHTS="24998316 24998321" scripts/record-fixtures.sh
+# HEIGHTS lists heights and inclusive ranges a..b, separated by spaces.
+#
+# Usage: HEIGHTS="24998316 24998321..24998330" scripts/record-fixtures.sh
 #        (or: make fixtures HEIGHTS="...")
 set -euo pipefail
 
@@ -47,7 +49,21 @@ fetch() {
   echo "recorded ${route} -> ${dest#"${OUT}/"}"
 }
 
-for h in ${HEIGHTS}; do
+expanded=""
+for item in ${HEIGHTS}; do
+  if [[ "${item}" =~ ^([1-9][0-9]*)\.\.([1-9][0-9]*)$ ]]; then
+    lo="${BASH_REMATCH[1]}" hi="${BASH_REMATCH[2]}"
+    if (( lo > hi )); then
+      echo "invalid range: ${item}" >&2
+      exit 2
+    fi
+    expanded+=" $(seq -s ' ' "${lo}" "${hi}")"
+  else
+    expanded+=" ${item}"
+  fi
+done
+
+for h in ${expanded}; do
   if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then
     echo "invalid height: ${h}" >&2
     exit 2

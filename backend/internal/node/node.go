@@ -58,6 +58,9 @@ type Status struct {
 	Network           string
 	LatestBlockHeight int64
 	LatestBlockTime   time.Time
+	// EarliestBlockHeight is the lowest height the node still serves (1 on
+	// an archive node).
+	EarliestBlockHeight int64
 }
 
 // Block is the part of /block the backend uses.
@@ -131,8 +134,9 @@ func (c *Client) Status(ctx context.Context) (*Status, []byte, error) {
 			Network string `json:"network"`
 		} `json:"node_info"`
 		SyncInfo struct {
-			LatestBlockHeight int64     `json:"latest_block_height,string"`
-			LatestBlockTime   time.Time `json:"latest_block_time"`
+			LatestBlockHeight   int64     `json:"latest_block_height,string"`
+			LatestBlockTime     time.Time `json:"latest_block_time"`
+			EarliestBlockHeight int64     `json:"earliest_block_height,string"`
 		} `json:"sync_info"`
 	}
 	raw, err := c.call(ctx, "status", 0, &res)
@@ -143,6 +147,8 @@ func (c *Client) Status(ctx context.Context) (*Status, []byte, error) {
 		Network:           res.NodeInfo.Network,
 		LatestBlockHeight: res.SyncInfo.LatestBlockHeight,
 		LatestBlockTime:   res.SyncInfo.LatestBlockTime,
+
+		EarliestBlockHeight: res.SyncInfo.EarliestBlockHeight,
 	}, raw, nil
 }
 

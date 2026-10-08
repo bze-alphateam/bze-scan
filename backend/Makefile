@@ -54,7 +54,7 @@ e2e: e2e-up ## Run acceptance tests (starts PostgreSQL, runs tests, tears it dow
 	go test -tags=e2e -race -v -count=1 ./e2e/ ; ret=$$? ; $(MAKE) e2e-down ; exit $$ret
 
 .PHONY: fixtures
-fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 ..." [ARCHIVE_RPC=...]
+fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [ARCHIVE_RPC=...]
 	HEIGHTS="$(HEIGHTS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
 
 .PHONY: clean

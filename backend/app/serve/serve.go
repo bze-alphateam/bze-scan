@@ -1,6 +1,7 @@
 // Package serve runs the production process: the HTTP API over the explorer
-// tables and, when INDEXER_ENABLED is set, the live indexer, as components of
-// one errgroup.
+// tables, the status checker and, when enabled, the live indexer (with the
+// catch-up through the archive) and the backfill, as components of one
+// errgroup. It also runs the backfill standalone for the backfill command.
 // It lives outside cmd/ so acceptance tests can run the real wiring
 // in-process.
 package serve
@@ -9,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
@@ -18,6 +20,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
@@ -32,6 +35,8 @@ type Options struct {
 	OnListen func(net.Addr)
 	// Live overrides the live indexer's tuning (retries, backoff, clock).
 	Live live.Config
+	// BackfillRetryDelays overrides the backfill's waits between retries.
+	BackfillRetryDelays []time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -43,13 +48,13 @@ type component struct {
 }
 
 // Run runs every component until ctx is cancelled (by SIGINT/SIGTERM in
-// production) or one of them fails. Later work registers the state sync and
-// the backfill here.
+// production) or one of them fails. Later work registers the state sync here.
 func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	log.WithFields(log.Fields{
-		"http_addr":       cfg.HTTPAddr,
-		"log_level":       cfg.LogLevel,
-		"indexer_enabled": cfg.IndexerEnabled,
+		"http_addr":        cfg.HTTPAddr,
+		"log_level":        cfg.LogLevel,
+		"indexer_enabled":  cfg.IndexerEnabled,
+		"backfill_enabled": cfg.BackfillEnabled,
 	}).Info("starting bze-scan")
 
 	if err := cfg.RequireDatabase(); err != nil {
@@ -75,8 +80,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		statusRetry, rawRetry = retry, retry
 	}
 	checker := status.New(status.Config{
-		Interval:  cfg.StatusInterval,
-		Tolerance: cfg.StatusHeightTolerance,
+		Interval:        cfg.StatusInterval,
+		Tolerance:       cfg.StatusHeightTolerance,
+		BackfillEnabled: cfg.BackfillEnabled,
 	}, status.Deps{
 		Store:        status.NewPGStore(apiPool),
 		Local:        node.New(cfg.NodeRPCURL),
@@ -105,33 +111,55 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		{name: "status checker", run: checker.Run},
 	}
 
-	if cfg.IndexerEnabled {
-		nodeClient := node.New(cfg.NodeRPCURL)
-		if err := checkChainID(ctx, nodeClient, cfg.ChainID); err != nil {
-			return err
-		}
+	// The live indexer's catch-up and the backfill share the history side:
+	// its own pool, the batch writer and one archive rate limiter.
+	var hist *history
+	if cfg.IndexerEnabled || cfg.BackfillEnabled {
 		codec, err := chain.NewCodec()
 		if err != nil {
 			return err
 		}
-		pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
-		if err != nil {
-			return fmt.Errorf("live writer pool: %w", err)
+		if hist, err = newHistory(ctx, cfg, opts, codec); err != nil {
+			return err
 		}
-		// Closed after every component has returned: the indexer finishes
-		// the height in flight first.
-		defer pool.Close()
+		// Closed after every component has returned.
+		defer hist.pool.Close()
 
-		ix := live.New(opts.Live, live.Deps{
-			Listener:    live.NewPGListener(cfg.DatabaseURL),
-			Node:        nodeClient,
-			Store:       writer.NewLiveWriter(pool),
-			Transformer: transform.New(codec, log.StandardLogger()),
-			Raw:         raw,
-		})
-		components = append(components, component{name: "live indexer", run: ix.Run})
-	} else {
+		if cfg.IndexerEnabled {
+			nodeClient := node.New(cfg.NodeRPCURL)
+			if err := checkChainID(ctx, nodeClient, cfg.ChainID); err != nil {
+				return err
+			}
+			pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+			if err != nil {
+				return fmt.Errorf("live writer pool: %w", err)
+			}
+			// Closed after every component has returned: the indexer
+			// finishes the height in flight first.
+			defer pool.Close()
+
+			ix := live.New(opts.Live, live.Deps{
+				Listener:    live.NewPGListener(cfg.DatabaseURL),
+				Node:        nodeClient,
+				Store:       writer.NewLiveWriter(pool),
+				Transformer: transform.New(codec, log.StandardLogger()),
+				Raw:         raw,
+				CatchUp:     hist.catchUp(),
+			})
+			components = append(components, component{name: "live indexer", run: ix.Run})
+		}
+		if cfg.BackfillEnabled {
+			components = append(components, backfillComponent(hist, cfg))
+		}
+	}
+	if !cfg.IndexerEnabled {
 		log.Info("live indexer disabled (INDEXER_ENABLED=false)")
+	}
+	if !cfg.BackfillEnabled {
+		// An unfinished job reports paused until it is enabled again.
+		if err := backfill.Pause(ctx, backfill.NewPGStore(apiPool)); err != nil {
+			log.WithError(err).Warn("backfill: marking the checkpoint paused")
+		}
 	}
 
 	g, gctx := errgroup.WithContext(ctx)

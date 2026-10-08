@@ -12,7 +12,9 @@
 //	<height>/commit.json          /commit?height=<height>
 //
 // A height without a fixture answers above_tip.json with HTTP 500, as a real
-// node does. A request without a height resolves to the status height, as a
+// node does. SetEarliestHeight makes the node behave as a pruned one: /status
+// reports that earliest_block_height and every height below it answers the
+// node's "not available" error. A request without a height resolves to the status height, as a
 // real node resolves it to its latest height.
 package fakenode
 
@@ -47,7 +49,10 @@ var byHeightFiles = map[string]string{
 //go:embed testdata
 var testdata embed.FS
 
-var latestHeightRe = regexp.MustCompile(`"latest_block_height":"(\d+)"`)
+var (
+	latestHeightRe   = regexp.MustCompile(`"latest_block_height":"(\d+)"`)
+	earliestHeightRe = regexp.MustCompile(`"earliest_block_height":"(\d+)"`)
+)
 
 // Node is a running fake CometBFT RPC node. Use URL for its base address.
 type Node struct {
@@ -59,7 +64,9 @@ type Node struct {
 	recordedTip   int64
 	mu            sync.Mutex
 	statusHeight  int64 // 0: answer status.json as recorded
+	earliest      int64 // 0: the recorded earliest height, nothing pruned
 	requestCounts map[string]int
+	heightCounts  map[string]int
 }
 
 // New starts a fake node serving the recorded fixtures and closes it when the
@@ -102,6 +109,7 @@ func newNode(fixtures fs.FS) (*Node, error) {
 		aboveTip:      aboveTip,
 		recordedTip:   tip,
 		requestCounts: map[string]int{},
+		heightCounts:  map[string]int{},
 	}, nil
 }
 
@@ -127,6 +135,22 @@ func (n *Node) SetStatusHeight(h int64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.statusHeight = h
+}
+
+// SetEarliestHeight makes /status answer h as earliest_block_height and every
+// by-height route below h answer the pruned error. h <= 0 restores the
+// recorded status and serves every height again.
+func (n *Node) SetEarliestHeight(h int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.earliest = h
+}
+
+// RequestsAt returns how many requests route has received for height.
+func (n *Node) RequestsAt(route string, height int64) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.heightCounts[route+"?"+strconv.FormatInt(height, 10)]
 }
 
 // FixtureHeights lists the heights with recorded fixtures, ascending.
@@ -175,13 +199,14 @@ func (n *Node) ResetRequests() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.requestCounts = map[string]int{}
+	n.heightCounts = map[string]int{}
 }
 
 func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.URL.Path
 	n.mu.Lock()
 	n.requestCounts[route]++
-	statusHeight := n.statusHeight
+	statusHeight, earliest := n.statusHeight, n.earliest
 	n.mu.Unlock()
 
 	if r.Method != http.MethodGet {
@@ -192,8 +217,12 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if route == RouteStatus {
 		body := n.status
 		if statusHeight > 0 {
-			body = latestHeightRe.ReplaceAll(n.status,
+			body = latestHeightRe.ReplaceAll(body,
 				[]byte(fmt.Sprintf(`"latest_block_height":"%d"`, statusHeight)))
+		}
+		if earliest > 0 {
+			body = earliestHeightRe.ReplaceAll(body,
+				[]byte(fmt.Sprintf(`"earliest_block_height":"%d"`, earliest)))
 		}
 		writeJSON(w, http.StatusOK, body)
 		return
@@ -213,6 +242,16 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		height = h
+	}
+	n.mu.Lock()
+	n.heightCounts[route+"?"+strconv.FormatInt(height, 10)]++
+	n.mu.Unlock()
+
+	if height < earliest {
+		writeJSON(w, http.StatusInternalServerError, []byte(fmt.Sprintf(
+			`{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"height %d is not available, lowest height is %d"}}`,
+			height, earliest)))
+		return
 	}
 
 	body, err := fs.ReadFile(n.fixtures, path.Join(strconv.FormatInt(height, 10), file))

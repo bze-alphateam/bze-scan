@@ -61,6 +61,12 @@ type RawCache interface {
 	PutHeight(height int64, block, blockResults, commit []byte)
 }
 
+// CatchUp indexes heights the local node has pruned (an outage longer than
+// its retained window) from an archive node, and moves the cursor past them.
+type CatchUp interface {
+	CatchUp(ctx context.Context, from, to int64) error
+}
+
 // Deps are the indexer's dependencies.
 type Deps struct {
 	Listener    Listener
@@ -69,6 +75,9 @@ type Deps struct {
 	Transformer Transformer
 	// Raw is optional: nil keeps no bodies.
 	Raw RawCache
+	// CatchUp is optional: nil records the heights the node has pruned in
+	// index_failures.
+	CatchUp CatchUp
 }
 
 // Defaults of Config.
@@ -104,6 +113,7 @@ type Indexer struct {
 	store       Store
 	transformer Transformer
 	raw         RawCache
+	catchUp     CatchUp
 }
 
 // New returns an indexer woken by deps.Listener, reading deps.Node,
@@ -124,7 +134,7 @@ func New(cfg Config, deps Deps) *Indexer {
 	if cfg.Sleep == nil {
 		cfg.Sleep = sleep
 	}
-	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer, raw: deps.Raw}
+	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer, raw: deps.Raw, catchUp: deps.CatchUp}
 }
 
 // Run listens and indexes until ctx is cancelled, reconnecting with backoff
@@ -218,6 +228,18 @@ func (ix *Indexer) pass(ctx context.Context, notified int64) error {
 	from, to, ok := heightRange(cursor, hasCursor, floor, hasFloor, notified, st.LatestBlockHeight)
 	if !ok {
 		return nil
+	}
+	// Heights below the node's earliest are gone from it: the catch-up job
+	// reads them from the archive and moves the cursor past them.
+	if ix.catchUp != nil && from < st.EarliestBlockHeight {
+		upTo := min(to, st.EarliestBlockHeight-1)
+		if err := ix.catchUp.CatchUp(ctx, from, upTo); err != nil {
+			return fmt.Errorf("catch-up: %w", err)
+		}
+		from = upTo + 1
+		if from > to {
+			return nil
+		}
 	}
 	if to > from {
 		log.WithFields(log.Fields{"from": from, "to": to}).Info("live indexer catching up")
