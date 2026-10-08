@@ -9,4 +9,7 @@ The app talks only to the backend API, including for the raw JSON shown in the
 "More details" sections, which the backend proxies from archive nodes. Live
 views (home, the block and transaction lists, the account page) refetch every
 7 seconds through React Query and pause in background tabs; a block or a found
-transaction is fetched once and never refetched.
+transaction is fetched once and never refetched. A small light in the footer or
+header reflects the backend's status endpoint (green when live indexing keeps
+up with the chain, red otherwise, with the heights and the backfill state next
+to it), refetched once a minute.
