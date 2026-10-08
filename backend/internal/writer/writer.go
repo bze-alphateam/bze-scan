@@ -42,17 +42,13 @@ type DB interface {
 // LiveWriter writes the live indexer's blocks, one height per transaction.
 // Give it a pool of its own: the live path must not wait on other writers.
 type LiveWriter struct {
-	db DB
-
-	mu sync.Mutex
-	// lastPartition is the lower bound of the highest existing blocks
-	// partition; -1 until read from the catalog.
-	lastPartition int64
+	db    DB
+	parts *partitions
 }
 
 // NewLiveWriter returns a live writer over db.
 func NewLiveWriter(db DB) *LiveWriter {
-	return &LiveWriter{db: db, lastPartition: -1}
+	return &LiveWriter{db: db, parts: newPartitions(db)}
 }
 
 // Cursor returns indexer_state.last_indexed_height, and false when the live
@@ -97,7 +93,7 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 		top = max(top, b.Height)
 	}
 
-	topUp, err := w.needsTopUp(ctx, top)
+	topUp, err := w.parts.needsTopUp(ctx, top)
 	if err != nil {
 		return err
 	}
@@ -109,15 +105,18 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if topUp {
-		if _, err := tx.Exec(ctx, `SELECT explorer.ensure_partitions($1, $2)`, top, top+PartitionTopUp); err != nil {
+		if _, err := tx.Exec(ctx, topUpSQL, top, top+PartitionTopUp); err != nil {
 			return fmt.Errorf("write %d: top up partitions: %w", top, err)
 		}
 	}
-	if err := insertTransactions(ctx, tx, top, ents.Transactions); err != nil {
+	rows, err := rowStatements(top, ents)
+	if err != nil {
 		return err
 	}
-	if err := insertMessages(ctx, tx, top, ents.Messages); err != nil {
-		return err
+	for _, st := range rows {
+		if _, err := tx.Exec(ctx, st.sql, st.args...); err != nil {
+			return fmt.Errorf("write %d: %s: %w", top, st.table, err)
+		}
 	}
 	for i := range ents.Blocks {
 		if err := insertBlock(ctx, tx, &ents.Blocks[i]); err != nil {
@@ -141,9 +140,7 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 	}
 
 	if topUp {
-		w.mu.Lock()
-		w.lastPartition = max(w.lastPartition, migrations.PartitionLower(top+PartitionTopUp))
-		w.mu.Unlock()
+		w.parts.toppedUp(top)
 	}
 	return nil
 }
@@ -158,18 +155,25 @@ func (w *LiveWriter) RecordFailure(ctx context.Context, height int64, attempts i
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, `INSERT INTO explorer.index_failures (height, source, attempts, error, failed_at)
-		VALUES ($1, $2, $3, $4, now())
-		ON CONFLICT (height, source) DO UPDATE
-		SET attempts = EXCLUDED.attempts, error = EXCLUDED.error, failed_at = now(), resolved_at = NULL`,
-		height, FailureSourceLive, attempts, cause.Error()); err != nil {
-		return fmt.Errorf("record failure %d: %w", height, err)
+	if err := upsertFailure(ctx, tx, height, FailureSourceLive, attempts, cause); err != nil {
+		return err
 	}
 	if err := advanceCursor(ctx, tx, height); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("record failure %d: commit: %w", height, err)
+	}
+	return nil
+}
+
+func upsertFailure(ctx context.Context, tx pgx.Tx, height int64, source string, attempts int, cause error) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO explorer.index_failures (height, source, attempts, error, failed_at)
+		VALUES ($1, $2, $3, $4, now())
+		ON CONFLICT (height, source) DO UPDATE
+		SET attempts = EXCLUDED.attempts, error = EXCLUDED.error, failed_at = now(), resolved_at = NULL`,
+		height, source, attempts, cause.Error()); err != nil {
+		return fmt.Errorf("record failure %d: %w", height, err)
 	}
 	return nil
 }
@@ -232,28 +236,70 @@ type msgRow struct {
 	Body     json.RawMessage `json:"body"`
 }
 
-func insertTransactions(ctx context.Context, tx pgx.Tx, top int64, txs []transform.Transaction) error {
-	if len(txs) == 0 {
-		return nil
-	}
-	rows := make([]txRow, 0, len(txs))
-	for _, t := range txs {
+// ChunkRows bounds the rows of one multi-row insert.
+const ChunkRows = 1000
+
+const topUpSQL = `SELECT explorer.ensure_partitions($1, $2)`
+
+// statement is one bulk insert of up to ChunkRows rows.
+type statement struct {
+	table string
+	sql   string
+	args  []any
+}
+
+// rowStatements returns the bulk inserts of the transactions and messages of
+// ents, in chunks of ChunkRows rows. top names the write in errors.
+func rowStatements(top int64, ents *transform.Entities) ([]statement, error) {
+	txRows := make([]txRow, 0, len(ents.Transactions))
+	for _, t := range ents.Transactions {
 		fee, err := json.Marshal(nonNil(t.Fee))
 		if err != nil {
-			return fmt.Errorf("write %d: transactions: fee: %w", top, err)
+			return nil, fmt.Errorf("write %d: transactions: fee: %w", top, err)
 		}
-		rows = append(rows, txRow{
+		txRows = append(txRows, txRow{
 			Height: t.Height, TxIndex: t.TxIndex, Hash: t.Hash, Time: t.Time, Success: t.Success,
 			Code: t.Code, Codespace: nullIfEmpty(t.Codespace), ErrorLog: nullIfEmpty(t.ErrorLog),
 			GasWanted: t.GasWanted, GasUsed: t.GasUsed, Fee: fee, FeePayer: nullIfEmpty(t.FeePayer),
 			Signers: nonNil(t.Signers), Memo: nullIfEmpty(t.Memo), MsgCount: t.MsgCount, MsgTypes: nonNil(t.MsgTypes),
 		})
 	}
-	payload, err := json.Marshal(rows)
-	if err != nil {
-		return fmt.Errorf("write %d: transactions: %w", top, err)
+	msgRows := make([]msgRow, 0, len(ents.Messages))
+	for _, m := range ents.Messages {
+		events, err := json.Marshal(nonNil(m.Events))
+		if err != nil {
+			return nil, fmt.Errorf("write %d: messages: events: %w", top, err)
+		}
+		msgRows = append(msgRows, msgRow{
+			Height: m.Height, TxIndex: m.TxIndex, MsgIndex: m.MsgIndex, TypeURL: m.TypeURL,
+			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
+		})
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO explorer.transactions (
+	txs, err := chunked(top, "transactions", insertTransactionsSQL, txRows)
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := chunked(top, "messages", insertMessagesSQL, msgRows)
+	if err != nil {
+		return nil, err
+	}
+	return append(txs, msgs...), nil
+}
+
+// chunked splits rows into statements of sql with one JSON parameter each.
+func chunked[T any](top int64, table, sql string, rows []T) ([]statement, error) {
+	var out []statement
+	for lo := 0; lo < len(rows); lo += ChunkRows {
+		payload, err := json.Marshal(rows[lo:min(lo+ChunkRows, len(rows))])
+		if err != nil {
+			return nil, fmt.Errorf("write %d: %s: %w", top, table, err)
+		}
+		out = append(out, statement{table: table, sql: sql, args: []any{payload}})
+	}
+	return out, nil
+}
+
+const insertTransactionsSQL = `INSERT INTO explorer.transactions (
 			height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
 			fee, fee_payer, signers, memo, msg_count, msg_types)
 		SELECT height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
@@ -262,42 +308,15 @@ func insertTransactions(ctx context.Context, tx pgx.Tx, top int64, txs []transfo
 			height bigint, tx_index integer, hash text, time timestamptz, success boolean, code integer,
 			codespace text, error_log text, gas_wanted bigint, gas_used bigint, fee jsonb, fee_payer text,
 			signers text[], memo text, msg_count integer, msg_types text[])
-		ON CONFLICT (height, tx_index) DO NOTHING`, payload); err != nil {
-		return fmt.Errorf("write %d: transactions: %w", top, err)
-	}
-	return nil
-}
+		ON CONFLICT (height, tx_index) DO NOTHING`
 
-func insertMessages(ctx context.Context, tx pgx.Tx, top int64, msgs []transform.Message) error {
-	if len(msgs) == 0 {
-		return nil
-	}
-	rows := make([]msgRow, 0, len(msgs))
-	for _, m := range msgs {
-		events, err := json.Marshal(nonNil(m.Events))
-		if err != nil {
-			return fmt.Errorf("write %d: messages: events: %w", top, err)
-		}
-		rows = append(rows, msgRow{
-			Height: m.Height, TxIndex: m.TxIndex, MsgIndex: m.MsgIndex, TypeURL: m.TypeURL,
-			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
-		})
-	}
-	payload, err := json.Marshal(rows)
-	if err != nil {
-		return fmt.Errorf("write %d: messages: %w", top, err)
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO explorer.messages (
+const insertMessagesSQL = `INSERT INTO explorer.messages (
 			height, tx_index, msg_index, type_url, sender, module, events, body)
 		SELECT height, tx_index, msg_index, type_url, sender, module, events, NULLIF(body, 'null'::jsonb)
 		  FROM jsonb_to_recordset($1::jsonb) AS r(
 			height bigint, tx_index integer, msg_index integer, type_url text, sender text, module text,
 			events jsonb, body jsonb)
-		ON CONFLICT (height, tx_index, msg_index) DO NOTHING`, payload); err != nil {
-		return fmt.Errorf("write %d: messages: %w", top, err)
-	}
-	return nil
-}
+		ON CONFLICT (height, tx_index, msg_index) DO NOTHING`
 
 func nonNil[T any](s []T) []T {
 	if s == nil {
@@ -319,27 +338,48 @@ func advanceCursor(ctx context.Context, tx pgx.Tx, height int64) error {
 	return nil
 }
 
+// partitions tracks the highest existing blocks partition of one writer.
+type partitions struct {
+	db DB
+
+	mu sync.Mutex
+	// last is the lower bound of the highest existing blocks partition; -1
+	// until read from the catalog.
+	last int64
+}
+
+func newPartitions(db DB) *partitions {
+	return &partitions{db: db, last: -1}
+}
+
 // needsTopUp reports whether height lies in (or above) the last existing
 // blocks partition. The partition list is read from the catalog once and
 // then tracked in memory.
-func (w *LiveWriter) needsTopUp(ctx context.Context, height int64) (bool, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.lastPartition < 0 {
+func (p *partitions) needsTopUp(ctx context.Context, height int64) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.last < 0 {
 		var top *int64
-		err := w.db.QueryRow(ctx, `SELECT max(substring(c.relname FROM '^blocks_p([0-9]+)$')::bigint)
+		err := p.db.QueryRow(ctx, `SELECT max(substring(c.relname FROM '^blocks_p([0-9]+)$')::bigint)
 			FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
 			WHERE i.inhparent = 'explorer.blocks'::regclass`).Scan(&top)
 		if err != nil {
 			return false, fmt.Errorf("read partitions: %w", err)
 		}
 		if top == nil {
-			w.lastPartition = 0
+			p.last = 0
 			return true, nil
 		}
-		w.lastPartition = *top * migrations.PartitionSize
+		p.last = *top * migrations.PartitionSize
 	}
-	return migrations.PartitionLower(height) >= w.lastPartition, nil
+	return migrations.PartitionLower(height) >= p.last, nil
+}
+
+// toppedUp records a committed top-up above height.
+func (p *partitions) toppedUp(height int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.last = max(p.last, migrations.PartitionLower(height+PartitionTopUp))
 }
 
 func nullIfEmpty(s string) *string {
