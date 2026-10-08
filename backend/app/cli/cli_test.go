@@ -23,6 +23,33 @@ func TestHelpListsCommands(t *testing.T) {
 	require.NoError(t, root.Execute())
 	assert.Contains(t, out.String(), "serve")
 	assert.Contains(t, out.String(), "migrate")
+	assert.Contains(t, out.String(), "backfill")
+}
+
+func TestBackfillRequiresDatabaseURL(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"backfill"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DATABASE_URL is required")
+}
+
+func TestBackfillRejectsInvalidConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("BACKFILL_FLOOR", "yesterday")
+
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"backfill"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "BACKFILL_FLOOR")
 }
 
 func TestMigrateCommandsRequireDatabaseURL(t *testing.T) {

@@ -14,7 +14,8 @@ import (
 
 var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
-	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL"}
+	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
+	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -35,7 +36,9 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, &config.Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
-		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
+		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
+		BackfillRateLimit: 20}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -49,7 +52,9 @@ func TestLoadFromEnvironment(t *testing.T) {
 	assert.Equal(t, &config.Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
-		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
+		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
+		BackfillRateLimit: 20}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -133,7 +138,9 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 	assert.Equal(t, &config.Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
-		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
+		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
+		BackfillRateLimit: 20}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -252,6 +259,64 @@ func TestLoadRejectsInvalidRawCacheSettings(t *testing.T) {
 	cases := map[string][]string{
 		"RAW_CACHE_MAX_ENTRIES": {"many", "0", "-1"},
 		"RAW_CACHE_TTL":         {"20", "0s", "-1m"},
+	}
+	for key, values := range cases {
+		for _, value := range values {
+			t.Run(key+"="+value, func(t *testing.T) {
+				isolate(t)
+				t.Setenv(key, value)
+
+				_, err := config.Load()
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), key)
+			})
+		}
+	}
+}
+
+func TestLoadBackfillSettings(t *testing.T) {
+	isolate(t)
+	t.Setenv("BACKFILL_ENABLED", "true")
+	t.Setenv("BACKFILL_FLOOR", "19560001")
+	t.Setenv("BACKFILL_WORKERS", "3")
+	t.Setenv("BACKFILL_BATCH", "4")
+	t.Setenv("BACKFILL_QUIET", "500ms")
+	t.Setenv("BACKFILL_RATE_LIMIT", "2.5")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.BackfillEnabled)
+	assert.Equal(t, int64(19560001), cfg.BackfillFloorHeight)
+	assert.True(t, cfg.BackfillFloorDate.IsZero())
+	assert.Equal(t, 3, cfg.BackfillWorkers)
+	assert.Equal(t, 4, cfg.BackfillBatch)
+	assert.Equal(t, 500*time.Millisecond, cfg.BackfillQuiet)
+	assert.InDelta(t, 2.5, cfg.BackfillRateLimit, 0)
+}
+
+func TestLoadBackfillFloorForms(t *testing.T) {
+	isolate(t)
+	t.Setenv("BACKFILL_FLOOR", "GENESIS")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), cfg.BackfillFloorHeight)
+	assert.True(t, cfg.BackfillFloorDate.IsZero())
+
+	t.Setenv("BACKFILL_FLOOR", "2024-10-08")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2024, 10, 8, 0, 0, 0, 0, time.UTC), cfg.BackfillFloorDate)
+	assert.Zero(t, cfg.BackfillFloorHeight)
+}
+
+func TestLoadRejectsInvalidBackfillSettings(t *testing.T) {
+	cases := map[string][]string{
+		"BACKFILL_ENABLED":    {"maybe"},
+		"BACKFILL_FLOOR":      {"0", "-5", "yesterday", "2024-13-01", "08.10.2024"},
+		"BACKFILL_WORKERS":    {"many", "0", "-1"},
+		"BACKFILL_BATCH":      {"1.5", "0"},
+		"BACKFILL_QUIET":      {"2", "0s"},
+		"BACKFILL_RATE_LIMIT": {"fast", "0", "-1", "Inf"},
 	}
 	for key, values := range cases {
 		for _, value := range values {

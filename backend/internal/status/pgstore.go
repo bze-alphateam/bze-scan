@@ -44,3 +44,14 @@ func (s *PGStore) OldestHeight(ctx context.Context) (int64, bool, error) {
 	}
 	return *h, true, nil
 }
+
+// BackfillStatus implements Store.
+func (s *PGStore) BackfillStatus(ctx context.Context) (string, bool, error) {
+	var st string
+	err := s.db.QueryRow(ctx,
+		`SELECT status FROM explorer.backfill_checkpoints WHERE job = 'main'`).Scan(&st)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return st, err == nil, err
+}

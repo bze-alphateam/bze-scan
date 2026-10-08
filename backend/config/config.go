@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -71,6 +72,25 @@ type Config struct {
 	RawCacheMaxEntries int
 	// RawCacheTTL is how long a raw-JSON entry lives after it was stored.
 	RawCacheTTL time.Duration
+
+	// BackfillEnabled runs the main backfill job inside serve. The backfill
+	// command runs it whatever this says.
+	BackfillEnabled bool
+	// BackfillFloorHeight is the lowest height the backfill indexes (1 for
+	// genesis), used when BackfillFloorDate is zero.
+	BackfillFloorHeight int64
+	// BackfillFloorDate, when set, makes the floor the first block at or
+	// after this UTC midnight.
+	BackfillFloorDate time.Time
+	// BackfillWorkers (X) bounds the heights fetched in parallel.
+	BackfillWorkers int
+	// BackfillBatch (M) is the number of heights one flush writes at most.
+	BackfillBatch int
+	// BackfillQuiet flushes what the writer holds after this idle time.
+	BackfillQuiet time.Duration
+	// BackfillRateLimit is the archive requests per second, across every
+	// worker of the backfill and the catch-up.
+	BackfillRateLimit float64
 }
 
 // Load reads the environment (and a .env file when present), applies
@@ -156,6 +176,49 @@ func Load() (*Config, error) {
 		fail("RAW_CACHE_TTL must be a positive duration like 20m (got %q)", ttl)
 	} else {
 		cfg.RawCacheTTL = d
+	}
+
+	backfill := envString("BACKFILL_ENABLED", "false")
+	if v, err := strconv.ParseBool(backfill); err != nil {
+		fail("BACKFILL_ENABLED must be true or false (got %q)", backfill)
+	} else {
+		cfg.BackfillEnabled = v
+	}
+
+	floor := envString("BACKFILL_FLOOR", "genesis")
+	if strings.EqualFold(floor, "genesis") {
+		cfg.BackfillFloorHeight = 1
+	} else if n, err := strconv.ParseInt(floor, 10, 64); err == nil && n > 0 {
+		cfg.BackfillFloorHeight = n
+	} else if d, err := time.Parse(time.DateOnly, floor); err == nil {
+		cfg.BackfillFloorDate = d
+	} else {
+		fail("BACKFILL_FLOOR must be genesis, a positive height or a YYYY-MM-DD date (got %q)", floor)
+	}
+
+	positiveInt := func(key, def string, dst *int) {
+		v := envString(key, def)
+		if n, err := strconv.Atoi(v); err != nil || n <= 0 {
+			fail("%s must be a positive integer (got %q)", key, v)
+		} else {
+			*dst = n
+		}
+	}
+	positiveInt("BACKFILL_WORKERS", "10", &cfg.BackfillWorkers)
+	positiveInt("BACKFILL_BATCH", "50", &cfg.BackfillBatch)
+
+	quiet := envString("BACKFILL_QUIET", "2s")
+	if d, err := time.ParseDuration(quiet); err != nil || d <= 0 {
+		fail("BACKFILL_QUIET must be a positive duration like 2s (got %q)", quiet)
+	} else {
+		cfg.BackfillQuiet = d
+	}
+
+	rateLimit := envString("BACKFILL_RATE_LIMIT", "20")
+	if r, err := strconv.ParseFloat(rateLimit, 64); err != nil || r <= 0 || math.IsInf(r, 0) {
+		fail("BACKFILL_RATE_LIMIT must be a positive number of requests per second (got %q)", rateLimit)
+	} else {
+		cfg.BackfillRateLimit = r
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {

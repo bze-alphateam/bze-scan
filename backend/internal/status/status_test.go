@@ -20,10 +20,21 @@ var errDown = errors.New("connection refused")
 
 // fakeStore answers the heights it holds; a nil height is "not written yet".
 type fakeStore struct {
-	mu     sync.Mutex
-	db     *int64
-	oldest *int64
-	err    error
+	mu       sync.Mutex
+	db       *int64
+	oldest   *int64
+	err      error
+	backfill *string // main checkpoint status, nil: no checkpoint
+	bfErr    error
+}
+
+func (s *fakeStore) BackfillStatus(context.Context) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bfErr != nil || s.backfill == nil {
+		return "", false, s.bfErr
+	}
+	return *s.backfill, true, nil
 }
 
 func (s *fakeStore) set(db int64) {
@@ -258,4 +269,44 @@ func TestRunTicksAndStopsInsideATick(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not stop")
 	}
+}
+
+func TestBackFillStateRule(t *testing.T) {
+	cases := []struct {
+		enabled    bool
+		checkpoint string
+		has        bool
+		want       string
+	}{
+		{false, "", false, status.BackFillFinished},
+		{true, "", false, status.BackFillInProgress},
+		{true, "running", true, status.BackFillInProgress},
+		{false, "running", true, status.BackFillInProgress},
+		{false, "paused", true, status.BackFillInProgress},
+		{true, "error", true, status.BackFillInProgress},
+		{false, "error", true, status.BackFillInProgress},
+		{true, "done", true, status.BackFillFinished},
+		{false, "done", true, status.BackFillFinished},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, status.BackFillState(c.enabled, c.checkpoint, c.has), "%+v", c)
+	}
+}
+
+func TestCheckReportsTheBackfillCheckpoint(t *testing.T) {
+	running, done := "running", "done"
+	store := &fakeStore{backfill: &running}
+	c := status.New(status.Config{BackfillEnabled: true}, status.Deps{Store: store, Local: &fakeNode{height: 1}, Log: quiet()})
+	assert.Equal(t, status.BackFillInProgress, c.Snapshot().BackFill, "before the first tick")
+	assert.Equal(t, status.BackFillInProgress, c.Check(context.Background()).BackFill)
+
+	store.mu.Lock()
+	store.backfill = &done
+	store.mu.Unlock()
+	assert.Equal(t, status.BackFillFinished, c.Check(context.Background()).BackFill)
+
+	store.mu.Lock()
+	store.bfErr = errDown
+	store.mu.Unlock()
+	assert.Equal(t, status.BackFillFinished, c.Check(context.Background()).BackFill, "a failed read keeps the verdict")
 }
