@@ -1,0 +1,115 @@
+{
+  "transactions": [
+    {
+      "Height": 3000275,
+      "TxIndex": 0,
+      "Hash": "A6ACCD20C92502EE7EA7FECE8369262A7514CE5EF370AC1D38C65174A3EA0AE6",
+      "Time": "2022-10-11T21:00:21.431427136Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 200000,
+      "GasUsed": 143651,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "FeePayer": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p",
+      "Signers": [
+        "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.staking.v1beta1.MsgDelegate"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 3000275,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.staking.v1beta1.MsgDelegate",
+      "Sender": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p",
+      "Module": "",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.staking.v1beta1.MsgDelegate",
+            "sender": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "11249ubze",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "11249ubze",
+            "receiver": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "11249ubze",
+            "recipient": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "24837864ubze",
+            "spender": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "24837864ubze",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "24837864ubze",
+            "new_shares": "24839851.188057149948561762",
+            "validator": "bzevaloper1s7m86a4z8gqmlr4exmnlkdjz23vweet7hc2r77"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "staking",
+            "sender": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p"
+          }
+        }
+      ],
+      "Body": {
+        "delegator_address": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p",
+        "validator_address": "bzevaloper1s7m86a4z8gqmlr4exmnlkdjz23vweet7hc2r77",
+        "amount": {
+          "denom": "ubze",
+          "amount": "24837864"
+        }
+      }
+    }
+  ]
+}

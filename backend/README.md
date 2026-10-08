@@ -139,8 +139,11 @@ app/dto/           JSON shapes of the API and the keyset cursor
 app/repository/    read queries over the explorer tables (pgx)
 app/middleware/    request id, request log, panic recovery, JSON error
                    handler
+internal/archive/  normalises the pre-v8 event format of archive heights
+                   (generation table, legacy names), archive path only
 internal/chain/    chain facts (bech32 prefix, module account addresses), the
-                   chain's codec (transaction decoding), coin strings
+                   chain's codec (transaction decoding, pre-v8 type URLs),
+                   coin strings
 internal/classify/ message and block-event classification (Go source of
                    truth, mirrored into SQL by migrate)
 internal/node/     CometBFT RPC client, by-height routes only
@@ -345,9 +348,9 @@ elsewhere ends without stopping the process, and the next start resumes it).
   `/block`, `/block_results` and `/commit` under one rate limiter shared by
   every worker, retries three times (0.5 s, 1 s, 2 s) against
   `ARCHIVE_RPC_RETRY_URL` (or the primary again), runs the archive adapter
-  hook and the transformer, and sends one result into the writer's channel
-  (capacity X). Its slot frees once the result is queued, so memory holds at
-  most X in flight, X queued and M held.
+  (see "Old event formats") and the transformer, and sends one result into
+  the writer's channel (capacity X). Its slot frees once the result is
+  queued, so memory holds at most X in flight, X queued and M held.
 - **Writer.** A batch writer of its own (own pool, never the live writer's)
   holds results in arrival order and flushes when it holds M heights, after
   `BACKFILL_QUIET` without a result, and when the channel closes after the
@@ -368,6 +371,27 @@ elsewhere ends without stopping the process, and the next start resumes it).
   `running`, `done` at the floor, `error` after a fatal error (resumed at the
   next start), `paused` while `BACKFILL_ENABLED=false`. A done job is not
   rerun unless the floor moves lower.
+
+### Old event formats
+
+Heights before v8.0.0 (mainnet height 20,237,800) were produced by Cosmos SDK
+0.44/0.45 on Tendermint/CometBFT 0.34. On the archive path only (backfill,
+catch-up, reindex; never the live path), `internal/archive` normalises them
+to the current format before the transformer sees them: `msg_index` rebuilt
+from message order, the leading `message` event rebuilt as SDK 0.50 builds it
+(legacy action names such as `create_order` mapped to type URLs), typed
+events renamed from the old proto packages (`bze.tradebin.v1.*` →
+`bze.tradebin.*`), `voter`/`depositor`/`proposer` and the vote option array
+added to the governance events, `amount`/`denom`/`memo` to `ibc_transfer`.
+The codec decodes the pre-v8 BZE type URLs (`/bze.tradebin.v1.MsgCreateOrder`)
+into today's messages, so the rows carry the current type URL; the scavenge
+module, removed in v8, keeps its old URL with a NULL body. A height whose shape
+does not match its generation fails into `index_failures` with
+`unknown event generation`. The generation table, how its heights were
+verified and every difference are in the package documentation
+(`internal/archive/generation.go`). The archive node must run CometBFT 0.38:
+it converts the legacy ABCI responses itself, and an older node's answer is
+rejected rather than guessed at.
 
 ### Transactions and messages
 

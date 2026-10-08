@@ -80,6 +80,11 @@ type BlockResults struct {
 	Height              int64
 	TxsResults          []TxResult
 	FinalizeBlockEvents []Event
+	// BeginBlockEvents and EndBlockEvents are answered only by nodes older
+	// than CometBFT 0.38 (which answer no FinalizeBlockEvents); the archive
+	// adapter rejects them.
+	BeginBlockEvents []Event
+	EndBlockEvents   []Event
 }
 
 // TxResult is one entry of txs_results.
@@ -196,6 +201,8 @@ func (c *Client) BlockResults(ctx context.Context, height int64) (*BlockResults,
 		Height              int64      `json:"height,string"`
 		TxsResults          []TxResult `json:"txs_results"`
 		FinalizeBlockEvents []Event    `json:"finalize_block_events"`
+		BeginBlockEvents    []Event    `json:"begin_block_events"`
+		EndBlockEvents      []Event    `json:"end_block_events"`
 	}
 	raw, err := c.call(ctx, "block_results", height, &res)
 	if err != nil {
@@ -208,6 +215,8 @@ func (c *Client) BlockResults(ctx context.Context, height int64) (*BlockResults,
 		Height:              res.Height,
 		TxsResults:          res.TxsResults,
 		FinalizeBlockEvents: res.FinalizeBlockEvents,
+		BeginBlockEvents:    res.BeginBlockEvents,
+		EndBlockEvents:      res.EndBlockEvents,
 	}, raw, nil
 }
 

@@ -1,0 +1,65 @@
+{
+  "transactions": [
+    {
+      "Height": 20232724,
+      "TxIndex": 0,
+      "Hash": "6DB89C84B312E96A99B61D4F1B5591A03957DF900A21BBD1EADF6F42F9D37430",
+      "Time": "2025-11-27T05:26:49.570401302Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 167212,
+      "GasUsed": 135395,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "1673"
+        }
+      ],
+      "FeePayer": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+      "Signers": [
+        "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/bze.cointrunk.MsgAddArticle"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 20232724,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.cointrunk.MsgAddArticle",
+      "Sender": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+      "Module": "cointrunk",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.cointrunk.MsgAddArticle",
+            "module": "cointrunk",
+            "sender": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+          }
+        },
+        {
+          "type": "bze.cointrunk.ArticleAddedEvent",
+          "attrs": {
+            "article_id": "0",
+            "paid": false,
+            "publisher": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+          }
+        }
+      ],
+      "Body": {
+        "publisher": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+        "title": " ⚛️ Cosmos chronicles 23.11.25",
+        "url": "https://x.com/IvanM10529875/status/1992679916312367423",
+        "picture": "https://pbs.twimg.com/media/G6drzAzXUAEsCFR?format=png\u0026name=small"
+      }
+    }
+  ]
+}

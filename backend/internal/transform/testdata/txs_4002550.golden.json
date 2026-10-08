@@ -1,0 +1,132 @@
+{
+  "transactions": [
+    {
+      "Height": 4002550,
+      "TxIndex": 0,
+      "Hash": "5CEB2836470F0EF48B37283E058592C8DEF98FBD0CBB17A1D44EC3BB9D661447",
+      "Time": "2022-12-21T18:04:46.316782531Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 210000,
+      "GasUsed": 88123,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "5250"
+        }
+      ],
+      "FeePayer": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e",
+      "Signers": [
+        "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/ibc.applications.transfer.v1.MsgTransfer"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 4002550,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/ibc.applications.transfer.v1.MsgTransfer",
+      "Sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e",
+      "Module": "",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/ibc.applications.transfer.v1.MsgTransfer",
+            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "5000000ubze",
+            "spender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "5000000ubze",
+            "receiver": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "5000000ubze",
+            "recipient": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee",
+            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+          }
+        },
+        {
+          "type": "send_packet",
+          "attrs": {
+            "packet_channel_ordering": "ORDER_UNORDERED",
+            "packet_connection": "connection-0",
+            "packet_data": "{\"amount\":\"5000000\",\"denom\":\"ubze\",\"receiver\":\"osmo19l9wsymdh3mp7munzrlk8rs03ttnu2uaujyktu\",\"sender\":\"bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e\"}",
+            "packet_data_hex": "7b22616d6f756e74223a2235303030303030222c2264656e6f6d223a2275627a65222c227265636569766572223a226f736d6f31396c397773796d6468336d70376d756e7a726c6b387273303374746e75327561756a796b7475222c2273656e646572223a22627a6531396c397773796d6468336d70376d756e7a726c6b387273303374746e7532756166646d643065227d",
+            "packet_dst_channel": "channel-340",
+            "packet_dst_port": "transfer",
+            "packet_sequence": "106",
+            "packet_src_channel": "channel-0",
+            "packet_src_port": "transfer",
+            "packet_timeout_height": "1-7438201",
+            "packet_timeout_timestamp": "0"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "ibc_channel"
+          }
+        },
+        {
+          "type": "ibc_transfer",
+          "attrs": {
+            "amount": "5000000",
+            "denom": "ubze",
+            "memo": "",
+            "receiver": "osmo19l9wsymdh3mp7munzrlk8rs03ttnu2uaujyktu",
+            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "transfer"
+          }
+        }
+      ],
+      "Body": {
+        "source_port": "transfer",
+        "source_channel": "channel-0",
+        "token": {
+          "denom": "ubze",
+          "amount": "5000000"
+        },
+        "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e",
+        "receiver": "osmo19l9wsymdh3mp7munzrlk8rs03ttnu2uaujyktu",
+        "timeout_height": {
+          "revision_number": "1",
+          "revision_height": "7438201"
+        },
+        "timeout_timestamp": "0",
+        "memo": ""
+      }
+    }
+  ]
+}

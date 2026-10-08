@@ -1,0 +1,1409 @@
+{
+  "Height": 20232724,
+  "TxsResults": [
+    {
+      "code": 0,
+      "codespace": "",
+      "log": "[{\"events\":[{\"type\":\"bze.cointrunk.v1.ArticleAddedEvent\",\"attributes\":[{\"key\":\"article_id\",\"value\":\"\\\"0\\\"\"},{\"key\":\"paid\",\"value\":\"false\"},{\"key\":\"publisher\",\"value\":\"\\\"bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws\\\"\"}]},{\"type\":\"message\",\"attributes\":[{\"key\":\"action\",\"value\":\"add_article\"}]}]}]",
+      "gas_wanted": "167212",
+      "gas_used": "135395",
+      "events": [
+        {
+          "type": "coin_spent",
+          "attributes": [
+            {
+              "key": "spender",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+            },
+            {
+              "key": "amount",
+              "value": "1673ubze"
+            }
+          ]
+        },
+        {
+          "type": "coin_received",
+          "attributes": [
+            {
+              "key": "receiver",
+              "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+            },
+            {
+              "key": "amount",
+              "value": "1673ubze"
+            }
+          ]
+        },
+        {
+          "type": "transfer",
+          "attributes": [
+            {
+              "key": "recipient",
+              "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+            },
+            {
+              "key": "sender",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+            },
+            {
+              "key": "amount",
+              "value": "1673ubze"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "attributes": [
+            {
+              "key": "sender",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+            }
+          ]
+        },
+        {
+          "type": "tx",
+          "attributes": [
+            {
+              "key": "fee",
+              "value": "1673ubze"
+            },
+            {
+              "key": "fee_payer",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+            }
+          ]
+        },
+        {
+          "type": "tx",
+          "attributes": [
+            {
+              "key": "acc_seq",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws/229"
+            }
+          ]
+        },
+        {
+          "type": "tx",
+          "attributes": [
+            {
+              "key": "signature",
+              "value": "O9Ji33pw1SmHSMc55Gd539UyquoLKievIaA0R/Er4DUSbkyZ8BDM2z8DbyRtPNvpMY2I5XhCFHHg8oaMW5EbcA=="
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "attributes": [
+            {
+              "key": "action",
+              "value": "/bze.cointrunk.MsgAddArticle"
+            },
+            {
+              "key": "sender",
+              "value": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+            },
+            {
+              "key": "module",
+              "value": "cointrunk"
+            },
+            {
+              "key": "msg_index",
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "type": "bze.cointrunk.ArticleAddedEvent",
+          "attributes": [
+            {
+              "key": "article_id",
+              "value": "\"0\""
+            },
+            {
+              "key": "paid",
+              "value": "false"
+            },
+            {
+              "key": "publisher",
+              "value": "\"bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws\""
+            },
+            {
+              "key": "msg_index",
+              "value": "0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "FinalizeBlockEvents": [
+    {
+      "type": "coin_received",
+      "attributes": [
+        {
+          "key": "receiver",
+          "value": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h"
+        },
+        {
+          "key": "amount",
+          "value": "2436712ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "coinbase",
+      "attributes": [
+        {
+          "key": "minter",
+          "value": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h"
+        },
+        {
+          "key": "amount",
+          "value": "2436712ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "coin_spent",
+      "attributes": [
+        {
+          "key": "spender",
+          "value": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h"
+        },
+        {
+          "key": "amount",
+          "value": "2436712ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "coin_received",
+      "attributes": [
+        {
+          "key": "receiver",
+          "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+        },
+        {
+          "key": "amount",
+          "value": "2436712ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "transfer",
+      "attributes": [
+        {
+          "key": "recipient",
+          "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+        },
+        {
+          "key": "sender",
+          "value": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h"
+        },
+        {
+          "key": "amount",
+          "value": "2436712ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "attributes": [
+        {
+          "key": "sender",
+          "value": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "mint",
+      "attributes": [
+        {
+          "key": "bonded_ratio",
+          "value": "0.582875504459957384"
+        },
+        {
+          "key": "inflation",
+          "value": "0.050000000000000000"
+        },
+        {
+          "key": "annual_provisions",
+          "value": "13507352007639.600000000000000000"
+        },
+        {
+          "key": "amount",
+          "value": "2436712"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "coin_spent",
+      "attributes": [
+        {
+          "key": "spender",
+          "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+        },
+        {
+          "key": "amount",
+          "value": "2452564ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "coin_received",
+      "attributes": [
+        {
+          "key": "receiver",
+          "value": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+        },
+        {
+          "key": "amount",
+          "value": "2452564ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "transfer",
+      "attributes": [
+        {
+          "key": "recipient",
+          "value": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+        },
+        {
+          "key": "sender",
+          "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+        },
+        {
+          "key": "amount",
+          "value": "2452564ubze"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "attributes": [
+        {
+          "key": "sender",
+          "value": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "proposer_reward",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "122628.200000000000000000ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xp8kasne7dakz9h07xju73t8vvdjgm039sqqvq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "6131.410000000000000000ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xp8kasne7dakz9h07xju73t8vvdjgm039sqqvq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "122628.200000000000000000ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xp8kasne7dakz9h07xju73t8vvdjgm039sqqvq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "19646.191903965903530575ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1k27v68x9gtppsgt9scr3649tpjfxnqljh3qa3e"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "196461.919039659035305748ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1k27v68x9gtppsgt9scr3649tpjfxnqljh3qa3e"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "7777.228697812147445175ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "155544.573956242948903501ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5062.794076175828820576ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1zww2j706zcanf79vphey96snpldxkkz8xq8pem"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "101255.881523516576411515ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1zww2j706zcanf79vphey96snpldxkkz8xq8pem"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "2002.733645005488737834ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1ngl7qkmpvh80t5ju3cq0ffyx8reph2qacjkpym"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "100136.682250274436891688ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1ngl7qkmpvh80t5ju3cq0ffyx8reph2qacjkpym"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "6936.716912440515587477ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper172fstuv62dq2c98fcyp9h32dgga5y6r5eaq7c9"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "99095.955892007365535389ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper172fstuv62dq2c98fcyp9h32dgga5y6r5eaq7c9"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4614.784242343842019567ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper15vrv8rf58m3h8juldaeuvj0aww6sxm4ksm9ejt"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "92295.684846876840391342ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper15vrv8rf58m3h8juldaeuvj0aww6sxm4ksm9ejt"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4128.267659418216435865ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper19fgph876c3rqxrn6xk5ch6wd73r3g05wzpsht0"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "91739.281320404809685899ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper19fgph876c3rqxrn6xk5ch6wd73r3g05wzpsht0"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4484.896708951515440266ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "89697.934179030308805324ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "8697.713327044580893915ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper16zk776px8ef00hmd59vgnueegyrkk3lja0nhy4"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "86977.133270445808939147ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper16zk776px8ef00hmd59vgnueegyrkk3lja0nhy4"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4321.344182890668637330ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1u98eefp0del3jzgqxmuj0kqjal2fyxf5npftr4"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "86426.883657813372746594ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1u98eefp0del3jzgqxmuj0kqjal2fyxf5npftr4"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4208.941334537356538210ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1qv6jfpavwez6f945f4qkgh6w56fzdczguawred"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "84178.826690747130764197ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1qv6jfpavwez6f945f4qkgh6w56fzdczguawred"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4108.807764289069279525ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1gk8k0u3vkt65xjc82l8qryf44pxp68dcsuth5c"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "82176.155285781385590508ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1gk8k0u3vkt65xjc82l8qryf44pxp68dcsuth5c"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5539.430403242700806476ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1quvktn6z864swqzq7y5zqfyhpatrskv6sj6zq2"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "79134.720046324297235377ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1quvktn6z864swqzq7y5zqfyhpatrskv6sj6zq2"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "7874.164055207351004421ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xq38qxad2eumdaytrejnmypqaay8dtmukz72re"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "78741.640552073510044213ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xq38qxad2eumdaytrejnmypqaay8dtmukz72re"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3306.197471660615848914ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1ash3048dh2s3xhav2xk53yj67x40r8fh8el5qx"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "78718.987420490853545583ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1ash3048dh2s3xhav2xk53yj67x40r8fh8el5qx"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3094.778878565615723106ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper13snue6qplvfgk40gps54v84wgthj8ekfg5sl6q"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "77369.471964140393077650ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper13snue6qplvfgk40gps54v84wgthj8ekfg5sl6q"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3851.146615971411598533ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xp8kasne7dakz9h07xju73t8vvdjgm039sqqvq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "77022.932319428231970666ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1xp8kasne7dakz9h07xju73t8vvdjgm039sqqvq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "6105.633511828276759063ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper12p7gvl4c7lpnfcmq0rs7sr99ju0dmdnazza7zq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "76320.418897853459488288ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper12p7gvl4c7lpnfcmq0rs7sr99ju0dmdnazza7zq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3448.593038193311205962ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7qx0nyg"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "68971.860763866224119238ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7qx0nyg"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5300.354775621969638904ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1hnvjttxzehwldcuwje9fkny3qz37ddn98apez3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "53003.547756219696389038ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1hnvjttxzehwldcuwje9fkny3qz37ddn98apez3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5293.707427233049008322ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1s2m3emtqdpm4a5nhwsux2fm9mmlzcza63fx7nm"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "52937.074272330490083217ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1s2m3emtqdpm4a5nhwsux2fm9mmlzcza63fx7nm"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5055.274806509407359044ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper17excul8pv3pj974z4u60unthpg0t2777n37n08"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "50552.748065094073590441ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper17excul8pv3pj974z4u60unthpg0t2777n37n08"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4736.999709575779983277ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1eln44h0fpqf0wuxpzt8xrpkm6s0puqap9a8ptg"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "47369.997095757799832773ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1eln44h0fpqf0wuxpzt8xrpkm6s0puqap9a8ptg"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4394.685098192216088632ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper19qyr029qa9pmatm5w6p98g0v8suyutccr2ux75"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "43946.850981922160886316ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper19qyr029qa9pmatm5w6p98g0v8suyutccr2ux75"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "4307.013553919783757440ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1alx7nm98jsfpkn6f5r889rpztlpx9g6s7u0g76"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "43070.135539197837574400ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1alx7nm98jsfpkn6f5r889rpztlpx9g6s7u0g76"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3135.137338931786097830ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1mzqtykn6nq6ukeq0wvr0zvzldt8y2elur3vug3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "31351.373389317860978295ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1mzqtykn6nq6ukeq0wvr0zvzldt8y2elur3vug3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "3091.566507505292871634ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1rrdkvra2jrthpm7jnsxym9tukgj96duw5yrk3k"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "30915.665075052928716336ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1rrdkvra2jrthpm7jnsxym9tukgj96duw5yrk3k"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "1263.313842386046559754ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1h0tc940y5rfucgu22ay67u5nuup97u07wq8u7c"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "30078.901009191584756059ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1h0tc940y5rfucgu22ay67u5nuup97u07wq8u7c"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "1803.615842540140764681ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1kh8aqhy07e8c8fd7x8zcz79gy3mfh986m6x6eq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "16396.507659455825133466ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1kh8aqhy07e8c8fd7x8zcz79gy3mfh986m6x6eq"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "commission",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "270.892763974136306004ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1znh4223lfrj97q5kkfs2amgj402dku4uyx4gc3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    },
+    {
+      "type": "rewards",
+      "attributes": [
+        {
+          "key": "amount",
+          "value": "5417.855279482726120089ubze"
+        },
+        {
+          "key": "validator",
+          "value": "bzevaloper1znh4223lfrj97q5kkfs2amgj402dku4uyx4gc3"
+        },
+        {
+          "key": "mode",
+          "value": "BeginBlock"
+        }
+      ]
+    }
+  ],
+  "BeginBlockEvents": null,
+  "EndBlockEvents": null
+}

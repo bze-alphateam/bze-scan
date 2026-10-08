@@ -11,9 +11,12 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx"
+	"github.com/cosmos/cosmos-sdk/x/authz"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 )
@@ -154,4 +157,54 @@ func TestRegistryHasTheChainMessages(t *testing.T) {
 	} {
 		assert.Contains(t, urls, want)
 	}
+}
+
+// A pre-v8 tradebin order: the old type URL decodes into today's message.
+func TestDecodesAPreV8Message(t *testing.T) {
+	tx, err := newCodec(t).Decode(fixtureTx(t, "20230045", 0))
+	require.NoError(t, err)
+	require.Len(t, tx.Msgs, 2)
+	for _, m := range tx.Msgs {
+		assert.Equal(t, "/bze.tradebin.MsgCreateOrder", m.TypeURL)
+		assert.NoError(t, m.Err)
+		assert.Equal(t, "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d", m.Signer)
+		assert.Contains(t, string(m.Body), `"market_id":`, "current field names")
+	}
+	assert.Equal(t, []string{"bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"}, tx.Signers)
+	assert.Equal(t, "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d", tx.FeePayer)
+}
+
+func TestLegacyTypeURLsMapToRegisteredMessages(t *testing.T) {
+	urls := newCodec(t).MsgTypeURLs()
+	require.NotEmpty(t, chain.LegacyTypeURLs())
+	for _, old := range chain.LegacyTypeURLs() {
+		current := chain.CanonicalTypeURL(old)
+		assert.NotEqual(t, old, current)
+		assert.Contains(t, urls, current)
+		assert.NotContains(t, urls, old, "aliases are not listed as messages")
+	}
+	assert.Equal(t, "/cosmos.bank.v1beta1.MsgSend", chain.CanonicalTypeURL("/cosmos.bank.v1beta1.MsgSend"))
+	assert.Equal(t, "/bze.scavenge.MsgSubmitScavenge", chain.CanonicalTypeURL("/bze.scavenge.MsgSubmitScavenge"), "no current type")
+}
+
+func TestNestedLegacyMessagesGetTheirCurrentType(t *testing.T) {
+	c := newCodec(t)
+	order, err := (&tradebintypes.MsgCreateOrder{Creator: "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw", OrderType: "buy", Amount: "1", Price: "2", MarketId: "a/b"}).Marshal()
+	require.NoError(t, err)
+	execBytes, err := (&authz.MsgExec{Grantee: "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw", Msgs: []*codectypes.Any{{TypeUrl: "/bze.tradebin.v1.MsgCreateOrder", Value: order}}}).Marshal()
+	require.NoError(t, err)
+
+	body, err := (&tx.TxBody{Messages: []*codectypes.Any{{TypeUrl: "/cosmos.authz.v1beta1.MsgExec", Value: execBytes}}}).Marshal()
+	require.NoError(t, err)
+	auth, err := (&tx.AuthInfo{Fee: &tx.Fee{}}).Marshal()
+	require.NoError(t, err)
+	raw, err := (&tx.TxRaw{BodyBytes: body, AuthInfoBytes: auth}).Marshal()
+	require.NoError(t, err)
+
+	decoded, err := c.Decode(raw)
+	require.NoError(t, err)
+	require.Len(t, decoded.Msgs, 1)
+	require.NoError(t, decoded.Msgs[0].Err)
+	assert.Contains(t, string(decoded.Msgs[0].Body), `"@type":"/bze.tradebin.MsgCreateOrder"`)
+	assert.NotContains(t, string(decoded.Msgs[0].Body), "v1.MsgCreateOrder")
 }
