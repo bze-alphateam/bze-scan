@@ -1,0 +1,121 @@
+{
+  "transactions": [
+    {
+      "Height": 20234864,
+      "TxIndex": 0,
+      "Hash": "B7E1462FD9DE1E0376219BA0D2CAD64AE7867D825266EBE2B7585B473541CBDC",
+      "Time": "2025-11-27T08:50:33.977527033Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 172324,
+      "GasUsed": 139459,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "1724"
+        }
+      ],
+      "FeePayer": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+      "Signers": [
+        "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/bze.cointrunk.MsgPayPublisherRespect"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 20234864,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.cointrunk.MsgPayPublisherRespect",
+      "Sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+      "Module": "cointrunk",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.cointrunk.MsgPayPublisherRespect",
+            "module": "cointrunk",
+            "sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "10800000000ubze",
+            "spender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "10800000000ubze",
+            "receiver": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "10800000000ubze",
+            "recipient": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+            "sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2700000000ubze",
+            "spender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2700000000ubze",
+            "receiver": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "2700000000ubze",
+            "recipient": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+            "sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex"
+          }
+        },
+        {
+          "type": "bze.cointrunk.PublisherRespectPaidEvent",
+          "attrs": {
+            "community_pool_funds": "2700000000",
+            "publisher": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+            "publisher_reward": "10800000000",
+            "respect_paid": "13500000000"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+        "address": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+        "amount": "13500000000ubze"
+      }
+    }
+  ]
+}

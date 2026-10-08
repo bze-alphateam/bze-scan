@@ -10,6 +10,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -59,7 +60,9 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 			ArchiveRetry: retry,
 			// One limiter for every worker of every job: the archive sees
 			// one polite client.
-			Limiter:     rate.NewLimiter(limit, 1),
+			Limiter: rate.NewLimiter(limit, 1),
+			// Heights older than v8.0.0 come in the legacy event format.
+			Adapter:     archive.New(codec),
 			Transformer: transform.New(codec, log.StandardLogger()),
 			Writer:      w,
 		},

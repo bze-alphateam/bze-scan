@@ -1,0 +1,49 @@
+{
+  "transactions": [
+    {
+      "Height": 20237060,
+      "TxIndex": 0,
+      "Hash": "E812293930EFEBF4C56B407FFF48AF1B59A370C05E82CCD7581A94E3AEFC365E",
+      "Time": "2025-11-27T12:20:32.946349199Z",
+      "Success": false,
+      "Code": 5,
+      "Codespace": "sdk",
+      "ErrorLog": "failed to execute message; message index: 0: 6388414207ubze is smaller than 6388423207ubze: insufficient funds",
+      "GasWanted": 800000,
+      "GasUsed": 134094,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "8000"
+        }
+      ],
+      "FeePayer": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+      "Signers": [
+        "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf"
+      ],
+      "Memo": "app.getbze.com",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCreateOrder"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 20237060,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+        "order_type": "sell",
+        "amount": "6388423207",
+        "price": "0.01",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+      }
+    }
+  ]
+}

@@ -83,6 +83,25 @@ func TestBlockResults(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// A node older than CometBFT 0.38 answers begin- and end-block events in
+// fields of their own; they are kept for the archive adapter to reject.
+func TestBlockResultsOfAPreCometBFT038Node(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":-1,"result":{"height":"7","txs_results":null,` +
+			`"begin_block_events":[{"type":"mint","attributes":[{"key":"amount","value":"1"}]}],` +
+			`"end_block_events":[{"type":"burn","attributes":[]}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	r, _, err := node.New(srv.URL).BlockResults(context.Background(), 7)
+	require.NoError(t, err)
+	assert.Empty(t, r.FinalizeBlockEvents)
+	require.Len(t, r.BeginBlockEvents, 1)
+	assert.Equal(t, "mint", r.BeginBlockEvents[0].Type)
+	require.Len(t, r.EndBlockEvents, 1)
+	assert.Equal(t, "burn", r.EndBlockEvents[0].Type)
+}
+
 func TestCommit(t *testing.T) {
 	n := fakenode.New(t)
 	c, raw, err := node.New(n.URL).Commit(context.Background(), fixtureHeight)

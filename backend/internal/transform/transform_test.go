@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
@@ -47,13 +48,18 @@ var (
 	codecErr  error
 )
 
-// realTransformer decodes with the chain's own codec, as production does.
-func realTransformer(t *testing.T) *transform.Transformer {
+func chainCodec(t *testing.T) *chain.Codec {
 	t.Helper()
 	codecOnce.Do(func() { codec, codecErr = chain.NewCodec() })
 	require.NoError(t, codecErr)
+	return codec
+}
+
+// realTransformer decodes with the chain's own codec, as production does.
+func realTransformer(t *testing.T) *transform.Transformer {
+	t.Helper()
 	log, _ := logtest.NewNullLogger()
-	return transform.New(codec, log)
+	return transform.New(chainCodec(t), log)
 }
 
 // mockDecoder answers Decode from a map keyed by the raw bytes.
@@ -87,7 +93,13 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	require.NoError(t, err)
 	cm, _, err := c.Commit(ctx, h)
 	require.NoError(t, err)
-	return transform.Input{Block: b, Results: r, Commit: cm}
+	in := transform.Input{Block: b, Results: r, Commit: cm}
+	// Heights of an older generation reach the transformer through the
+	// archive adapter, as on the backfill path.
+	if archive.GenerationAt(h).Format != archive.FormatCurrent {
+		require.NoError(t, archive.New(chainCodec(t)).Adapt(h, &in))
+	}
+	return in
 }
 
 func TestBlockGolden(t *testing.T) {

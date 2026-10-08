@@ -1,0 +1,109 @@
+{
+  "transactions": [
+    {
+      "Height": 20121972,
+      "TxIndex": 0,
+      "Hash": "E98EC7E0680778DA62D901DB13183949BF79FDB9C2FC13AE2E45584D9ABD0398",
+      "Time": "2025-11-19T21:52:20.471486016Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 251607,
+      "GasUsed": 243776,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "15000"
+        }
+      ],
+      "FeePayer": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "Signers": [
+        "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.gov.v1beta1.MsgDeposit"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 20121972,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.gov.v1beta1.MsgDeposit",
+      "Sender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "Module": "",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.gov.v1beta1.MsgDeposit",
+            "sender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "100000000000ubze",
+            "spender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "100000000000ubze",
+            "receiver": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "100000000000ubze",
+            "recipient": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+            "sender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+          }
+        },
+        {
+          "type": "proposal_deposit",
+          "attrs": {
+            "amount": "100000000000ubze",
+            "depositor": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+            "proposal_id": "44"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "governance",
+            "sender": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f"
+          }
+        },
+        {
+          "type": "proposal_deposit",
+          "attrs": {
+            "voting_period_start": "44"
+          }
+        }
+      ],
+      "Body": {
+        "proposal_id": "44",
+        "depositor": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "100000000000"
+          }
+        ]
+      }
+    }
+  ]
+}
