@@ -40,10 +40,13 @@ of both the local node and an archive node; it carries the three heights.
 oldest indexed height. The response is HTTP 200 whenever the process serves;
 the JSON carries the verdict, so a halted chain never blocks a deploy.
 
-Implemented so far: `serve` with the HTTP server and `GET /health` (200, empty
-body, whenever the process serves HTTP; it checks neither the database nor a
-node). Unknown paths answer 404 with the JSON error envelope
-`{"error":{"code":"not_found","message":"Not Found"}}`.
+Implemented so far:
+
+- `serve` with the HTTP server and `GET /health` (200, empty body, whenever
+  the process serves HTTP; it checks neither the database nor a node).
+  Unknown paths answer 404 with the JSON error envelope
+  `{"error":{"code":"not_found","message":"Not Found"}}`.
+- `migrate` (see Migrations below).
 
 ## Configuration
 
@@ -56,6 +59,7 @@ documented template with the defaults:
 | `HTTP_ADDR` | `:8080` | listen address of the HTTP API |
 | `LOG_LEVEL` | `info` | logrus level |
 | `LOG_FORMAT` | `text` | `text` or `json` |
+| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by `migrate`. Never logged |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -67,6 +71,7 @@ Invalid values stop the process at startup with every problem listed.
 | --- | --- |
 | `make build` | builds `build/bze-scan` |
 | `make run` | runs `bze-scan serve` |
+| `make migrate` | runs `bze-scan migrate` against `DATABASE_URL` |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet ./...` |
 | `make lint` | `golangci-lint run` |
@@ -83,9 +88,10 @@ CI (`.github/workflows/backend.yml`) runs build, vet, lint, `make test` and
 ## Layout
 
 ```
-cmd/bze-scan/      cobra root and subcommands (serve)
+cmd/bze-scan/      cobra root and subcommands (serve, migrate)
 config/            environment parsing and validation
 app/server/        echo wiring and the graceful HTTP runner
+app/migrations/    SQL migrations (embedded, up only), partition math, Run
 app/controller/    thin HTTP handlers
 app/middleware/    request id, panic recovery, JSON error handler
 internal/testutil/fakenode/
@@ -93,6 +99,28 @@ internal/testutil/fakenode/
 e2e/               acceptance tests (build tag e2e)
 scripts/           record-fixtures.sh
 ```
+
+## Migrations
+
+`bze-scan migrate` brings a database to the latest schema. The database must
+already hold the CometBFT `psql` sink schema in `public` (a node with the psql
+indexer enabled, or `docker/compose.yml` for development); without
+`public.blocks` it stops before creating anything.
+
+- The migrations are SQL files in `app/migrations/sql/`, embedded in the
+  binary and applied with golang-migrate, up only. The version table is
+  `explorer.schema_migrations`.
+- Everything the explorer owns lives in the `explorer` schema. The only object
+  attached to the sink is the trigger `trg_notify_block` on `public.blocks`:
+  `pg_notify('explorer_block', height)` after each insert, which wakes the
+  live indexer.
+- The seven history tables (`blocks`, `transactions`, `messages`,
+  `transfers`, `account_activity`, `block_events`, `order_fills`) are
+  partitioned by height, one partition per 1,000,000 heights
+  (`blocks_p000024` holds [24,000,000, 25,000,000)). After the migrations,
+  `migrate` calls `explorer.ensure_partitions` for heights 0 to the highest
+  height known (in the sink or the explorer) plus 20,000,000.
+- Running it again changes nothing, so it can run on every deploy.
 
 ## Test fixtures and the fake node
 

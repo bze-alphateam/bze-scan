@@ -7,7 +7,8 @@ show activity that happens without a transaction (order fills, reward
 distributions, raffles).
 
 Status: backend foundation in place (the `serve` command with a health
-endpoint, the test harness and CI); no explorer logic yet. No UI yet.
+endpoint, the `migrate` command with the explorer schema, the test harness and
+CI); no indexing yet. No UI yet.
 
 ## Layout
 
