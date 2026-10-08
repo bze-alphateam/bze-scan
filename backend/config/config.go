@@ -28,6 +28,9 @@ const (
 type Config struct {
 	// HTTPAddr is the listen address of the HTTP API.
 	HTTPAddr string
+	// CORSAllowedOrigins are the origins the API answers CORS requests for
+	// ("*" for any). Empty sends no CORS headers at all.
+	CORSAllowedOrigins []string
 
 	// LogLevel is a logrus level name (trace, debug, info, warn, error, fatal, panic).
 	LogLevel string
@@ -36,7 +39,8 @@ type Config struct {
 
 	// DatabaseURL is the PostgreSQL URL of the node's database (the CometBFT
 	// psql sink plus the explorer schema). Optional here; the commands that
-	// use the database require it. Carries a password: never log it.
+	// use the database (serve and migrate) require it. Carries a password:
+	// never log it.
 	DatabaseURL string
 
 	// NodeRPCURL is the CometBFT RPC endpoint of the local node, read by
@@ -70,6 +74,18 @@ func Load() (*Config, error) {
 		DatabaseURL: envString("DATABASE_URL", ""),
 		NodeRPCURL:  strings.TrimRight(envString("NODE_RPC_URL", "http://127.0.0.1:26657"), "/"),
 		ChainID:     envString("CHAIN_ID", "beezee-1"),
+	}
+
+	for _, o := range strings.Split(envString("CORS_ALLOWED_ORIGINS", ""), ",") {
+		o = strings.TrimSpace(o)
+		if o == "" {
+			continue
+		}
+		if u, err := url.Parse(o); o != "*" && (err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "") {
+			fail("CORS_ALLOWED_ORIGINS must list * or origins like https://scan.getbze.com (got %q)", o)
+			continue
+		}
+		cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
 	}
 
 	indexer := envString("INDEXER_ENABLED", "true")

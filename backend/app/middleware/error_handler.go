@@ -1,5 +1,6 @@
 // Package middleware holds the HTTP middleware of the API: request id,
-// panic recovery and the global error handler with its JSON error envelope.
+// request log, panic recovery and the global error handler with its JSON
+// error envelope.
 package middleware
 
 import (
@@ -31,13 +32,16 @@ var errorCodes = map[int]string{
 	http.StatusRequestTimeout:        "request_timeout",
 	http.StatusRequestEntityTooLarge: "payload_too_large",
 	http.StatusTooManyRequests:       "rate_limit_exceeded",
+	http.StatusBadGateway:            "upstream_error",
 	http.StatusServiceUnavailable:    "service_unavailable",
+	http.StatusGatewayTimeout:        "upstream_error",
 }
 
 // ErrorHandler is the global echo error handler. An error carrying an HTTP
 // status (echo's sentinel errors, *echo.HTTPError) keeps it; anything else is
 // a 500 with a generic message, logged with the request id. Internal error
-// details are never sent to clients.
+// details are never sent to clients, and no error response may be cached (a
+// transaction that is not indexed yet will be soon).
 func ErrorHandler(c *echo.Context, err error) {
 	if resp, _ := echo.UnwrapResponse(c.Response()); resp != nil && resp.Committed {
 		return
@@ -58,6 +62,7 @@ func ErrorHandler(c *echo.Context, err error) {
 	}
 
 	body := ErrorBody{Error: ErrorDetail{Code: codeFor(status), Message: messageFor(status, err)}}
+	c.Response().Header().Set(echo.HeaderCacheControl, "no-store")
 
 	if c.Request().Method == http.MethodHead {
 		_ = c.NoContent(status)
@@ -71,7 +76,7 @@ func codeFor(status int) string {
 		return code
 	}
 	if status >= http.StatusInternalServerError {
-		return "internal_error"
+		return "internal"
 	}
 	return "http_error"
 }
