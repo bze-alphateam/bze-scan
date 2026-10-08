@@ -51,6 +51,8 @@ Implemented so far:
   API below).
 - `GET /api/v1/status` with its checker (see HTTP API below); `back_fill.status`
   is `finished` until the backfill lands.
+- The raw-JSON routes under `/api/v1/raw` with their in-memory cache (see
+  HTTP API below).
 - `migrate` (see Migrations below).
 - The live indexer inside `serve`, writing `explorer.blocks` (see Live
   indexer below). Transactions, messages and everything else follow.
@@ -71,10 +73,12 @@ documented template with the defaults:
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
 | `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
-| `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node; the status checker compares its tip |
+| `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node; the status checker compares its tip, the raw-JSON routes fetch their misses from it |
 | `ARCHIVE_RPC_RETRY_URL` | empty | tried when `ARCHIVE_RPC_URL` fails; empty means `ARCHIVE_RPC_URL` again |
 | `STATUS_INTERVAL` | `60s` | period of the status checker's ticks (a Go duration) |
 | `STATUS_HEIGHT_TOLERANCE` | `5` | largest spread, in blocks, between the explorer, the local node and the archive that is still healthy |
+| `RAW_CACHE_MAX_ENTRIES` | `300` | entries kept per raw-JSON route (one per height) |
+| `RAW_CACHE_TTL` | `20m` | how long a raw-JSON entry lives after it was stored (a Go duration) |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -136,6 +140,9 @@ internal/transform/
 internal/writer/   transactional, idempotent writes (the live writer)
 internal/indexer/live/
                    LISTEN/NOTIFY listener, height cursor, retries
+internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
+                   miss
+internal/status/   the status checker and its snapshot
 internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
                    fake CometBFT RPC node for tests, fixtures in testdata/
@@ -163,7 +170,8 @@ scripts/           record-fixtures.sh
 ## HTTP API
 
 Every route but `/health` lives under `/api/v1` and reads the explorer tables
-only: never the CometBFT indexer's tables, never a node. Conventions, which
+only: never the CometBFT indexer's tables, never a node, except the raw-JSON
+routes, which ask an archive node on a cache miss. Conventions, which
 every later route follows:
 
 - **JSON** with snake_case names. Amounts and other big decimals are strings
@@ -201,6 +209,24 @@ ticks at start and then every `STATUS_INTERVAL`, reading
 primary fails; 5 s per call). `healthy` needs all three heights, a spread of
 at most `STATUS_HEIGHT_TOLERANCE`, and the explorer's height above the
 previous tick's; the first tick after a start judges the spread only.
+
+| Raw route | Answers |
+| --- | --- |
+| `GET /api/v1/raw/block/{height}` | the node's `/block?height=` response body, verbatim |
+| `GET /api/v1/raw/block_results/{height}` | the node's `/block_results?height=` response body, verbatim |
+| `GET /api/v1/raw/commit/{height}` | the node's `/commit?height=` response body, verbatim |
+| `GET /api/v1/raw/tx/{hash}` | `{"height", "index", "tx", "tx_result"}`: the base64 transaction from `/block` `data.txs[index]` and `/block_results` `txs_results[index]`, at the height and index `explorer.transactions` holds; 404 when the hash is not indexed |
+
+A height is a positive integer (else 400) and is proxied whether the explorer
+indexed it or not. Successes are `immutable`; when no archive node serves the
+height (unreachable, an error, above its tip) the answer is 502
+`upstream_error` and nothing is cached. The cache keeps one LRU per route of
+at most `RAW_CACHE_MAX_ENTRIES` entries, each living `RAW_CACHE_TTL` from the
+moment it was stored; an entry is never refreshed (a height never changes).
+The live indexer puts the three bodies of every height it writes, so recent
+heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
+once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
+for one height share one fetch, which outlives a request that gives up.
 
 ## Migrations
 
@@ -263,7 +289,8 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   `explorer.blocks` row last (every insert `ON CONFLICT DO NOTHING`;
   `block_time_ms` from the previous row when it is indexed), sets the live
   floor at the first write, and moves the cursor with `GREATEST`. A blocks
-  row therefore proves its height is complete. When a height enters the last existing partition, the same
+  row therefore proves its height is complete. After the commit the three
+  response bodies go to the raw-JSON cache. When a height enters the last existing partition, the same
   transaction calls `explorer.ensure_partitions(height, height + 20000000)`.
 - A height is tried three times (waits of 0.5 s and 2 s). Then, or at once
   when the node reports the height pruned, it is recorded in

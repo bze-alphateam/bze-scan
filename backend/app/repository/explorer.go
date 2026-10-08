@@ -231,6 +231,21 @@ func (r *Explorer) Tx(ctx context.Context, hash string) (*Tx, error) {
 	return &t, nil
 }
 
+// TxPosition returns the height of the transaction with hash (upper-case
+// hex) and its index in the block, or ErrNotFound.
+func (r *Explorer) TxPosition(ctx context.Context, hash string) (int64, int64, error) {
+	var height, index int64
+	err := r.db.QueryRow(ctx, `SELECT height, tx_index FROM explorer.transactions
+		WHERE hash = $1 ORDER BY height LIMIT 1`, hash).Scan(&height, &index)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("transaction %s position: %w", hash, err)
+	}
+	return height, index, nil
+}
+
 // BlockExists reports whether the block at height is indexed.
 func (r *Explorer) BlockExists(ctx context.Context, height int64) (bool, error) {
 	return r.exists(ctx, `SELECT EXISTS (SELECT 1 FROM explorer.blocks WHERE height = $1)`, height)

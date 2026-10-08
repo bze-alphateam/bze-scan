@@ -98,6 +98,17 @@ func (f *fakeReader) Tx(_ context.Context, hash string) (*repository.Tx, error) 
 	return f.tx, nil
 }
 
+func (f *fakeReader) TxPosition(_ context.Context, hash string) (int64, int64, error) {
+	f.gotHash = hash
+	if f.err != nil {
+		return 0, 0, f.err
+	}
+	if f.tx == nil || f.tx.Hash != hash {
+		return 0, 0, repository.ErrNotFound
+	}
+	return f.tx.Height, f.tx.TxIndex, nil
+}
+
 func (f *fakeReader) BlockExists(_ context.Context, height int64) (bool, error) {
 	return f.block != nil && f.block.Height == height, f.err
 }

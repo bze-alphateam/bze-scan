@@ -55,12 +55,20 @@ type Transformer interface {
 	Transform(in transform.Input) (*transform.Entities, error)
 }
 
+// RawCache receives the node's response bodies of every height written, so
+// the raw-JSON routes serve recent heights without an archive call.
+type RawCache interface {
+	PutHeight(height int64, block, blockResults, commit []byte)
+}
+
 // Deps are the indexer's dependencies.
 type Deps struct {
 	Listener    Listener
 	Node        Node
 	Store       Store
 	Transformer Transformer
+	// Raw is optional: nil keeps no bodies.
+	Raw RawCache
 }
 
 // Defaults of Config.
@@ -95,6 +103,7 @@ type Indexer struct {
 	node        Node
 	store       Store
 	transformer Transformer
+	raw         RawCache
 }
 
 // New returns an indexer woken by deps.Listener, reading deps.Node,
@@ -115,7 +124,7 @@ func New(cfg Config, deps Deps) *Indexer {
 	if cfg.Sleep == nil {
 		cfg.Sleep = sleep
 	}
-	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer}
+	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer, raw: deps.Raw}
 }
 
 // Run listens and indexes until ctx is cancelled, reconnecting with backoff
@@ -269,15 +278,15 @@ func (ix *Indexer) recordFailure(ctx context.Context, h int64, attempts int, cau
 }
 
 func (ix *Indexer) indexOnce(ctx context.Context, h int64) error {
-	b, _, err := ix.node.Block(ctx, h)
+	b, rawBlock, err := ix.node.Block(ctx, h)
 	if err != nil {
 		return err
 	}
-	r, _, err := ix.node.BlockResults(ctx, h)
+	r, rawResults, err := ix.node.BlockResults(ctx, h)
 	if err != nil {
 		return err
 	}
-	c, _, err := ix.node.Commit(ctx, h)
+	c, rawCommit, err := ix.node.Commit(ctx, h)
 	if err != nil {
 		return err
 	}
@@ -285,7 +294,13 @@ func (ix *Indexer) indexOnce(ctx context.Context, h int64) error {
 	if err != nil {
 		return err
 	}
-	return ix.store.WriteBlock(ctx, ents)
+	if err := ix.store.WriteBlock(ctx, ents); err != nil {
+		return err
+	}
+	if ix.raw != nil {
+		ix.raw.PutHeight(h, rawBlock, rawResults, rawCommit)
+	}
+	return nil
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

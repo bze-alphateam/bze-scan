@@ -20,6 +20,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
@@ -63,10 +64,15 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	defer apiPool.Close()
 
 	// The status checker reads the explorer's height through the API pool
-	// and the tips of both nodes, with or without the indexer.
-	var archiveRetry status.Node
+	// and the tips of both nodes, with or without the indexer. The raw-JSON
+	// cache fetches its misses from the same archive nodes.
+	archive := node.New(cfg.ArchiveRPCURL)
+	// Nil interfaces when there is no retry node, never a typed nil.
+	var statusRetry status.Node
+	var rawRetry rawcache.Node
 	if cfg.ArchiveRPCRetryURL != "" {
-		archiveRetry = node.New(cfg.ArchiveRPCRetryURL)
+		retry := node.New(cfg.ArchiveRPCRetryURL)
+		statusRetry, rawRetry = retry, retry
 	}
 	checker := status.New(status.Config{
 		Interval:  cfg.StatusInterval,
@@ -74,13 +80,21 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}, status.Deps{
 		Store:        status.NewPGStore(apiPool),
 		Local:        node.New(cfg.NodeRPCURL),
-		Archive:      node.New(cfg.ArchiveRPCURL),
-		ArchiveRetry: archiveRetry,
+		Archive:      archive,
+		ArchiveRetry: statusRetry,
+	})
+	raw := rawcache.New(rawcache.Config{
+		MaxEntries: cfg.RawCacheMaxEntries,
+		TTL:        cfg.RawCacheTTL,
+	}, rawcache.Deps{
+		Archive:      archive,
+		ArchiveRetry: rawRetry,
 	})
 
 	e := server.New(server.Deps{
 		Explorer:           repository.NewExplorer(apiPool),
 		Status:             checker,
+		Raw:                raw,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})
@@ -113,6 +127,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			Node:        nodeClient,
 			Store:       writer.NewLiveWriter(pool),
 			Transformer: transform.New(codec, log.StandardLogger()),
+			Raw:         raw,
 		})
 		components = append(components, component{name: "live indexer", run: ix.Run})
 	} else {

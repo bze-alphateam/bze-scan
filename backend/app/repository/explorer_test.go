@@ -81,6 +81,8 @@ func TestMissingRowsAreNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, repository.ErrNotFound)
 	_, err = r.ValidatorMoniker(ctx, "bzevaloper1x")
 	assert.ErrorIs(t, err, repository.ErrNotFound)
+	_, _, err = r.TxPosition(ctx, "AB")
+	assert.ErrorIs(t, err, repository.ErrNotFound)
 }
 
 func TestDatabaseErrorsAreWrapped(t *testing.T) {
@@ -90,6 +92,7 @@ func TestDatabaseErrorsAreWrapped(t *testing.T) {
 	calls := map[string]func() error{
 		"block":     func() error { _, err := r.Block(ctx, 1); return err },
 		"tx":        func() error { _, err := r.Tx(ctx, "AB"); return err },
+		"tx at":     func() error { _, _, err := r.TxPosition(ctx, "AB"); return err },
 		"validator": func() error { _, err := r.ValidatorMoniker(ctx, "v"); return err },
 		"block?":    func() error { _, err := r.BlockExists(ctx, 1); return err },
 		"tx?":       func() error { _, err := r.TxExists(ctx, "AB"); return err },

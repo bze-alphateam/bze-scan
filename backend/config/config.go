@@ -55,7 +55,8 @@ type Config struct {
 	IndexerEnabled bool
 
 	// ArchiveRPCURL is the CometBFT RPC of an archive node: the status
-	// checker compares its tip with the local node's.
+	// checker compares its tip with the local node's, and the raw-JSON routes
+	// fetch the heights they have not cached from it.
 	ArchiveRPCURL string
 	// ArchiveRPCRetryURL is tried when ArchiveRPCURL fails; empty means
 	// ArchiveRPCURL again.
@@ -65,6 +66,11 @@ type Config struct {
 	// StatusHeightTolerance is the largest spread, in blocks, between the
 	// explorer, the local node and the archive that still counts as healthy.
 	StatusHeightTolerance int64
+
+	// RawCacheMaxEntries bounds each raw-JSON route's in-memory LRU.
+	RawCacheMaxEntries int
+	// RawCacheTTL is how long a raw-JSON entry lives after it was stored.
+	RawCacheTTL time.Duration
 }
 
 // Load reads the environment (and a .env file when present), applies
@@ -136,6 +142,20 @@ func Load() (*Config, error) {
 		fail("STATUS_HEIGHT_TOLERANCE must be a non-negative integer (got %q)", tolerance)
 	} else {
 		cfg.StatusHeightTolerance = n
+	}
+
+	maxEntries := envString("RAW_CACHE_MAX_ENTRIES", "300")
+	if n, err := strconv.Atoi(maxEntries); err != nil || n <= 0 {
+		fail("RAW_CACHE_MAX_ENTRIES must be a positive integer (got %q)", maxEntries)
+	} else {
+		cfg.RawCacheMaxEntries = n
+	}
+
+	ttl := envString("RAW_CACHE_TTL", "20m")
+	if d, err := time.ParseDuration(ttl); err != nil || d <= 0 {
+		fail("RAW_CACHE_TTL must be a positive duration like 20m (got %q)", ttl)
+	} else {
+		cfg.RawCacheTTL = d
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {

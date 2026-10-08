@@ -29,6 +29,8 @@ type Deps struct {
 	Explorer controller.ExplorerReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
+	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
+	Raw controller.RawReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers.
 	CORSAllowedOrigins []string
@@ -68,6 +70,13 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/search", explorer.Search)
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)
+	}
+	if deps.Raw != nil {
+		raw := controller.NewRawController(deps.Raw, deps.Explorer)
+		api.GET("/raw/block/:height", raw.Block)
+		api.GET("/raw/block_results/:height", raw.BlockResults)
+		api.GET("/raw/commit/:height", raw.Commit)
+		api.GET("/raw/tx/:hash", raw.Tx)
 	}
 
 	return e
