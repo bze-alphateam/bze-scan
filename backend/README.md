@@ -5,20 +5,26 @@ by the `bze` chain module it imports to decode message types).
 
 One binary, `bze-scan`, with subcommands:
 
-- `serve` — read-only HTTP API over the explorer tables.
-- `migrate` — applies the versioned migrations: additions to the CometBFT
-  `psql` indexer schema (indexes, triggers), the explorer schema, the
-  transformation functions and the classification seed tables.
-- `enrich` — long-running: fills the fields the indexer does not carry (block
-  hash, header time, proposer, signatures, memo, message bodies, gas, results of
-  failed transactions) from the local node, by height.
-- `backfill` — walks history backwards from archive nodes at a polite rate,
-  normalises old event formats and writes them through the same path as live
-  blocks. Checkpointed and resumable.
-- `sync-state` — cron one-shot: validators, proposals, denominations, holders,
-  labels, the Cosmos chain registry cache and token prices.
-- `retention` — cron one-shot: prunes raw indexer rows, retries failed
-  transformations, manages partitions, aggregates daily statistics.
+- `serve` — the production process: the read-only HTTP API, the live indexer
+  (woken by a PostgreSQL notification at each block the node's `psql` indexer
+  commits, with a height cursor as the guarantee), the state sync (driven by
+  what the indexer sees, with tickers as a safety net) and, when enabled by
+  configuration, the backfill. One process, one log.
+- `migrate` — applies the versioned migrations: the explorer schema, its
+  partitions, the one notification trigger on the CometBFT `psql` indexer's
+  `blocks` table, and the classification seed tables. The indexer's own tables
+  are never altered otherwise.
+- `backfill` — walks history backwards from archive nodes through a pool of
+  workers and one batching writer, at a polite rate, normalising old event
+  formats. Checkpointed and resumable; never writes the node's indexer tables.
+- `reindex` — re-runs a list of heights or a range through the same pipeline,
+  from the local node while it still has them and from archive nodes otherwise.
+- `sync-state` — one full refresh of validators, proposals, denominations,
+  holders, labels, the Cosmos chain registry cache and token prices, for
+  operations.
+
+Every node call is by height (`/block`, `/block_results`, `/commit`, `/status`
+and gRPC state queries); the search routes are never used, on any node.
 
 ## Commands
 
