@@ -3,6 +3,8 @@ CMD         := ./cmd/bze-scan
 BUILD_DIR   := build
 COMPOSE     := docker compose -f ../docker/compose.yml
 ARCHIVE_RPC ?= https://rpc.getbze.com
+# The PostgreSQL of docker/compose.yml unless DATABASE_URL is set.
+DATABASE_URL ?= postgres://bze:bze@localhost:15432/bze_index?sslmode=disable
 
 .PHONY: build
 build: ## Build the binary into build/
@@ -13,8 +15,8 @@ run: ## Run the backend (serve)
 	go run $(CMD) serve
 
 .PHONY: migrate
-migrate: ## Apply the database migrations (needs DATABASE_URL)
-	go run $(CMD) migrate
+migrate: ## Run migrate up (compose database unless DATABASE_URL is set)
+	DATABASE_URL="$(DATABASE_URL)" go run $(CMD) migrate up
 
 .PHONY: test
 test: ## Run unit tests (no network, no docker)

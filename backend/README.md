@@ -11,10 +11,11 @@ One binary, `bze-scan`, with subcommands:
   `psql` indexer commits, with a height cursor as the guarantee), the state
   sync (driven by what the indexer sees, with tickers as a safety net) and,
   when enabled by configuration, the backfill. One process, one log.
-- `migrate` — applies the versioned migrations: the explorer schema, its
-  partitions, the one notification trigger on the CometBFT `psql` indexer's
-  `blocks` table, and the classification seed tables. The indexer's own tables
-  are never altered otherwise.
+- `migrate` — `up` (the default), `down <n>` and `version` over the
+  versioned migrations: the explorer schema, its partitions, the one
+  notification trigger on the CometBFT `psql` indexer's `blocks` table, and
+  the classification tables. The indexer's own tables are never altered
+  otherwise.
 - `backfill` — walks history backwards from archive nodes through a pool of
   workers and one batching writer, at a polite rate, normalising old event
   formats. Checkpointed and resumable; never writes the node's indexer tables.
@@ -59,7 +60,7 @@ documented template with the defaults:
 | `HTTP_ADDR` | `:8080` | listen address of the HTTP API |
 | `LOG_LEVEL` | `info` | logrus level |
 | `LOG_FORMAT` | `text` | `text` or `json` |
-| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by `migrate`. Never logged |
+| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by every command that touches it (`migrate`). Never logged |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -71,7 +72,7 @@ Invalid values stop the process at startup with every problem listed.
 | --- | --- |
 | `make build` | builds `build/bze-scan` |
 | `make run` | runs `bze-scan serve` |
-| `make migrate` | runs `bze-scan migrate` against `DATABASE_URL` |
+| `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet ./...` |
 | `make lint` | `golangci-lint run` |
@@ -90,10 +91,12 @@ CI (`.github/workflows/backend.yml`) runs build, vet, lint, `make test` and
 ```
 cmd/bze-scan/      cobra root and subcommands (serve, migrate)
 config/            environment parsing and validation
+migrations/        SQL migrations (embedded, up and down), the Migrator,
+                   post-migration steps, partition math
 app/server/        echo wiring and the graceful HTTP runner
-app/migrations/    SQL migrations (embedded, up only), partition math, Run
 app/controller/    thin HTTP handlers
 app/middleware/    request id, panic recovery, JSON error handler
+internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
                    fake CometBFT RPC node for tests, fixtures in testdata/
 e2e/               acceptance tests (build tag e2e)
@@ -102,25 +105,39 @@ scripts/           record-fixtures.sh
 
 ## Migrations
 
-`bze-scan migrate` brings a database to the latest schema. The database must
-already hold the CometBFT `psql` sink schema in `public` (a node with the psql
-indexer enabled, or `docker/compose.yml` for development); without
-`public.blocks` it stops before creating anything.
+`bze-scan migrate` manages the schema. The database must already hold the
+CometBFT `psql` sink schema in `public` (a node with the psql indexer enabled,
+or `docker/compose.yml` for development); without `public.blocks` it stops
+before creating anything.
 
-- The migrations are SQL files in `app/migrations/sql/`, embedded in the
-  binary and applied with golang-migrate, up only. The version table is
-  `explorer.schema_migrations`.
-- Everything the explorer owns lives in the `explorer` schema. The only object
-  attached to the sink is the trigger `trg_notify_block` on `public.blocks`:
-  `pg_notify('explorer_block', height)` after each insert, which wakes the
-  live indexer.
-- The seven history tables (`blocks`, `transactions`, `messages`,
-  `transfers`, `account_activity`, `block_events`, `order_fills`) are
-  partitioned by height, one partition per 1,000,000 heights
-  (`blocks_p000024` holds [24,000,000, 25,000,000)). After the migrations,
-  `migrate` calls `explorer.ensure_partitions` for heights 0 to the highest
-  height known (in the sink or the explorer) plus 20,000,000.
-- Running it again changes nothing, so it can run on every deploy.
+```
+bze-scan migrate            # same as up
+bze-scan migrate up         # apply pending migrations, then the post-migration steps
+bze-scan migrate down 2     # revert the last two migrations
+bze-scan migrate version    # print the current version (0 when none)
+```
+
+- The migrations are `migrations/NNNNNN_<name>.up.sql` and `.down.sql`,
+  embedded in the binary and applied with golang-migrate: the schema, the
+  notification trigger, the history tables, the state tables, the
+  operational tables, and the functions (`ensure_partitions`,
+  `reclassify_unknown`).
+- Everything the explorer owns lives in the `explorer` schema. The version
+  table is `explorer_migrations.schema_migrations`, in a schema of its own so
+  that `down` to version 0 can drop `explorer` entirely.
+- The only object attached to the sink is the trigger `trg_notify_block` on
+  `public.blocks`: `pg_notify('explorer_block', height)` after each insert,
+  which wakes the live indexer. No `down` touches the sink's tables or rows.
+- After `up`, the post-migration Go steps run in order (`postMigrate` in
+  `migrations/steps.go`; each must be idempotent). The first creates the
+  height partitions of the seven history tables (`blocks`, `transactions`,
+  `messages`, `transfers`, `account_activity`, `block_events`,
+  `order_fills`): one per 1,000,000 heights, `_p000000` to `_p000049`
+  (`blocks_p000024` holds [24,000,000, 25,000,000)).
+- Running `up` again changes nothing, so it can run on every deploy.
+
+Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
+to date; tests that need an untouched database create their own.
 
 ## Test fixtures and the fake node
 

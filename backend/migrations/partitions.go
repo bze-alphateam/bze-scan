@@ -3,15 +3,17 @@ package migrations
 import "fmt"
 
 // Partitioning of the history tables, mirrored from explorer.ensure_partitions
-// (sql/000002_partitions.up.sql): one partition per PartitionSize heights,
-// named <table>_p<NNNNNN> after the millions of its lower bound.
+// (000006_functions.up.sql): one partition per PartitionSize heights, named
+// <table>_p<NNNNNN> after the millions of its lower bound.
 const (
 	// PartitionSize is the number of heights per partition (about 70 days of
 	// chain at today's block time).
 	PartitionSize int64 = 1_000_000
-	// PartitionLookAhead is how far above the highest known height migrate
-	// creates partitions (several years at today's block time).
-	PartitionLookAhead int64 = 20_000_000
+	// PartitionsUpTo is the highest height `migrate up` creates partitions
+	// for: 50 partitions per table, heights 0 to 49,999,999 (about four years
+	// beyond today's 25 M at the current block time). Empty partitions are
+	// cheap; the live indexer tops them up as it climbs.
+	PartitionsUpTo int64 = 50*PartitionSize - 1
 )
 
 // PartitionedTables are the explorer tables partitioned by height, in the
@@ -34,17 +36,6 @@ func PartitionLower(height int64) int64 {
 // height: PartitionName("blocks", 24998316) is "blocks_p000024".
 func PartitionName(table string, height int64) string {
 	return fmt.Sprintf("%s_p%06d", table, PartitionLower(height)/PartitionSize)
-}
-
-// PartitionRange is the height range migrate passes to ensure_partitions
-// given the highest height already known (in the sink or the explorer):
-// from genesis, since the backfill floor may be genesis, to head plus the
-// look-ahead. A negative head counts as 0.
-func PartitionRange(head int64) (from, to int64) {
-	if head < 0 {
-		head = 0
-	}
-	return 0, head + PartitionLookAhead
 }
 
 // PartitionNames lists the partitions of table that ensure_partitions(from,
