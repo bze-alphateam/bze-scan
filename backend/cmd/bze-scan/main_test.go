@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHelpListsServe(t *testing.T) {
+func TestHelpListsCommands(t *testing.T) {
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -20,6 +20,21 @@ func TestHelpListsServe(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	assert.Contains(t, out.String(), "serve")
+	assert.Contains(t, out.String(), "migrate")
+}
+
+func TestMigrateRequiresDatabaseURL(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+
+	root := newRootCmd()
+	root.SetArgs([]string{"migrate"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DATABASE_URL is required")
 }
 
 func TestServeRejectsInvalidConfig(t *testing.T) {
