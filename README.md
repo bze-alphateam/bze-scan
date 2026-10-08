@@ -34,7 +34,9 @@ by a parallel pipeline, and a `reindex` command repairs any list or range of
 heights. The UI shows a simple view by default and the full JSON on demand;
 that JSON is proxied from archive nodes by the backend through a short
 in-memory cache the live indexer fills as it goes, so the browser never calls
-a node.
+a node. A status endpoint reports, once a minute, whether live indexing keeps
+up with the node and an archive node and how far back the backfill has
+reached; the UI shows it as a green or red light.
 
 ## License
 
