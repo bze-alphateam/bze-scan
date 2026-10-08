@@ -6,9 +6,11 @@ package server
 import (
 	"context"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
@@ -18,17 +20,50 @@ import (
 // ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
 const ShutdownTimeout = 10 * time.Second
 
+// APIPrefix is the prefix of every route but /health.
+const APIPrefix = "/api/v1"
+
+// Deps is what the routes read from, built by the composition root.
+type Deps struct {
+	// Explorer reads the explorer tables.
+	Explorer controller.ExplorerReader
+	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
+	// sends no CORS headers.
+	CORSAllowedOrigins []string
+	// Log receives the request log; nil is the standard logger.
+	Log log.FieldLogger
+}
+
 // New wires the echo instance: global middleware, the error handler and the
 // routes. Any unknown path answers 404 with the JSON error envelope.
-func New() *echo.Echo {
+func New(deps Deps) *echo.Echo {
+	if deps.Log == nil {
+		deps.Log = log.StandardLogger()
+	}
 	e := echo.New()
 	e.HTTPErrorHandler = appmw.ErrorHandler
 
 	e.Use(appmw.RequestID())
+	e.Use(appmw.RequestLog(deps.Log))
+	if len(deps.CORSAllowedOrigins) > 0 {
+		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+			AllowOrigins:  deps.CORSAllowedOrigins,
+			AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
+			ExposeHeaders: []string{appmw.RequestIDHeader},
+		}))
+	}
 	e.Use(appmw.Recover())
 
 	health := controller.NewHealthController()
 	e.GET("/health", health.Health)
+
+	explorer := controller.NewExplorerController(deps.Explorer)
+	api := e.Group(APIPrefix)
+	api.GET("/blocks", explorer.Blocks)
+	api.GET("/blocks/:height", explorer.Block)
+	api.GET("/txs", explorer.Txs)
+	api.GET("/txs/:hash", explorer.Tx)
+	api.GET("/search", explorer.Search)
 
 	return e
 }

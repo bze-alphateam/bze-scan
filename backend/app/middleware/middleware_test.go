@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v5"
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/middleware"
 )
@@ -70,7 +73,7 @@ func TestRecoverAnswersGeneric500(t *testing.T) {
 	rec := do(newEcho(), http.MethodGet, "/panic", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.JSONEq(t, `{"error":{"code":"internal_error","message":"An unexpected error occurred"}}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"internal","message":"An unexpected error occurred"}}`, rec.Body.String())
 }
 
 func TestInternalErrorDetailsAreNotExposed(t *testing.T) {
@@ -78,7 +81,7 @@ func TestInternalErrorDetailsAreNotExposed(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "hunter2")
-	assert.JSONEq(t, `{"error":{"code":"internal_error","message":"An unexpected error occurred"}}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"internal","message":"An unexpected error occurred"}}`, rec.Body.String())
 }
 
 func TestHTTPErrorKeepsStatusAndMessage(t *testing.T) {
@@ -100,4 +103,59 @@ func TestHeadErrorHasNoBody(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Empty(t, rec.Body.Bytes())
+}
+
+func TestErrorsAreNotCached(t *testing.T) {
+	for _, path := range []string{"/bad", "/fail", "/nope"} {
+		rec := do(newEcho(), http.MethodGet, path, nil)
+		assert.Equal(t, "no-store", rec.Header().Get(echo.HeaderCacheControl), path)
+	}
+}
+
+func TestUpstreamStatusesHaveTheirCode(t *testing.T) {
+	e := newEcho()
+	e.GET("/upstream", func(c *echo.Context) error {
+		return echo.NewHTTPError(http.StatusBadGateway, "archive node unreachable")
+	})
+	e.GET("/timeout", func(c *echo.Context) error { return echo.NewHTTPError(http.StatusGatewayTimeout, "") })
+
+	rec := do(e, http.MethodGet, "/upstream", nil)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	assert.JSONEq(t, `{"error":{"code":"upstream_error","message":"An unexpected error occurred"}}`, rec.Body.String())
+	assert.Contains(t, do(e, http.MethodGet, "/timeout", nil).Body.String(), `"upstream_error"`)
+}
+
+func TestRequestLogWritesOneLinePerRequest(t *testing.T) {
+	logger, hook := logtest.NewNullLogger()
+	e := echo.New()
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	e.Use(middleware.RequestID())
+	e.Use(middleware.RequestLog(logger))
+	e.Use(middleware.Recover())
+	e.GET("/ok", func(c *echo.Context) error { return c.String(http.StatusOK, "ok") })
+	e.GET("/bad", func(c *echo.Context) error { return echo.NewHTTPError(http.StatusBadRequest, "no") })
+	e.GET("/panic", func(c *echo.Context) error { panic("boom") })
+
+	cases := []struct {
+		path   string
+		status int
+	}{{"/ok", 200}, {"/bad", 400}, {"/panic", 500}, {"/nope", 404}}
+	for _, tc := range cases {
+		hook.Reset()
+		do(e, http.MethodGet, tc.path+"?q=1", http.Header{middleware.RequestIDHeader: {"rid"}})
+
+		var lines []*log.Entry
+		for _, entry := range hook.AllEntries() {
+			if entry.Message == "request" {
+				lines = append(lines, entry)
+			}
+		}
+		require.Len(t, lines, 1, tc.path)
+		assert.Equal(t, log.InfoLevel, lines[0].Level)
+		assert.Equal(t, http.MethodGet, lines[0].Data["method"])
+		assert.Equal(t, tc.path, lines[0].Data["path"])
+		assert.Equal(t, tc.status, lines[0].Data["status"], tc.path)
+		assert.Equal(t, "rid", lines[0].Data["request_id"])
+		assert.Contains(t, lines[0].Data, "duration_ms")
+	}
 }

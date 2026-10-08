@@ -68,10 +68,10 @@ func TestServeRejectsInvalidConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "LOG_FORMAT")
 }
 
-func TestServeWithIndexerRequiresDatabaseURL(t *testing.T) {
+func TestServeRequiresDatabaseURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", "")
-	t.Setenv("INDEXER_ENABLED", "true")
+	t.Setenv("INDEXER_ENABLED", "false")
 	t.Setenv("LOG_LEVEL", "warn")
 
 	root := cli.NewRootCmd()
@@ -82,7 +82,6 @@ func TestServeWithIndexerRequiresDatabaseURL(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "DATABASE_URL is required")
-	assert.Contains(t, err.Error(), "INDEXER_ENABLED=false")
 }
 
 // TestServeStopsCleanlyOnSIGTERM runs the real serve command, waits until it
@@ -95,6 +94,8 @@ func TestServeStopsCleanlyOnSIGTERM(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "warn")
 	t.Setenv("LOG_FORMAT", "text")
 	t.Setenv("INDEXER_ENABLED", "false")
+	// Never reached: the API pool connects on the first query.
+	t.Setenv("DATABASE_URL", "postgres://bze@127.0.0.1:1/none?sslmode=disable")
 
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{"serve"})

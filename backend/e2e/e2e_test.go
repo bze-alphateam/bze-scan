@@ -54,7 +54,9 @@ func TestHealthOnInProcessServer(t *testing.T) {
 
 	addrCh := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- server.Run(ctx, server.New(), "127.0.0.1:0", func(a net.Addr) { addrCh <- a }) }()
+	go func() {
+		done <- server.Run(ctx, server.New(server.Deps{}), "127.0.0.1:0", func(a net.Addr) { addrCh <- a })
+	}()
 
 	var addr net.Addr
 	select {

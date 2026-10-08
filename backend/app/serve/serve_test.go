@@ -43,10 +43,15 @@ func TestRefusesAnUnreachableNode(t *testing.T) {
 	assert.Contains(t, err.Error(), "node status")
 }
 
-func TestIndexerRequiresDatabaseURL(t *testing.T) {
-	cfg := indexerConfig("http://127.0.0.1:1", "beezee-1")
-	cfg.DatabaseURL = ""
+// The API reads the database, so serve needs it with or without the
+// indexer.
+func TestServeRequiresDatabaseURL(t *testing.T) {
+	for _, indexer := range []bool{true, false} {
+		cfg := indexerConfig("http://127.0.0.1:1", "beezee-1")
+		cfg.DatabaseURL = ""
+		cfg.IndexerEnabled = indexer
 
-	err := serve.Run(context.Background(), cfg, serve.Options{})
-	assert.ErrorIs(t, err, config.ErrDatabaseURLRequired)
+		err := serve.Run(context.Background(), cfg, serve.Options{})
+		assert.ErrorIs(t, err, config.ErrDatabaseURLRequired, "indexer %v", indexer)
+	}
 }

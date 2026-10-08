@@ -11,7 +11,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/config"
 )
 
-var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED"}
+var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -164,5 +164,30 @@ func TestLoadRejectsInvalidIndexerSettings(t *testing.T) {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), key)
 		})
+	}
+}
+
+func TestLoadCORSAllowedOrigins(t *testing.T) {
+	isolate(t)
+	t.Setenv("CORS_ALLOWED_ORIGINS", " https://scan.getbze.com, http://localhost:3000 ,,")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://scan.getbze.com", "http://localhost:3000"}, cfg.CORSAllowedOrigins)
+
+	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"*"}, cfg.CORSAllowedOrigins)
+}
+
+func TestLoadRejectsInvalidCORSOrigins(t *testing.T) {
+	for _, v := range []string{"scan.getbze.com", "ftp://scan.getbze.com", "https://scan.getbze.com/path", "https://"} {
+		isolate(t)
+		t.Setenv("CORS_ALLOWED_ORIGINS", v)
+
+		_, err := config.Load()
+		require.Error(t, err, v)
+		assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS", v)
 	}
 }

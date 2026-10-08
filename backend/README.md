@@ -47,6 +47,8 @@ Implemented so far:
   the process serves HTTP; it checks neither the database nor a node).
   Unknown paths answer 404 with the JSON error envelope
   `{"error":{"code":"not_found","message":"Not Found"}}`.
+- The read API under `/api/v1`: blocks, transactions and search (see HTTP
+  API below).
 - `migrate` (see Migrations below).
 - The live indexer inside `serve`, writing `explorer.blocks` (see Live
   indexer below). Transactions, messages and everything else follow.
@@ -60,9 +62,10 @@ documented template with the defaults:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `HTTP_ADDR` | `:8080` | listen address of the HTTP API |
+| `CORS_ALLOWED_ORIGINS` | empty | comma-separated origins allowed to call the API from a browser, or `*`; empty sends no CORS headers |
 | `LOG_LEVEL` | `info` | logrus level |
 | `LOG_FORMAT` | `text` | `text` or `json` |
-| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by every command that touches it (`migrate`, and `serve` with the indexer). Never logged |
+| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by `migrate` and `serve` (the API reads it, with or without the indexer). Never logged |
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
 | `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
@@ -112,8 +115,11 @@ migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
 app/serve/         the serve process: its components in one errgroup
 app/server/        echo wiring and the graceful HTTP runner
-app/controller/    thin HTTP handlers
-app/middleware/    request id, panic recovery, JSON error handler
+app/controller/    thin HTTP handlers: parsing, validation, status codes
+app/dto/           JSON shapes of the API and the keyset cursor
+app/repository/    read queries over the explorer tables (pgx)
+app/middleware/    request id, request log, panic recovery, JSON error
+                   handler
 internal/chain/    chain facts (bech32 prefix, module account addresses), the
                    chain's codec (transaction decoding), coin strings
 internal/classify/ message and block-event classification (Go source of
@@ -147,6 +153,39 @@ scripts/           record-fixtures.sh
   exceptions, `export_test.go` included). Nothing is exported just to be
   tested: unexported code is covered through the exported behaviour that
   uses it.
+
+## HTTP API
+
+Every route but `/health` lives under `/api/v1` and reads the explorer tables
+only: never the CometBFT indexer's tables, never a node. Conventions, which
+every later route follows:
+
+- **JSON** with snake_case names. Amounts and other big decimals are strings
+  (coins are `[{"denom": "ubze", "amount": "2000"}]`), times RFC 3339 in UTC,
+  and an absent value is `null`, never a missing field. Every block and
+  transaction carries its height, index and hash.
+- **Lists** answer `{"items": [...], "next_cursor": "<opaque>" | null}`.
+  `limit` defaults to 25, maximum 100 (beyond is a 400). The cursor is the key
+  of the last item (base64 of the key tuple); pass it back as `cursor` for the
+  next page; `null` means the last page. Keyset queries carry a height
+  predicate so PostgreSQL prunes the partitions above the cursor.
+- **Errors** answer `{"error": {"code": "...", "message": "..."}}` with
+  `bad_request` (400), `not_found` (404), `upstream_error` (502/504, for the
+  routes that call a node) or `internal` (500, details only in the log).
+- **Caching**: lists, search and every error are `Cache-Control: no-store`;
+  a block by height and a found transaction are
+  `public, max-age=31536000, immutable` (a committed height never changes).
+- **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
+- **Request log**: one info line per request with method, path, status,
+  duration and request id.
+
+| Route | Answers |
+| --- | --- |
+| `GET /api/v1/blocks?cursor&limit` | blocks, height descending: height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes |
+| `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer); 400 unless a positive integer, 404 when not indexed |
+| `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
+| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
+| `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; no match is an empty list; an empty `q` is a 400 |
 
 ## Migrations
 

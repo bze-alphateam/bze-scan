@@ -43,6 +43,7 @@ func newTransformer(t *testing.T) *transform.Transformer {
 // indexer runs the live indexer's pass for given heights: the fake node, the
 // real transformer and the live writer over a migrated database of its own.
 type indexer struct {
+	url    string
 	db     *sql.DB
 	client *node.Client
 	tr     *transform.Transformer
@@ -57,6 +58,7 @@ func newIndexer(t *testing.T) *indexer {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	return &indexer{
+		url:    url,
 		db:     connect(t, url),
 		client: node.New(fakenode.New(t).URL),
 		tr:     newTransformer(t),
