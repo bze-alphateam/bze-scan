@@ -1,0 +1,147 @@
+{
+  "transactions": [
+    {
+      "Height": 24999205,
+      "TxIndex": 0,
+      "Hash": "8F67A7463FA352ED10958716837119DA98A0274D2E93E30A55B16D0764C11F8B",
+      "Time": "2026-10-08T17:00:00.688597027Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 472565,
+      "GasUsed": 329880,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "23629"
+        }
+      ],
+      "FeePayer": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "Signers": [
+        "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/ibc.applications.transfer.v1.MsgTransfer"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 24999205,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/ibc.applications.transfer.v1.MsgTransfer",
+      "Sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "Module": "",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/ibc.applications.transfer.v1.MsgTransfer",
+            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "spender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "receiver": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "recipient": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95",
+            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "spender": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95"
+          }
+        },
+        {
+          "type": "burn",
+          "attrs": {
+            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "burner": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95"
+          }
+        },
+        {
+          "type": "send_packet",
+          "attrs": {
+            "connection_id": "connection-3",
+            "packet_channel_ordering": "ORDER_UNORDERED",
+            "packet_connection": "connection-3",
+            "packet_data": "{\"amount\":\"957617\",\"denom\":\"transfer/channel-3/uusdc\",\"memo\":\"{\\\"forward\\\":{\\\"channel\\\":\\\"channel-1\\\",\\\"next\\\":{\\\"wasm\\\":{\\\"contract\\\":\\\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\\\",\\\"msg\\\":{\\\"swap_and_action\\\":{\\\"affiliates\\\":[],\\\"min_asset\\\":{\\\"native\\\":{\\\"amount\\\":\\\"5043987638\\\",\\\"denom\\\":\\\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\\\"}},\\\"post_swap_action\\\":{\\\"ibc_transfer\\\":{\\\"ibc_info\\\":{\\\"memo\\\":\\\"\\\",\\\"receiver\\\":\\\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\\\",\\\"recover_address\\\":\\\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\\\",\\\"source_channel\\\":\\\"channel-340\\\"}}},\\\"timeout_timestamp\\\":1791479095283102700,\\\"user_swap\\\":{\\\"swap_exact_asset_in\\\":{\\\"operations\\\":[{\\\"denom_in\\\":\\\"ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4\\\",\\\"denom_out\\\":\\\"uosmo\\\",\\\"pool\\\":\\\"1464\\\"},{\\\"denom_in\\\":\\\"uosmo\\\",\\\"denom_out\\\":\\\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\\\",\\\"pool\\\":\\\"856\\\"}],\\\"swap_venue_name\\\":\\\"osmosis-poolmanager\\\"}}}}}},\\\"port\\\":\\\"transfer\\\",\\\"receiver\\\":\\\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\\\",\\\"retries\\\":2,\\\"timeout\\\":1791479095283082641}}\",\"receiver\":\"noble1mjpllwcpca0t2dmnr3wez2ugkr5l07lf0dyjqa\",\"sender\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\"}",
+            "packet_data_hex": "7b22616d6f756e74223a22393537363137222c2264656e6f6d223a227472616e736665722f6368616e6e656c2d332f7575736463222c226d656d6f223a227b5c22666f72776172645c223a7b5c226368616e6e656c5c223a5c226368616e6e656c2d315c222c5c226e6578745c223a7b5c227761736d5c223a7b5c22636f6e74726163745c223a5c226f736d6f313061336b3468766b3337636334686e78637477347039356668736364327a366832726d783061756b6336726d38753971717839736d66736837755c222c5c226d73675c223a7b5c22737761705f616e645f616374696f6e5c223a7b5c22616666696c69617465735c223a5b5d2c5c226d696e5f61737365745c223a7b5c226e61746976655c223a7b5c22616d6f756e745c223a5c22353034333938373633385c222c5c2264656e6f6d5c223a5c226962632f433832323634353532324643334545434638313736303941413338433234423634443034463543323637413233424343463846324533424335373535464138385c227d7d2c5c22706f73745f737761705f616374696f6e5c223a7b5c226962635f7472616e736665725c223a7b5c226962635f696e666f5c223a7b5c226d656d6f5c223a5c225c222c5c2272656365697665725c223a5c22627a65316d6a706c6c7763706361307432646d6e723377657a3275676b72356c30376c663632613332795c222c5c227265636f7665725f616464726573735c223a5c226f736d6f316d6a706c6c7763706361307432646d6e723377657a3275676b72356c30376c6630347a3277705c222c5c22736f757263655f6368616e6e656c5c223a5c226368616e6e656c2d3334305c227d7d7d2c5c2274696d656f75745f74696d657374616d705c223a313739313437393039353238333130323730302c5c22757365725f737761705c223a7b5c22737761705f65786163745f61737365745f696e5c223a7b5c226f7065726174696f6e735c223a5b7b5c2264656e6f6d5f696e5c223a5c226962632f343938413037353143373938413044394133383941413336393131323344414441353744414134464531363544354337353839343530354238373642413645345c222c5c2264656e6f6d5f6f75745c223a5c22756f736d6f5c222c5c22706f6f6c5c223a5c22313436345c227d2c7b5c2264656e6f6d5f696e5c223a5c22756f736d6f5c222c5c2264656e6f6d5f6f75745c223a5c226962632f433832323634353532324643334545434638313736303941413338433234423634443034463543323637413233424343463846324533424335373535464138385c222c5c22706f6f6c5c223a5c223835365c227d5d2c5c22737761705f76656e75655f6e616d655c223a5c226f736d6f7369732d706f6f6c6d616e616765725c227d7d7d7d7d7d2c5c22706f72745c223a5c227472616e736665725c222c5c2272656365697665725c223a5c226f736d6f313061336b3468766b3337636334686e78637477347039356668736364327a366832726d783061756b6336726d38753971717839736d66736837755c222c5c22726574726965735c223a322c5c2274696d656f75745c223a313739313437393039353238333038323634317d7d222c227265636569766572223a226e6f626c65316d6a706c6c7763706361307432646d6e723377657a3275676b72356c30376c663064796a7161222c2273656e646572223a22627a65316d6a706c6c7763706361307432646d6e723377657a3275676b72356c30376c66363261333279227d",
+            "packet_dst_channel": "channel-95",
+            "packet_dst_port": "transfer",
+            "packet_sequence": "5437",
+            "packet_src_channel": "channel-3",
+            "packet_src_port": "transfer",
+            "packet_timeout_height": "0-0",
+            "packet_timeout_timestamp": "1791479095283079700"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "ibc_channel"
+          }
+        },
+        {
+          "type": "ibc_transfer",
+          "attrs": {
+            "amount": "957617",
+            "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "memo": "{\"forward\":{\"channel\":\"channel-1\",\"next\":{\"wasm\":{\"contract\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"msg\":{\"swap_and_action\":{\"affiliates\":[],\"min_asset\":{\"native\":{\"amount\":\"5043987638\",\"denom\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\"}},\"post_swap_action\":{\"ibc_transfer\":{\"ibc_info\":{\"memo\":\"\",\"receiver\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\",\"recover_address\":\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\",\"source_channel\":\"channel-340\"}}},\"timeout_timestamp\":1791479095283102700,\"user_swap\":{\"swap_exact_asset_in\":{\"operations\":[{\"denom_in\":\"ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4\",\"denom_out\":\"uosmo\",\"pool\":\"1464\"},{\"denom_in\":\"uosmo\",\"denom_out\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\",\"pool\":\"856\"}],\"swap_venue_name\":\"osmosis-poolmanager\"}}}}}},\"port\":\"transfer\",\"receiver\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"retries\":2,\"timeout\":1791479095283082641}}",
+            "receiver": "noble1mjpllwcpca0t2dmnr3wez2ugkr5l07lf0dyjqa",
+            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "transfer"
+          }
+        }
+      ],
+      "Body": {
+        "source_port": "transfer",
+        "source_channel": "channel-3",
+        "token": {
+          "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "amount": "957617"
+        },
+        "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+        "receiver": "noble1mjpllwcpca0t2dmnr3wez2ugkr5l07lf0dyjqa",
+        "timeout_height": {
+          "revision_number": "0",
+          "revision_height": "0"
+        },
+        "timeout_timestamp": "1791479095283079700",
+        "memo": "{\"forward\":{\"channel\":\"channel-1\",\"next\":{\"wasm\":{\"contract\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"msg\":{\"swap_and_action\":{\"affiliates\":[],\"min_asset\":{\"native\":{\"amount\":\"5043987638\",\"denom\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\"}},\"post_swap_action\":{\"ibc_transfer\":{\"ibc_info\":{\"memo\":\"\",\"receiver\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\",\"recover_address\":\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\",\"source_channel\":\"channel-340\"}}},\"timeout_timestamp\":1791479095283102700,\"user_swap\":{\"swap_exact_asset_in\":{\"operations\":[{\"denom_in\":\"ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4\",\"denom_out\":\"uosmo\",\"pool\":\"1464\"},{\"denom_in\":\"uosmo\",\"denom_out\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\",\"pool\":\"856\"}],\"swap_venue_name\":\"osmosis-poolmanager\"}}}}}},\"port\":\"transfer\",\"receiver\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"retries\":2,\"timeout\":1791479095283082641}}"
+      }
+    }
+  ]
+}

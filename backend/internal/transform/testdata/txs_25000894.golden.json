@@ -1,0 +1,622 @@
+{
+  "transactions": [
+    {
+      "Height": 25000894,
+      "TxIndex": 0,
+      "Hash": "E580BFA56DE28886E51DDB9BE50DD610C1C832C579CA08FCF9177B04D2F7B7B9",
+      "Time": "2026-10-08T19:44:08.539680072Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 200000,
+      "GasUsed": 113761,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "FeePayer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "Signers": [
+        "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ]
+    },
+    {
+      "Height": 25000894,
+      "TxIndex": 1,
+      "Hash": "F630302967066CCF4E8B87A0C9B66C6C9DEE40A216E32E32F0C21FA16F46ECC4",
+      "Time": "2026-10-08T19:44:08.539680072Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 968962,
+      "GasUsed": 807133,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "242241"
+        }
+      ],
+      "FeePayer": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+      "Signers": [
+        "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787"
+      ],
+      "Memo": "Relayed by ChainTools | 1 | hermes 1.13.2+65c4cf82 (https://hermes.informal.systems)",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/ibc.core.client.v1.MsgUpdateClient"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 25000894,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.bank.v1beta1.MsgSend",
+      "Sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "Module": "bank",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.bank.v1beta1.MsgSend",
+            "module": "bank",
+            "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "333611762700ubze",
+            "spender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "333611762700ubze",
+            "receiver": "bze1xrw00qx3laxg7dkwx0aymxyqtwr9xsuf3k3pa7"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "333611762700ubze",
+            "recipient": "bze1xrw00qx3laxg7dkwx0aymxyqtwr9xsuf3k3pa7",
+            "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+          }
+        }
+      ],
+      "Body": {
+        "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "to_address": "bze1xrw00qx3laxg7dkwx0aymxyqtwr9xsuf3k3pa7",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "333611762700"
+          }
+        ]
+      }
+    },
+    {
+      "Height": 25000894,
+      "TxIndex": 1,
+      "MsgIndex": 0,
+      "TypeURL": "/ibc.core.client.v1.MsgUpdateClient",
+      "Sender": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+      "Module": "",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/ibc.core.client.v1.MsgUpdateClient",
+            "sender": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787"
+          }
+        },
+        {
+          "type": "update_client",
+          "attrs": {
+            "client_id": "07-tendermint-8",
+            "client_type": "07-tendermint",
+            "consensus_height": "1-17692309",
+            "consensus_heights": "1-17692309",
+            "header": "0a262f6962632e6c69676874636c69656e74732e74656e6465726d696e742e76312e48656164657212fb210ac50e0a92030a02080b1209617263687761792d311895edb708220c0883e59fd6061083c2f296032a480a2052db817b4c5647b47e6c0e7013ae0327d7b27363c1c32bd6556f64970faf366412240801122040edfcac462d57c912b5f758db03cdbf1bff7e0e9175277377ba852e743578f93220a34bf44e4b8e843136a0dc8655844c313c66aa6035c50a8c5c9feece6f03441d3a20189d1ab86665912aaf968fdaa8dcbc50a583452fe737fc0f2ab4ff7ff96c2cd04220b839490d04b6b9feca39fed38ec161c53be82aa64e0bb241ff57fd0e4817b4eb4a20b839490d04b6b9feca39fed38ec161c53be82aa64e0bb241ff57fd0e4817b4eb522022e3fa2d1695ae7db62e55677bf0c914b1ec88d64cd8d280cf2e29b2e06d09655a20f04a31696ca045565bd888be3738ef0737c039879922582a6052ea047e1cc0056220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8556a20e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8557214adadee9b97c69600fea8911323f3f5cb28906ee512ad0b0895edb7081a480a20772f9d8f7d55db3dbc1a5b10b5882959a9e81f5a2cedc58eeaabf9e47aa2ed3c1224080112201dc6cbb6f9e338374e82c844f26cfa0aed8f183332d1d42d8ff56ee2cb3e8c00226808021214e89799b6440988a1aaee14ada7050fcfbcbe31b51a0c0889e59fd606108590c3ba022240dc64c03a3b52a550c390f8192a597a631095e6d280511bc987937427e30f5dba1b62fc3a8f48be647f9c8386abd278502a520d24161344171e653025e9df500c220f08011a0b088092b8c398feffffff012268080212140b854339bdcc14b85fb8711e41c2942377476f701a0c0889e59fd60610d29ab1a8022240f15f22de0dfd00bd29c3f2f238ab8752a803133d7405db82fcddf1101b21d210b9d170252f79be1738db5c6ace1f85790ef21069990ecd7f0e318c5db77b6207226808021214c64f7cf03bbb07b80e1b557a185032114c1f02011a0c0889e59fd60610d5b0eda70222408b3d3b2e348b08c434f097d9180996281dfd59f2fde6cc2c534d57997402a9a5cfb8b18759497e977512f0659a2dfc8b150484e3acfe6d91eacbd6eab0cce5052268080212142d63b9079fcaf8cee74b072665a04599064bcb091a0c0889e59fd606109a8cf9a7022240c2edaac4ea2a5798eb0ab2fa51831726cbce27abc3143c7711408ef213b6235a8ef47d1a6e4886f422bde9ce2d71fd4371bdf97a5419c208c9f3ee37f30a3f00220f08011a0b088092b8c398feffffff01226808021214d78997b5a01d2d4e80c5189d930a14055002b4781a0c0889e59fd60610a6aed8a6022240e8094dae29622a4889d796131db81f8d56f4354e67c8bae2290a6ddf502d4542d525c890af00d63602047568b2bffddd30c69cf56bd047467bd6d440d9996a042268080212145f647ee2aa22982e897765117160da27bd8dd1ae1a0c0889e59fd60610c6dab0a90222403c64f6ad8b5a22174cca2ea6a28d633cf15abd92d5aac0da809ce15137947826bda21c9ed9b980d1c46cb5b9e1587727dcc31519a4c002bc6574a1400c9a8205226808021214fd1e562dd7fa1296aca834ef29aa0685a8ad8f331a0c0889e59fd60610f0befbc5022240d4c437667f932fdccaece163395967ffddab093baa9fd4ec41d6831ac86a1af72f1e5ae8e9a0ef2fbe8fc4af19071b20a05d035421da5b2ed4348ac5f5846f0922680802121490f0753d72b15384cd536b1fae023bd7ff7d250e1a0c0889e59fd606108399b1c0022240d89d39ab7786750fcbff477c83f2b222a1f12601cbdfb2d456c79193dd7662eb2d22dd41811f48fdc744655d1f845d2b524cde0c16fc3bc15dacbf2412b2d205220f08011a0b088092b8c398feffffff01220f08011a0b088092b8c398feffffff01220f08011a0b088092b8c398feffffff01226808021214223bd658adc0be9e1a318eaee26a927e9b782dfb1a0c0889e59fd6061088fed3b20222409cc98784e40648ebd07f8c40210cc3e8c8be842ff6d46668335842f6fd94c8219fec6c0e0fed39a1775b6eee7d29b26366692b00b145aeae770d667b70bde902220f08011a0b088092b8c398feffffff01226808021214750ca8cee4aba1ca93d1e0a524f26da8a64ef7f71a0c0889e59fd60610eeeaf6a70222404f95eacef0c9c94f4ac3f79eaf7edaaadb73895ad95af79c1f274fdb808e49e18a385ba0b0ac486ffba50315ef5d82728e6d35ee0a7d497b6b4dba473c1cf605226808021214bd1af7acaafc43e292c1b3a220bb9a93617fca6e1a0c0889e59fd60610fa8bc3c0022240b88fda451d554be1669dfb361b2945c055dafa07825e6ab158f14b32227db815bd26bd2c9b260cf40bd24bb99190e85aef6f08e77aeb484a5b0832f29dfef6002268080212145c5fd46633a0c87a57c735b983ba19a83d3d85a81a0c0889e59fd60610acd8eebe022240464e371a3a5ab1c035128d253f2bb50b4319cde8231fdb0210a13da6974be1fcf191296f5e3464fbec38ab0f59039628416a01d16e4f9cea23afaad539ca9f0f12d2090a3f0a14e89799b6440988a1aaee14ada7050fcfbcbe31b512220a20df0a50704ac978f3c35b53f0cca7e7e0b4970db76bfae7f92b047c10b44dda4d189eb385130a3f0a148f9c9f4ec28c7e06f3d348394270fca69dba116b12220a207bb6fe46bbb7ba1e99f652db69f188f647d9256d1ad72e713f15f02e5b64bf1918d181e4080a3f0a140b854339bdcc14b85fb8711e41c2942377476f7012220a20078f073851149a1ce22a0b8da66e41d7e86e6cb658f0984bd659cec0310b29ea18d784d1070a3f0a14c64f7cf03bbb07b80e1b557a185032114c1f020112220a201bcf4a89108d8d88365f0277c14f9f6e36efe12b7ebfc054a5f6f20085343d5418df87cc070a3f0a142d63b9079fcaf8cee74b072665a04599064bcb0912220a20454d1a9ce954706c06ada598297f12e5952e094d66795c96b1427b786df4a1f118df9d98070a3f0a14cb8d061c7d78bae099c50d6857b97ad4a921877612220a20ba02bce5a91a96413d40ca44c721e9590ee4463cfc47f9090aae9eb1c2d42948188b9b87070a3f0a14d78997b5a01d2d4e80c5189d930a14055002b47812220a204bfdd8afb025826d37ecc3f44e2458fa616e11220fa2497769be7e0c420b159318a48bfe060a3f0a145f647ee2aa22982e897765117160da27bd8dd1ae12220a202b4d1316716bfb0992aed09b0600e2d2b7c5026c76d34a928e149b386e0ad1c6189ea6de060a3f0a14fd1e562dd7fa1296aca834ef29aa0685a8ad8f3312220a209ef78f2ab25f8fa0822fcdf67b42ad425f1acc14760220d7afc88fe7935594f6189ab7d3060a3f0a1490f0753d72b15384cd536b1fae023bd7ff7d250e12220a20d3d756a066d997406e2f1415067c436afc78787477782dac93d5f2862202a25e18cbc8fc050a3f0a14adadee9b97c69600fea8911323f3f5cb28906ee512220a2079a8f2ddba9de2cc37957e31facc71c431c5a16165d0d7131def3686161c65ea18bcc8e6050a3f0a14f9f61fd65fb010a8c9365032d83ccab9fef69bfa12220a206e37e8f5e0a0996553a1dae739ed9f59a57862785244d9f76f67ee364b0b578d18c6bce0050a3f0a14c5047a5b0c008a531993140151f3e54c1308a86f12220a20e47ea28e889165a6da5a2481bc9978ca29843983fad6fb21f18b1fb78577d0cd18e3e8f6040a3f0a14223bd658adc0be9e1a318eaee26a927e9b782dfb12220a2049f3cedbdb03b1b439f3a3b7b0705d64b5a74e2f11013b51ee4039bd4cac8c5a188ac8ec040a3e0a148cb1be337d1427136eb8eddd9232735e2405c50c12220a20dfc188c4593543ba42fcd564b9626492ff09dd3126db9523fe876c09d481d60218f9814a0a3e0a14750ca8cee4aba1ca93d1e0a524f26da8a64ef7f712220a209369de6097c1cea7e70d74a8919cdad48b6084493fac77311e273c77851a0d7a18dff71e0a3d0a14bd1af7acaafc43e292c1b3a220bb9a93617fca6e12220a20158424c9c36f8c66519b20f6dc5d8a4ad56910b6524231ee74c20a44a97b6365188b1f0a3d0a145c5fd46633a0c87a57c735b983ba19a83d3d85a812220a20c577dcf95f497896e3d99e579672a728301799c22f1b09b866e661083150198b18fd11123f0a14adadee9b97c69600fea8911323f3f5cb28906ee512220a2079a8f2ddba9de2cc37957e31facc71c431c5a16165d0d7131def3686161c65ea18bcc8e60518858ce6691a07080110ebe1b70822d2090a3f0a14e89799b6440988a1aaee14ada7050fcfbcbe31b512220a20df0a50704ac978f3c35b53f0cca7e7e0b4970db76bfae7f92b047c10b44dda4d189eb385130a3f0a148f9c9f4ec28c7e06f3d348394270fca69dba116b12220a207bb6fe46bbb7ba1e99f652db69f188f647d9256d1ad72e713f15f02e5b64bf1918d181e4080a3f0a140b854339bdcc14b85fb8711e41c2942377476f7012220a20078f073851149a1ce22a0b8da66e41d7e86e6cb658f0984bd659cec0310b29ea18d784d1070a3f0a14c64f7cf03bbb07b80e1b557a185032114c1f020112220a201bcf4a89108d8d88365f0277c14f9f6e36efe12b7ebfc054a5f6f20085343d5418b287cc070a3f0a142d63b9079fcaf8cee74b072665a04599064bcb0912220a20454d1a9ce954706c06ada598297f12e5952e094d66795c96b1427b786df4a1f118df9d98070a3f0a14cb8d061c7d78bae099c50d6857b97ad4a921877612220a20ba02bce5a91a96413d40ca44c721e9590ee4463cfc47f9090aae9eb1c2d42948188b9b87070a3f0a14d78997b5a01d2d4e80c5189d930a14055002b47812220a204bfdd8afb025826d37ecc3f44e2458fa616e11220fa2497769be7e0c420b159318a48bfe060a3f0a145f647ee2aa22982e897765117160da27bd8dd1ae12220a202b4d1316716bfb0992aed09b0600e2d2b7c5026c76d34a928e149b386e0ad1c6189ea6de060a3f0a14fd1e562dd7fa1296aca834ef29aa0685a8ad8f3312220a209ef78f2ab25f8fa0822fcdf67b42ad425f1acc14760220d7afc88fe7935594f6189ab7d3060a3f0a1490f0753d72b15384cd536b1fae023bd7ff7d250e12220a20d3d756a066d997406e2f1415067c436afc78787477782dac93d5f2862202a25e18cbc8fc050a3f0a14adadee9b97c69600fea8911323f3f5cb28906ee512220a2079a8f2ddba9de2cc37957e31facc71c431c5a16165d0d7131def3686161c65ea18bcc8e6050a3f0a14f9f61fd65fb010a8c9365032d83ccab9fef69bfa12220a206e37e8f5e0a0996553a1dae739ed9f59a57862785244d9f76f67ee364b0b578d18c6bce0050a3f0a14c5047a5b0c008a531993140151f3e54c1308a86f12220a20e47ea28e889165a6da5a2481bc9978ca29843983fad6fb21f18b1fb78577d0cd18e3e8f6040a3f0a14223bd658adc0be9e1a318eaee26a927e9b782dfb12220a2049f3cedbdb03b1b439f3a3b7b0705d64b5a74e2f11013b51ee4039bd4cac8c5a188ac8ec040a3e0a148cb1be337d1427136eb8eddd9232735e2405c50c12220a20dfc188c4593543ba42fcd564b9626492ff09dd3126db9523fe876c09d481d60218f9814a0a3e0a14750ca8cee4aba1ca93d1e0a524f26da8a64ef7f712220a209369de6097c1cea7e70d74a8919cdad48b6084493fac77311e273c77851a0d7a18dff71e0a3d0a14bd1af7acaafc43e292c1b3a220bb9a93617fca6e12220a20158424c9c36f8c66519b20f6dc5d8a4ad56910b6524231ee74c20a44a97b6365188b1f0a3d0a145c5fd46633a0c87a57c735b983ba19a83d3d85a812220a20c577dcf95f497896e3d99e579672a728301799c22f1b09b866e661083150198b18fd11123f0a14223bd658adc0be9e1a318eaee26a927e9b782dfb12220a2049f3cedbdb03b1b439f3a3b7b0705d64b5a74e2f11013b51ee4039bd4cac8c5a188ac8ec0418d88be669"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "module": "ibc_client"
+          }
+        }
+      ],
+      "Body": {
+        "client_id": "07-tendermint-8",
+        "client_message": {
+          "@type": "/ibc.lightclients.tendermint.v1.Header",
+          "signed_header": {
+            "header": {
+              "version": {
+                "block": "11",
+                "app": "0"
+              },
+              "chain_id": "archway-1",
+              "height": "17692309",
+              "time": "2026-10-08T19:44:03.853319939Z",
+              "last_block_id": {
+                "hash": "UtuBe0xWR7R+bA5wE64DJ9eyc2PBwyvWVW9klw+vNmQ=",
+                "part_set_header": {
+                  "total": 1,
+                  "hash": "QO38rEYtV8kStfdY2wPNvxv/fg6RdSdzd7qFLnQ1ePk="
+                }
+              },
+              "last_commit_hash": "o0v0TkuOhDE2oNyGVYRMMTxmqmA1xQqMXJ/uzm8DRB0=",
+              "data_hash": "GJ0auGZlkSqvlo/aqNy8UKWDRS/nN/wPKrT/f/lsLNA=",
+              "validators_hash": "uDlJDQS2uf7KOf7TjsFhxTvoKqZOC7JB/1f9DkgXtOs=",
+              "next_validators_hash": "uDlJDQS2uf7KOf7TjsFhxTvoKqZOC7JB/1f9DkgXtOs=",
+              "consensus_hash": "IuP6LRaVrn22LlVne/DJFLHsiNZM2NKAzy4psuBtCWU=",
+              "app_hash": "8EoxaWygRVZb2Ii+NzjvBzfAOYeZIlgqYFLqBH4cwAU=",
+              "last_results_hash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+              "evidence_hash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+              "proposer_address": "ra3um5fGlgD+qJETI/P1yyiQbuU="
+            },
+            "commit": {
+              "height": "17692309",
+              "round": 0,
+              "block_id": {
+                "hash": "dy+dj31V2z28GlsQtYgpWanoH1os7cWO6qv55Hqi7Tw=",
+                "part_set_header": {
+                  "total": 1,
+                  "hash": "HcbLtvnjODdOgshE8mz6Cu2PGDMy0dQtj/Vu4ss+jAA="
+                }
+              },
+              "signatures": [
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "6JeZtkQJiKGq7hStpwUPz7y+MbU=",
+                  "timestamp": "2026-10-08T19:44:09.659605509Z",
+                  "signature": "3GTAOjtSpVDDkPgZKll6YxCV5tKAURvJh5N0J+MPXbobYvw6j0i+ZH+cg4ar0nhQKlINJBYTRBceZTAl6d9QDA=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "C4VDOb3MFLhfuHEeQcKUI3dHb3A=",
+                  "timestamp": "2026-10-08T19:44:09.621563218Z",
+                  "signature": "8V8i3g39AL0pw/LyOKuHUqgDEz10BduC/N3xEBsh0hC50XAlL3m+FzjbXGrOH4V5DvIQaZkOzX8OMYxdt3tiBw=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "xk988Du7B7gOG1V6GFAyEUwfAgE=",
+                  "timestamp": "2026-10-08T19:44:09.620451925Z",
+                  "signature": "iz07LjSLCMQ08JfZGAmWKB39WfL95swsU01XmXQCqaXPuLGHWUl+l3US8GWaLfyLFQSE46z+bZHqy9bqsMzlBQ=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "LWO5B5/K+M7nSwcmZaBFmQZLywk=",
+                  "timestamp": "2026-10-08T19:44:09.620643866Z",
+                  "signature": "wu2qxOoqV5jrCrL6UYMXJsvOJ6vDFDx3EUCO8hO2I1qO9H0abkiG9CK96c4tcf1Dcb35elQZwgjJ8+438wo/AA=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "14mXtaAdLU6AxRidkwoUBVACtHg=",
+                  "timestamp": "2026-10-08T19:44:09.618010406Z",
+                  "signature": "6AlNriliKkiJ15YTHbgfjVb0NU5nyLriKQpt31AtRULVJciQrwDWNgIEdWiyv/3dMMac9WvQR0Z71tRA2ZlqBA=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "X2R+4qoimC6Jd2URcWDaJ72N0a4=",
+                  "timestamp": "2026-10-08T19:44:09.623652166Z",
+                  "signature": "PGT2rYtaIhdMyi6moo1jPPFavZLVqsDagJzhUTeUeCa9ohye2bmA0cRstbnhWHcn3MMVGaTAArxldKFADJqCBQ=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "/R5WLdf6EpasqDTvKaoGhaitjzM=",
+                  "timestamp": "2026-10-08T19:44:09.683597680Z",
+                  "signature": "1MQ3Zn+TL9zK7OFjOVln/92rCTuqn9TsQdaDGshqGvcvHlro6aDvL76PxK8ZBxsgoF0DVCHaWy7UNIrF9YRvCQ=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "kPB1PXKxU4TNU2sfrgI71/99JQ4=",
+                  "timestamp": "2026-10-08T19:44:09.671894659Z",
+                  "signature": "2J05q3eGdQ/L/0d8g/KyIqHxJgHL37LUVseRk912YustIt1BgR9I/cdEZV0fhF0rUkzeDBb8O8FdrL8kErLSBQ=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "IjvWWK3Avp4aMY6u4mqSfpt4Lfs=",
+                  "timestamp": "2026-10-08T19:44:09.643104520Z",
+                  "signature": "nMmHhOQGSOvQf4xAIQzD6Mi+hC/21GZoM1hC9v2UyCGf7GwOD+05oXdbbu59KbJjZmkrALFFrq53DWZ7cL3pAg=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_ABSENT",
+                  "validator_address": null,
+                  "timestamp": "0001-01-01T00:00:00Z",
+                  "signature": null
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "dQyozuSrocqT0eClJPJtqKZO9/c=",
+                  "timestamp": "2026-10-08T19:44:09.620606830Z",
+                  "signature": "T5XqzvDJyU9Kw/eer37aqttziVrZWvecHydP24COSeGKOFugsKxIb/ulAxXvXYJyjm017gp9SXtrTbpHPBz2BQ=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "vRr3rKr8Q+KSwbOiILuak2F/ym4=",
+                  "timestamp": "2026-10-08T19:44:09.672187898Z",
+                  "signature": "uI/aRR1VS+Fmnfs2GylFwFXa+geCXmqxWPFLMiJ9uBW9Jr0smyYM9AvSS7mRkOha728I53rrSEpbCDLynf72AA=="
+                },
+                {
+                  "block_id_flag": "BLOCK_ID_FLAG_COMMIT",
+                  "validator_address": "XF/UZjOgyHpXxzW5g7oZqD09hag=",
+                  "timestamp": "2026-10-08T19:44:09.668707884Z",
+                  "signature": "Rk43GjpascA1Eo0lPyu1C0MZzegjH9sCEKE9ppdL4fzxkSlvXjRk++w4qw9ZA5YoQWoB0W5PnOojr6rVOcqfDw=="
+                }
+              ]
+            }
+          },
+          "validator_set": {
+            "validators": [
+              {
+                "address": "6JeZtkQJiKGq7hStpwUPz7y+MbU=",
+                "pub_key": {
+                  "ed25519": "3wpQcErJePPDW1PwzKfn4LSXDbdr+uf5KwR8ELRN2k0="
+                },
+                "voting_power": "39934366",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "j5yfTsKMfgbz00g5QnD8pp26EWs=",
+                "pub_key": {
+                  "ed25519": "e7b+Rru3uh6Z9lLbafGI9kfZJW0a1y5xPxXwLltkvxk="
+                },
+                "voting_power": "18415825",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "C4VDOb3MFLhfuHEeQcKUI3dHb3A=",
+                "pub_key": {
+                  "ed25519": "B48HOFEUmhziKguNpm5B1+hubLZY8JhL1lnOwDELKeo="
+                },
+                "voting_power": "16007767",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "xk988Du7B7gOG1V6GFAyEUwfAgE=",
+                "pub_key": {
+                  "ed25519": "G89KiRCNjYg2XwJ3wU+fbjbv4St+v8BUpfbyAIU0PVQ="
+                },
+                "voting_power": "15926239",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "LWO5B5/K+M7nSwcmZaBFmQZLywk=",
+                "pub_key": {
+                  "ed25519": "RU0anOlUcGwGraWYKX8S5ZUuCU1meVyWsUJ7eG30ofE="
+                },
+                "voting_power": "15077087",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "y40GHH14uuCZxQ1oV7l61Kkhh3Y=",
+                "pub_key": {
+                  "ed25519": "ugK85akalkE9QMpExyHpWQ7kRjz8R/kJCq6escLUKUg="
+                },
+                "voting_power": "14798219",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "14mXtaAdLU6AxRidkwoUBVACtHg=",
+                "pub_key": {
+                  "ed25519": "S/3Yr7Algm037MP0TiRY+mFuESIPokl3ab5+DEILFZM="
+                },
+                "voting_power": "14648740",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "X2R+4qoimC6Jd2URcWDaJ72N0a4=",
+                "pub_key": {
+                  "ed25519": "K00TFnFr+wmSrtCbBgDi0rfFAmx200qSjhSbOG4K0cY="
+                },
+                "voting_power": "14127902",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "/R5WLdf6EpasqDTvKaoGhaitjzM=",
+                "pub_key": {
+                  "ed25519": "nvePKrJfj6CCL832e0KtQl8azBR2AiDXr8iP55NVlPY="
+                },
+                "voting_power": "13949850",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "kPB1PXKxU4TNU2sfrgI71/99JQ4=",
+                "pub_key": {
+                  "ed25519": "09dWoGbZl0BuLxQVBnxDavx4eHR3eC2sk9XyhiICol4="
+                },
+                "voting_power": "12526667",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "ra3um5fGlgD+qJETI/P1yyiQbuU=",
+                "pub_key": {
+                  "ed25519": "eajy3bqd4sw3lX4x+sxxxDHFoWFl0NcTHe82hhYcZeo="
+                },
+                "voting_power": "12166204",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "+fYf1l+wEKjJNlAy2DzKuf72m/o=",
+                "pub_key": {
+                  "ed25519": "bjfo9eCgmWVTodrnOe2fWaV4YnhSRNn3b2fuNksLV40="
+                },
+                "voting_power": "12066374",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "xQR6WwwAilMZkxQBUfPlTBMIqG8=",
+                "pub_key": {
+                  "ed25519": "5H6ijoiRZabaWiSBvJl4yimEOYP61vsh8Ysft4V30M0="
+                },
+                "voting_power": "10335331",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "IjvWWK3Avp4aMY6u4mqSfpt4Lfs=",
+                "pub_key": {
+                  "ed25519": "SfPO29sDsbQ586O3sHBdZLWnTi8RATtR7kA5vUysjFo="
+                },
+                "voting_power": "10167306",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "jLG+M30UJxNuuO3dkjJzXiQFxQw=",
+                "pub_key": {
+                  "ed25519": "38GIxFk1Q7pC/NVkuWJkkv8J3TEm25Uj/odsCdSB1gI="
+                },
+                "voting_power": "1212665",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "dQyozuSrocqT0eClJPJtqKZO9/c=",
+                "pub_key": {
+                  "ed25519": "k2neYJfBzqfnDXSokZza1ItghEk/rHcxHic8d4UaDXo="
+                },
+                "voting_power": "506847",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "vRr3rKr8Q+KSwbOiILuak2F/ym4=",
+                "pub_key": {
+                  "ed25519": "FYQkycNvjGZRmyD23F2KStVpELZSQjHudMIKRKl7Y2U="
+                },
+                "voting_power": "3979",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "XF/UZjOgyHpXxzW5g7oZqD09hag=",
+                "pub_key": {
+                  "ed25519": "xXfc+V9JeJbj2Z5XlnKnKDAXmcIvGwm4ZuZhCDFQGYs="
+                },
+                "voting_power": "2301",
+                "proposer_priority": "0"
+              }
+            ],
+            "proposer": {
+              "address": "ra3um5fGlgD+qJETI/P1yyiQbuU=",
+              "pub_key": {
+                "ed25519": "eajy3bqd4sw3lX4x+sxxxDHFoWFl0NcTHe82hhYcZeo="
+              },
+              "voting_power": "12166204",
+              "proposer_priority": "0"
+            },
+            "total_voting_power": "221873669"
+          },
+          "trusted_height": {
+            "revision_number": "1",
+            "revision_height": "17690859"
+          },
+          "trusted_validators": {
+            "validators": [
+              {
+                "address": "6JeZtkQJiKGq7hStpwUPz7y+MbU=",
+                "pub_key": {
+                  "ed25519": "3wpQcErJePPDW1PwzKfn4LSXDbdr+uf5KwR8ELRN2k0="
+                },
+                "voting_power": "39934366",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "j5yfTsKMfgbz00g5QnD8pp26EWs=",
+                "pub_key": {
+                  "ed25519": "e7b+Rru3uh6Z9lLbafGI9kfZJW0a1y5xPxXwLltkvxk="
+                },
+                "voting_power": "18415825",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "C4VDOb3MFLhfuHEeQcKUI3dHb3A=",
+                "pub_key": {
+                  "ed25519": "B48HOFEUmhziKguNpm5B1+hubLZY8JhL1lnOwDELKeo="
+                },
+                "voting_power": "16007767",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "xk988Du7B7gOG1V6GFAyEUwfAgE=",
+                "pub_key": {
+                  "ed25519": "G89KiRCNjYg2XwJ3wU+fbjbv4St+v8BUpfbyAIU0PVQ="
+                },
+                "voting_power": "15926194",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "LWO5B5/K+M7nSwcmZaBFmQZLywk=",
+                "pub_key": {
+                  "ed25519": "RU0anOlUcGwGraWYKX8S5ZUuCU1meVyWsUJ7eG30ofE="
+                },
+                "voting_power": "15077087",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "y40GHH14uuCZxQ1oV7l61Kkhh3Y=",
+                "pub_key": {
+                  "ed25519": "ugK85akalkE9QMpExyHpWQ7kRjz8R/kJCq6escLUKUg="
+                },
+                "voting_power": "14798219",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "14mXtaAdLU6AxRidkwoUBVACtHg=",
+                "pub_key": {
+                  "ed25519": "S/3Yr7Algm037MP0TiRY+mFuESIPokl3ab5+DEILFZM="
+                },
+                "voting_power": "14648740",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "X2R+4qoimC6Jd2URcWDaJ72N0a4=",
+                "pub_key": {
+                  "ed25519": "K00TFnFr+wmSrtCbBgDi0rfFAmx200qSjhSbOG4K0cY="
+                },
+                "voting_power": "14127902",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "/R5WLdf6EpasqDTvKaoGhaitjzM=",
+                "pub_key": {
+                  "ed25519": "nvePKrJfj6CCL832e0KtQl8azBR2AiDXr8iP55NVlPY="
+                },
+                "voting_power": "13949850",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "kPB1PXKxU4TNU2sfrgI71/99JQ4=",
+                "pub_key": {
+                  "ed25519": "09dWoGbZl0BuLxQVBnxDavx4eHR3eC2sk9XyhiICol4="
+                },
+                "voting_power": "12526667",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "ra3um5fGlgD+qJETI/P1yyiQbuU=",
+                "pub_key": {
+                  "ed25519": "eajy3bqd4sw3lX4x+sxxxDHFoWFl0NcTHe82hhYcZeo="
+                },
+                "voting_power": "12166204",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "+fYf1l+wEKjJNlAy2DzKuf72m/o=",
+                "pub_key": {
+                  "ed25519": "bjfo9eCgmWVTodrnOe2fWaV4YnhSRNn3b2fuNksLV40="
+                },
+                "voting_power": "12066374",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "xQR6WwwAilMZkxQBUfPlTBMIqG8=",
+                "pub_key": {
+                  "ed25519": "5H6ijoiRZabaWiSBvJl4yimEOYP61vsh8Ysft4V30M0="
+                },
+                "voting_power": "10335331",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "IjvWWK3Avp4aMY6u4mqSfpt4Lfs=",
+                "pub_key": {
+                  "ed25519": "SfPO29sDsbQ586O3sHBdZLWnTi8RATtR7kA5vUysjFo="
+                },
+                "voting_power": "10167306",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "jLG+M30UJxNuuO3dkjJzXiQFxQw=",
+                "pub_key": {
+                  "ed25519": "38GIxFk1Q7pC/NVkuWJkkv8J3TEm25Uj/odsCdSB1gI="
+                },
+                "voting_power": "1212665",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "dQyozuSrocqT0eClJPJtqKZO9/c=",
+                "pub_key": {
+                  "ed25519": "k2neYJfBzqfnDXSokZza1ItghEk/rHcxHic8d4UaDXo="
+                },
+                "voting_power": "506847",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "vRr3rKr8Q+KSwbOiILuak2F/ym4=",
+                "pub_key": {
+                  "ed25519": "FYQkycNvjGZRmyD23F2KStVpELZSQjHudMIKRKl7Y2U="
+                },
+                "voting_power": "3979",
+                "proposer_priority": "0"
+              },
+              {
+                "address": "XF/UZjOgyHpXxzW5g7oZqD09hag=",
+                "pub_key": {
+                  "ed25519": "xXfc+V9JeJbj2Z5XlnKnKDAXmcIvGwm4ZuZhCDFQGYs="
+                },
+                "voting_power": "2301",
+                "proposer_priority": "0"
+              }
+            ],
+            "proposer": {
+              "address": "IjvWWK3Avp4aMY6u4mqSfpt4Lfs=",
+              "pub_key": {
+                "ed25519": "SfPO29sDsbQ586O3sHBdZLWnTi8RATtR7kA5vUysjFo="
+              },
+              "voting_power": "10167306",
+              "proposer_priority": "0"
+            },
+            "total_voting_power": "221873624"
+          }
+        },
+        "signer": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787"
+      }
+    }
+  ]
+}

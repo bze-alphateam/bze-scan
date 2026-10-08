@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
 )
 
 // Execer runs a statement; *pgxpool.Pool and pgx.Tx satisfy it.
@@ -19,9 +21,10 @@ type Step struct {
 }
 
 // postMigrate lists the post-migration steps. Later work appends its own (the
-// classification mirror, the labels seed).
+// labels seed).
 var postMigrate = []Step{
 	{Name: "partitions", Run: ensurePartitions},
+	{Name: "classification", Run: mirrorClassification},
 }
 
 // ensurePartitions creates the history-table partitions for
@@ -29,4 +32,10 @@ var postMigrate = []Step{
 func ensurePartitions(ctx context.Context, db Execer) error {
 	_, err := db.Exec(ctx, `SELECT explorer.ensure_partitions($1, $2)`, int64(0), PartitionsUpTo)
 	return err
+}
+
+// mirrorClassification rewrites the classification tables from the Go
+// classification and reclassifies the activity stored as "other".
+func mirrorClassification(ctx context.Context, db Execer) error {
+	return classify.Mirror(ctx, db)
 }

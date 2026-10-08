@@ -15,6 +15,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
@@ -62,6 +63,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		if err := checkChainID(ctx, nodeClient, cfg.ChainID); err != nil {
 			return err
 		}
+		codec, err := chain.NewCodec()
+		if err != nil {
+			return err
+		}
 		pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("live writer pool: %w", err)
@@ -74,7 +79,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			Listener:    live.NewPGListener(cfg.DatabaseURL),
 			Node:        nodeClient,
 			Store:       writer.NewLiveWriter(pool),
-			Transformer: transform.New(),
+			Transformer: transform.New(codec, log.StandardLogger()),
 		})
 		components = append(components, component{name: "live indexer", run: ix.Run})
 	} else {

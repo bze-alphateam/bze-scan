@@ -1,0 +1,436 @@
+{
+  "transactions": [
+    {
+      "Height": 25000440,
+      "TxIndex": 0,
+      "Hash": "866675DB32111084115D39052D7F600829F186D7FCD483A5D27A0DF5B4C904E1",
+      "Time": "2026-10-08T19:00:05.794345835Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 1047889,
+      "GasUsed": 944325,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "26198"
+        }
+      ],
+      "FeePayer": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+      "Signers": [
+        "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy"
+      ],
+      "Memo": "REStaked by ChainTools",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.authz.v1beta1.MsgExec"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 25000440,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.authz.v1beta1.MsgExec",
+      "Sender": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+      "Module": "authz",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.authz.v1beta1.MsgExec",
+            "module": "authz",
+            "sender": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "772625ubze",
+            "authz_msg_index": "0",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "772625ubze",
+            "authz_msg_index": "0",
+            "receiver": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "772625ubze",
+            "authz_msg_index": "0",
+            "recipient": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "authz_msg_index": "0",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "withdraw_rewards",
+          "attrs": {
+            "amount": "772625ubze",
+            "authz_msg_index": "0",
+            "delegator": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "772573ubze",
+            "authz_msg_index": "0",
+            "spender": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "772573ubze",
+            "authz_msg_index": "0",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "772573ubze",
+            "authz_msg_index": "0",
+            "delegator": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+            "new_shares": "772573.000000000000000000",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2196396ubze",
+            "authz_msg_index": "1",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2196396ubze",
+            "authz_msg_index": "1",
+            "receiver": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "2196396ubze",
+            "authz_msg_index": "1",
+            "recipient": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "authz_msg_index": "1",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "withdraw_rewards",
+          "attrs": {
+            "amount": "2196396ubze",
+            "authz_msg_index": "1",
+            "delegator": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2196249ubze",
+            "authz_msg_index": "1",
+            "spender": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2196249ubze",
+            "authz_msg_index": "1",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "2196249ubze",
+            "authz_msg_index": "1",
+            "delegator": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry",
+            "new_shares": "2196249.000000000000000000",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2569271ubze",
+            "authz_msg_index": "2",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2569271ubze",
+            "authz_msg_index": "2",
+            "receiver": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "2569271ubze",
+            "authz_msg_index": "2",
+            "recipient": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "authz_msg_index": "2",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "withdraw_rewards",
+          "attrs": {
+            "amount": "2569271ubze",
+            "authz_msg_index": "2",
+            "delegator": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2569099ubze",
+            "authz_msg_index": "2",
+            "spender": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2569099ubze",
+            "authz_msg_index": "2",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "2569099ubze",
+            "authz_msg_index": "2",
+            "delegator": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5",
+            "new_shares": "2569099.000000000000000000",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2445562ubze",
+            "authz_msg_index": "3",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2445562ubze",
+            "authz_msg_index": "3",
+            "receiver": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "2445562ubze",
+            "authz_msg_index": "3",
+            "recipient": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "authz_msg_index": "3",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "withdraw_rewards",
+          "attrs": {
+            "amount": "2445562ubze",
+            "authz_msg_index": "3",
+            "delegator": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "2445398ubze",
+            "authz_msg_index": "3",
+            "spender": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "2445398ubze",
+            "authz_msg_index": "3",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "2445398ubze",
+            "authz_msg_index": "3",
+            "delegator": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da",
+            "new_shares": "2445398.000000000000000000",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "16773020ubze",
+            "authz_msg_index": "4",
+            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "16773020ubze",
+            "authz_msg_index": "4",
+            "receiver": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "16773020ubze",
+            "authz_msg_index": "4",
+            "recipient": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "authz_msg_index": "4",
+            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
+          }
+        },
+        {
+          "type": "withdraw_rewards",
+          "attrs": {
+            "amount": "16773020ubze",
+            "authz_msg_index": "4",
+            "delegator": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "16771896ubze",
+            "authz_msg_index": "4",
+            "spender": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "16771896ubze",
+            "authz_msg_index": "4",
+            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+          }
+        },
+        {
+          "type": "delegate",
+          "attrs": {
+            "amount": "16771896ubze",
+            "authz_msg_index": "4",
+            "delegator": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd",
+            "new_shares": "16771896.000000000000000000",
+            "validator": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"
+          }
+        }
+      ],
+      "Body": {
+        "grantee": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+        "msgs": [
+          {
+            "@type": "/cosmos.staking.v1beta1.MsgDelegate",
+            "delegator_address": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+            "validator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+            "amount": {
+              "denom": "ubze",
+              "amount": "772573"
+            }
+          },
+          {
+            "@type": "/cosmos.staking.v1beta1.MsgDelegate",
+            "delegator_address": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry",
+            "validator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+            "amount": {
+              "denom": "ubze",
+              "amount": "2196249"
+            }
+          },
+          {
+            "@type": "/cosmos.staking.v1beta1.MsgDelegate",
+            "delegator_address": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5",
+            "validator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+            "amount": {
+              "denom": "ubze",
+              "amount": "2569099"
+            }
+          },
+          {
+            "@type": "/cosmos.staking.v1beta1.MsgDelegate",
+            "delegator_address": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da",
+            "validator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+            "amount": {
+              "denom": "ubze",
+              "amount": "2445398"
+            }
+          },
+          {
+            "@type": "/cosmos.staking.v1beta1.MsgDelegate",
+            "delegator_address": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd",
+            "validator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+            "amount": {
+              "denom": "ubze",
+              "amount": "16771896"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

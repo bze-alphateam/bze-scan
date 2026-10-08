@@ -2,6 +2,7 @@ package writer_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -117,6 +119,10 @@ func sqlOf(tx *mockTx) []string {
 		switch {
 		case strings.Contains(s.sql, "ensure_partitions"):
 			out = append(out, "partitions")
+		case strings.Contains(s.sql, "INSERT INTO explorer.transactions"):
+			out = append(out, "transactions")
+		case strings.Contains(s.sql, "INSERT INTO explorer.messages"):
+			out = append(out, "messages")
 		case strings.Contains(s.sql, "INSERT INTO explorer.blocks"):
 			out = append(out, "block")
 		case strings.Contains(s.sql, "index_failures"):
@@ -225,4 +231,100 @@ func TestCursorAndFloor(t *testing.T) {
 	db.rows["indexer_state"] = mockRow{err: errors.New("connection reset")}
 	_, _, err = w.Cursor(ctx)
 	assert.Error(t, err)
+}
+
+func blockWithTxs(h int64) *transform.Entities {
+	ents := block(h)
+	ents.Transactions = []transform.Transaction{
+		{Height: h, TxIndex: 0, Hash: "H0", Time: time.Unix(h, 0), Success: true,
+			Fee: []chain.Coin{{Denom: "ubze", Amount: "5"}}, FeePayer: "bze1a", Signers: []string{"bze1a"},
+			Memo: "gm", MsgCount: 1, MsgTypes: []string{"/x.MsgA"}},
+		{Height: h, TxIndex: 1, Hash: "H1", Time: time.Unix(h, 0), Code: 11, Codespace: "sdk", ErrorLog: "out of gas"},
+	}
+	ents.Messages = []transform.Message{
+		{Height: h, TxIndex: 0, MsgIndex: 0, TypeURL: "/x.MsgA", Sender: "bze1a", Module: "x",
+			Events: []transform.Event{{Type: "transfer", Attrs: map[string]any{"amount": "5ubze"}}}, Body: json.RawMessage(`{"a":1}`)},
+		{Height: h, TxIndex: 1, MsgIndex: 0, TypeURL: "/x.MsgB"},
+	}
+	return ents
+}
+
+// payload decodes the jsonb_to_recordset parameter of a bulk insert.
+func payload(t *testing.T, s statement) []map[string]any {
+	t.Helper()
+	require.Len(t, s.args, 1)
+	var rows []map[string]any
+	require.NoError(t, json.Unmarshal(s.args[0].([]byte), &rows))
+	return rows
+}
+
+func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
+	db := newMockDB(49)
+	w := writer.NewLiveWriter(db)
+
+	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
+	require.Len(t, db.txs, 1)
+	tx := db.txs[0]
+	assert.Equal(t, []string{"transactions", "messages", "block", "floor", "cursor"}, sqlOf(tx),
+		"the blocks row is written last in the same transaction")
+	assert.True(t, tx.committed)
+	for _, st := range tx.stmts[:2] {
+		assert.Contains(t, st.sql, "ON CONFLICT", "idempotent")
+		assert.Contains(t, st.sql, "DO NOTHING")
+	}
+
+	txs := payload(t, tx.stmts[0])
+	require.Len(t, txs, 2)
+	assert.Equal(t, map[string]any{
+		"height": float64(100), "tx_index": float64(0), "hash": "H0", "time": "1970-01-01T00:01:40Z",
+		"success": true, "code": float64(0), "codespace": nil, "error_log": nil,
+		"gas_wanted": float64(0), "gas_used": float64(0),
+		"fee": []any{map[string]any{"denom": "ubze", "amount": "5"}}, "fee_payer": "bze1a",
+		"signers": []any{"bze1a"}, "memo": "gm", "msg_count": float64(1), "msg_types": []any{"/x.MsgA"},
+	}, withUTCTime(txs[0]))
+	assert.Equal(t, "sdk", txs[1]["codespace"])
+	assert.Equal(t, "out of gas", txs[1]["error_log"])
+	assert.Nil(t, txs[1]["memo"], "empty strings are NULL")
+	assert.Equal(t, []any{}, txs[1]["fee"], "no fee is an empty array, not NULL")
+	assert.Equal(t, []any{}, txs[1]["signers"])
+	assert.Equal(t, []any{}, txs[1]["msg_types"])
+
+	msgs := payload(t, tx.stmts[1])
+	require.Len(t, msgs, 2)
+	assert.Equal(t, map[string]any{
+		"height": float64(100), "tx_index": float64(0), "msg_index": float64(0), "type_url": "/x.MsgA",
+		"sender": "bze1a", "module": "x",
+		"events": []any{map[string]any{"type": "transfer", "attrs": map[string]any{"amount": "5ubze"}}},
+		"body":   map[string]any{"a": float64(1)},
+	}, msgs[0])
+	assert.Nil(t, msgs[1]["body"], "an undecodable message has a NULL body")
+	assert.Nil(t, msgs[1]["sender"])
+	assert.Equal(t, []any{}, msgs[1]["events"])
+	assert.Contains(t, tx.stmts[1].sql, "NULLIF(body, 'null'::jsonb)")
+}
+
+// withUTCTime normalises the time column, which encoding/json writes in the
+// local zone of time.Unix.
+func withUTCTime(row map[string]any) map[string]any {
+	tm, err := time.Parse(time.RFC3339Nano, row["time"].(string))
+	if err == nil {
+		row["time"] = tm.UTC().Format(time.RFC3339)
+	}
+	return row
+}
+
+func TestABlockWithoutTransactionsWritesNoTransactionRows(t *testing.T) {
+	db := newMockDB(49)
+	require.NoError(t, writer.NewLiveWriter(db).WriteBlock(context.Background(), block(100)))
+	assert.Equal(t, []string{"block", "floor", "cursor"}, sqlOf(db.txs[0]))
+}
+
+func TestFailedTransactionsInsertRollsBackTheBlock(t *testing.T) {
+	db := newMockDB(49)
+	db.execErr, db.execErrOn = errors.New("deadlock"), "INSERT INTO explorer.messages"
+	err := writer.NewLiveWriter(db).WriteBlock(context.Background(), blockWithTxs(100))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "messages")
+	assert.Equal(t, []string{"transactions", "messages"}, sqlOf(db.txs[0]), "the blocks row is never reached")
+	assert.True(t, db.txs[0].rolledBack)
 }

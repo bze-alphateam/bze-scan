@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,7 +21,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
 
-var update = flag.Bool("update", false, "rewrite the golden files from the transformer's output")
+var update = flag.Bool("golden", false, "rewrite the golden files from the transformer's output")
 
 // goldenBlock is every explorer.blocks column the transformer fills, as the
 // golden files store it. block_time_ms is the writer's (it reads the previous
@@ -39,6 +41,42 @@ type goldenBlock struct {
 	SignaturesPowerPct  *string         `json:"signatures_power_pct"`
 }
 
+var (
+	codecOnce sync.Once
+	codec     *chain.Codec
+	codecErr  error
+)
+
+// realTransformer decodes with the chain's own codec, as production does.
+func realTransformer(t *testing.T) *transform.Transformer {
+	t.Helper()
+	codecOnce.Do(func() { codec, codecErr = chain.NewCodec() })
+	require.NoError(t, codecErr)
+	log, _ := logtest.NewNullLogger()
+	return transform.New(codec, log)
+}
+
+// mockDecoder answers Decode from a map keyed by the raw bytes.
+type mockDecoder struct {
+	txs map[string]*chain.Tx
+	err error
+}
+
+func (d mockDecoder) Decode(raw []byte) (*chain.Tx, error) {
+	if d.err != nil {
+		return nil, d.err
+	}
+	if tx, ok := d.txs[string(raw)]; ok {
+		return tx, nil
+	}
+	return &chain.Tx{}, nil
+}
+
+func mockTransformer(d mockDecoder) (*transform.Transformer, *logtest.Hook) {
+	log, hook := logtest.NewNullLogger()
+	return transform.New(d, log), hook
+}
+
 func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	t.Helper()
 	c := node.New(n.URL)
@@ -54,7 +92,7 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 
 func TestBlockGolden(t *testing.T) {
 	n := fakenode.New(t)
-	tr := transform.New()
+	tr := realTransformer(t)
 	for _, h := range n.FixtureHeights() {
 		t.Run(fmt.Sprint(h), func(t *testing.T) {
 			ents, err := tr.Transform(fetchInput(t, n, h))
@@ -79,7 +117,7 @@ func TestBlockGolden(t *testing.T) {
 				require.NoError(t, os.WriteFile(file, got, 0o644))
 			}
 			want, err := os.ReadFile(file)
-			require.NoError(t, err, "run go test ./internal/transform -update to create it")
+			require.NoError(t, err, "run go test ./internal/transform -golden to create it")
 			assert.Equal(t, string(want), string(got))
 		})
 	}
@@ -89,7 +127,7 @@ func TestBlockGolden(t *testing.T) {
 func TestBlockSizeIsTheRawBlockObject(t *testing.T) {
 	n := fakenode.New(t)
 	in := fetchInput(t, n, 24998316)
-	ents, err := transform.New().Transform(in)
+	ents, err := realTransformer(t).Transform(in)
 	require.NoError(t, err)
 	assert.Equal(t, len(in.Block.Raw), ents.Blocks[0].SizeBytes)
 	assert.Positive(t, ents.Blocks[0].SizeBytes)
@@ -102,7 +140,7 @@ var (
 
 func baseInput() transform.Input {
 	return transform.Input{
-		Block:   &node.Block{Height: 10, Time: time.Unix(100, 0), Hash: "AB", Txs: []string{"a", "b"}, Raw: json.RawMessage(`{}`)},
+		Block:   &node.Block{Height: 10, Time: time.Unix(100, 0), Hash: "AB", Txs: []string{"YQ==", "Yg=="}, Raw: json.RawMessage(`{}`)},
 		Results: &node.BlockResults{Height: 10, TxsResults: []node.TxResult{{Code: 0}, {Code: 5}}},
 		Commit: &node.Commit{Height: 10, Signatures: []node.CommitSig{
 			{BlockIDFlag: node.BlockIDFlagCommit}, {BlockIDFlag: 1}, {BlockIDFlag: 3}, {BlockIDFlag: node.BlockIDFlagCommit},
@@ -117,7 +155,7 @@ func transfer(sender, recipient, amount string) node.Event {
 }
 
 func TestCountsAndFees(t *testing.T) {
-	tr := transform.New()
+	tr, _ := mockTransformer(mockDecoder{})
 	in := baseInput()
 	in.Results.FinalizeBlockEvents = []node.Event{
 		transfer(feeCollector, distribution, "5ubze,7ibc/ABC"),
@@ -141,7 +179,8 @@ func TestCountsAndFees(t *testing.T) {
 }
 
 func TestNoFeeTransferIsNull(t *testing.T) {
-	ents, err := transform.New().Transform(baseInput())
+	tr, _ := mockTransformer(mockDecoder{})
+	ents, err := tr.Transform(baseInput())
 	require.NoError(t, err)
 	fees, err := ents.Blocks[0].FeesDistributedJSON()
 	require.NoError(t, err)
@@ -149,7 +188,7 @@ func TestNoFeeTransferIsNull(t *testing.T) {
 }
 
 func TestRejectsInconsistentInput(t *testing.T) {
-	tr := transform.New()
+	tr, _ := mockTransformer(mockDecoder{})
 	cases := map[string]func(in *transform.Input){
 		"missing commit": func(in *transform.Input) { in.Commit = nil },
 		"results height": func(in *transform.Input) { in.Results.Height = 11 },
@@ -163,6 +202,10 @@ func TestRejectsInconsistentInput(t *testing.T) {
 		},
 		"bad fee distribution": func(in *transform.Input) {
 			in.Results.FinalizeBlockEvents = []node.Event{transfer(feeCollector, distribution, "five ubze")}
+		},
+		"raw tx not base64": func(in *transform.Input) { in.Block.Txs[0] = "!!" },
+		"bad tx.fee": func(in *transform.Input) {
+			in.Results.TxsResults[0].Events = []node.Event{{Type: "tx", Attributes: []node.Attribute{{Key: "fee", Value: "ubze"}}}}
 		},
 	}
 	for name, mutate := range cases {

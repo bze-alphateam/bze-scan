@@ -114,7 +114,10 @@ app/serve/         the serve process: its components in one errgroup
 app/server/        echo wiring and the graceful HTTP runner
 app/controller/    thin HTTP handlers
 app/middleware/    request id, panic recovery, JSON error handler
-internal/chain/    chain facts (bech32 prefix, module account addresses)
+internal/chain/    chain facts (bech32 prefix, module account addresses), the
+                   chain's codec (transaction decoding), coin strings
+internal/classify/ message and block-event classification (Go source of
+                   truth, mirrored into SQL by migrate)
 internal/node/     CometBFT RPC client, by-height routes only
 internal/transform/
                    node answers of one height -> explorer rows (no I/O)
@@ -175,7 +178,11 @@ bze-scan migrate version    # print the current version (0 when none)
   height partitions of the seven history tables (`blocks`, `transactions`,
   `messages`, `transfers`, `account_activity`, `block_events`,
   `order_fills`): one per 1,000,000 heights, `_p000000` to `_p000049`
-  (`blocks_p000024` holds [24,000,000, 25,000,000)).
+  (`blocks_p000024` holds [24,000,000, 25,000,000)). The second mirrors the
+  classification of `internal/classify` into `explorer.message_kinds` and
+  `explorer.block_event_kinds` (upsert every entry, delete the rows without
+  one), then runs `explorer.reclassify_unknown()` so activity stored as
+  `other` picks up the entries added since.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -197,10 +204,12 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   That first height is stored once as `indexer_state.live_floor`; the live
   side never indexes below it.
 - Per height: `/block`, `/block_results` and `/commit` from the local node,
-  the transformer, then one transaction that inserts the `explorer.blocks`
-  row (`ON CONFLICT DO NOTHING`; `block_time_ms` from the previous row when it
-  is indexed), sets the live floor at the first write, and moves the cursor
-  with `GREATEST`. When a height enters the last existing partition, the same
+  the transformer, then one transaction that bulk-inserts the
+  `explorer.transactions` and `explorer.messages` rows, inserts the
+  `explorer.blocks` row last (every insert `ON CONFLICT DO NOTHING`;
+  `block_time_ms` from the previous row when it is indexed), sets the live
+  floor at the first write, and moves the cursor with `GREATEST`. A blocks
+  row therefore proves its height is complete. When a height enters the last existing partition, the same
   transaction calls `explorer.ensure_partitions(height, height + 20000000)`.
 - A height is tried three times (waits of 0.5 s and 2 s). Then, or at once
   when the node reports the height pruned, it is recorded in
@@ -211,6 +220,35 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the
   height, the node supplies the data.
+
+### Transactions and messages
+
+Transactions are decoded with the chain's own Go types: the backend imports
+`github.com/bze-alphateam/bze` (pinned to the v8.2.0 release line, a superset
+of the messages mainnet accepts today) and builds its codec from the chain's
+app configuration without starting the app, plus the IBC modules the chain
+registers by hand. `go.mod` repeats the chain's `replace` directives.
+
+- `hash` is the SHA-256 of the raw bytes, upper-case hex, as the node and the
+  sink compute it.
+- `fee`, `fee_payer` and `signers` come from the ante handler's `tx` events
+  (`fee`, `fee_payer`, `acc_seq`), which a failed transaction emits too; the
+  decoded transaction fills in what the events lack. `memo`, `msg_count` and
+  `msg_types` come from the decoded bytes, so failed transactions have them.
+- One `messages` row per message: the type URL, `sender` and `module` from
+  the message's first `message` event (else the first signer), `events` = the
+  transaction's events whose `msg_index` is the message's, in emission order,
+  and `body` = the message as proto JSON. A failed transaction's messages
+  have a body and no events. An authz `MsgExec` is one row whose body carries
+  the nested messages.
+- Attribute values of typed events (`bze.*`) are JSON-decoded once, here;
+  SDK attribute values stay strings. Coin strings such as
+  `70255ubze,12ibc/ED07…` are split by `chain.ParseCoins` (amount = leading
+  digits, the denom may contain `/`).
+- A message type the chain's registry does not know never fails a height: the
+  row keeps the type URL with a NULL body, and the indexer logs a warning.
+  Bytes that are not a transaction at all still get their `transactions` row
+  from the block results.
 
 ## Test fixtures and the fake node
 
@@ -230,7 +268,17 @@ make fixtures HEIGHTS="24998316" ARCHIVE_RPC=https://rpc.getbze.com
 
 Recorded today: 24998316 to 24998318 and 24998320. 24998319 is left out on
 purpose: the fake node answers it with the above-tip error, which the live
-indexer tests use as a failing height between good ones.
+indexer tests use as a failing height between good ones. Heights with
+transactions: 24999004 (multi-message `MsgCancelOrder` transactions and an
+out-of-gas `MsgCreateOrder`), 24999134 (multi-message `MsgCreateOrder`),
+24999205 (IBC `MsgTransfer`), 24999209 (relayer `MsgUpdateClient` with
+`MsgRecvPacket` / `MsgAcknowledgement`), 25000439 (`MsgWithdrawDelegatorReward`
++ `MsgWithdrawValidatorCommission`), 25000440 (authz `MsgExec`) and 25000894
+(`MsgSend`). Recording a new height leaves `status.json` and `above_tip.json`
+as committed (restore them with git) so the tests' tip stays put.
+
+The transformer's golden files (`internal/transform/testdata`) are rewritten
+with `go test ./internal/transform -golden`.
 
 The script fetches `/block`, `/block_results` and `/commit` once per height,
 plus `/status` and one above-tip answer. It never calls `/tx`, `/tx_search` or
