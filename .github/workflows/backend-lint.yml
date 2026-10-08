@@ -1,23 +1,27 @@
-name: Backend
+name: Backend lint
 
 on:
   push:
     branches: [main]
     paths:
       - "backend/**"
-      - "docker/**"
-      - ".github/workflows/backend.yml"
+      - ".github/workflows/backend-lint.yml"
   pull_request:
     paths:
       - "backend/**"
-      - "docker/**"
-      - ".github/workflows/backend.yml"
+      - ".github/workflows/backend-lint.yml"
 
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its run in progress; runs on main
+# always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  checks:
+  lint:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,11 +52,3 @@ jobs:
 
       - name: Vulnerabilities
         run: make vulncheck
-
-      - name: Unit tests
-        run: make test
-
-      # PostgreSQL comes from docker/compose.yml (not a service container) so
-      # the vendored sink schema is applied exactly as it is locally.
-      - name: Acceptance tests
-        run: make e2e

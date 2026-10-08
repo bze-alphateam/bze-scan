@@ -1,0 +1,40 @@
+name: Backend unit tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-unit.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-unit.yml"
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its run in progress; runs on main
+# always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # No network, no database: every dependency is mocked.
+      - name: Unit tests
+        run: make test

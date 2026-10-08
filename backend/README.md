@@ -91,9 +91,16 @@ Invalid values stop the process at startup with every problem listed.
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
 database `postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable`.
-CI (`.github/workflows/backend.yml`) runs build, vet, lint, the tidy check,
-vulncheck, `make test` and `make e2e` on every pull request touching
-`backend/` or `docker/`.
+CI runs three independent workflows on every pull request touching
+`backend/` (and, for e2e, `docker/`), each its own check:
+
+| Workflow | Runs |
+| --- | --- |
+| `backend-lint.yml` (Backend lint) | build, `make vet`, golangci-lint, `make tidy-check`, `make vulncheck` |
+| `backend-unit.yml` (Backend unit tests) | `make test` |
+| `backend-e2e.yml` (Backend e2e tests) | `make e2e` |
+
+`make check` runs all of it locally.
 
 ## Layout
 
