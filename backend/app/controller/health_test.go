@@ -1,4 +1,4 @@
-package controller
+package controller_test
 
 import (
 	"net/http"
@@ -8,6 +8,8 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 )
 
 func TestHealthAnswersOKWithEmptyBody(t *testing.T) {
@@ -15,7 +17,7 @@ func TestHealthAnswersOKWithEmptyBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
-	require.NoError(t, NewHealthController().Health(e.NewContext(req, rec)))
+	require.NoError(t, controller.NewHealthController().Health(e.NewContext(req, rec)))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, rec.Body.Bytes())

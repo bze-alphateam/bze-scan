@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
@@ -31,10 +30,17 @@ const FailureSourceLive = "live"
 // when the height enters the last existing partition.
 const PartitionTopUp int64 = 20_000_000
 
-// LiveWriter writes the live indexer's blocks, one height per transaction,
-// through its own connection pool.
+// DB is the part of a PostgreSQL connection pool the writers use;
+// *pgxpool.Pool satisfies it.
+type DB interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// LiveWriter writes the live indexer's blocks, one height per transaction.
+// Give it a pool of its own: the live path must not wait on other writers.
 type LiveWriter struct {
-	pool *pgxpool.Pool
+	db DB
 
 	mu sync.Mutex
 	// lastPartition is the lower bound of the highest existing blocks
@@ -42,18 +48,9 @@ type LiveWriter struct {
 	lastPartition int64
 }
 
-// NewLiveWriter opens the writer's pool on databaseURL.
-func NewLiveWriter(ctx context.Context, databaseURL string) (*LiveWriter, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("live writer: %w", err)
-	}
-	return &LiveWriter{pool: pool, lastPartition: -1}, nil
-}
-
-// Close closes the pool.
-func (w *LiveWriter) Close() {
-	w.pool.Close()
+// NewLiveWriter returns a live writer over db.
+func NewLiveWriter(db DB) *LiveWriter {
+	return &LiveWriter{db: db, lastPartition: -1}
 }
 
 // Cursor returns indexer_state.last_indexed_height, and false when the live
@@ -69,7 +66,7 @@ func (w *LiveWriter) LiveFloor(ctx context.Context) (int64, bool, error) {
 
 func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, error) {
 	var v string
-	err := w.pool.QueryRow(ctx, `SELECT value FROM explorer.indexer_state WHERE key = $1`, key).Scan(&v)
+	err := w.db.QueryRow(ctx, `SELECT value FROM explorer.indexer_state WHERE key = $1`, key).Scan(&v)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
 	}
@@ -101,7 +98,7 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 		return err
 	}
 
-	tx, err := w.pool.Begin(ctx)
+	tx, err := w.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("write %d: begin: %w", top, err)
 	}
@@ -145,7 +142,7 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 // index_failures (replacing an earlier record of the same height) and moves
 // the cursor past it, in one transaction.
 func (w *LiveWriter) RecordFailure(ctx context.Context, height int64, attempts int, cause error) error {
-	tx, err := w.pool.Begin(ctx)
+	tx, err := w.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("record failure %d: begin: %w", height, err)
 	}
@@ -213,7 +210,7 @@ func (w *LiveWriter) needsTopUp(ctx context.Context, height int64) (bool, error)
 	defer w.mu.Unlock()
 	if w.lastPartition < 0 {
 		var top *int64
-		err := w.pool.QueryRow(ctx, `SELECT max(substring(c.relname FROM '^blocks_p([0-9]+)$')::bigint)
+		err := w.db.QueryRow(ctx, `SELECT max(substring(c.relname FROM '^blocks_p([0-9]+)$')::bigint)
 			FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
 			WHERE i.inhparent = 'explorer.blocks'::regclass`).Scan(&top)
 		if err != nil {

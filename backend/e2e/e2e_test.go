@@ -1,9 +1,9 @@
 //go:build e2e
 
-// Package e2e holds the acceptance tests. They run against the PostgreSQL of
+// Package e2e_test holds the acceptance tests. They run against the PostgreSQL of
 // docker/compose.yml and the fake node (make e2e), behind the e2e build tag so
 // a plain `go test ./...` never runs them.
-package e2e
+package e2e_test
 
 import (
 	"context"

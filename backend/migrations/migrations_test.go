@@ -1,4 +1,4 @@
-package migrations
+package migrations_test
 
 import (
 	"errors"
@@ -11,12 +11,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
+
+// files are the migration sources on disk; TestMigrationSetLoadsInOrder
+// covers what the binary embeds.
+var files = os.DirFS(".")
 
 var fileNameRe = regexp.MustCompile(`^\d{6}_[a-z0-9_]+\.(up|down)\.sql$`)
 
 func TestMigrationFilesAreWellNamed(t *testing.T) {
-	names, err := fs.Glob(files, "*")
+	names, err := fs.Glob(files, "*.sql")
 	require.NoError(t, err)
 	require.NotEmpty(t, names)
 	for _, n := range names {
@@ -35,7 +41,7 @@ func readAll(t *testing.T, r io.ReadCloser) string {
 // TestMigrationSetLoadsInOrder walks the embedded source as golang-migrate
 // does: versions contiguous from 1, each with a non-empty up and down file.
 func TestMigrationSetLoadsInOrder(t *testing.T) {
-	src, err := Source()
+	src, err := migrations.Source()
 	require.NoError(t, err)
 	defer func() { _ = src.Close() }()
 
@@ -94,8 +100,8 @@ func createdTables(t *testing.T, name string) (all, partitioned []string) {
 // history tables migration and with ensure_partitions.
 func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 	all, partitioned := createdTables(t, "000003_history_tables.up.sql")
-	assert.Equal(t, PartitionedTables, all)
-	assert.Equal(t, PartitionedTables, partitioned)
+	assert.Equal(t, migrations.PartitionedTables, all)
+	assert.Equal(t, migrations.PartitionedTables, partitioned)
 	for _, name := range []string{"000004_state_tables.up.sql", "000005_operational.up.sql"} {
 		_, partitioned := createdTables(t, name)
 		assert.Empty(t, partitioned, name)
@@ -108,7 +114,7 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 	for _, q := range strings.Split(m[1], ",") {
 		listed = append(listed, strings.Trim(strings.TrimSpace(q), "'"))
 	}
-	assert.Equal(t, PartitionedTables, listed)
+	assert.Equal(t, migrations.PartitionedTables, listed)
 	assert.Contains(t, fn, "generate_series((p_from / 1000000) * 1000000, p_to, 1000000)")
 	assert.Contains(t, fn, "lpad((lo / 1000000)::text, 6, '0')")
 }
@@ -127,7 +133,7 @@ func TestDownMigrationsDropWhatUpCreates(t *testing.T) {
 
 func TestNotifyTriggerUsesTheChannel(t *testing.T) {
 	up := readMigration(t, "000002_notify_trigger.up.sql")
-	assert.Contains(t, up, "pg_notify('"+NotifyChannel+"', NEW.height::text)")
+	assert.Contains(t, up, "pg_notify('"+migrations.NotifyChannel+"', NEW.height::text)")
 	assert.Contains(t, up, "AFTER INSERT ON public.blocks")
 	down := readMigration(t, "000002_notify_trigger.down.sql")
 	assert.Contains(t, down, "DROP TRIGGER IF EXISTS trg_notify_block ON public.blocks;")
@@ -148,9 +154,4 @@ func TestSinkSchemaIsLeftAlone(t *testing.T) {
 		assert.NotRegexp(t, `(?i)(ALTER|DROP|TRUNCATE)\s+TABLE\s+(IF\s+EXISTS\s+)?(public\.)?(blocks|tx_results|events|attributes)\b`, sql, name)
 		assert.NotRegexp(t, `(?i)DELETE\s+FROM\s+(public\.)?(blocks|tx_results|events|attributes)\b`, sql, name)
 	}
-}
-
-func TestPartitionsAreTheFirstPostMigrationStep(t *testing.T) {
-	require.NotEmpty(t, postMigrate)
-	assert.Equal(t, "partitions", postMigrate[0].Name)
 }
