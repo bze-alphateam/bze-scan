@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"syscall"
@@ -24,6 +26,7 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "serve")
 	assert.Contains(t, out.String(), "migrate")
 	assert.Contains(t, out.String(), "backfill")
+	assert.Contains(t, out.String(), "reindex")
 }
 
 func TestBackfillRequiresDatabaseURL(t *testing.T) {
@@ -169,4 +172,54 @@ func waitHealthy(t *testing.T, url string, done <-chan error) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("serve did not become healthy")
+}
+
+func runReindex(args ...string) error {
+	root := cli.NewRootCmd()
+	root.SetArgs(append([]string{"reindex"}, args...))
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	return root.Execute()
+}
+
+// Selector mistakes fail before the configuration or the database is read:
+// exit code 1.
+func TestReindexRejectsBadSelectors(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "postgres://unreachable.invalid/db")
+	for _, tc := range []struct {
+		args []string
+		err  string
+	}{
+		{nil, "is required"},
+		{[]string{"--heights", "1", "--failed"}, "mutually exclusive"},
+		{[]string{"--from", "5", "--to", "9", "--heights", "7"}, "mutually exclusive"},
+		{[]string{"--from", "5"}, "go together"},
+		{[]string{"--from", "9", "--to", "5"}, "above --to"},
+		{[]string{"--heights", "a"}, `"a"`},
+		{[]string{"--heights", "1", "--source", "live"}, "--failed only"},
+		{[]string{"--failed", "--source", "elsewhere"}, "must be one of"},
+		{[]string{"--heights", "1", "--workers", "-1"}, "--workers"},
+	} {
+		err := runReindex(tc.args...)
+		require.ErrorContains(t, err, tc.err, "%v", tc.args)
+		assert.Equal(t, 1, cli.ExitCode(err), "%v", tc.args)
+	}
+}
+
+func TestReindexRequiresDatabaseURL(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+	err := runReindex("--heights", "1")
+	require.ErrorContains(t, err, "DATABASE_URL is required")
+	assert.Equal(t, 1, cli.ExitCode(err))
+}
+
+func TestExitCode(t *testing.T) {
+	assert.Equal(t, 0, cli.ExitCode(nil))
+	assert.Equal(t, 1, cli.ExitCode(errors.New("database unavailable")))
+	failed := &cli.ExitError{Code: cli.ExitSomeFailed, Err: errors.New("1 of 3 heights failed")}
+	assert.Equal(t, 2, cli.ExitCode(failed))
+	assert.Equal(t, 2, cli.ExitCode(fmt.Errorf("reindex: %w", failed)), "through wrapping")
+	assert.Equal(t, "1 of 3 heights failed", failed.Error())
 }
