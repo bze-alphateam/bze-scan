@@ -20,6 +20,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -41,8 +42,8 @@ type component struct {
 }
 
 // Run runs every component until ctx is cancelled (by SIGINT/SIGTERM in
-// production) or one of them fails. Later work registers the state sync, the
-// status checker and the backfill here.
+// production) or one of them fails. Later work registers the state sync and
+// the backfill here.
 func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	log.WithFields(log.Fields{
 		"http_addr":       cfg.HTTPAddr,
@@ -61,8 +62,25 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 	defer apiPool.Close()
 
+	// The status checker reads the explorer's height through the API pool
+	// and the tips of both nodes, with or without the indexer.
+	var archiveRetry status.Node
+	if cfg.ArchiveRPCRetryURL != "" {
+		archiveRetry = node.New(cfg.ArchiveRPCRetryURL)
+	}
+	checker := status.New(status.Config{
+		Interval:  cfg.StatusInterval,
+		Tolerance: cfg.StatusHeightTolerance,
+	}, status.Deps{
+		Store:        status.NewPGStore(apiPool),
+		Local:        node.New(cfg.NodeRPCURL),
+		Archive:      node.New(cfg.ArchiveRPCURL),
+		ArchiveRetry: archiveRetry,
+	})
+
 	e := server.New(server.Deps{
 		Explorer:           repository.NewExplorer(apiPool),
+		Status:             checker,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})
@@ -70,6 +88,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		{name: "http", run: func(ctx context.Context) error {
 			return server.Run(ctx, e, cfg.HTTPAddr, opts.OnListen)
 		}},
+		{name: "status checker", run: checker.Run},
 	}
 
 	if cfg.IndexerEnabled {
