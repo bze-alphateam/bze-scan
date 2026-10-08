@@ -152,6 +152,38 @@ func TestRequestCounters(t *testing.T) {
 	assert.Equal(t, 0, n.Requests(fakenode.RouteBlock))
 }
 
+func TestSetEarliestHeightPrunesBelowIt(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	n.SetEarliestHeight(h + 1)
+
+	_, body := get(t, n.URL+fakenode.RouteStatus)
+	assert.Contains(t, string(body), fmt.Sprintf(`"earliest_block_height":"%d"`, h+1))
+	code, body := get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	assert.Equal(t, http.StatusInternalServerError, code)
+	assert.Contains(t, string(body), fmt.Sprintf("height %d is not available, lowest height is %d", h, h+1))
+
+	n.SetEarliestHeight(0)
+	code, _ = get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	assert.Equal(t, http.StatusOK, code)
+	_, body = get(t, n.URL+fakenode.RouteStatus)
+	assert.Equal(t, readFile(t, "status.json"), body)
+}
+
+func TestRequestsAtCountsPerHeight(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteCommit, h+1))
+
+	assert.Equal(t, 2, n.RequestsAt(fakenode.RouteBlock, h))
+	assert.Equal(t, 1, n.RequestsAt(fakenode.RouteCommit, h+1))
+	assert.Equal(t, 0, n.RequestsAt(fakenode.RouteBlock, h+1))
+	n.ResetRequests()
+	assert.Equal(t, 0, n.RequestsAt(fakenode.RouteBlock, h))
+}
+
 func TestUnknownRouteIsNotFound(t *testing.T) {
 	n := fakenode.New(t)
 	resp, err := http.Get(n.URL + "/tx_search")

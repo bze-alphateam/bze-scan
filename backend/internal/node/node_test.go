@@ -27,6 +27,7 @@ func TestStatus(t *testing.T) {
 	assert.Equal(t, "beezee-1", st.Network)
 	assert.Equal(t, n.RecordedStatusHeight(), st.LatestBlockHeight)
 	assert.False(t, st.LatestBlockTime.IsZero())
+	assert.Equal(t, int64(1), st.EarliestBlockHeight)
 	assert.NotEmpty(t, raw)
 
 	n.SetStatusHeight(fixtureHeight)
@@ -218,4 +219,18 @@ func TestTransportErrorIsReturned(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "connection refused")
 	assert.False(t, errors.Is(err, node.ErrAboveTip) || errors.Is(err, node.ErrPruned))
+}
+
+func TestPrunedHeightIsErrPruned(t *testing.T) {
+	n := fakenode.New(t)
+	n.SetEarliestHeight(fixtureHeight + 1)
+	c := node.New(n.URL)
+
+	st, _, err := c.Status(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(fixtureHeight+1), st.EarliestBlockHeight)
+
+	_, _, err = c.BlockResults(context.Background(), fixtureHeight)
+	require.ErrorIs(t, err, node.ErrPruned)
+	assert.NotErrorIs(t, err, node.ErrAboveTip)
 }
