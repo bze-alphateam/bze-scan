@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
@@ -30,6 +31,11 @@ type Config struct {
 	LogLevel string
 	// LogFormat is "text" or "json".
 	LogFormat string
+
+	// DatabaseURL is the PostgreSQL URL of the node's database (the CometBFT
+	// psql sink plus the explorer schema). Optional here; the commands that
+	// use the database require it. Carries a password: never log it.
+	DatabaseURL string
 }
 
 // Load reads the environment (and a .env file when present), applies
@@ -46,9 +52,10 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		HTTPAddr:  envString("HTTP_ADDR", ":8080"),
-		LogLevel:  strings.ToLower(envString("LOG_LEVEL", "info")),
-		LogFormat: strings.ToLower(envString("LOG_FORMAT", LogFormatText)),
+		HTTPAddr:    envString("HTTP_ADDR", ":8080"),
+		LogLevel:    strings.ToLower(envString("LOG_LEVEL", "info")),
+		LogFormat:   strings.ToLower(envString("LOG_FORMAT", LogFormatText)),
+		DatabaseURL: envString("DATABASE_URL", ""),
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {
@@ -58,6 +65,13 @@ func Load() (*Config, error) {
 	case LogFormatText, LogFormatJSON:
 	default:
 		fail("LOG_FORMAT must be one of: text, json (got %q)", cfg.LogFormat)
+	}
+
+	if cfg.DatabaseURL != "" {
+		// The parse error is not included: it can echo the URL and its password.
+		if _, err := pgx.ParseConfig(cfg.DatabaseURL); err != nil {
+			fail("DATABASE_URL is not a valid PostgreSQL connection URL")
+		}
 	}
 
 	if len(problems) > 0 {
@@ -72,4 +86,16 @@ func envString(key, def string) string {
 		return strings.TrimSpace(v)
 	}
 	return def
+}
+
+// ErrDatabaseURLRequired is returned by the commands that need the database
+// when DATABASE_URL is not set.
+var ErrDatabaseURLRequired = errors.New("invalid configuration: DATABASE_URL is required")
+
+// RequireDatabase returns ErrDatabaseURLRequired when DATABASE_URL is empty.
+func (c *Config) RequireDatabase() error {
+	if c.DatabaseURL == "" {
+		return ErrDatabaseURLRequired
+	}
+	return nil
 }

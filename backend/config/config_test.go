@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT"}
+var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -39,6 +39,35 @@ func TestLoadFromEnvironment(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, &Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json"}, cfg)
+}
+
+func TestLoadDatabaseURL(t *testing.T) {
+	isolate(t)
+	t.Setenv("DATABASE_URL", " postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable ")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable", cfg.DatabaseURL)
+	assert.NoError(t, cfg.RequireDatabase())
+}
+
+func TestLoadRejectsInvalidDatabaseURLWithoutEchoingIt(t *testing.T) {
+	isolate(t)
+	t.Setenv("DATABASE_URL", "postgres://bze:s3cret@127.0.0.1:notaport/bze_index")
+
+	_, err := Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DATABASE_URL")
+	assert.NotContains(t, err.Error(), "s3cret")
+}
+
+func TestRequireDatabase(t *testing.T) {
+	isolate(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Empty(t, cfg.DatabaseURL)
+	assert.ErrorIs(t, cfg.RequireDatabase(), ErrDatabaseURLRequired)
 }
 
 func TestLoadBlankValuesUseDefaults(t *testing.T) {
