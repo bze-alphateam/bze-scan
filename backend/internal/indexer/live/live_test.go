@@ -84,6 +84,7 @@ func (s *mockSubscription) Close() {}
 type mockNode struct {
 	mu        sync.Mutex
 	tip       int64
+	earliest  int64
 	statusErr error
 	blockErrs map[int64][]error
 	badBlocks map[int64]bool
@@ -118,7 +119,7 @@ func (n *mockNode) Status(context.Context) (*node.Status, []byte, error) {
 	if n.statusErr != nil {
 		return nil, nil, n.statusErr
 	}
-	return &node.Status{Network: "beezee-1", LatestBlockHeight: n.tip}, nil, nil
+	return &node.Status{Network: "beezee-1", LatestBlockHeight: n.tip, EarliestBlockHeight: n.earliest}, nil, nil
 }
 
 func (n *mockNode) Block(_ context.Context, h int64) (*node.Block, []byte, error) {
@@ -286,14 +287,23 @@ type harness struct {
 // stops it when the test ends.
 func run(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock, cursor, floor int64) *harness {
 	t.Helper()
+	return runWithCatchUp(t, l, n, clock, cursor, floor, nil)
+}
+
+// runWithCatchUp is run with a catch-up job (nil: none).
+func runWithCatchUp(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock, cursor, floor int64, cu *mockCatchUp) *harness {
+	t.Helper()
 	h := &harness{
 		listener: l, node: n, clock: clock, done: make(chan error, 1),
 		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}},
 		raw:   &mockRaw{puts: map[int64][3]string{}},
 	}
-	ix := live.New(live.Config{Sleep: clock.Sleep}, live.Deps{
-		Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw,
-	})
+	deps := live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw}
+	if cu != nil {
+		cu.store = h.store
+		deps.CatchUp = cu
+	}
+	ix := live.New(live.Config{Sleep: clock.Sleep}, deps)
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
 	go func() { h.done <- ix.Run(ctx) }()
@@ -510,4 +520,79 @@ func TestWrittenHeightsFillTheRawCache(t *testing.T) {
 	assert.Equal(t, [3]string{"block 101", "block_results 101", "commit 101"}, got)
 	_, ok := h.raw.put(100)
 	assert.False(t, ok, "a failed height puts nothing")
+}
+
+// mockCatchUp records its ranges and moves the store's cursor as the real
+// job does; err fails the next call.
+type mockCatchUp struct {
+	mu     sync.Mutex
+	store  *mockStore
+	ranges [][2]int64
+	err    error
+}
+
+func (c *mockCatchUp) CatchUp(_ context.Context, from, to int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ranges = append(c.ranges, [2]int64{from, to})
+	if err := c.err; err != nil {
+		c.err = nil
+		return err
+	}
+	c.store.mu.Lock()
+	c.store.cursor = max(c.store.cursor, to)
+	c.store.mu.Unlock()
+	return nil
+}
+
+func (c *mockCatchUp) calls() [][2]int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.ranges)
+}
+
+func TestHeightsBelowTheNodesEarliestGoToTheCatchUp(t *testing.T) {
+	n := newMockNode(110)
+	n.earliest = 105
+	cu := &mockCatchUp{}
+	h := runWithCatchUp(t, newMockListener(), n, &fakeClock{}, 99, 50, cu)
+
+	h.waitWritten(t, 105, 106, 107, 108, 109, 110)
+	assert.Equal(t, [][2]int64{{100, 104}}, cu.calls())
+	for hh := int64(100); hh < 105; hh++ {
+		assert.Zero(t, n.callsAt(hh), "the local node is not asked for pruned height %d", hh)
+	}
+}
+
+func TestCatchUpCoversTheWholeRangeWhenTheTipIsPruned(t *testing.T) {
+	n := newMockNode(103)
+	n.earliest = 200 // a node restored from a snapshot ahead of the tip it reports
+	cu := &mockCatchUp{}
+	h := runWithCatchUp(t, newMockListener(), n, &fakeClock{}, 99, 50, cu)
+
+	require.Eventually(t, func() bool { return len(cu.calls()) == 1 }, 5*time.Second, 5*time.Millisecond)
+	assert.Equal(t, [][2]int64{{100, 103}}, cu.calls())
+	assert.Empty(t, h.store.writtenHeights())
+}
+
+func TestNoCatchUpWithinTheNodesWindow(t *testing.T) {
+	n := newMockNode(103)
+	n.earliest = 100
+	cu := &mockCatchUp{}
+	h := runWithCatchUp(t, newMockListener(), n, &fakeClock{}, 99, 50, cu)
+
+	h.waitWritten(t, 100, 101, 102, 103)
+	assert.Empty(t, cu.calls())
+}
+
+func TestAFailedCatchUpReconnectsAndRetries(t *testing.T) {
+	n := newMockNode(106)
+	n.earliest = 105
+	cu := &mockCatchUp{err: errors.New("database unavailable")}
+	clock := &fakeClock{}
+	h := runWithCatchUp(t, newMockListener(), n, clock, 99, 50, cu)
+
+	h.waitWritten(t, 105, 106)
+	assert.Equal(t, [][2]int64{{100, 104}, {100, 104}}, cu.calls())
+	assert.Equal(t, []time.Duration{live.DefaultReconnectMin}, clock.recorded())
 }
