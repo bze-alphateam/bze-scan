@@ -70,7 +70,7 @@ func (e *liveEnv) start(t *testing.T) {
 		Listener:    live.NewPGListener(e.url),
 		Node:        node.New(e.node.URL),
 		Store:       writer.NewLiveWriter(pool),
-		Transformer: transform.New(),
+		Transformer: newTransformer(t),
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

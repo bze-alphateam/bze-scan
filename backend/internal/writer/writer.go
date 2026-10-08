@@ -6,10 +6,12 @@ package writer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -81,9 +83,11 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 }
 
 // WriteBlock writes the entities of one or more heights in one transaction:
-// the blocks rows (block_time_ms from the previous row when it exists), the
-// live floor at the first write ever, and the cursor moved to the highest
-// height. Partitions are topped up first when a height enters the last one.
+// the transactions and messages rows, the blocks rows (block_time_ms from the
+// previous row when it exists), the live floor at the first write ever, and
+// the cursor moved to the highest height. Partitions are topped up first when
+// a height enters the last one. A blocks row therefore proves its height is
+// complete.
 func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) error {
 	if ents == nil || len(ents.Blocks) == 0 {
 		return nil
@@ -108,6 +112,12 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 		if _, err := tx.Exec(ctx, `SELECT explorer.ensure_partitions($1, $2)`, top, top+PartitionTopUp); err != nil {
 			return fmt.Errorf("write %d: top up partitions: %w", top, err)
 		}
+	}
+	if err := insertTransactions(ctx, tx, top, ents.Transactions); err != nil {
+		return err
+	}
+	if err := insertMessages(ctx, tx, top, ents.Messages); err != nil {
+		return err
 	}
 	for i := range ents.Blocks {
 		if err := insertBlock(ctx, tx, &ents.Blocks[i]); err != nil {
@@ -187,6 +197,113 @@ func insertBlock(ctx context.Context, tx pgx.Tx, b *transform.Block) error {
 		return fmt.Errorf("write %d: blocks: %w", b.Height, err)
 	}
 	return nil
+}
+
+// txRow and msgRow are the JSON shape the bulk inserts expand with
+// jsonb_to_recordset: one parameter per table whatever the row count, and
+// array columns that unnest could not take.
+type txRow struct {
+	Height    int64           `json:"height"`
+	TxIndex   int             `json:"tx_index"`
+	Hash      string          `json:"hash"`
+	Time      time.Time       `json:"time"`
+	Success   bool            `json:"success"`
+	Code      uint32          `json:"code"`
+	Codespace *string         `json:"codespace"`
+	ErrorLog  *string         `json:"error_log"`
+	GasWanted int64           `json:"gas_wanted"`
+	GasUsed   int64           `json:"gas_used"`
+	Fee       json.RawMessage `json:"fee"`
+	FeePayer  *string         `json:"fee_payer"`
+	Signers   []string        `json:"signers"`
+	Memo      *string         `json:"memo"`
+	MsgCount  int             `json:"msg_count"`
+	MsgTypes  []string        `json:"msg_types"`
+}
+
+type msgRow struct {
+	Height   int64           `json:"height"`
+	TxIndex  int             `json:"tx_index"`
+	MsgIndex int             `json:"msg_index"`
+	TypeURL  string          `json:"type_url"`
+	Sender   *string         `json:"sender"`
+	Module   *string         `json:"module"`
+	Events   json.RawMessage `json:"events"`
+	Body     json.RawMessage `json:"body"`
+}
+
+func insertTransactions(ctx context.Context, tx pgx.Tx, top int64, txs []transform.Transaction) error {
+	if len(txs) == 0 {
+		return nil
+	}
+	rows := make([]txRow, 0, len(txs))
+	for _, t := range txs {
+		fee, err := json.Marshal(nonNil(t.Fee))
+		if err != nil {
+			return fmt.Errorf("write %d: transactions: fee: %w", top, err)
+		}
+		rows = append(rows, txRow{
+			Height: t.Height, TxIndex: t.TxIndex, Hash: t.Hash, Time: t.Time, Success: t.Success,
+			Code: t.Code, Codespace: nullIfEmpty(t.Codespace), ErrorLog: nullIfEmpty(t.ErrorLog),
+			GasWanted: t.GasWanted, GasUsed: t.GasUsed, Fee: fee, FeePayer: nullIfEmpty(t.FeePayer),
+			Signers: nonNil(t.Signers), Memo: nullIfEmpty(t.Memo), MsgCount: t.MsgCount, MsgTypes: nonNil(t.MsgTypes),
+		})
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("write %d: transactions: %w", top, err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO explorer.transactions (
+			height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
+			fee, fee_payer, signers, memo, msg_count, msg_types)
+		SELECT height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
+			fee, fee_payer, signers, memo, msg_count, msg_types
+		  FROM jsonb_to_recordset($1::jsonb) AS r(
+			height bigint, tx_index integer, hash text, time timestamptz, success boolean, code integer,
+			codespace text, error_log text, gas_wanted bigint, gas_used bigint, fee jsonb, fee_payer text,
+			signers text[], memo text, msg_count integer, msg_types text[])
+		ON CONFLICT (height, tx_index) DO NOTHING`, payload); err != nil {
+		return fmt.Errorf("write %d: transactions: %w", top, err)
+	}
+	return nil
+}
+
+func insertMessages(ctx context.Context, tx pgx.Tx, top int64, msgs []transform.Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	rows := make([]msgRow, 0, len(msgs))
+	for _, m := range msgs {
+		events, err := json.Marshal(nonNil(m.Events))
+		if err != nil {
+			return fmt.Errorf("write %d: messages: events: %w", top, err)
+		}
+		rows = append(rows, msgRow{
+			Height: m.Height, TxIndex: m.TxIndex, MsgIndex: m.MsgIndex, TypeURL: m.TypeURL,
+			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
+		})
+	}
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return fmt.Errorf("write %d: messages: %w", top, err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO explorer.messages (
+			height, tx_index, msg_index, type_url, sender, module, events, body)
+		SELECT height, tx_index, msg_index, type_url, sender, module, events, NULLIF(body, 'null'::jsonb)
+		  FROM jsonb_to_recordset($1::jsonb) AS r(
+			height bigint, tx_index integer, msg_index integer, type_url text, sender text, module text,
+			events jsonb, body jsonb)
+		ON CONFLICT (height, tx_index, msg_index) DO NOTHING`, payload); err != nil {
+		return fmt.Errorf("write %d: messages: %w", top, err)
+	}
+	return nil
+}
+
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }
 
 func advanceCursor(ctx context.Context, tx pgx.Tx, height int64) error {

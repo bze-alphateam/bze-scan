@@ -1,0 +1,1524 @@
+{
+  "transactions": [
+    {
+      "Height": 24999134,
+      "TxIndex": 0,
+      "Hash": "128C0787D55D013822D61B53C29E753E2891399EDFB3BB5E127D767B5F9A0835",
+      "Time": "2026-10-08T16:53:06.854906881Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 820048,
+      "GasUsed": 569943,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "54669"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 4,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder"
+      ]
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "Hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1",
+      "Time": "2026-10-08T16:53:06.854906881Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 1388002,
+      "GasUsed": 1114283,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "92533"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 7,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder",
+        "/bze.tradebin.MsgCreateOrder"
+      ]
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 2,
+      "Hash": "998891CBA95B076B4F212037FFC7AE4590E301054C70277BB3D59F4840BBBC37",
+      "Time": "2026-10-08T16:53:06.854906881Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 316074,
+      "GasUsed": 181377,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "15803"
+        }
+      ],
+      "FeePayer": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "Signers": [
+        "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCreateOrder"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 24999134,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "647259ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "647259ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "647259ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "647259",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "sell",
+            "price": "223"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "sell",
+        "amount": "647259",
+        "price": "223",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 0,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "922130ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "922130ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "922130ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "922130",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "sell",
+            "price": "226"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "sell",
+        "amount": "922130",
+        "price": "226",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 0,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "591757ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "591757ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "591757ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "591757",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "sell",
+            "price": "229"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "sell",
+        "amount": "591757",
+        "price": "229",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 0,
+      "MsgIndex": 3,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "642051ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "642051ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "642051ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "642051",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "sell",
+            "price": "232"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "sell",
+        "amount": "642051",
+        "price": "232",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "26189695ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "26189695ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "26189695ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "196915",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "133"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "196915",
+        "price": "133",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "36411050ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "36411050ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "36411050ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "280085",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "130"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "280085",
+        "price": "130",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "43934507ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "43934507ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "43934507ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "345941",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "127"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "345941",
+        "price": "127",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 3,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "43057760ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "43057760ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "43057760ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "347240",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "124"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "347240",
+        "price": "124",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 4,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "24869493ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "24869493ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "24869493ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "205533",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "121"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "205533",
+        "price": "121",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 5,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "112546630ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "112546630ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "112546630ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "953785",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "118"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "953785",
+        "price": "118",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 1,
+      "MsgIndex": 6,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "1000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "1000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "1000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "26419985ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "26419985ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "26419985ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "229739",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "115"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "229739",
+        "price": "115",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    },
+    {
+      "Height": 24999134,
+      "TxIndex": 2,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "100000ubze",
+            "spender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "100000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "100000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "100000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "100000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "100000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "763662113ubze",
+            "spender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "763662113ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "763662113ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "763662113",
+            "creator": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "sell",
+            "price": "0.0002"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+        "order_type": "sell",
+        "amount": "763662113",
+        "price": "0.0002",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+      }
+    }
+  ]
+}
