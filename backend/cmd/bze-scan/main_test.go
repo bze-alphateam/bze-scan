@@ -23,18 +23,33 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "migrate")
 }
 
-func TestMigrateRequiresDatabaseURL(t *testing.T) {
+func TestMigrateCommandsRequireDatabaseURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", "")
 
-	root := newRootCmd()
-	root.SetArgs([]string{"migrate"})
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
+	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}} {
+		root := newRootCmd()
+		root.SetArgs(args)
+		root.SetOut(&bytes.Buffer{})
+		root.SetErr(&bytes.Buffer{})
 
-	err := root.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "DATABASE_URL is required")
+		err := root.Execute()
+		require.Error(t, err, args)
+		assert.Contains(t, err.Error(), "DATABASE_URL is required", args)
+	}
+}
+
+func TestMigrateDownRejectsInvalidCount(t *testing.T) {
+	for _, n := range []string{"0", "1.5", "all"} {
+		root := newRootCmd()
+		root.SetArgs([]string{"migrate", "down", n})
+		root.SetOut(&bytes.Buffer{})
+		root.SetErr(&bytes.Buffer{})
+
+		err := root.Execute()
+		require.Error(t, err, n)
+		assert.Contains(t, err.Error(), "positive number", n)
+	}
 }
 
 func TestServeRejectsInvalidConfig(t *testing.T) {

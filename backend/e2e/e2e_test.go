@@ -12,7 +12,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -22,21 +21,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
+	"github.com/bze-alphateam/bze-scan/backend/internal/testutil"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
-
-// defaultDatabaseURL matches the postgres service of docker/compose.yml.
-const defaultDatabaseURL = "postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable"
 
 // openDB connects to E2E_DATABASE_URL (or the compose default) and waits up
 // to 60 s for the database to accept connections.
 func openDB(t *testing.T) *sql.DB {
 	t.Helper()
-	url := os.Getenv("E2E_DATABASE_URL")
-	if url == "" {
-		url = defaultDatabaseURL
-	}
-	db, err := sql.Open("pgx", url)
+	db, err := sql.Open("pgx", testutil.DatabaseURL())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
