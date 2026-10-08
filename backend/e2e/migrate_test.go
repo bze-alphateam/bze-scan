@@ -155,7 +155,7 @@ func TestMigrateUpBuildsTheExplorerSchema(t *testing.T) {
 	db := connect(t, dbURL)
 
 	res := migrateUp(t, dbURL)
-	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions"}}, res)
+	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification"}}, res)
 
 	var version int64
 	var dirty bool
@@ -274,10 +274,7 @@ func TestReclassifyUnknown(t *testing.T) {
 		('bze1receiver', 100, 0, now(), 'other', 'other', false, '{/cosmos.bank.v1beta1.MsgSend}'),
 		('bze1someone',  101, 0, now(), 'other', 'other', true,  '{/bze.unknown.MsgFoo}'),
 		('bze1known',    102, 0, now(), 'staking', 'delegate', true, '{/cosmos.bank.v1beta1.MsgSend}')`)
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO explorer.message_kinds (type_url, kind, signer_category, participant_category)
-		VALUES ('/cosmos.bank.v1beta1.MsgSend', 'send', 'sent', 'received')`)
-	require.NoError(t, err)
+	require.NoError(t, err) // message_kinds holds MsgSend: `migrate up` mirrored the classification
 
 	var updated int64
 	require.NoError(t, db.QueryRow(`SELECT explorer.reclassify_unknown()`).Scan(&updated))
