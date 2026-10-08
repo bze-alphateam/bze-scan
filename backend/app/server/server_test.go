@@ -17,6 +17,7 @@ import (
 
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
+	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 )
 
@@ -48,6 +49,30 @@ func TestStatusRoute(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"node_height":null,"archive_height":null},
 		"back_fill":{"status":"finished","oldest_height":null}}`, rec.Body.String())
+}
+
+// echoRaw answers every route with its name and height.
+type echoRaw struct{}
+
+func (echoRaw) Get(_ context.Context, route rawcache.Route, height int64) ([]byte, error) {
+	b, _ := json.Marshal(map[string]any{"route": route, "height": height})
+	return b, nil
+}
+
+func (echoRaw) Tx(context.Context, int64, int) (*rawcache.Tx, error) {
+	return nil, errors.New("unused")
+}
+
+func TestRawRoutes(t *testing.T) {
+	e := server.New(server.Deps{Raw: echoRaw{}})
+	for _, route := range []string{"block", "block_results", "commit"} {
+		rec := serve(t, e, http.MethodGet, "/api/v1/raw/"+route+"/42")
+		assert.Equal(t, http.StatusOK, rec.Code, route)
+		assert.JSONEq(t, `{"route":"`+route+`","height":42}`, rec.Body.String())
+	}
+
+	rec := serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/raw/block/42")
+	assert.Equal(t, http.StatusNotFound, rec.Code, "no raw reader, no routes")
 }
 
 func TestUnknownPathAnswersNotFoundEnvelope(t *testing.T) {

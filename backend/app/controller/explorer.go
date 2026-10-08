@@ -44,6 +44,9 @@ type ExplorerReader interface {
 	Block(ctx context.Context, height int64) (*repository.Block, error)
 	Txs(ctx context.Context, before *repository.TxKey, success *bool, limit int) ([]repository.TxSummary, error)
 	Tx(ctx context.Context, hash string) (*repository.Tx, error)
+	// TxPosition returns the height and the index in the block of a
+	// transaction.
+	TxPosition(ctx context.Context, hash string) (height, index int64, err error)
 	BlockExists(ctx context.Context, height int64) (bool, error)
 	TxExists(ctx context.Context, hash string) (bool, error)
 	AccountIndexed(ctx context.Context, address string) (bool, error)

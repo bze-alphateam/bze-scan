@@ -13,7 +13,8 @@ import (
 )
 
 var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
-	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE"}
+	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
+	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -33,7 +34,8 @@ func TestLoadDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
-		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -46,7 +48,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
-		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -129,7 +132,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
-		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
+		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -218,6 +222,36 @@ func TestLoadRejectsInvalidStatusSettings(t *testing.T) {
 		"ARCHIVE_RPC_RETRY_URL":   {"ftp://rpc.getbze.com"},
 		"STATUS_INTERVAL":         {"60", "0s", "-1s"},
 		"STATUS_HEIGHT_TOLERANCE": {"five", "-1"},
+	}
+	for key, values := range cases {
+		for _, value := range values {
+			t.Run(key+"="+value, func(t *testing.T) {
+				isolate(t)
+				t.Setenv(key, value)
+
+				_, err := config.Load()
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), key)
+			})
+		}
+	}
+}
+
+func TestLoadRawCacheSettings(t *testing.T) {
+	isolate(t)
+	t.Setenv("RAW_CACHE_MAX_ENTRIES", "50")
+	t.Setenv("RAW_CACHE_TTL", "90s")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 50, cfg.RawCacheMaxEntries)
+	assert.Equal(t, 90*time.Second, cfg.RawCacheTTL)
+}
+
+func TestLoadRejectsInvalidRawCacheSettings(t *testing.T) {
+	cases := map[string][]string{
+		"RAW_CACHE_MAX_ENTRIES": {"many", "0", "-1"},
+		"RAW_CACHE_TTL":         {"20", "0s", "-1m"},
 	}
 	for key, values := range cases {
 		for _, value := range values {

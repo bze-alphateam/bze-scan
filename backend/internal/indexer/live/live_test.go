@@ -133,15 +133,39 @@ func (n *mockNode) Block(_ context.Context, h int64) (*node.Block, []byte, error
 	if n.badBlocks[h] {
 		hash = "bad"
 	}
-	return &node.Block{Height: h, Time: time.Unix(h, 0), Hash: hash}, nil, nil
+	return &node.Block{Height: h, Time: time.Unix(h, 0), Hash: hash}, rawBody("block", h), nil
 }
 
 func (n *mockNode) BlockResults(_ context.Context, h int64) (*node.BlockResults, []byte, error) {
-	return &node.BlockResults{Height: h}, nil, nil
+	return &node.BlockResults{Height: h}, rawBody("block_results", h), nil
 }
 
 func (n *mockNode) Commit(_ context.Context, h int64) (*node.Commit, []byte, error) {
-	return &node.Commit{Height: h}, nil, nil
+	return &node.Commit{Height: h}, rawBody("commit", h), nil
+}
+
+// rawBody is the response body mockNode answers for route at h.
+func rawBody(route string, h int64) []byte {
+	return []byte(fmt.Sprintf("%s %d", route, h))
+}
+
+// mockRaw records the bodies the indexer puts, by height.
+type mockRaw struct {
+	mu   sync.Mutex
+	puts map[int64][3]string
+}
+
+func (r *mockRaw) PutHeight(h int64, block, blockResults, commit []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.puts[h] = [3]string{string(block), string(blockResults), string(commit)}
+}
+
+func (r *mockRaw) put(h int64) ([3]string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.puts[h]
+	return p, ok
 }
 
 // mockTransformer turns a height into a bare blocks row; a block whose hash
@@ -251,6 +275,7 @@ type harness struct {
 	listener *mockListener
 	node     *mockNode
 	store    *mockStore
+	raw      *mockRaw
 	clock    *fakeClock
 	cancel   context.CancelFunc
 	done     chan error
@@ -264,8 +289,11 @@ func run(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock, cursor, f
 	h := &harness{
 		listener: l, node: n, clock: clock, done: make(chan error, 1),
 		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}},
+		raw:   &mockRaw{puts: map[int64][3]string{}},
 	}
-	ix := live.New(live.Config{Sleep: clock.Sleep}, live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}})
+	ix := live.New(live.Config{Sleep: clock.Sleep}, live.Deps{
+		Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw,
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
 	go func() { h.done <- ix.Run(ctx) }()
@@ -465,4 +493,21 @@ func TestTransformErrorIsAFailedAttempt(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 3, f.attempts)
 	assert.EqualError(t, f.err, "cannot decode")
+}
+
+// A written height's three bodies reach the raw cache; a failed one's do not.
+func TestWrittenHeightsFillTheRawCache(t *testing.T) {
+	n := newMockNode(99)
+	n.badBlocks[100] = true
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	n.setTip(101)
+	sub.notify(101)
+	h.waitWritten(t, 101)
+	require.Eventually(t, func() bool { _, ok := h.raw.put(101); return ok }, 5*time.Second, time.Millisecond)
+	got, _ := h.raw.put(101)
+	assert.Equal(t, [3]string{"block 101", "block_results 101", "commit 101"}, got)
+	_, ok := h.raw.put(100)
+	assert.False(t, ok, "a failed height puts nothing")
 }
