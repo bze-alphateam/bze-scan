@@ -7,7 +7,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -36,6 +38,16 @@ type Config struct {
 	// psql sink plus the explorer schema). Optional here; the commands that
 	// use the database require it. Carries a password: never log it.
 	DatabaseURL string
+
+	// NodeRPCURL is the CometBFT RPC endpoint of the local node, read by
+	// height only.
+	NodeRPCURL string
+	// ChainID is the chain the node must report in /status node_info.network;
+	// serve refuses to start the indexer on another chain.
+	ChainID string
+	// IndexerEnabled runs the live indexer in serve. false runs the API only:
+	// the one way to run a second process against the same database.
+	IndexerEnabled bool
 }
 
 // Load reads the environment (and a .env file when present), applies
@@ -56,6 +68,19 @@ func Load() (*Config, error) {
 		LogLevel:    strings.ToLower(envString("LOG_LEVEL", "info")),
 		LogFormat:   strings.ToLower(envString("LOG_FORMAT", LogFormatText)),
 		DatabaseURL: envString("DATABASE_URL", ""),
+		NodeRPCURL:  strings.TrimRight(envString("NODE_RPC_URL", "http://127.0.0.1:26657"), "/"),
+		ChainID:     envString("CHAIN_ID", "beezee-1"),
+	}
+
+	indexer := envString("INDEXER_ENABLED", "true")
+	if v, err := strconv.ParseBool(indexer); err != nil {
+		fail("INDEXER_ENABLED must be true or false (got %q)", indexer)
+	} else {
+		cfg.IndexerEnabled = v
+	}
+
+	if u, err := url.Parse(cfg.NodeRPCURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		fail("NODE_RPC_URL must be an http(s) URL (got %q)", cfg.NodeRPCURL)
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {

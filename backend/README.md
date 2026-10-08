@@ -48,6 +48,8 @@ Implemented so far:
   Unknown paths answer 404 with the JSON error envelope
   `{"error":{"code":"not_found","message":"Not Found"}}`.
 - `migrate` (see Migrations below).
+- The live indexer inside `serve`, writing `explorer.blocks` (see Live
+  indexer below). Transactions, messages and everything else follow.
 
 ## Configuration
 
@@ -60,7 +62,10 @@ documented template with the defaults:
 | `HTTP_ADDR` | `:8080` | listen address of the HTTP API |
 | `LOG_LEVEL` | `info` | logrus level |
 | `LOG_FORMAT` | `text` | `text` or `json` |
-| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by every command that touches it (`migrate`). Never logged |
+| `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by every command that touches it (`migrate`, and `serve` with the indexer). Never logged |
+| `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
+| `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
+| `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -93,9 +98,17 @@ cmd/bze-scan/      cobra root and subcommands (serve, migrate)
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
+app/serve/         the serve process: its components in one errgroup
 app/server/        echo wiring and the graceful HTTP runner
 app/controller/    thin HTTP handlers
 app/middleware/    request id, panic recovery, JSON error handler
+internal/chain/    chain facts (bech32 prefix, module account addresses)
+internal/node/     CometBFT RPC client, by-height routes only
+internal/transform/
+                   node answers of one height -> explorer rows (no I/O)
+internal/writer/   transactional, idempotent writes (the live writer)
+internal/indexer/live/
+                   LISTEN/NOTIFY listener, height cursor, retries
 internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
                    fake CometBFT RPC node for tests, fixtures in testdata/
@@ -139,6 +152,37 @@ bze-scan migrate version    # print the current version (0 when none)
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
 to date; tests that need an untouched database create their own.
 
+## Live indexer
+
+Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
+
+- A dedicated connection runs `LISTEN explorer_block`. Each notification (the
+  height the sink just committed) and each (re)connect starts a pass: the
+  target is the greater of the notified height and the node's `/status`
+  height, and every height above `indexer_state.last_indexed_height` up to
+  the target is indexed in order. A notification lost while disconnected is
+  recovered by the pass that follows the reconnect. Reconnects back off from
+  1 s to 30 s.
+- The very first pass, with no cursor yet, indexes only the target: the live
+  side starts at the head of the chain and the backfill owns what lies below.
+  That first height is stored once as `indexer_state.live_floor`; the live
+  side never indexes below it.
+- Per height: `/block`, `/block_results` and `/commit` from the local node,
+  the transformer, then one transaction that inserts the `explorer.blocks`
+  row (`ON CONFLICT DO NOTHING`; `block_time_ms` from the previous row when it
+  is indexed), sets the live floor at the first write, and moves the cursor
+  with `GREATEST`. When a height enters the last existing partition, the same
+  transaction calls `explorer.ensure_partitions(height, height + 20000000)`.
+- A height is tried three times (waits of 0.5 s and 2 s). Then, or at once
+  when the node reports the height pruned, it is recorded in
+  `explorer.index_failures` with source `live`, logged, and the cursor moves
+  past it. A pass stops (and reconnects) only when the database or the
+  node's `/status` cannot be reached, so a node restart never turns into
+  recorded failures.
+- On shutdown the height in flight gets up to 10 s to finish.
+- Nothing is read from the sink's tables: the notification carries the
+  height, the node supplies the data.
+
 ## Test fixtures and the fake node
 
 `internal/testutil/fakenode` serves the URI form of the by-height RPC routes
@@ -154,6 +198,10 @@ height the existing ones do not cover:
 ```
 make fixtures HEIGHTS="24998316" ARCHIVE_RPC=https://rpc.getbze.com
 ```
+
+Recorded today: 24998316 to 24998318 and 24998320. 24998319 is left out on
+purpose: the fake node answers it with the above-tip error, which the live
+indexer tests use as a failing height between good ones.
 
 The script fetches `/block`, `/block_results` and `/commit` once per height,
 plus `/status` and one above-tip answer. It never calls `/tx`, `/tx_search` or
