@@ -13,7 +13,7 @@ Status: repository skeleton, no code yet.
 - `backend/` — Go. One binary that serves the read-only HTTP API from the
   explorer's PostgreSQL tables and runs the processes that fill them
   (migrations, enricher, backfill, state sync, retention).
-- `ui/` — React web app. Talks to the backend API, and lazily loads raw block
+- `ui/` — Next.js web app. Talks to the backend API, and lazily loads raw block
   and transaction JSON from BZE archive nodes for the "More details" view.
 - `docker/` — container images and the local-development compose setup
   (PostgreSQL with the CometBFT `psql` indexer schema plus the explorer schema).
@@ -27,6 +27,10 @@ backend serves the API from those tables, enriches blocks with the few fields
 the indexer does not carry, backfills history from archive nodes, and prunes raw
 rows after a retention window. The UI shows a simple view by default and the
 full JSON on demand.
+
+## License
+
+MIT, see `LICENSE`.
 
 ## Development
 
