@@ -35,13 +35,19 @@ jobs:
         run: go build ./...
 
       - name: Vet
-        run: go vet ./...
+        run: make vet
 
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           working-directory: backend
+
+      - name: Modules tidy
+        run: make tidy-check
+
+      - name: Vulnerabilities
+        run: make vulncheck
 
       - name: Unit tests
         run: make test

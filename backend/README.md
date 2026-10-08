@@ -78,23 +78,28 @@ Invalid values stop the process at startup with every problem listed.
 | `make build` | builds `build/bze-scan` |
 | `make run` | runs `bze-scan serve` |
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
+| `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
-| `make vet` | `go vet ./...` |
-| `make lint` | `golangci-lint run` |
-| `make e2e` | starts PostgreSQL from `../docker/compose.yml`, runs the acceptance tests in `e2e/` (build tag `e2e`), tears the database down; the exit code is the tests' |
+| `make vet` | `go vet -tags=e2e ./...` |
+| `make lint` | `golangci-lint run` (linters and formatters, acceptance tests included) |
+| `make tidy-check` | fails when `go.mod`/`go.sum` are not tidy |
+| `make vulncheck` | `govulncheck`; fails on a reachable vulnerability that has a fixed version, lists the ones without a fix |
+| `make e2e` | starts PostgreSQL from `../docker/compose.yml`, runs the acceptance tests in `e2e/` (build tag `e2e`, `-race`), tears the database down; the exit code is the tests' |
 | `make e2e-up` / `make e2e-down` | starts / removes that PostgreSQL by hand |
 | `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
 | `make clean` | removes `build/` |
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
 database `postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable`.
-CI (`.github/workflows/backend.yml`) runs build, vet, lint, `make test` and
-`make e2e` on every pull request touching `backend/` or `docker/`.
+CI (`.github/workflows/backend.yml`) runs build, vet, lint, the tidy check,
+vulncheck, `make test` and `make e2e` on every pull request touching
+`backend/` or `docker/`.
 
 ## Layout
 
 ```
-cmd/bze-scan/      cobra root and subcommands (serve, migrate)
+cmd/bze-scan/      main: runs app/cli
+app/cli/           cobra root and subcommands (serve, migrate)
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
@@ -115,6 +120,23 @@ internal/testutil/fakenode/
 e2e/               acceptance tests (build tag e2e)
 scripts/           record-fixtures.sh
 ```
+
+## Code and test rules
+
+- **Dependencies are interfaces.** A component takes what it depends on (a
+  database, a node, a listener, a transformer, an HTTP transport) as an
+  interface declared next to it, so any of them can be swapped, mocked or
+  replaced by a no-op. Concrete types are built only at the composition
+  roots (`app/serve`, `app/cli`).
+- **Unit tests and acceptance tests are both mandatory** wherever they are
+  possible: unit tests with mocks of those interfaces (no network, no
+  database), acceptance tests in `e2e/` against the compose PostgreSQL and the
+  fake node.
+- **Tests use the public API only.** Every test file is in the external
+  `<package>_test` package (enforced by the `testpackage` linter, with no
+  exceptions, `export_test.go` included). Nothing is exported just to be
+  tested: unexported code is covered through the exported behaviour that
+  uses it.
 
 ## Migrations
 

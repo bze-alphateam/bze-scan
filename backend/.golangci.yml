@@ -4,3 +4,25 @@ run:
   # Lint the acceptance tests too.
   build-tags:
     - e2e
+
+linters:
+  # On top of the standard set (errcheck, govet, ineffassign, staticcheck,
+  # unused).
+  enable:
+    - testpackage # tests use the package's public API only (package x_test)
+    - bodyclose
+    - misspell
+  settings:
+    testpackage:
+      # No exceptions: export_test.go files (exporting internals for tests)
+      # are not allowed either; unexported code is tested through the API.
+      skip-regexp: "^$"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/bze-alphateam/bze-scan
