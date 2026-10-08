@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,7 +12,8 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/config"
 )
 
-var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS"}
+var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
+	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -30,7 +32,8 @@ func TestLoadDefaults(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text",
-		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -42,7 +45,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json",
-		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -124,7 +128,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json",
-		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -189,5 +194,41 @@ func TestLoadRejectsInvalidCORSOrigins(t *testing.T) {
 		_, err := config.Load()
 		require.Error(t, err, v)
 		assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS", v)
+	}
+}
+
+func TestLoadStatusSettings(t *testing.T) {
+	isolate(t)
+	t.Setenv("ARCHIVE_RPC_URL", "https://archive.example.org/")
+	t.Setenv("ARCHIVE_RPC_RETRY_URL", "http://10.0.0.2:26657/")
+	t.Setenv("STATUS_INTERVAL", "100ms")
+	t.Setenv("STATUS_HEIGHT_TOLERANCE", "0")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://archive.example.org", cfg.ArchiveRPCURL)
+	assert.Equal(t, "http://10.0.0.2:26657", cfg.ArchiveRPCRetryURL)
+	assert.Equal(t, 100*time.Millisecond, cfg.StatusInterval)
+	assert.Equal(t, int64(0), cfg.StatusHeightTolerance)
+}
+
+func TestLoadRejectsInvalidStatusSettings(t *testing.T) {
+	cases := map[string][]string{
+		"ARCHIVE_RPC_URL":         {"rpc.getbze.com"},
+		"ARCHIVE_RPC_RETRY_URL":   {"ftp://rpc.getbze.com"},
+		"STATUS_INTERVAL":         {"60", "0s", "-1s"},
+		"STATUS_HEIGHT_TOLERANCE": {"five", "-1"},
+	}
+	for key, values := range cases {
+		for _, value := range values {
+			t.Run(key+"="+value, func(t *testing.T) {
+				isolate(t)
+				t.Setenv(key, value)
+
+				_, err := config.Load()
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), key)
+			})
+		}
 	}
 }

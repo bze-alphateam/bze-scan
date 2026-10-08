@@ -27,6 +27,8 @@ const APIPrefix = "/api/v1"
 type Deps struct {
 	// Explorer reads the explorer tables.
 	Explorer controller.ExplorerReader
+	// Status serves the status snapshots; nil leaves /api/v1/status out.
+	Status controller.StatusReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers.
 	CORSAllowedOrigins []string
@@ -64,6 +66,9 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs", explorer.Txs)
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/search", explorer.Search)
+	if deps.Status != nil {
+		api.GET("/status", controller.NewStatusController(deps.Status).Status)
+	}
 
 	return e
 }

@@ -49,6 +49,8 @@ Implemented so far:
   `{"error":{"code":"not_found","message":"Not Found"}}`.
 - The read API under `/api/v1`: blocks, transactions and search (see HTTP
   API below).
+- `GET /api/v1/status` with its checker (see HTTP API below); `back_fill.status`
+  is `finished` until the backfill lands.
 - `migrate` (see Migrations below).
 - The live indexer inside `serve`, writing `explorer.blocks` (see Live
   indexer below). Transactions, messages and everything else follow.
@@ -69,6 +71,10 @@ documented template with the defaults:
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
 | `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
+| `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node; the status checker compares its tip |
+| `ARCHIVE_RPC_RETRY_URL` | empty | tried when `ARCHIVE_RPC_URL` fails; empty means `ARCHIVE_RPC_URL` again |
+| `STATUS_INTERVAL` | `60s` | period of the status checker's ticks (a Go duration) |
+| `STATUS_HEIGHT_TOLERANCE` | `5` | largest spread, in blocks, between the explorer, the local node and the archive that is still healthy |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -186,6 +192,15 @@ every later route follows:
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
 | `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; no match is an empty list; an empty `q` is a 400 |
+| `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
+
+The status checker runs inside `serve` (with or without the indexer): it
+ticks at start and then every `STATUS_INTERVAL`, reading
+`indexer_state.last_indexed_height`, `min(height)` of `explorer.blocks`, and
+`/status` of the local node and of the archive (the retry URL when the
+primary fails; 5 s per call). `healthy` needs all three heights, a spread of
+at most `STATUS_HEIGHT_TOLERANCE`, and the explorer's height above the
+previous tick's; the first tick after a start judges the spread only.
 
 ## Migrations
 

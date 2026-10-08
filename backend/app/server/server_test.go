@@ -17,6 +17,7 @@ import (
 
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
+	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 )
 
 func serve(t *testing.T, e *echo.Echo, method, path string) *httptest.ResponseRecorder {
@@ -33,6 +34,20 @@ func TestHealthRoute(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, rec.Body.Bytes())
 	assert.NotEmpty(t, rec.Header().Get(appmw.RequestIDHeader))
+}
+
+type pendingStatus struct{}
+
+func (pendingStatus) Snapshot() status.Snapshot {
+	return status.Snapshot{BackFill: status.BackFillFinished}
+}
+
+func TestStatusRoute(t *testing.T) {
+	rec := serve(t, server.New(server.Deps{Status: pendingStatus{}}), http.MethodGet, "/api/v1/status")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"node_height":null,"archive_height":null},
+		"back_fill":{"status":"finished","oldest_height":null}}`, rec.Body.String())
 }
 
 func TestUnknownPathAnswersNotFoundEnvelope(t *testing.T) {

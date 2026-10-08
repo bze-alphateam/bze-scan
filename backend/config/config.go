@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
@@ -52,6 +53,18 @@ type Config struct {
 	// IndexerEnabled runs the live indexer in serve. false runs the API only:
 	// the one way to run a second process against the same database.
 	IndexerEnabled bool
+
+	// ArchiveRPCURL is the CometBFT RPC of an archive node: the status
+	// checker compares its tip with the local node's.
+	ArchiveRPCURL string
+	// ArchiveRPCRetryURL is tried when ArchiveRPCURL fails; empty means
+	// ArchiveRPCURL again.
+	ArchiveRPCRetryURL string
+	// StatusInterval is the period of the status checker's ticks.
+	StatusInterval time.Duration
+	// StatusHeightTolerance is the largest spread, in blocks, between the
+	// explorer, the local node and the archive that still counts as healthy.
+	StatusHeightTolerance int64
 }
 
 // Load reads the environment (and a .env file when present), applies
@@ -74,6 +87,9 @@ func Load() (*Config, error) {
 		DatabaseURL: envString("DATABASE_URL", ""),
 		NodeRPCURL:  strings.TrimRight(envString("NODE_RPC_URL", "http://127.0.0.1:26657"), "/"),
 		ChainID:     envString("CHAIN_ID", "beezee-1"),
+
+		ArchiveRPCURL:      strings.TrimRight(envString("ARCHIVE_RPC_URL", "https://rpc.getbze.com"), "/"),
+		ArchiveRPCRetryURL: strings.TrimRight(envString("ARCHIVE_RPC_RETRY_URL", ""), "/"),
 	}
 
 	for _, o := range strings.Split(envString("CORS_ALLOWED_ORIGINS", ""), ",") {
@@ -97,6 +113,29 @@ func Load() (*Config, error) {
 
 	if u, err := url.Parse(cfg.NodeRPCURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		fail("NODE_RPC_URL must be an http(s) URL (got %q)", cfg.NodeRPCURL)
+	}
+
+	for key, v := range map[string]string{"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL} {
+		if v == "" && key == "ARCHIVE_RPC_RETRY_URL" {
+			continue
+		}
+		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			fail("%s must be an http(s) URL (got %q)", key, v)
+		}
+	}
+
+	interval := envString("STATUS_INTERVAL", "60s")
+	if d, err := time.ParseDuration(interval); err != nil || d <= 0 {
+		fail("STATUS_INTERVAL must be a positive duration like 60s (got %q)", interval)
+	} else {
+		cfg.StatusInterval = d
+	}
+
+	tolerance := envString("STATUS_HEIGHT_TOLERANCE", "5")
+	if n, err := strconv.ParseInt(tolerance, 10, 64); err != nil || n < 0 {
+		fail("STATUS_HEIGHT_TOLERANCE must be a non-negative integer (got %q)", tolerance)
+	} else {
+		cfg.StatusHeightTolerance = n
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {
