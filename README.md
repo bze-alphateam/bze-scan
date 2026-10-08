@@ -8,7 +8,8 @@ distributions, raffles).
 
 Status: backend foundation in place (the `serve` command with a health
 endpoint, the `migrate` command with the explorer schema, the test harness and
-CI); no indexing yet. No UI yet.
+CI) and the live indexer writing blocks; transactions and the read API come
+next. No UI yet.
 
 ## Layout
 

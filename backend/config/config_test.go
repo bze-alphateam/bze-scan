@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"}
+var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -27,7 +27,8 @@ func TestLoadDefaults(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-	assert.Equal(t, &Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text"}, cfg)
+	assert.Equal(t, &Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text",
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -38,7 +39,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-	assert.Equal(t, &Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json"}, cfg)
+	assert.Equal(t, &Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json",
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -119,7 +121,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 
 	cfg, err := Load()
 	require.NoError(t, err)
-	assert.Equal(t, &Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json"}, cfg)
+	assert.Equal(t, &Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json",
+		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -130,4 +133,34 @@ func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "error", cfg.LogLevel)
+}
+
+func TestLoadIndexerSettings(t *testing.T) {
+	isolate(t)
+	t.Setenv("NODE_RPC_URL", "https://rpc.example.org:443/")
+	t.Setenv("CHAIN_ID", "beezee-testnet")
+	t.Setenv("INDEXER_ENABLED", "false")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://rpc.example.org:443", cfg.NodeRPCURL)
+	assert.Equal(t, "beezee-testnet", cfg.ChainID)
+	assert.False(t, cfg.IndexerEnabled)
+}
+
+func TestLoadRejectsInvalidIndexerSettings(t *testing.T) {
+	cases := map[string]string{
+		"INDEXER_ENABLED": "maybe",
+		"NODE_RPC_URL":    "127.0.0.1:26657",
+	}
+	for key, value := range cases {
+		t.Run(key, func(t *testing.T) {
+			isolate(t)
+			t.Setenv(key, value)
+
+			_, err := Load()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), key)
+		})
+	}
 }

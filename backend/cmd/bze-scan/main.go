@@ -1,6 +1,7 @@
 // Command bze-scan is the BZE block explorer backend. Subcommands: serve (the
-// production process: HTTP API and, as later work lands, the live indexer,
-// state sync, status checker and backfill) and migrate (the database schema).
+// production process: HTTP API and live indexer; the state sync, status
+// checker and backfill join it as later work lands) and migrate (the database
+// schema).
 package main
 
 import (

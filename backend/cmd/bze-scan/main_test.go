@@ -66,6 +66,23 @@ func TestServeRejectsInvalidConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "LOG_FORMAT")
 }
 
+func TestServeWithIndexerRequiresDatabaseURL(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("INDEXER_ENABLED", "true")
+	t.Setenv("LOG_LEVEL", "warn")
+
+	root := newRootCmd()
+	root.SetArgs([]string{"serve"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DATABASE_URL is required")
+	assert.Contains(t, err.Error(), "INDEXER_ENABLED=false")
+}
+
 // TestServeStopsCleanlyOnSIGTERM runs the real serve command, waits until it
 // answers /health, sends SIGTERM to the test process (caught by serve's
 // signal context) and expects a nil error, i.e. exit code 0.
@@ -75,6 +92,7 @@ func TestServeStopsCleanlyOnSIGTERM(t *testing.T) {
 	t.Setenv("HTTP_ADDR", addr)
 	t.Setenv("LOG_LEVEL", "warn")
 	t.Setenv("LOG_FORMAT", "text")
+	t.Setenv("INDEXER_ENABLED", "false")
 
 	root := newRootCmd()
 	root.SetArgs([]string{"serve"})
