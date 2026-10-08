@@ -40,7 +40,7 @@ func (e *env) deps() backfill.Deps {
 
 func TestDispatchFollowsTheSourceOrder(t *testing.T) {
 	e := newEnv()
-	res := e.pipeline(1, 100).Run(context.Background(), backfill.Descending(10, 1, nil), backfill.Insert)
+	res := e.pipeline(1, 100).Run(context.Background(), backfill.Descending(10, 1, nil), writer.ModeInsert)
 
 	require.NoError(t, res.Err)
 	assert.True(t, res.Complete)
@@ -54,7 +54,7 @@ func TestSemaphoreBoundsTheHeightsInFlight(t *testing.T) {
 	e.archive.gate = make(chan struct{})
 	done := make(chan backfill.Result, 1)
 	go func() {
-		done <- e.pipeline(3, 100).Run(context.Background(), backfill.Descending(20, 1, nil), backfill.Insert)
+		done <- e.pipeline(3, 100).Run(context.Background(), backfill.Descending(20, 1, nil), writer.ModeInsert)
 	}()
 
 	require.Eventually(t, func() bool { _, in, _ := e.archive.stats(); return in == 3 }, 5*time.Second, time.Millisecond)
@@ -73,7 +73,7 @@ func TestSemaphoreBoundsTheHeightsInFlight(t *testing.T) {
 
 func TestFlushWhenTheBatchIsFull(t *testing.T) {
 	e := newEnv()
-	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(5, 1, nil), backfill.Insert)
+	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 
 	require.True(t, res.Complete)
 	assert.Equal(t, [][]int64{{5, 4}, {3, 2}, {1}}, e.writer.flushes(), "the last, partial batch is flushed on close")
@@ -84,7 +84,7 @@ func TestFlushAfterTheQuietPeriod(t *testing.T) {
 	e.writer.flushed = make(chan struct{}, 1)
 	src := make(chanSource)
 	done := make(chan backfill.Result, 1)
-	go func() { done <- e.pipeline(2, 10).Run(context.Background(), src, backfill.Insert) }()
+	go func() { done <- e.pipeline(2, 10).Run(context.Background(), src, writer.ModeInsert) }()
 
 	src <- 7
 	src <- 6
@@ -108,7 +108,7 @@ func TestAStaleQuietTimerDoesNotFlushEarly(t *testing.T) {
 	e.writer.flushed = make(chan struct{}, 1)
 	src := make(chanSource)
 	done := make(chan backfill.Result, 1)
-	go func() { done <- e.pipeline(1, 10).Run(context.Background(), src, backfill.Insert) }()
+	go func() { done <- e.pipeline(1, 10).Run(context.Background(), src, writer.ModeInsert) }()
 
 	src <- 3
 	require.Eventually(t, func() bool { return e.clock.armed() == 1 }, 5*time.Second, time.Millisecond)
@@ -132,7 +132,7 @@ func TestCancelledRunStillWritesWhatItFetched(t *testing.T) {
 	src := make(chanSource)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan backfill.Result, 1)
-	go func() { done <- e.pipeline(2, 10).Run(ctx, src, backfill.Insert) }()
+	go func() { done <- e.pipeline(2, 10).Run(ctx, src, writer.ModeInsert) }()
 
 	src <- 9
 	src <- 8
@@ -151,7 +151,7 @@ func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	e.archive.fail(3, errUnavailable)
 	e.retry.fail(3, errUnavailable, errUnavailable, errUnavailable)
 
-	res := e.pipeline(2, 2).Run(context.Background(), backfill.Descending(5, 1, nil), backfill.Insert)
+	res := e.pipeline(2, 2).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 
 	require.NoError(t, res.Err)
 	assert.True(t, res.Complete)
@@ -170,7 +170,7 @@ func TestARetryOnTheRetryNodeSucceeds(t *testing.T) {
 	e := newEnv()
 	e.archive.fail(2, errUnavailable)
 
-	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), backfill.Insert)
+	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), writer.ModeInsert)
 
 	require.True(t, res.Complete)
 	assert.Equal(t, []int64{2, 1}, e.writer.written())
@@ -182,7 +182,7 @@ func TestTheRateLimiterPacesEveryRequest(t *testing.T) {
 	e := newEnv()
 	e.archive.fail(4, errUnavailable)
 
-	res := e.pipeline(3, 10).Run(context.Background(), backfill.Descending(5, 1, nil), backfill.Insert)
+	res := e.pipeline(3, 10).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 
 	require.True(t, res.Complete)
 	archive, _, _ := e.archive.stats()
@@ -195,7 +195,7 @@ func TestAWriteErrorIsFatal(t *testing.T) {
 	e := newEnv()
 	e.writer.writeErr = errors.New("database unavailable")
 
-	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(100, 1, nil), backfill.Insert)
+	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(100, 1, nil), writer.ModeInsert)
 
 	require.ErrorContains(t, res.Err, "database unavailable")
 	assert.False(t, res.Complete)
@@ -208,13 +208,19 @@ func TestAPresenceErrorIsFatal(t *testing.T) {
 	store := newMockStore(0)
 	store.presenceErr = errors.New("database unavailable")
 
-	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(10, 1, store), backfill.Insert)
+	res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(10, 1, store), writer.ModeInsert)
 
 	require.ErrorContains(t, res.Err, "database unavailable")
 	assert.False(t, res.Complete)
 }
 
-func TestOnlyTheInsertModeIsSupported(t *testing.T) {
-	res := newEnv().pipeline(1, 1).Run(context.Background(), backfill.Descending(1, 1, nil), backfill.WriteMode(7))
-	require.ErrorIs(t, res.Err, backfill.ErrUnsupportedMode)
+func TestEveryFlushIsWrittenInTheRunsMode(t *testing.T) {
+	for _, mode := range []writer.Mode{writer.ModeInsert, writer.ModeUpdate} {
+		e := newEnv()
+		res := e.pipeline(1, 2).Run(context.Background(), backfill.Descending(5, 1, nil), mode)
+		require.NoError(t, res.Err)
+		e.writer.mu.Lock()
+		assert.Equal(t, []writer.Mode{mode, mode, mode}, e.writer.modes, "%s", mode)
+		e.writer.mu.Unlock()
+	}
 }

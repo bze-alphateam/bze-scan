@@ -109,7 +109,7 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 			return fmt.Errorf("write %d: top up partitions: %w", top, err)
 		}
 	}
-	rows, err := rowStatements(top, ents)
+	rows, err := rowStatements(top, ents, ModeInsert)
 	if err != nil {
 		return err
 	}
@@ -236,21 +236,23 @@ type msgRow struct {
 	Body     json.RawMessage `json:"body"`
 }
 
-// ChunkRows bounds the rows of one multi-row insert.
+// ChunkRows bounds the rows of one multi-row statement.
 const ChunkRows = 1000
 
 const topUpSQL = `SELECT explorer.ensure_partitions($1, $2)`
 
-// statement is one bulk insert of up to ChunkRows rows.
+// statement is one bulk statement of up to ChunkRows rows. inserted, when
+// set, reads the keys an INSERT returned into the flush's Inserted.
 type statement struct {
-	table string
-	sql   string
-	args  []any
+	table    string
+	sql      string
+	args     []any
+	inserted func(rows pgx.Rows, into *Inserted) error
 }
 
-// rowStatements returns the bulk inserts of the transactions and messages of
+// rowStatements returns the bulk writes of the transactions and messages of
 // ents, in chunks of ChunkRows rows. top names the write in errors.
-func rowStatements(top int64, ents *transform.Entities) ([]statement, error) {
+func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
 	for _, t := range ents.Transactions {
 		fee, err := json.Marshal(nonNil(t.Fee))
@@ -275,48 +277,68 @@ func rowStatements(top int64, ents *transform.Entities) ([]statement, error) {
 			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
 		})
 	}
-	txs, err := chunked(top, "transactions", insertTransactionsSQL, txRows)
+	txs, err := chunked(top, "transactions", transactionsTable, mode, txRows, scanTransactionKeys)
 	if err != nil {
 		return nil, err
 	}
-	msgs, err := chunked(top, "messages", insertMessagesSQL, msgRows)
+	msgs, err := chunked(top, "messages", messagesTable, mode, msgRows, scanMessageKeys)
 	if err != nil {
 		return nil, err
 	}
 	return append(txs, msgs...), nil
 }
 
-// chunked splits rows into statements of sql with one JSON parameter each.
-func chunked[T any](top int64, table, sql string, rows []T) ([]statement, error) {
+// chunked splits rows into statements of tbl with one JSON parameter each:
+// per chunk, in ModeUpdate the update of the rows that differ, then the
+// insert of the missing ones, whose returned keys scan reads.
+func chunked[T any](top int64, label string, tbl table, mode Mode, rows []T,
+	scan func(pgx.Rows, *Inserted) error) ([]statement, error) {
 	var out []statement
 	for lo := 0; lo < len(rows); lo += ChunkRows {
 		payload, err := json.Marshal(rows[lo:min(lo+ChunkRows, len(rows))])
 		if err != nil {
-			return nil, fmt.Errorf("write %d: %s: %w", top, table, err)
+			return nil, fmt.Errorf("write %d: %s: %w", top, label, err)
 		}
-		out = append(out, statement{table: table, sql: sql, args: []any{payload}})
+		if mode == ModeUpdate {
+			out = append(out, statement{table: label + " update", sql: tbl.updateSQL(), args: []any{payload}})
+		}
+		out = append(out, statement{table: label, sql: tbl.insertSQL(), args: []any{payload}, inserted: scan})
 	}
 	return out, nil
 }
 
-const insertTransactionsSQL = `INSERT INTO explorer.transactions (
-			height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
-			fee, fee_payer, signers, memo, msg_count, msg_types)
-		SELECT height, tx_index, hash, time, success, code, codespace, error_log, gas_wanted, gas_used,
-			fee, fee_payer, signers, memo, msg_count, msg_types
-		  FROM jsonb_to_recordset($1::jsonb) AS r(
-			height bigint, tx_index integer, hash text, time timestamptz, success boolean, code integer,
-			codespace text, error_log text, gas_wanted bigint, gas_used bigint, fee jsonb, fee_payer text,
-			signers text[], memo text, msg_count integer, msg_types text[])
-		ON CONFLICT (height, tx_index) DO NOTHING`
+func scanBlockKeys(rows pgx.Rows, into *Inserted) error {
+	for rows.Next() {
+		var h int64
+		if err := rows.Scan(&h); err != nil {
+			return err
+		}
+		into.Blocks[h] = true
+	}
+	return rows.Err()
+}
 
-const insertMessagesSQL = `INSERT INTO explorer.messages (
-			height, tx_index, msg_index, type_url, sender, module, events, body)
-		SELECT height, tx_index, msg_index, type_url, sender, module, events, NULLIF(body, 'null'::jsonb)
-		  FROM jsonb_to_recordset($1::jsonb) AS r(
-			height bigint, tx_index integer, msg_index integer, type_url text, sender text, module text,
-			events jsonb, body jsonb)
-		ON CONFLICT (height, tx_index, msg_index) DO NOTHING`
+func scanTransactionKeys(rows pgx.Rows, into *Inserted) error {
+	for rows.Next() {
+		var k TxKey
+		if err := rows.Scan(&k.Height, &k.TxIndex); err != nil {
+			return err
+		}
+		into.Transactions[k] = true
+	}
+	return rows.Err()
+}
+
+func scanMessageKeys(rows pgx.Rows, into *Inserted) error {
+	for rows.Next() {
+		var k MsgKey
+		if err := rows.Scan(&k.Height, &k.TxIndex, &k.MsgIndex); err != nil {
+			return err
+		}
+		into.Messages[k] = true
+	}
+	return rows.Err()
+}
 
 func nonNil[T any](s []T) []T {
 	if s == nil {

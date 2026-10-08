@@ -12,7 +12,6 @@ package backfill
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -52,7 +51,7 @@ type Transformer interface {
 // Writer persists the pipeline's flushes and failures; *writer.BatchWriter
 // satisfies it.
 type Writer interface {
-	Write(ctx context.Context, batch []*transform.Entities) error
+	Write(ctx context.Context, batch []*transform.Entities, mode writer.Mode) error
 	RecordFailure(ctx context.Context, height int64, source string, attempts int, cause error) error
 }
 
@@ -61,17 +60,6 @@ type Writer interface {
 type HeightSource interface {
 	Next(ctx context.Context) (height int64, ok bool, err error)
 }
-
-// WriteMode is how a flush treats rows that already exist.
-type WriteMode int
-
-const (
-	// Insert keeps existing rows (ON CONFLICT DO NOTHING).
-	Insert WriteMode = iota
-)
-
-// ErrUnsupportedMode: the write mode is not implemented.
-var ErrUnsupportedMode = errors.New("unsupported write mode")
 
 // Defaults applied to the zero fields of Config.
 const (
@@ -208,20 +196,18 @@ type outcome struct {
 }
 
 // Run dispatches every height of heights to the workers and writes the
-// results, until the source is exhausted, ctx is cancelled or a fatal error
-// occurs. A worker slot is released once its result is in the writer's
+// results in mode, until the source is exhausted, ctx is cancelled or a fatal
+// error occurs. A worker slot is released once its result is in the writer's
 // channel, so the heights in memory are bounded by X in flight, X queued and
-// M held.
-func (p *Pipeline) Run(ctx context.Context, heights HeightSource, mode WriteMode) Result {
-	if mode != Insert {
-		return Result{Err: fmt.Errorf("%w: %d", ErrUnsupportedMode, mode)}
-	}
+// M held. The backfill and the catch-up write in writer.ModeInsert, the
+// reindex in writer.ModeUpdate.
+func (p *Pipeline) Run(ctx context.Context, heights HeightSource, mode writer.Mode) Result {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 
 	results := make(chan outcome, p.cfg.Workers)
 	writeDone := make(chan error, 1)
-	go func() { writeDone <- p.write(ctx, cancel, results) }()
+	go func() { writeDone <- p.write(ctx, cancel, results, mode) }()
 
 	sem := make(chan struct{}, p.cfg.Workers)
 	var wg sync.WaitGroup
@@ -357,7 +343,7 @@ func (p *Pipeline) wait(ctx context.Context) error {
 // when the channel closes. A failed height is recorded at once. A write error
 // is fatal: it cancels the run, and the rest of the channel is drained
 // without writing.
-func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, results <-chan outcome) error {
+func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, results <-chan outcome, mode writer.Mode) error {
 	wctx := context.WithoutCancel(ctx)
 	var held []*transform.Entities
 	var quiet <-chan time.Time
@@ -371,7 +357,7 @@ func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, re
 		}
 		fctx, done := context.WithTimeout(wctx, p.cfg.FlushTimeout)
 		defer done()
-		if err := p.deps.Writer.Write(fctx, batch); err != nil {
+		if err := p.deps.Writer.Write(fctx, batch, mode); err != nil {
 			fatal = err
 			cancel(err)
 			return

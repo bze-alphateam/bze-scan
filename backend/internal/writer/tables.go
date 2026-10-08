@@ -1,0 +1,174 @@
+package writer
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Mode is how a write treats rows that already exist.
+type Mode int
+
+const (
+	// ModeInsert keeps existing rows (ON CONFLICT DO NOTHING): the live
+	// indexer, the backfill and the catch-up.
+	ModeInsert Mode = iota
+	// ModeUpdate overwrites existing rows whose values differ, then inserts
+	// the missing ones: the reindex command.
+	ModeUpdate
+)
+
+func (m Mode) String() string {
+	switch m {
+	case ModeInsert:
+		return "insert"
+	case ModeUpdate:
+		return "update"
+	default:
+		return fmt.Sprintf("mode(%d)", int(m))
+	}
+}
+
+// column is one column of a bulk write: its name, its type in the
+// jsonb_to_recordset record, and the expression that reads it from the
+// record (the name when empty).
+type column struct {
+	name, typ, expr string
+}
+
+func (c column) value() string {
+	if c.expr != "" {
+		return c.expr
+	}
+	return c.name
+}
+
+// table describes the bulk writes of one table from a JSON array of rows.
+//
+// Insert-or-not is decided by the INSERT alone: ON CONFLICT DO NOTHING
+// RETURNING the key returns exactly the rows this statement inserted, also
+// when another writer inserts the same key concurrently. (RETURNING
+// (xmax = 0) would tell inserts from updates in one upsert, but PostgreSQL
+// refuses system columns on partitioned tables.) So ModeUpdate runs an UPDATE
+// of the rows that differ first, then the same INSERT, and counters are
+// driven by the INSERT's rows in both modes.
+type table struct {
+	name string // e.g. explorer.blocks
+	keys []string
+	cols []column // every column written, keys included, in insert order
+}
+
+func (t table) recordset() string {
+	defs := make([]string, len(t.cols))
+	for i, c := range t.cols {
+		defs[i] = c.name + " " + c.typ
+	}
+	return "jsonb_to_recordset($1::jsonb) AS r(" + strings.Join(defs, ", ") + ")"
+}
+
+func (t table) names() []string {
+	out := make([]string, len(t.cols))
+	for i, c := range t.cols {
+		out[i] = c.name
+	}
+	return out
+}
+
+// insertSQL inserts the rows whose key is absent and returns their keys.
+func (t table) insertSQL() string {
+	values := make([]string, len(t.cols))
+	for i, c := range t.cols {
+		values[i] = c.value()
+	}
+	return "INSERT INTO " + t.name + " (" + strings.Join(t.names(), ", ") + ")\n" +
+		"\t\tSELECT " + strings.Join(values, ", ") + "\n" +
+		"\t\t  FROM " + t.recordset() + "\n" +
+		"\t\tON CONFLICT (" + strings.Join(t.keys, ", ") + ") DO NOTHING\n" +
+		"\t\tRETURNING " + strings.Join(t.keys, ", ")
+}
+
+// updateSQL overwrites the existing rows whose values differ from the
+// incoming ones; identical rows are left alone, so a repeated reindex writes
+// no new row versions.
+func (t table) updateSQL() string {
+	isKey := map[string]bool{}
+	for _, k := range t.keys {
+		isKey[k] = true
+	}
+	var data, incoming, current, match, selected []string
+	for _, c := range t.cols {
+		selected = append(selected, c.value()+" AS "+c.name)
+		if isKey[c.name] {
+			match = append(match, "t."+c.name+" = n."+c.name)
+			continue
+		}
+		data = append(data, c.name)
+		incoming = append(incoming, "n."+c.name)
+		current = append(current, "t."+c.name)
+	}
+	return "UPDATE " + t.name + " AS t\n" +
+		"\t\tSET (" + strings.Join(data, ", ") + ") = ROW(" + strings.Join(incoming, ", ") + ")\n" +
+		"\t\tFROM (SELECT " + strings.Join(selected, ", ") + "\n" +
+		"\t\t  FROM " + t.recordset() + ") AS n\n" +
+		"\t\tWHERE " + strings.Join(match, " AND ") + "\n" +
+		"\t\t  AND (" + strings.Join(current, ", ") + ") IS DISTINCT FROM (" + strings.Join(incoming, ", ") + ")"
+}
+
+// The tables the writers fill. block_time_ms is not a column of the blocks
+// write: it is derived from the previous block by blockTimesSQL (and by the
+// live writer's insert).
+var (
+	blocksTable = table{
+		name: "explorer.blocks",
+		keys: []string{"height"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "time", typ: "timestamptz"},
+			{name: "tx_count", typ: "integer"},
+			{name: "tx_failed_count", typ: "integer"},
+			{name: "hash", typ: "text"},
+			{name: "proposer_cons_address", typ: "text"},
+			{name: "size_bytes", typ: "integer"},
+			{name: "minted", typ: "numeric"},
+			{name: "inflation", typ: "numeric"},
+			{name: "fees_distributed", typ: "jsonb", expr: "NULLIF(fees_distributed, 'null'::jsonb)"},
+			{name: "signatures_count", typ: "integer"},
+			{name: "signatures_power_pct", typ: "numeric"},
+		},
+	}
+	transactionsTable = table{
+		name: "explorer.transactions",
+		keys: []string{"height", "tx_index"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "hash", typ: "text"},
+			{name: "time", typ: "timestamptz"},
+			{name: "success", typ: "boolean"},
+			{name: "code", typ: "integer"},
+			{name: "codespace", typ: "text"},
+			{name: "error_log", typ: "text"},
+			{name: "gas_wanted", typ: "bigint"},
+			{name: "gas_used", typ: "bigint"},
+			{name: "fee", typ: "jsonb"},
+			{name: "fee_payer", typ: "text"},
+			{name: "signers", typ: "text[]"},
+			{name: "memo", typ: "text"},
+			{name: "msg_count", typ: "integer"},
+			{name: "msg_types", typ: "text[]"},
+		},
+	}
+	messagesTable = table{
+		name: "explorer.messages",
+		keys: []string{"height", "tx_index", "msg_index"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "msg_index", typ: "integer"},
+			{name: "type_url", typ: "text"},
+			{name: "sender", typ: "text"},
+			{name: "module", typ: "text"},
+			{name: "events", typ: "jsonb"},
+			{name: "body", typ: "jsonb", expr: "NULLIF(body, 'null'::jsonb)"},
+		},
+	}
+)

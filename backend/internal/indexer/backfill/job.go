@@ -209,7 +209,7 @@ func (j *MainJob) Run(ctx context.Context) (string, error) {
 			}
 		}
 	}()
-	res := p.Run(ctx, Descending(start, floor, j.deps.Store), Insert)
+	res := p.Run(ctx, Descending(start, floor, j.deps.Store), writer.ModeInsert)
 	stopTicks()
 	<-ticks
 	save(res.Progress)
@@ -310,7 +310,7 @@ func (c *CatchUp) CatchUp(ctx context.Context, from, to int64) error {
 		lg = log.StandardLogger()
 	}
 	lg.WithFields(log.Fields{"from": from, "to": to}).Info("catch-up: reading heights the local node has pruned from the archive")
-	res := New(c.cfg, c.deps).Run(ctx, Ascending(from, to, c.presence), Insert)
+	res := New(c.cfg, c.deps).Run(ctx, Ascending(from, to, c.presence), writer.ModeInsert)
 	if res.Err != nil {
 		return fmt.Errorf("catch-up %d..%d: %w", from, to, res.Err)
 	}
