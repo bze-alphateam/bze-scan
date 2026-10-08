@@ -12,6 +12,10 @@ build: ## Build the binary into build/
 run: ## Run the backend (serve)
 	go run $(CMD) serve
 
+.PHONY: migrate
+migrate: ## Apply the database migrations (needs DATABASE_URL)
+	go run $(CMD) migrate
+
 .PHONY: test
 test: ## Run unit tests (no network, no docker)
 	go test ./... -race
