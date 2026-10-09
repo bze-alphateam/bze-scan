@@ -2,6 +2,7 @@ package writer
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -55,12 +56,15 @@ type table struct {
 	name string // e.g. explorer.blocks
 	keys []string
 	cols []column // every column written, keys included, in insert order
+	// inputs are fields of the JSON rows that no column stores but column
+	// expressions read.
+	inputs []column
 }
 
 func (t table) recordset() string {
-	defs := make([]string, len(t.cols))
-	for i, c := range t.cols {
-		defs[i] = c.name + " " + c.typ
+	defs := make([]string, 0, len(t.cols)+len(t.inputs))
+	for _, c := range append(slices.Clone(t.cols), t.inputs...) {
+		defs = append(defs, c.name+" "+c.typ)
 	}
 	return "jsonb_to_recordset($1::jsonb) AS r(" + strings.Join(defs, ", ") + ")"
 }
@@ -113,6 +117,17 @@ func (t table) updateSQL() string {
 		"\t\t  AND (" + strings.Join(current, ", ") + ") IS DISTINCT FROM (" + strings.Join(incoming, ", ") + ")"
 }
 
+// signaturesPowerPct is the share, in percent, of the bonded validators'
+// tokens whose validator signed, signers being an array of the consensus
+// addresses in the commit, with the column's three decimals (so a reindex
+// finds nothing to rewrite). It reads the current validators table: exact
+// for a live block, approximate for history. NULL before the first state
+// sync.
+func signaturesPowerPct(signers string) string {
+	return "(SELECT round(100 * coalesce(sum(v.tokens) FILTER (WHERE v.consensus_address = ANY(" + signers + ")), 0)" +
+		" / NULLIF(sum(v.tokens), 0), 3) FROM explorer.validators v WHERE v.status = 'bonded')"
+}
+
 // The tables the writers fill. block_time_ms is not a column of the blocks
 // write: it is derived from the previous block by blockTimesSQL (and by the
 // live writer's insert).
@@ -132,8 +147,9 @@ var (
 			{name: "inflation", typ: "numeric"},
 			{name: "fees_distributed", typ: "jsonb", expr: "NULLIF(fees_distributed, 'null'::jsonb)"},
 			{name: "signatures_count", typ: "integer"},
-			{name: "signatures_power_pct", typ: "numeric"},
+			{name: "signatures_power_pct", typ: "numeric", expr: signaturesPowerPct("signers")},
 		},
+		inputs: []column{{name: "signers", typ: "text[]"}},
 	}
 	transactionsTable = table{
 		name: "explorer.transactions",

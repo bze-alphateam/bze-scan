@@ -72,3 +72,26 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"fees_distributed":null`)
 }
+
+func TestNewValidatorUptime(t *testing.T) {
+	ptr := func(n int64) *int64 { return &n }
+	cases := []struct {
+		missed, window *int64
+		want           *string
+	}{
+		{ptr(0), ptr(10000), strPtr("100.00000")},
+		{ptr(160), ptr(10000), strPtr("98.40000")},
+		{ptr(1), ptr(3), strPtr("66.66667")},
+		{ptr(10000), ptr(10000), strPtr("0.00000")},
+		{ptr(20000), ptr(10000), strPtr("0.00000")},
+		{nil, ptr(10000), nil},
+		{ptr(0), nil, nil},
+		{ptr(0), ptr(0), nil},
+	}
+	for _, c := range cases {
+		got := dto.NewValidator(repository.ValidatorSummary{MissedBlocks: c.missed, SignedBlocksWindow: c.window}).Uptime
+		assert.Equal(t, c.want, got)
+	}
+}
+
+func strPtr(s string) *string { return &s }

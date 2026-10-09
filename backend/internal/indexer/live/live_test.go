@@ -14,6 +14,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
 
@@ -170,14 +171,42 @@ func (r *mockRaw) put(h int64) ([3]string, bool) {
 }
 
 // mockTransformer turns a height into a bare blocks row; a block whose hash
-// is "bad" fails.
+// is "bad" fails. An even height marks the validator "v<height>" dirty.
 type mockTransformer struct{}
 
 func (mockTransformer) Transform(in transform.Input) (*transform.Entities, error) {
 	if in.Block.Hash == "bad" {
 		return nil, errors.New("cannot decode")
 	}
-	return &transform.Entities{Blocks: []transform.Block{{Height: in.Block.Height}}}, nil
+	ents := &transform.Entities{Blocks: []transform.Block{{Height: in.Block.Height}}}
+	if in.Block.Height%2 == 0 {
+		ents.Dirty.Mark(statesync.Validators, fmt.Sprintf("v%d", in.Block.Height))
+	}
+	return ents, nil
+}
+
+// mockPublisher records the published dirty sets with the heights written
+// at the time.
+type mockPublisher struct {
+	store *mockStore
+
+	mu        sync.Mutex
+	published []string
+}
+
+func (p *mockPublisher) Publish(d statesync.Dirty) {
+	written := p.store.writtenHeights()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, k := range d.Keys(statesync.Validators) {
+		p.published = append(p.published, fmt.Sprintf("%s after %v", k, written))
+	}
+}
+
+func (p *mockPublisher) list() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.published)
 }
 
 // mockStore keeps the indexer state in memory, with the writer's rules: the
@@ -277,6 +306,7 @@ type harness struct {
 	node     *mockNode
 	store    *mockStore
 	raw      *mockRaw
+	dirty    *mockPublisher
 	clock    *fakeClock
 	cancel   context.CancelFunc
 	done     chan error
@@ -298,7 +328,8 @@ func runWithCatchUp(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock
 		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}},
 		raw:   &mockRaw{puts: map[int64][3]string{}},
 	}
-	deps := live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw}
+	h.dirty = &mockPublisher{store: h.store}
+	deps := live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw, Dirty: h.dirty}
 	if cu != nil {
 		cu.store = h.store
 		deps.CatchUp = cu
@@ -335,6 +366,17 @@ func TestFirstStartBeginsAtTheHead(t *testing.T) {
 
 	h.waitWritten(t, 100)
 	assert.Equal(t, int64(100), h.store.liveFloor())
+}
+
+func TestDirtySetIsPublishedAfterTheWrite(t *testing.T) {
+	h := run(t, newMockListener(), newMockNode(99), &fakeClock{}, 98, 50)
+	sub := h.listener.next(t)
+	h.waitWritten(t, 99)
+
+	sub.notify(101)
+	h.waitWritten(t, 99, 100, 101)
+	require.Eventually(t, func() bool { return len(h.dirty.list()) == 1 }, 5*time.Second, 5*time.Millisecond)
+	assert.Equal(t, []string{"v100 after [99 100]"}, h.dirty.list(), "clean heights publish nothing")
 }
 
 func TestNotificationWithoutGap(t *testing.T) {

@@ -86,7 +86,7 @@ type blockRow struct {
 	Inflation           *string         `json:"inflation"`
 	FeesDistributed     json.RawMessage `json:"fees_distributed"`
 	SignaturesCount     int             `json:"signatures_count"`
-	SignaturesPowerPct  *string         `json:"signatures_power_pct"`
+	Signers             []string        `json:"signers"`
 }
 
 // blockTimesSQL sets block_time_ms of the rows in [$1, $2] whose previous
@@ -151,7 +151,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 			Height: b.Height, Time: b.Time, TxCount: b.TxCount, TxFailedCount: b.TxFailedCount, Hash: b.Hash,
 			ProposerConsAddress: nullIfEmpty(b.ProposerConsAddress), SizeBytes: b.SizeBytes,
 			Minted: b.Minted, Inflation: b.Inflation, FeesDistributed: fees,
-			SignaturesCount: b.SignaturesCount, SignaturesPowerPct: b.SignaturesPowerPct,
+			SignaturesCount: b.SignaturesCount, Signers: nonNil(b.Signers),
 		})
 	}
 	blockStmts, err := chunked(hi, "blocks", blocksTable, mode, blocks, scanBlockKeys)

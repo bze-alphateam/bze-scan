@@ -2870,5 +2870,18 @@
     }
   ],
   "BeginBlockEvents": null,
-  "EndBlockEvents": null
+  "EndBlockEvents": null,
+  "ValidatorUpdates": [
+    {
+      "pub_key": {
+        "Sum": {
+          "type": "tendermint.crypto.PublicKey_Ed25519",
+          "value": {
+            "ed25519": "yLGSoPp7lQG+s757/tUIuC/QCYY0TVaPhmG7nzY7Btg="
+          }
+        }
+      },
+      "power": "7223288"
+    }
+  ]
 }

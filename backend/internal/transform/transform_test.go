@@ -39,7 +39,6 @@ type goldenBlock struct {
 	Inflation           *string         `json:"inflation"`
 	FeesDistributed     json.RawMessage `json:"fees_distributed"`
 	SignaturesCount     int             `json:"signatures_count"`
-	SignaturesPowerPct  *string         `json:"signatures_power_pct"`
 }
 
 var (
@@ -118,7 +117,7 @@ func TestBlockGolden(t *testing.T) {
 				Height: b.Height, Time: b.Time, TxCount: b.TxCount, TxFailedCount: b.TxFailedCount,
 				Hash: b.Hash, ProposerConsAddress: b.ProposerConsAddress, SizeBytes: b.SizeBytes,
 				Minted: b.Minted, Inflation: b.Inflation, FeesDistributed: fees,
-				SignaturesCount: b.SignaturesCount, SignaturesPowerPct: b.SignaturesPowerPct,
+				SignaturesCount: b.SignaturesCount,
 			}, "", "  ")
 			require.NoError(t, err)
 			got = append(got, '\n')
@@ -155,7 +154,8 @@ func baseInput() transform.Input {
 		Block:   &node.Block{Height: 10, Time: time.Unix(100, 0), Hash: "AB", Txs: []string{"YQ==", "Yg=="}, Raw: json.RawMessage(`{}`)},
 		Results: &node.BlockResults{Height: 10, TxsResults: []node.TxResult{{Code: 0}, {Code: 5}}},
 		Commit: &node.Commit{Height: 10, Signatures: []node.CommitSig{
-			{BlockIDFlag: node.BlockIDFlagCommit}, {BlockIDFlag: 1}, {BlockIDFlag: 3}, {BlockIDFlag: node.BlockIDFlagCommit},
+			{BlockIDFlag: node.BlockIDFlagCommit, ValidatorAddress: "aa01"}, {BlockIDFlag: 1},
+			{BlockIDFlag: 3, ValidatorAddress: "CC03"}, {BlockIDFlag: node.BlockIDFlagCommit, ValidatorAddress: "BB02"},
 		}},
 	}
 }
@@ -184,7 +184,7 @@ func TestCountsAndFees(t *testing.T) {
 	assert.Equal(t, 2, b.SignaturesCount)
 	assert.Nil(t, b.Minted)
 	assert.Nil(t, b.Inflation)
-	assert.Nil(t, b.SignaturesPowerPct)
+	assert.Equal(t, []string{"AA01", "BB02"}, b.Signers, "the signing validators, nil votes left out")
 	fees, err := b.FeesDistributedJSON()
 	require.NoError(t, err)
 	assert.JSONEq(t, `[{"denom":"ibc/ABC","amount":"7"},{"denom":"ubze","amount":"8"}]`, string(fees))

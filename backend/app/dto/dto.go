@@ -131,6 +131,43 @@ type Message struct {
 	Events   json.RawMessage `json:"events"`
 }
 
+// Validator is an item of GET /api/v1/validators. VotingPowerPct and
+// Uptime are percentages with five decimals; Rank and VotingPowerPct are
+// null for a validator outside the active set, Uptime before its first
+// signing window is known.
+type Validator struct {
+	Rank            *int64  `json:"rank"`
+	Moniker         string  `json:"moniker"`
+	OperatorAddress string  `json:"operator_address"`
+	Tokens          string  `json:"tokens"`
+	VotingPowerPct  *string `json:"voting_power_pct"`
+	CommissionRate  string  `json:"commission_rate"`
+	Uptime          *string `json:"uptime"`
+	Jailed          bool    `json:"jailed"`
+	Status          string  `json:"status"`
+}
+
+// NewValidator maps a validator list row. Uptime is 1 − missed / window,
+// from the slashing module's signing info, in percent.
+func NewValidator(v repository.ValidatorSummary) Validator {
+	out := Validator{
+		Rank: v.Rank, Moniker: v.Moniker, OperatorAddress: v.OperatorAddress, Tokens: v.Tokens,
+		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
+	}
+	if v.MissedBlocks != nil && v.SignedBlocksWindow != nil && *v.SignedBlocksWindow > 0 {
+		missed := min(max(*v.MissedBlocks, 0), *v.SignedBlocksWindow)
+		// percent with five decimals, half up: (window - missed) * 10^7 / window.
+		scaled := ((*v.SignedBlocksWindow-missed)*20_000_000 + *v.SignedBlocksWindow) / (2 * *v.SignedBlocksWindow)
+		s := strconv.FormatInt(scaled, 10)
+		for len(s) < 6 {
+			s = "0" + s
+		}
+		u := s[:len(s)-5] + "." + s[len(s)-5:]
+		out.Uptime = &u
+	}
+	return out
+}
+
 // Search result types.
 const (
 	ResultBlock       = "block"

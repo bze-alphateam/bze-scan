@@ -282,3 +282,51 @@ func (r *Explorer) exists(ctx context.Context, q string, arg any) (bool, error) 
 	}
 	return ok, nil
 }
+
+// ValidatorSummary is a row of the validator list. Numeric columns come back
+// as their decimal text.
+type ValidatorSummary struct {
+	// Position is the row's place in the list order, the cursor key.
+	Position           int64
+	Rank               *int64
+	Moniker            string
+	OperatorAddress    string
+	Tokens             string
+	VotingPowerPct     *string
+	CommissionRate     string
+	MissedBlocks       *int64
+	SignedBlocksWindow *int64
+	Jailed             bool
+	Status             string
+}
+
+// Validators lists the validators of status (every status when nil) in
+// rank order: the bonded ones by rank, then the others by tokens. after is
+// the position of the last row of the previous page (0 for the first). The
+// table holds tens of rows, so the position is the keyset.
+func (r *Explorer) Validators(ctx context.Context, status *string, after int64, limit int) ([]ValidatorSummary, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH v AS (
+			SELECT row_number() OVER (ORDER BY rank NULLS LAST,
+			         CASE status WHEN 'bonded' THEN 0 WHEN 'unbonding' THEN 1 ELSE 2 END,
+			         tokens DESC, operator_address) AS pos,
+			       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
+			       missed_blocks, signed_blocks_window, jailed, status
+			  FROM explorer.validators
+			 WHERE $1::text IS NULL OR status = $1)
+		SELECT * FROM v WHERE pos > $2 ORDER BY pos LIMIT $3`, status, after, limit)
+	if err != nil {
+		return nil, fmt.Errorf("validators: %w", err)
+	}
+	defer rows.Close()
+	var out []ValidatorSummary
+	for rows.Next() {
+		var v ValidatorSummary
+		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
+			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status); err != nil {
+			return nil, fmt.Errorf("validators: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

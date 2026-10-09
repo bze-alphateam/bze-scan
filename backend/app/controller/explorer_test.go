@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,6 +59,7 @@ type fakeReader struct {
 	tx       *repository.Tx
 	accounts map[string]bool
 	monikers map[string]string
+	vals     []repository.ValidatorSummary
 	err      error
 
 	gotBefore  *int64
@@ -65,6 +67,19 @@ type fakeReader struct {
 	gotSuccess *bool
 	gotLimit   int
 	gotHash    string
+	gotStatus  *string
+	gotAfter   int64
+}
+
+func (f *fakeReader) Validators(_ context.Context, status *string, after int64, limit int) ([]repository.ValidatorSummary, error) {
+	f.gotStatus, f.gotAfter, f.gotLimit = status, after, limit
+	var out []repository.ValidatorSummary
+	for _, v := range f.vals {
+		if v.Position > after && len(out) < limit {
+			out = append(out, v)
+		}
+	}
+	return out, f.err
 }
 
 func (f *fakeReader) Blocks(_ context.Context, before *int64, limit int) ([]repository.BlockSummary, error) {
@@ -140,6 +155,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/blocks/:height", h.Block)
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
+	e.GET("/validators", h.Validators)
 	e.GET("/search", h.Search)
 	return e
 }
@@ -369,4 +385,67 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/search").Code)
 	assert.JSONEq(t, `{"results":[]}`, get(t, e, "/search?q=hello").Body.String())
+}
+
+func validatorRows(n int) []repository.ValidatorSummary {
+	out := make([]repository.ValidatorSummary, n)
+	for i := range out {
+		rank, missed, window := int64(i+1), int64(16), int64(10000)
+		pct := "4.54545"
+		out[i] = repository.ValidatorSummary{
+			Position: int64(i + 1), Rank: &rank, Moniker: fmt.Sprintf("val %d", i+1),
+			OperatorAddress: fmt.Sprintf("bzevaloper%d", i+1), Tokens: "1000", VotingPowerPct: &pct,
+			CommissionRate: "0.050000000000000000", MissedBlocks: &missed, SignedBlocksWindow: &window, Status: "bonded",
+		}
+	}
+	return out
+}
+
+func TestValidatorsPaginatesInRankOrder(t *testing.T) {
+	f := &fakeReader{vals: validatorRows(3)}
+	e := newAPI(f)
+
+	rec := get(t, e, "/validators?limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	page := decode[dto.List[dto.Validator]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, "val 1", page.Items[0].Moniker)
+	assert.Equal(t, "99.84000", *page.Items[0].Uptime)
+	assert.Nil(t, f.gotStatus, "all statuses by default")
+	assert.Equal(t, 3, f.gotLimit, "one more row than the page, to know there is a next one")
+	require.NotNil(t, page.NextCursor)
+
+	page = decode[dto.List[dto.Validator]](t, get(t, e, "/validators?limit=2&cursor="+*page.NextCursor))
+	assert.Equal(t, int64(2), f.gotAfter)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, "val 3", page.Items[0].Moniker)
+	assert.Nil(t, page.NextCursor)
+
+	body := decodeRaw(t, get(t, e, "/validators"))
+	var items []map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body["items"], &items))
+	for _, k := range []string{"rank", "moniker", "operator_address", "tokens", "voting_power_pct", "commission_rate", "uptime", "jailed", "status"} {
+		assert.Contains(t, items[0], k)
+	}
+}
+
+func TestValidatorsStatusFilter(t *testing.T) {
+	f := &fakeReader{}
+	e := newAPI(f)
+	for _, s := range []string{"bonded", "unbonding", "unbonded"} {
+		require.Equal(t, http.StatusOK, get(t, e, "/validators?status="+s).Code)
+		require.NotNil(t, f.gotStatus)
+		assert.Equal(t, s, *f.gotStatus)
+	}
+	require.Equal(t, http.StatusOK, get(t, e, "/validators?status=all").Code)
+	assert.Nil(t, f.gotStatus)
+
+	rec := get(t, e, "/validators?status=jailed")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "bad_request", errorCode(t, rec))
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/validators?cursor=nope").Code)
+
+	page := decode[dto.List[dto.Validator]](t, get(t, e, "/validators"))
+	assert.NotNil(t, page.Items, "an empty list is [], not null")
 }
