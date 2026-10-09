@@ -135,12 +135,14 @@ const (
 // proposer once scanned.
 func blockSummaryDest(b *BlockSummary) (dest []any, finish func()) {
 	var op, moniker *string
-	return []any{&b.Height, &b.Time, &b.Hash, &b.TxCount, &b.TxFailedCount, &b.ProposerConsAddress,
-			&b.BlockTimeMs, &b.SizeBytes, &op, &moniker}, func() {
-			if op != nil && moniker != nil {
-				b.Proposer = &Proposer{OperatorAddress: *op, Moniker: *moniker}
-			}
+	dest = []any{&b.Height, &b.Time, &b.Hash, &b.TxCount, &b.TxFailedCount, &b.ProposerConsAddress,
+		&b.BlockTimeMs, &b.SizeBytes, &op, &moniker}
+	finish = func() {
+		if op != nil && moniker != nil {
+			b.Proposer = &Proposer{OperatorAddress: *op, Moniker: *moniker}
 		}
+	}
+	return dest, finish
 }
 
 func collectBlockSummaries(rows pgx.Rows) ([]BlockSummary, error) {
