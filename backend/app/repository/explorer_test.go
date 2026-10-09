@@ -44,13 +44,13 @@ func TestBlocksCursorAddsTheHeightPredicate(t *testing.T) {
 
 	_, err := r.Blocks(ctx, nil, 26)
 	assert.ErrorIs(t, err, errDB)
-	assert.NotContains(t, db.sql[0], "WHERE")
+	assert.NotContains(t, db.sql[0], "b.height <")
 	assert.Equal(t, []any{26}, db.args[0])
 
 	before := int64(25000439)
 	_, err = r.Blocks(ctx, &before, 3)
 	assert.ErrorIs(t, err, errDB)
-	assert.Contains(t, db.sql[1], "WHERE height < $1 ORDER BY height DESC LIMIT $2")
+	assert.Contains(t, db.sql[1], "WHERE b.height < $1 ORDER BY b.height DESC LIMIT $2")
 	assert.Equal(t, []any{before, 3}, db.args[1])
 }
 
@@ -104,4 +104,27 @@ func TestDatabaseErrorsAreWrapped(t *testing.T) {
 		assert.ErrorIs(t, err, errDB, name)
 		assert.NotErrorIs(t, err, repository.ErrNotFound, name)
 	}
+}
+
+func TestValidatorBlocksCursorAddsTheHeightPredicate(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	r := repository.NewExplorer(db)
+	ctx := context.Background()
+
+	_, err := r.ValidatorBlocks(ctx, "ABCD", nil, 11)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[0], "WHERE b.proposer_cons_address = $1 ORDER BY b.height DESC LIMIT $2")
+	assert.Equal(t, []any{"ABCD", 11}, db.args[0])
+
+	before := int64(25000439)
+	_, err = r.ValidatorBlocks(ctx, "ABCD", &before, 3)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[1], "AND b.height < $3 ORDER BY b.height DESC LIMIT $2")
+	assert.Equal(t, []any{"ABCD", 3, before}, db.args[1])
+}
+
+func TestValidatorMissIsNotFound(t *testing.T) {
+	r := repository.NewExplorer(&fakeDB{rowErr: pgx.ErrNoRows})
+	_, err := r.Validator(context.Background(), "bzevaloper1x")
+	assert.ErrorIs(t, err, repository.ErrNotFound)
 }

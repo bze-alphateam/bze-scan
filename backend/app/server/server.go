@@ -68,6 +68,8 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs", explorer.Txs)
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/validators", explorer.Validators)
+	api.GET("/validators/:operator", explorer.Validator)
+	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

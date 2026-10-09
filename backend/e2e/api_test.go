@@ -173,8 +173,11 @@ func testTxListPaginatesAndFilters(t *testing.T, base string, ix *indexer) {
 func testBlockDetailMatchesTheIndex(t *testing.T, base string, ix *indexer) {
 	r := fetch(t, fmt.Sprintf("%s/blocks/%d", base, hSend))
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
-	assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+	// No validator is synced here, so the proposer is not named yet and the
+	// block is not cacheable until it is.
+	assert.Equal(t, "no-store", r.header.Get("Cache-Control"))
 	b := into[dto.Block](t, r)
+	assert.Nil(t, b.Proposer)
 
 	assert.Equal(t, hSend, b.Height)
 	assert.Equal(t, ix.one(t, `SELECT hash FROM explorer.blocks WHERE height = $1`, hSend), b.Hash)
@@ -338,7 +341,8 @@ func testListQueriesPrunePartitions(t *testing.T, _ string, ix *indexer) {
 	ctx := context.Background()
 
 	cursor := hTransfer // partition 24
-	allowed := migrations.PartitionNames("blocks", 0, cursor)
+	// The proposer's name is a lookup in the (unpartitioned) validators.
+	allowed := append(migrations.PartitionNames("blocks", 0, cursor), "validators")
 
 	_, err = repo.Blocks(ctx, &cursor, 2)
 	require.NoError(t, err)

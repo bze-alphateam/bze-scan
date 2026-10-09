@@ -45,6 +45,15 @@ type BlockSummary struct {
 	ProposerConsAddress *string
 	BlockTimeMs         *int64
 	SizeBytes           *int64
+	// Proposer is the validator with the proposer's consensus address, nil
+	// when none is synced (before the first state sync, for example).
+	Proposer *Proposer
+}
+
+// Proposer names the validator that proposed a block.
+type Proposer struct {
+	OperatorAddress string
+	Moniker         string
 }
 
 // Block is every column of a blocks row plus the block's transactions.
@@ -112,37 +121,63 @@ type TxKey struct {
 	TxIndex int64
 }
 
-const blockSummaryCols = `height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes`
+// blockSummaryCols are the block list columns of explorer.blocks b, the
+// proposer's from explorer.validators p last; blockSummaryFrom joins them.
+const (
+	blockSummaryCols = `b.height, b.time, b.hash, b.tx_count, b.tx_failed_count, b.proposer_cons_address,
+		b.block_time_ms, b.size_bytes, p.operator_address, p.moniker`
+	blockSummaryFrom = `explorer.blocks b LEFT JOIN LATERAL (
+		SELECT v.operator_address, v.moniker FROM explorer.validators v
+		 WHERE v.consensus_address = b.proposer_cons_address ORDER BY v.operator_address LIMIT 1) p ON true`
+)
+
+// blockSummaryDest is what blockSummaryCols scan into; finish sets the
+// proposer once scanned.
+func blockSummaryDest(b *BlockSummary) (dest []any, finish func()) {
+	var op, moniker *string
+	return []any{&b.Height, &b.Time, &b.Hash, &b.TxCount, &b.TxFailedCount, &b.ProposerConsAddress,
+			&b.BlockTimeMs, &b.SizeBytes, &op, &moniker}, func() {
+			if op != nil && moniker != nil {
+				b.Proposer = &Proposer{OperatorAddress: *op, Moniker: *moniker}
+			}
+		}
+}
+
+func collectBlockSummaries(rows pgx.Rows) ([]BlockSummary, error) {
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (BlockSummary, error) {
+		var b BlockSummary
+		dest, finish := blockSummaryDest(&b)
+		err := row.Scan(dest...)
+		finish()
+		return b, err
+	})
+}
 
 // Blocks lists up to limit blocks by height descending, below before when it
 // is set.
 func (r *Explorer) Blocks(ctx context.Context, before *int64, limit int) ([]BlockSummary, error) {
-	q := `SELECT ` + blockSummaryCols + ` FROM explorer.blocks ORDER BY height DESC LIMIT $1`
+	q := `SELECT ` + blockSummaryCols + ` FROM ` + blockSummaryFrom + ` ORDER BY b.height DESC LIMIT $1`
 	args := []any{limit}
 	if before != nil {
-		q = `SELECT ` + blockSummaryCols + ` FROM explorer.blocks WHERE height < $1 ORDER BY height DESC LIMIT $2`
+		q = `SELECT ` + blockSummaryCols + ` FROM ` + blockSummaryFrom + ` WHERE b.height < $1 ORDER BY b.height DESC LIMIT $2`
 		args = []any{*before, limit}
 	}
 	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list blocks: %w", err)
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (BlockSummary, error) {
-		var b BlockSummary
-		err := row.Scan(&b.Height, &b.Time, &b.Hash, &b.TxCount, &b.TxFailedCount,
-			&b.ProposerConsAddress, &b.BlockTimeMs, &b.SizeBytes)
-		return b, err
-	})
+	return collectBlockSummaries(rows)
 }
 
 // Block returns the block at height with its transactions in index order.
 func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 	var b Block
-	err := r.db.QueryRow(ctx, `SELECT `+blockSummaryCols+`, minted::text, inflation::text, fees_distributed,
-		signatures_count, signatures_power_pct::text
-		FROM explorer.blocks WHERE height = $1`, height).Scan(
-		&b.Height, &b.Time, &b.Hash, &b.TxCount, &b.TxFailedCount, &b.ProposerConsAddress, &b.BlockTimeMs,
-		&b.SizeBytes, &b.Minted, &b.Inflation, &b.FeesDistributed, &b.SignaturesCount, &b.SignaturesPowerPct)
+	dest, finish := blockSummaryDest(&b.BlockSummary)
+	err := r.db.QueryRow(ctx, `SELECT `+blockSummaryCols+`, b.minted::text, b.inflation::text, b.fees_distributed,
+		b.signatures_count, b.signatures_power_pct::text
+		FROM `+blockSummaryFrom+` WHERE b.height = $1`, height).Scan(
+		append(dest, &b.Minted, &b.Inflation, &b.FeesDistributed, &b.SignaturesCount, &b.SignaturesPowerPct)...)
+	finish()
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -329,4 +364,130 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+// ValidatorDetail is every column of a validators row. Numeric columns come
+// back as their decimal text.
+type ValidatorDetail struct {
+	ValidatorSummary
+	AccountAddress          string
+	ConsensusAddress        *string
+	ConsensusPubkey         *string
+	Identity                *string
+	Website                 *string
+	SecurityContact         *string
+	Details                 *string
+	Tombstoned              bool
+	JailedUntil             *time.Time
+	DelegatorShares         string
+	CommissionMaxRate       string
+	CommissionMaxChangeRate string
+	CommissionUpdateTime    *time.Time
+	MinSelfDelegation       *string
+	SelfDelegation          *string
+	DelegatorCount          *int64
+	FirstSeenHeight         *int64
+	FirstSeenTime           *time.Time
+	UpdatedAt               time.Time
+}
+
+// ValidatorEvent is a validator_events row.
+type ValidatorEvent struct {
+	Height  int64
+	TxIndex int64
+	Seq     int64
+	Kind    string
+	Details json.RawMessage
+	Time    time.Time
+	// TxHash is the hash of the transaction, nil for a block-level event.
+	TxHash *string
+}
+
+// ValidatorVote is a governance vote of a validator's owner account.
+type ValidatorVote struct {
+	ProposalID int64
+	Title      *string // nil until the proposal is synced
+	Option     *string
+	Options    json.RawMessage
+	Height     int64
+	Time       time.Time
+}
+
+// Validator returns the validator with operator address, or ErrNotFound.
+func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDetail, error) {
+	var v ValidatorDetail
+	v.OperatorAddress = operator
+	err := r.db.QueryRow(ctx, `SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
+			missed_blocks, signed_blocks_window, jailed, status,
+			account_address, consensus_address, consensus_pubkey, identity, website, security_contact, details,
+			tombstoned, jailed_until, delegator_shares::text, commission_max_rate::text,
+			commission_max_change_rate::text, commission_update_time, min_self_delegation::text,
+			self_delegation::text, delegator_count, first_seen_height, first_seen_time, updated_at
+		FROM explorer.validators WHERE operator_address = $1`, operator).Scan(
+		&v.Rank, &v.Moniker, &v.Tokens, &v.VotingPowerPct, &v.CommissionRate,
+		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status,
+		&v.AccountAddress, &v.ConsensusAddress, &v.ConsensusPubkey, &v.Identity, &v.Website, &v.SecurityContact,
+		&v.Details, &v.Tombstoned, &v.JailedUntil, &v.DelegatorShares, &v.CommissionMaxRate,
+		&v.CommissionMaxChangeRate, &v.CommissionUpdateTime, &v.MinSelfDelegation,
+		&v.SelfDelegation, &v.DelegatorCount, &v.FirstSeenHeight, &v.FirstSeenTime, &v.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("validator %s: %w", operator, err)
+	}
+	return &v, nil
+}
+
+// ValidatorBlocks lists up to limit blocks proposed by the validator with
+// consensus address cons (upper-case hex) by height descending, below before
+// when it is set.
+func (r *Explorer) ValidatorBlocks(ctx context.Context, cons string, before *int64, limit int) ([]BlockSummary, error) {
+	q := `SELECT ` + blockSummaryCols + ` FROM ` + blockSummaryFrom +
+		` WHERE b.proposer_cons_address = $1 ORDER BY b.height DESC LIMIT $2`
+	args := []any{cons, limit}
+	if before != nil {
+		q = `SELECT ` + blockSummaryCols + ` FROM ` + blockSummaryFrom +
+			` WHERE b.proposer_cons_address = $1 AND b.height < $3 ORDER BY b.height DESC LIMIT $2`
+		args = append(args, *before)
+	}
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("validator %s blocks: %w", cons, err)
+	}
+	return collectBlockSummaries(rows)
+}
+
+// ValidatorEvents lists the last limit events of the validator with
+// operator address, newest first.
+func (r *Explorer) ValidatorEvents(ctx context.Context, operator string, limit int) ([]ValidatorEvent, error) {
+	rows, err := r.db.Query(ctx, `SELECT e.height, e.tx_index, e.seq, e.kind, e.details, e.time, t.hash
+		FROM explorer.validator_events e
+		LEFT JOIN explorer.transactions t ON e.tx_index >= 0 AND t.height = e.height AND t.tx_index = e.tx_index
+		WHERE e.operator_address = $1
+		ORDER BY e.height DESC, e.tx_index DESC, e.seq DESC LIMIT $2`, operator, limit)
+	if err != nil {
+		return nil, fmt.Errorf("validator %s events: %w", operator, err)
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ValidatorEvent, error) {
+		var e ValidatorEvent
+		err := row.Scan(&e.Height, &e.TxIndex, &e.Seq, &e.Kind, &e.Details, &e.Time, &e.TxHash)
+		return e, err
+	})
+}
+
+// VotesOf lists the last limit governance votes of account, newest proposal
+// first.
+func (r *Explorer) VotesOf(ctx context.Context, account string, limit int) ([]ValidatorVote, error) {
+	rows, err := r.db.Query(ctx, `SELECT v.proposal_id, p.title, v.option, v.options, v.height, v.time
+		FROM explorer.proposal_votes v LEFT JOIN explorer.proposals p ON p.id = v.proposal_id
+		WHERE v.voter = $1 ORDER BY v.proposal_id DESC LIMIT $2`, account, limit)
+	if err != nil {
+		return nil, fmt.Errorf("votes of %s: %w", account, err)
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ValidatorVote, error) {
+		var v ValidatorVote
+		err := row.Scan(&v.ProposalID, &v.Title, &v.Option, &v.Options, &v.Height, &v.Time)
+		return v, err
+	})
 }
