@@ -61,7 +61,8 @@ Implemented so far:
 - `backfill`, standalone or inside `serve` (see Backfill below).
 - `reindex` (see Reindex below).
 - The state sync inside `serve` and the `sync-state` command, with the
-  validators set and `GET /api/v1/validators` (see State sync below).
+  validators and denoms sets, `GET /api/v1/validators` and the token routes
+  (see State sync below).
 
 ## Configuration
 
@@ -189,6 +190,8 @@ internal/statesync/
 internal/statesync/validators/
                    the validators set (explorer.validators and the
                    validator_owner labels)
+internal/statesync/denoms/
+                   the denoms set (explorer.denoms)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
@@ -259,6 +262,11 @@ every later route follows:
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count, price_usd, price_change_24h_pct (all three null until the holders and prices job), halted, logo_url; another kind is a 400 |
+| `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
+| `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
+| `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
+| `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=` | the same three with the denom as a query value, the chain's own convention for denoms with `/` |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
@@ -496,6 +504,28 @@ stored. A type added to the classification later needs a reindex of the
 range. The wording a page shows ("transaction fee", "paid to the seller") is
 derived at read time; the tables hold facts only.
 
+### Token events
+
+`explorer.token_events` (kept forever) is the history of a denom that the
+chain state forgets, one row per denom named, `seq` counting from 0 per
+transaction (or per block, `tx_index = -1`), `actor` the message's signer:
+
+- from the tokenfactory messages of a successful transaction: `created`
+  (`MsgCreateDenom`, the denom `factory/<creator>/<subdenom>`, details
+  `subdenom`), `minted` and `burned` (`MsgMint`/`MsgBurn`, `amount`; a mint
+  goes to its signer, details `recipient`), `admin_changed` (details
+  `{"from", "to"}` from `DenomAdminChangeEvent`, `to` empty when renounced),
+  `metadata_changed` (details symbol, name, display) and
+  `branding_changed`;
+- from the tradebin typed events: `market_created` (a row for the base and
+  one for the quote, details market_id, base, quote), `pool_created` (base,
+  quote and the pool's LP denom) and `halted`/`unhalted`
+  (`DenomHaltedEvent`/`DenomUnhaltedEvent`, which governance enacts in
+  EndBlock, so block-level rows without an actor).
+
+Every denom a token event names is marked dirty for the denoms set, and so
+are the tokenfactory change events.
+
 ### Accounts
 
 Every signer of every transaction gets an `explorer.accounts` row:
@@ -575,14 +605,14 @@ indexer) the state sync:
 1. resyncs every registered set in full at start, in registration order, so
    a resync lost at shutdown is harmless;
 2. resyncs what each live block changed: the transformer fills the block's
-   dirty set (validators, proposals, denoms, channels, params; only the
-   validators are marked so far) and the live indexer publishes it after the
+   dirty set (validators, proposals, denoms, channels, params; validators
+   and denoms are marked so far) and the live indexer publishes it after the
    write. The backfill and the reindex ignore it: history cannot change
    current state. Keys go to an in-memory queue served by two workers; a
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators: one
-   minute), the safety net for what no event announces. A full resync, from
+   minute, denoms: one hour), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
@@ -617,6 +647,35 @@ operator it learnt from its last resyncs before queueing
 once; keys published before the start resync are folded again after it. A
 consensus key of a validator the set has never seen runs a full resync;
 an unreadable address or key asks for one too.
+
+**Denoms.** A full resync reads bank `TotalSupply` and `DenomsMetadata`
+(1,000 per page; a denom is listed when it has either), tradebin `AllMarkets`
+and `HaltedDenoms`, and per factory denom tokenfactory `DenomAuthority`.
+Supply and metadata always come from the node, never from events. `kind` is
+the denom's shape: `native` for `ubze`, `factory` for `factory/…`, `ibc` for
+`ibc/…`, `lp` for tradebin pool shares (`ulp/<hash>` since chain v8.2.0,
+`ulp_<base>_<quote>` before), else `unknown`. `symbol`, `name`,
+`description` and `logo_url` (the metadata `uri`) come from the bank
+metadata and `exponent` is its display unit's (0 when the display unit is not
+listed, as for most IBC vouchers until the chain-registry story); `ubze` has
+no bank metadata and takes the chain's constants (BZE, exponent 6). A factory
+denom's `creator` is the address in it and `admin` the tokenfactory admin
+(NULL once renounced). `markets` are the tradebin market ids (`base/quote`)
+the denom trades in; `halted` is the tradebin halt (a node before v8.2.0
+answers `HaltedDenoms` with Unimplemented: nothing is halted). First sight
+(`created_*`) is the denom's earliest `created` token event, filled at the
+next resync once the event is indexed. A denom the bank no longer lists keeps
+its row with a zero supply. The holders, prices and IBC origin columns are
+left to their own jobs.
+
+A dirty denom (a token event, a tokenfactory change event) is resynced alone
+(bank `DenomMetadataByQueryString` and `SupplyOf`, the factory admin, the
+markets and halts). Every denom a block moves is also marked "seen"
+(`seen:<denom>`): the set drops the key when it already holds the denom and
+resyncs it otherwise (`statesync.Canonicaliser` folding to an empty key), so
+a new IBC voucher appears within its first block without every `ubze` move
+costing a resync. Before its first full resync the set knows nothing yet and
+keeps the seen keys for the fold after it.
 
 **Validator events** (`explorer.validator_events`, kept forever) come from
 two writers:
@@ -686,7 +745,11 @@ commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
 active set). Transfers and block events come from the same heights: the fills
 of 24999134 (settlements at block level, `OrderExecutedEvent`), the failed
 transaction of 24999004 (its fee row only), the slash of 24160001 (a burn) and
-the empty 24998317. Recording a new height leaves `status.json` and `above_tip.json`
+the empty 24998317. No recorded height carries tokenfactory or tradebin
+token activity (branding and halts exist only from chain v8.2.0, which
+mainnet does not run yet): the token-event tests encode real messages with
+the chain codec and give them the events the chain emits, and the cases are
+checked live during the mainnet soak. Recording a new height leaves `status.json` and `above_tip.json`
 as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten
@@ -710,16 +773,26 @@ keyed file the keyless one answers, and without any file the method answers
 `Unimplemented`. A recorded gateway error (`{"code": 5, "message": …}`)
 answers that gRPC status. Tests count calls per method and per key, replace
 an answer (`SetResponse`) and stop the server to play a node that is down.
-So far the staking and slashing methods of the validators set and the
-account page's bank, staking and distribution reads are recorded; each later
-story adds its methods.
+So far the staking and slashing methods of the validators set, the account
+page's bank, staking and distribution reads and the denoms set's bank,
+tokenfactory and tradebin methods are recorded; each later story adds its
+methods. Denoms in file names are path-escaped
+(`DenomAuthority.factory%2Fbze1…%2Fuvdl.json`).
 
 ```
 make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
 
-`SETS` limits the run to some sets (`validators`, `accounts`; both by
-default), so adding an account does not re-record the validators.
+`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`;
+the first two by default), so adding an account does not re-record the
+validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
+records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
+`AllMarkets`, every factory denom's `DenomAuthority`, and for each denom in
+`DENOMS` its `DenomMetadataByQueryString` (a 404 for `ubze`) and `SupplyOf`.
+tokenfactory `AllDenomBranding` and tradebin `HaltedDenoms` are recorded only
+from a gateway that serves them (chain v8.2.0 and later); mainnet runs v8.1.1
+(recorded 2026-10-09: 28 denoms with a supply, 28 with metadata, 12 markets),
+so they are absent and answer Unimplemented like the node.
 
 records `staking/Validators.json`, `slashing/SigningInfos.json`,
 `slashing/Params.json`, every validator's self-delegation and delegator
