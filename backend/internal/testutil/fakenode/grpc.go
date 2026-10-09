@@ -53,7 +53,9 @@ var Services = map[string]string{
 // The key of a request is the values of its non-empty top-level string,
 // integer and enum fields, in field order, path-escaped and joined by "."
 // (Validator's validator_addr; Delegation's delegator_addr and
-// validator_addr; Proposal's proposal_id). A file
+// validator_addr; Proposal's proposal_id), then the key of its pagination
+// when it asks for a later page (DenomOwners.<denom>.<next_key>: the
+// base64 key with "/" escaped). A file
 // holding a gateway error ({"code":5,"message":"…","details":[]}) answers
 // that gRPC status. A method without a file answers codes.Unimplemented, as a
 // node does for a service it does not register. Recorded by
@@ -262,7 +264,8 @@ func (g *GRPC) answer(short, method, key string) ([]byte, bool) {
 	return nil, false
 }
 
-// requestKey joins the request's non-empty top-level string fields.
+// requestKey joins the request's non-empty top-level scalar fields and its
+// page key.
 func (g *GRPC) requestKey(md protoreflect.MessageDescriptor, req gogoproto.Message) (string, error) {
 	raw, err := g.codec.ProtoJSON(req)
 	if err != nil {
@@ -280,6 +283,14 @@ func (g *GRPC) requestKey(md protoreflect.MessageDescriptor, req gogoproto.Messa
 		}
 		if v := keyValue(fd, fields[string(fd.Name())]); v != "" {
 			parts = append(parts, url.PathEscape(v))
+		}
+	}
+	if raw, ok := fields["pagination"]; ok {
+		var page struct {
+			Key string `json:"key"`
+		}
+		if err := json.Unmarshal(raw, &page); err == nil && page.Key != "" {
+			parts = append(parts, url.PathEscape(page.Key))
 		}
 	}
 	return strings.Join(parts, "."), nil

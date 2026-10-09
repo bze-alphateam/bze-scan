@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/cosmos/cosmos-sdk/types/query"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
@@ -101,6 +102,33 @@ func TestGRPCKeysIntegersAndEnums(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, voting.Proposals)
 	assert.Equal(t, 1, g.RequestsFor("gov", "Proposals", "PROPOSAL_STATUS_VOTING_PERIOD"))
+}
+
+func TestGRPCServesPagesByTheirKey(t *testing.T) {
+	g := fakenode.NewGRPC(t)
+	bank := banktypes.NewQueryClient(dial(t, g))
+	ctx := context.Background()
+	const gge = "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE"
+
+	var owners []string
+	var next []byte
+	for range 5 {
+		resp, err := bank.DenomOwners(ctx, &banktypes.QueryDenomOwnersRequest{Denom: gge,
+			Pagination: &query.PageRequest{Key: next, Limit: 1000}})
+		require.NoError(t, err)
+		for _, o := range resp.DenomOwners {
+			owners = append(owners, o.Address)
+		}
+		if next = resp.Pagination.NextKey; len(next) == 0 {
+			break
+		}
+	}
+	assert.Len(t, owners, 5, "three recorded pages")
+	assert.Equal(t, 3, g.Requests("bank", "DenomOwners"))
+
+	none, err := bank.DenomOwners(ctx, &banktypes.QueryDenomOwnersRequest{Denom: "ubze"})
+	require.NoError(t, err)
+	assert.Empty(t, none.DenomOwners, "the fallback: a denom nobody holds")
 }
 
 func TestGRPCOverridesAndStop(t *testing.T) {

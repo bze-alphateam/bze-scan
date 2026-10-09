@@ -1,0 +1,15 @@
+{
+  "denom_owners": [
+    {
+      "address": "bze172stm33vz9rljphkway55aetsslrsqq87nytaf",
+      "balance": {
+        "denom": "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE",
+        "amount": "2800000"
+      }
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "denom_owners": [
+    {
+      "address": "bze12mvlwequdm23ltcl4utawkfm0ezxt3xhkr8j9f",
+      "balance": {
+        "denom": "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE",
+        "amount": "174713"
+      }
+    },
+    {
+      "address": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee",
+      "balance": {
+        "denom": "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE",
+        "amount": "50305258722"
+      }
+    }
+  ],
+  "pagination": {
+    "next_key": "FPKgvcYsEUf5BvZ3SUp3K4Q+OAAH",
+    "total": "0"
+  }
+}
