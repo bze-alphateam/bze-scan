@@ -1,0 +1,16 @@
+{
+  "transfers": [
+    {
+      "Height": 20122191,
+      "TxIndex": 0,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze1cgtrksac0pjj53lym42uaxrjsumtql29zxv2py",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "1500"
+    }
+  ],
+  "block_events": null
+}

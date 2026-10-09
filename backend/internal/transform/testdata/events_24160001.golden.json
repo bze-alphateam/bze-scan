@@ -1,0 +1,41 @@
+{
+  "transfers": [
+    {
+      "Height": 24160001,
+      "TxIndex": -1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "burn",
+      "Sender": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq",
+      "Recipient": "",
+      "Denom": "ubze",
+      "Amount": "613806200"
+    },
+    {
+      "Height": 24160001,
+      "TxIndex": -1,
+      "Seq": 1,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq",
+      "Recipient": "bze1tygms3xhhs3yv487phx3dw4a95jn7t7lule4a5",
+      "Denom": "ubze",
+      "Amount": "6137448379694"
+    }
+  ],
+  "block_events": [
+    {
+      "Height": 24160001,
+      "Seq": 60,
+      "Type": "slash",
+      "Attrs": {
+        "address": "bzevalcons1al6clt29tyceyv7zstu59su2p0502qfq8pu2d3",
+        "burned_coins": "613806200",
+        "jailed": "bzevalcons1al6clt29tyceyv7zstu59su2p0502qfq8pu2d3",
+        "mode": "BeginBlock",
+        "power": "6138062",
+        "reason": "missing_signature"
+      }
+    }
+  ]
+}
