@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"strings"
@@ -91,11 +92,34 @@ type Validator struct {
 	SignedBlocksWindow      *int64
 }
 
-// Standing is what ranking needs of a stored validator.
+// Standing is what ranking and change detection need of a stored
+// validator.
 type Standing struct {
+	Operator         string
+	Status           string
+	Tokens           sdkmath.Int
+	Jailed           bool
+	Tombstoned       bool
+	ConsensusAddress string // upper-case hex
+}
+
+// Kinds of the validator_events rows the set writes: the transitions the
+// chain emits no event for, found by comparing a fresh row with the stored
+// one.
+const (
+	KindJailed     = "jailed"
+	KindTombstoned = "tombstoned"
+	KindBonded     = "bonded"
+	KindUnbonded   = "unbonded"
+)
+
+// Change is a transition a resync found. It is written as a validator_events
+// row at the live cursor's height (tx_index -1), details {"from", "to"}.
+type Change struct {
 	Operator string
-	Status   string
-	Tokens   sdkmath.Int
+	Kind     string
+	From     any
+	To       any
 }
 
 // Ranking is the rank and voting power of a bonded validator.
@@ -118,6 +142,8 @@ type Snapshot struct {
 	// Ranks are the bonded validators' standings; every other row loses its
 	// rank and voting power.
 	Ranks []Ranking
+	// Changes are the transitions found against the stored rows.
+	Changes []Change
 }
 
 // Store persists the set.
@@ -144,6 +170,11 @@ type Set struct {
 	deps     Deps
 	interval time.Duration
 	mu       sync.Mutex
+
+	// operators maps the consensus addresses (statesync.ConsKey) of the
+	// validators the set has seen to their operator address, for Canonical.
+	opMu      sync.RWMutex
+	operators map[string]string
 }
 
 // New returns the set; interval zero is DefaultInterval.
@@ -154,7 +185,36 @@ func New(deps Deps, interval time.Duration) *Set {
 	return &Set{deps: deps, interval: interval}
 }
 
-var _ statesync.Set = (*Set)(nil)
+var (
+	_ statesync.Set           = (*Set)(nil)
+	_ statesync.Canonicaliser = (*Set)(nil)
+)
+
+// Canonical turns the consensus-address key of a validator the set has seen
+// into its operator address; other keys are returned as they are.
+func (s *Set) Canonical(key string) string {
+	s.opMu.RLock()
+	defer s.opMu.RUnlock()
+	if op, ok := s.operators[key]; ok {
+		return op
+	}
+	return key
+}
+
+// learn records the operator of each consensus address, replacing the
+// whole map when full.
+func (s *Set) learn(full bool, pairs ...[2]string) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	if full || s.operators == nil {
+		s.operators = map[string]string{}
+	}
+	for _, p := range pairs {
+		if p[0] != "" {
+			s.operators[statesync.ConsKey(p[0])] = p[1]
+		}
+	}
+}
 
 // Name is statesync.Validators.
 func (s *Set) Name() string { return statesync.Validators }
@@ -168,6 +228,15 @@ func (s *Set) Interval() time.Duration { return s.interval }
 func (s *Set) FullResync(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	stored, err := s.deps.Store.Standings(ctx)
+	if err != nil {
+		return err
+	}
+	old := map[string]Standing{}
+	for _, st := range stored {
+		old[st.Operator] = st
+	}
 
 	var vals []stakingtypes.Validator
 	var next []byte
@@ -221,17 +290,71 @@ func (s *Set) FullResync(ctx context.Context) error {
 		}
 		snap.Validators = append(snap.Validators, row)
 		standings = append(standings, Standing{Operator: row.OperatorAddress, Status: row.Status, Tokens: v.Tokens})
+		if prev, ok := old[row.OperatorAddress]; ok {
+			snap.Changes = append(snap.Changes, changes(prev, row)...)
+			delete(old, row.OperatorAddress)
+		}
+	}
+	// What is left is stored but no longer listed: it becomes unbonded.
+	for _, op := range slices.Sorted(maps.Keys(old)) {
+		snap.Changes = append(snap.Changes, changes(old[op], Validator{
+			OperatorAddress: op, Status: StatusUnbonded, Jailed: old[op].Jailed, Tombstoned: old[op].Tombstoned,
+		})...)
 	}
 	snap.Ranks = Rank(standings)
-	return s.deps.Store.Save(ctx, snap)
+	if err := s.deps.Store.Save(ctx, snap); err != nil {
+		return err
+	}
+	pairs := make([][2]string, 0, len(snap.Validators))
+	for _, v := range snap.Validators {
+		pairs = append(pairs, [2]string{v.ConsensusAddress, v.OperatorAddress})
+	}
+	s.learn(true, pairs...)
+	return nil
 }
 
-// ResyncOne rewrites the validator with operator address key and re-ranks
-// every bonded validator over the stored standings. A validator the node no
-// longer knows becomes unbonded.
+// changes lists the transitions from the stored standing prev to the fresh
+// row: entering or leaving the bonded set, jailing and tombstoning. Unjailing
+// is not one: MsgUnjail is indexed from the transaction.
+func changes(prev Standing, row Validator) []Change {
+	var out []Change
+	add := func(kind string, from, to any) {
+		out = append(out, Change{Operator: row.OperatorAddress, Kind: kind, From: from, To: to})
+	}
+	switch {
+	case prev.Status != StatusBonded && row.Status == StatusBonded:
+		add(KindBonded, prev.Status, row.Status)
+	case prev.Status == StatusBonded && row.Status != StatusBonded:
+		add(KindUnbonded, prev.Status, row.Status)
+	}
+	if !prev.Jailed && row.Jailed {
+		add(KindJailed, false, true)
+	}
+	if !prev.Tombstoned && row.Tombstoned {
+		add(KindTombstoned, false, true)
+	}
+	return out
+}
+
+// ResyncOne rewrites the validator with operator address key, or with the
+// consensus address of a statesync.ConsKey, and re-ranks every bonded
+// validator over the stored standings. A validator the node no longer knows
+// becomes unbonded; a consensus address no stored validator has is a
+// validator the sync has not seen yet, so it runs a full resync.
 func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if key == statesync.All {
 		return s.FullResync(ctx)
+	}
+	if cons, ok := statesync.ConsAddress(key); ok {
+		stored, err := s.deps.Store.Standings(ctx)
+		if err != nil {
+			return err
+		}
+		i := slices.IndexFunc(stored, func(st Standing) bool { return st.ConsensusAddress == cons })
+		if i < 0 {
+			return s.FullResync(ctx)
+		}
+		key = stored[i].Operator
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -240,11 +363,22 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+	var prev *Standing
+	if i := slices.IndexFunc(standings, func(st Standing) bool { return st.Operator == key }); i >= 0 {
+		p := standings[i] // a copy: DeleteFunc below reuses the array
+		prev = &p
+	}
 	standings = slices.DeleteFunc(standings, func(st Standing) bool { return st.Operator == key })
 
 	resp, err := s.deps.Staking.Validator(ctx, &stakingtypes.QueryValidatorRequest{ValidatorAddr: key})
 	if status.Code(err) == codes.NotFound {
-		return s.deps.Store.Save(ctx, Snapshot{Unbonded: []string{key}, Ranks: Rank(standings)})
+		snap := Snapshot{Unbonded: []string{key}, Ranks: Rank(standings)}
+		if prev != nil {
+			snap.Changes = changes(*prev, Validator{
+				OperatorAddress: key, Status: StatusUnbonded, Jailed: prev.Jailed, Tombstoned: prev.Tombstoned,
+			})
+		}
+		return s.deps.Store.Save(ctx, snap)
 	}
 	if err != nil {
 		return fmt.Errorf("staking Validator %s: %w", key, err)
@@ -267,7 +401,15 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 		return err
 	}
 	standings = append(standings, Standing{Operator: row.OperatorAddress, Status: row.Status, Tokens: resp.Validator.Tokens})
-	return s.deps.Store.Save(ctx, Snapshot{Validators: []Validator{row}, Ranks: Rank(standings)})
+	snap := Snapshot{Validators: []Validator{row}, Ranks: Rank(standings)}
+	if prev != nil {
+		snap.Changes = changes(*prev, row)
+	}
+	if err := s.deps.Store.Save(ctx, snap); err != nil {
+		return err
+	}
+	s.learn(false, [2]string{row.ConsensusAddress, row.OperatorAddress})
+	return nil
 }
 
 func (s *Set) window(ctx context.Context) (int64, error) {

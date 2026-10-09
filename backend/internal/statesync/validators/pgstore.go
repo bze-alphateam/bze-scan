@@ -27,7 +27,8 @@ func NewPGStore(db DB) *PGStore {
 
 // Standings lists every stored validator.
 func (s *PGStore) Standings(ctx context.Context) ([]Standing, error) {
-	rows, err := s.db.Query(ctx, `SELECT operator_address, status, tokens::text FROM explorer.validators`)
+	rows, err := s.db.Query(ctx, `SELECT operator_address, status, tokens::text, jailed, tombstoned,
+		coalesce(consensus_address, '') FROM explorer.validators`)
 	if err != nil {
 		return nil, fmt.Errorf("validators standings: %w", err)
 	}
@@ -36,7 +37,7 @@ func (s *PGStore) Standings(ctx context.Context) ([]Standing, error) {
 	for rows.Next() {
 		var st Standing
 		var tokens string
-		if err := rows.Scan(&st.Operator, &st.Status, &tokens); err != nil {
+		if err := rows.Scan(&st.Operator, &st.Status, &tokens, &st.Jailed, &st.Tombstoned, &st.ConsensusAddress); err != nil {
 			return nil, fmt.Errorf("validators standings: %w", err)
 		}
 		t, ok := sdkmath.NewIntFromString(tokens)
@@ -49,9 +50,9 @@ func (s *PGStore) Standings(ctx context.Context) ([]Standing, error) {
 	return out, rows.Err()
 }
 
-// upsertSQL writes one validator. First sight is set on insert only: the
-// height and time of its created event when indexed, else the live cursor
-// and now.
+// upsertSQL writes one validator. First sight is the height and time of its
+// created event when indexed, else the live cursor and now at the insert; a
+// created event indexed later (by the backfill) moves it back.
 const upsertSQL = `INSERT INTO explorer.validators (
 		operator_address, account_address, consensus_address, consensus_pubkey, moniker,
 		identity, website, security_contact, details, status, jailed, tombstoned, jailed_until,
@@ -74,7 +75,33 @@ const upsertSQL = `INSERT INTO explorer.validators (
 		commission_update_time = EXCLUDED.commission_update_time, min_self_delegation = EXCLUDED.min_self_delegation,
 		self_delegation = EXCLUDED.self_delegation, delegator_count = EXCLUDED.delegator_count,
 		missed_blocks = EXCLUDED.missed_blocks, signed_blocks_window = EXCLUDED.signed_blocks_window,
+		first_seen_height = COALESCE((SELECT min(height) FROM explorer.validator_events
+		                               WHERE operator_address = $1 AND kind = 'created'), explorer.validators.first_seen_height),
+		first_seen_time = COALESCE((SELECT min(time) FROM explorer.validator_events
+		                             WHERE operator_address = $1 AND kind = 'created'), explorer.validators.first_seen_time),
 		updated_at = now()`
+
+// SyncSeqBase is the first seq of the validator_events rows the sync writes
+// at a height. They share tx_index -1 with the block's slash events, whose
+// seq counts from 0, so a reindex of the height never meets them.
+const SyncSeqBase = 10_000
+
+// changeSQL writes one change at the live cursor's height, with that block's
+// time when it is indexed. Without a cursor (the indexer never ran) there is
+// no height to write it at, and nothing is written.
+const changeSQL = `INSERT INTO explorer.validator_events (height, tx_index, seq, operator_address, kind, details, time)
+	SELECT s.value::bigint, -1,
+	       COALESCE((SELECT max(e.seq) + 1 FROM explorer.validator_events e
+	                  WHERE e.height = s.value::bigint AND e.tx_index = -1 AND e.seq >= $4), $4),
+	       $1, $2, $3::jsonb,
+	       COALESCE((SELECT b.time FROM explorer.blocks b WHERE b.height = s.value::bigint), now())
+	  FROM explorer.indexer_state s WHERE s.key = 'last_indexed_height'`
+
+// resolveSlashesSQL names the operator of the slash events written before
+// their validator was synced, by the consensus address they carry.
+const resolveSlashesSQL = `UPDATE explorer.validator_events e SET operator_address = v.operator_address
+	FROM explorer.validators v
+	WHERE e.operator_address = '' AND e.details->>'consensus_address' = v.consensus_address`
 
 // labelSQL names the owner account after the moniker. Labels of another
 // source (seed, manual) are never overwritten.
@@ -119,6 +146,21 @@ func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
 		if _, err := tx.Exec(ctx, `UPDATE explorer.validators SET status = 'unbonded', updated_at = now()
 			WHERE operator_address = ANY($1::text[]) AND status <> 'unbonded'`, snap.Unbonded); err != nil {
 			return fmt.Errorf("validators: unbonded: %w", err)
+		}
+	}
+
+	for _, c := range snap.Changes {
+		details, err := json.Marshal(map[string]any{"from": c.From, "to": c.To})
+		if err != nil {
+			return fmt.Errorf("validator %s: %s: %w", c.Operator, c.Kind, err)
+		}
+		if _, err := tx.Exec(ctx, changeSQL, c.Operator, c.Kind, details, SyncSeqBase); err != nil {
+			return fmt.Errorf("validator %s: %s: %w", c.Operator, c.Kind, err)
+		}
+	}
+	if len(snap.Validators) > 0 {
+		if _, err := tx.Exec(ctx, resolveSlashesSQL); err != nil {
+			return fmt.Errorf("validators: slash operators: %w", err)
 		}
 	}
 
