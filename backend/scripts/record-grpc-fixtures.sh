@@ -32,9 +32,14 @@
 #     from a gateway that serves them (chain v8.2.0 and later): an older node
 #     answers 501, and with no file the fake answers Unimplemented the same way.
 #   Denoms in file names are path-escaped (factory%2Fbze1…%2Fuvdl).
+#   gov (the proposals sync):
+#     gov/Proposals.json (every proposal), gov/Proposals.PROPOSAL_STATUS_VOTING_PERIOD.json
+#     (the minute refresh's list), staking/Pool.json (bonded tokens for turnout)
+#     per id in PROPOSALS: gov/Proposal.<id>.json and gov/TallyResult.<id>.json
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
-#        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"] [REST=…])
+#        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
+#         [PROPOSALS="47 …"] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -43,10 +48,11 @@ SETS="${SETS:-validators accounts}"
 VALIDATORS="${VALIDATORS:-}"
 ACCOUNTS="${ACCOUNTS:-}"
 DENOMS="${DENOMS:-}"
+PROPOSALS="${PROPOSALS:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin"
+mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin" "${OUT}/gov"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -134,5 +140,16 @@ if has denoms; then
     fetch "cosmos/bank/v1beta1/denoms_metadata_by_query_string?denom=$(esc "${d}")" \
       "bank/DenomMetadataByQueryString.$(esc "${d}").json" 404
     fetch "cosmos/bank/v1beta1/supply/by_denom?denom=$(esc "${d}")" "bank/SupplyOf.$(esc "${d}").json"
+  done
+fi
+
+if has gov; then
+  fetch "cosmos/gov/v1/proposals?pagination.limit=1000" gov/Proposals.json
+  fetch "cosmos/gov/v1/proposals?proposal_status=PROPOSAL_STATUS_VOTING_PERIOD&pagination.limit=1000" \
+    gov/Proposals.PROPOSAL_STATUS_VOTING_PERIOD.json
+  fetch "cosmos/staking/v1beta1/pool" staking/Pool.json
+  for id in ${PROPOSALS}; do
+    fetch "cosmos/gov/v1/proposals/${id}" "gov/Proposal.${id}.json"
+    fetch "cosmos/gov/v1/proposals/${id}/tally" "gov/TallyResult.${id}.json"
   done
 fi
