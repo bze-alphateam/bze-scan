@@ -1,0 +1,13 @@
+# Build context of docker/*.Dockerfile is the repository root. Allow-list: the
+# backend sources only, so local .env files, the UI and tooling output never
+# reach the context.
+*
+!backend/
+backend/**/.env
+backend/**/.env.*
+backend/build/
+backend/graphify-out/
+backend/**/testdata/
+backend/e2e/
+backend/scripts/
+backend/**/*_test.go
