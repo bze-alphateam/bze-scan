@@ -204,6 +204,31 @@ var (
 			{name: "commission_from", typ: "boolean"},
 		},
 	}
+	transfersTable = table{
+		name: "explorer.transfers",
+		keys: []string{"height", "tx_index", "seq"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "seq", typ: "integer"},
+			{name: "msg_index", typ: "integer"},
+			{name: "kind", typ: "text"},
+			{name: "sender", typ: "text"},
+			{name: "recipient", typ: "text"},
+			{name: "denom", typ: "text"},
+			{name: "amount", typ: "numeric"},
+		},
+	}
+	blockEventsTable = table{
+		name: "explorer.block_events",
+		keys: []string{"height", "seq"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "seq", typ: "integer"},
+			{name: "type", typ: "text"},
+			{name: "attrs", typ: "jsonb"},
+		},
+	}
 )
 
 // validatorEventOperator is the operator of a validator_events row: the

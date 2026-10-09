@@ -80,7 +80,8 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 }
 
 // WriteBlock writes the entities of one or more heights in one transaction:
-// the transactions and messages rows, the accounts of their signers
+// the transactions, messages, validator_events, transfers and block_events
+// rows, the accounts of their signers
 // (counters moved for the transactions inserted), the blocks rows
 // (block_time_ms from the previous row when it exists), the live floor at the
 // first write ever, and the cursor moved to the highest height. Partitions
@@ -283,6 +284,27 @@ type validatorEventRow struct {
 	CommissionFrom   bool            `json:"commission_from"`
 }
 
+// transferRow is the JSON shape of the transfers bulk write.
+type transferRow struct {
+	Height    int64   `json:"height"`
+	TxIndex   int     `json:"tx_index"`
+	Seq       int     `json:"seq"`
+	MsgIndex  *int    `json:"msg_index"`
+	Kind      string  `json:"kind"`
+	Sender    *string `json:"sender"`
+	Recipient *string `json:"recipient"`
+	Denom     string  `json:"denom"`
+	Amount    string  `json:"amount"`
+}
+
+// blockEventRow is the JSON shape of the block_events bulk write.
+type blockEventRow struct {
+	Height int64           `json:"height"`
+	Seq    int             `json:"seq"`
+	Type   string          `json:"type"`
+	Attrs  json.RawMessage `json:"attrs"`
+}
+
 // ChunkRows bounds the rows of one multi-row statement.
 const ChunkRows = 1000
 
@@ -297,8 +319,8 @@ type statement struct {
 	inserted func(rows pgx.Rows, into *Inserted) error
 }
 
-// rowStatements returns the bulk writes of the transactions, messages and
-// validator_events of ents, in chunks of ChunkRows rows. top names the write in errors.
+// rowStatements returns the bulk writes of the transactions, messages,
+// validator_events, transfers and block_events of ents, in chunks of ChunkRows rows. top names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
 	for _, t := range ents.Transactions {
@@ -336,6 +358,21 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 			CommissionFrom: v.CommissionFrom,
 		})
 	}
+	transferRows := make([]transferRow, 0, len(ents.Transfers))
+	for _, t := range ents.Transfers {
+		transferRows = append(transferRows, transferRow{
+			Height: t.Height, TxIndex: t.TxIndex, Seq: t.Seq, MsgIndex: t.MsgIndex, Kind: t.Kind,
+			Sender: nullIfEmpty(t.Sender), Recipient: nullIfEmpty(t.Recipient), Denom: t.Denom, Amount: t.Amount,
+		})
+	}
+	eventRows := make([]blockEventRow, 0, len(ents.BlockEvents))
+	for _, e := range ents.BlockEvents {
+		attrs, err := json.Marshal(e.Attrs)
+		if err != nil {
+			return nil, fmt.Errorf("write %d: block_events: attrs: %w", top, err)
+		}
+		eventRows = append(eventRows, blockEventRow{Height: e.Height, Seq: e.Seq, Type: e.Type, Attrs: attrs})
+	}
 	txs, err := chunked(top, "transactions", transactionsTable, mode, txRows, scanTransactionKeys)
 	if err != nil {
 		return nil, err
@@ -348,7 +385,15 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals), nil
+	transfers, err := chunked(top, "transfers", transfersTable, mode, transferRows, nil)
+	if err != nil {
+		return nil, err
+	}
+	events, err := chunked(top, "block_events", blockEventsTable, mode, eventRows, nil)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals, transfers, events), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

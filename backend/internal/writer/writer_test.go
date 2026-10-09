@@ -215,6 +215,14 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "messages")
 		case strings.Contains(s.sql, "INSERT INTO explorer.blocks"):
 			out = append(out, "block")
+		case strings.Contains(s.sql, "INSERT INTO explorer.transfers"):
+			out = append(out, "transfers")
+		case strings.Contains(s.sql, "INSERT INTO explorer.block_events"):
+			out = append(out, "block_events")
+		case strings.Contains(s.sql, "UPDATE explorer.transfers AS t"):
+			out = append(out, "transfers update")
+		case strings.Contains(s.sql, "UPDATE explorer.block_events AS t"):
+			out = append(out, "block_events update")
 		case strings.Contains(s.sql, "UPDATE explorer.transactions AS t"):
 			out = append(out, "transactions update")
 		case strings.Contains(s.sql, "UPDATE explorer.messages AS t"):
@@ -348,6 +356,15 @@ func blockWithTxs(h int64) *transform.Entities {
 			Events: []transform.Event{{Type: "transfer", Attrs: map[string]any{"amount": "5ubze"}}}, Body: json.RawMessage(`{"a":1}`)},
 		{Height: h, TxIndex: 1, MsgIndex: 0, TypeURL: "/x.MsgB"},
 	}
+	one := 0
+	ents.Transfers = []transform.Transfer{
+		{Height: h, TxIndex: 0, Seq: 0, Kind: "transfer", Sender: "bze1a", Recipient: "bze1fee", Denom: "ubze", Amount: "5"},
+		{Height: h, TxIndex: 0, Seq: 1, MsgIndex: &one, Kind: "burn", Sender: "bze1a", Denom: "ubze", Amount: "100000000000000000000000000000"},
+		{Height: h, TxIndex: -1, Seq: 0, Kind: "mint", Recipient: "bze1b", Denom: "ufoo", Amount: "7"},
+	}
+	ents.BlockEvents = []transform.BlockEvent{
+		{Height: h, Seq: 3, Type: "bze.burner.RaffleWinnerEvent", Attrs: map[string]any{"winner": "bze1b", "amount": json.Number("12")}},
+	}
 	return ents
 }
 
@@ -367,10 +384,10 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"transactions", "messages", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
 		"the blocks row is written last in the same transaction")
 	assert.True(t, tx.committed)
-	for _, st := range tx.stmts[:2] {
+	for _, st := range tx.stmts[:4] {
 		assert.Contains(t, st.sql, "ON CONFLICT", "idempotent")
 		assert.Contains(t, st.sql, "DO NOTHING")
 	}
@@ -403,6 +420,23 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	assert.Nil(t, msgs[1]["sender"])
 	assert.Equal(t, []any{}, msgs[1]["events"])
 	assert.Contains(t, tx.stmts[1].sql, "NULLIF(body, 'null'::jsonb)")
+
+	transfers := payload(t, tx.stmts[2])
+	assert.Equal(t, []map[string]any{
+		{"height": float64(100), "tx_index": float64(0), "seq": float64(0), "msg_index": nil, "kind": "transfer",
+			"sender": "bze1a", "recipient": "bze1fee", "denom": "ubze", "amount": "5"},
+		{"height": float64(100), "tx_index": float64(0), "seq": float64(1), "msg_index": float64(0), "kind": "burn",
+			"sender": "bze1a", "recipient": nil, "denom": "ubze", "amount": "100000000000000000000000000000"},
+		{"height": float64(100), "tx_index": float64(-1), "seq": float64(0), "msg_index": nil, "kind": "mint",
+			"sender": nil, "recipient": "bze1b", "denom": "ufoo", "amount": "7"},
+	}, transfers, "amounts stay exact strings; missing ends are NULL")
+	assert.Contains(t, tx.stmts[2].sql, "amount numeric")
+
+	events := payload(t, tx.stmts[3])
+	assert.Equal(t, []map[string]any{
+		{"height": float64(100), "seq": float64(3), "type": "bze.burner.RaffleWinnerEvent",
+			"attrs": map[string]any{"winner": "bze1b", "amount": float64(12)}},
+	}, events)
 }
 
 // withUTCTime normalises the time column, which encoding/json writes in the

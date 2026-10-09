@@ -24,17 +24,19 @@ func TestBatchWriteIsOneTransactionOfOneBatch(t *testing.T) {
 	tx := db.txs[0]
 	assert.Equal(t, 1, tx.batches)
 	assert.True(t, tx.committed)
-	assert.Equal(t, []string{"transactions", "messages", "block", "block times", "accounts"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "block", "block times", "accounts"}, sqlOf(tx),
 		"never the live floor or the cursor; the accounts once the inserted keys are known")
 
 	assert.Len(t, payload(t, tx.stmts[0]), 4, "both heights' transactions in one insert")
-	blocks := payload(t, tx.stmts[2])
+	assert.Len(t, payload(t, tx.stmts[2]), 6, "both heights' transfers in one insert")
+	assert.Len(t, payload(t, tx.stmts[3]), 2, "both heights' block events in one insert")
+	blocks := payload(t, tx.stmts[4])
 	require.Len(t, blocks, 3)
 	assert.InDelta(t, 104, blocks[0]["height"], 0, "arrival order")
 	assert.Nil(t, blocks[0]["fees_distributed"])
-	assert.Contains(t, tx.stmts[2].sql, "NULLIF(fees_distributed, 'null'::jsonb)")
-	assert.Contains(t, tx.stmts[2].sql, "ON CONFLICT (height) DO NOTHING")
-	assert.Equal(t, []any{int64(102), int64(105)}, tx.stmts[3].args,
+	assert.Contains(t, tx.stmts[4].sql, "NULLIF(fees_distributed, 'null'::jsonb)")
+	assert.Contains(t, tx.stmts[4].sql, "ON CONFLICT (height) DO NOTHING")
+	assert.Equal(t, []any{int64(102), int64(105)}, tx.stmts[5].args,
 		"block times from the lowest height to one above the highest")
 }
 
@@ -126,6 +128,8 @@ var writtenTables = []struct {
 	{"transactions", "explorer.transactions", "height, tx_index", "gas_used"},
 	{"messages", "explorer.messages", "height, tx_index, msg_index", "events"},
 	{"block", "explorer.blocks", "height", "tx_count"},
+	{"transfers", "explorer.transfers", "height, tx_index, seq", "amount"},
+	{"block_events", "explorer.block_events", "height, seq", "attrs"},
 }
 
 func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
@@ -135,6 +139,7 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 	tx := db.txs[0]
 	assert.Equal(t, []string{
 		"transactions update", "transactions", "messages update", "messages",
+		"transfers update", "transfers", "block_events update", "block_events",
 		"block update", "block", "block times", "resolve failures", "accounts",
 	}, sqlOf(tx), "each table's update before its insert, both in the flush's transaction")
 
