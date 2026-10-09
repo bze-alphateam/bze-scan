@@ -23,6 +23,12 @@ type TokenSummary struct {
 	PriceChange24hPct *string
 	Halted            bool
 	LogoURL           *string
+	// OriginChainID is an IBC denom's origin; OriginChainName and
+	// OriginChainLogo are its chain-registry pretty name and logo, nil until
+	// the registry cache has the chain.
+	OriginChainID   *string
+	OriginChainName *string
+	OriginChainLogo *string
 	// SortKey is the row's position within its kind (the lower-case symbol,
 	// else the denom), for the keyset cursor.
 	SortKey string
@@ -34,7 +40,6 @@ type TokenSummary struct {
 type Token struct {
 	TokenSummary
 	Description    *string
-	OriginChainID  *string
 	IBCBaseDenom   *string
 	IBCPath        *string
 	Creator        *string
@@ -56,6 +61,23 @@ type TokenKey struct {
 	KindRank int
 	SortKey  string
 	Denom    string
+}
+
+// TokenHolder is a token_holders row with its rank and its address's label.
+type TokenHolder struct {
+	Rank    int64
+	Address string
+	Balance string
+	Label   *Label
+}
+
+// HolderKey is the keyset position of a holders list: by balance, largest
+// first, then address; Rank is the row's rank, so the next page goes on
+// counting.
+type HolderKey struct {
+	Balance string
+	Address string
+	Rank    int64
 }
 
 // TokenEvent is a token_events row with the hash of its transaction (nil
@@ -98,11 +120,16 @@ const kindRank = `CASE d.kind WHEN 'native' THEN 0 WHEN 'factory' THEN 1 WHEN 'i
 const sortKey = `lower(coalesce(d.symbol, d.denom))`
 
 const tokenSummaryCols = `d.denom, d.symbol, d.name, d.kind, d.exponent, d.supply::text, d.holders_count,
-		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, ` + sortKey + `, ` + kindRank
+		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
+		oc.logo_url, ` + sortKey + `, ` + kindRank
+
+// originJoin names the origin chain of the denoms row d.
+const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chain_id`
 
 func tokenSummaryDest(t *TokenSummary) []any {
 	return []any{&t.Denom, &t.Symbol, &t.Name, &t.Kind, &t.Exponent, &t.Supply, &t.HoldersCount,
-		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.SortKey, &t.KindRank}
+		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
+		&t.OriginChainLogo, &t.SortKey, &t.KindRank}
 }
 
 // Tokens returns up to limit denoms of kind (every kind when nil), by kind
@@ -114,7 +141,7 @@ func (r *Explorer) Tokens(ctx context.Context, kind *string, after *TokenKey, li
 		args = append(args, after.KindRank, after.SortKey, after.Denom)
 		keyset = ` AND (` + kindRank + `, ` + sortKey + `, d.denom) > ($3, $4, $5)`
 	}
-	rows, err := r.db.Query(ctx, `SELECT `+tokenSummaryCols+` FROM explorer.denoms d
+	rows, err := r.db.Query(ctx, `SELECT `+tokenSummaryCols+` FROM explorer.denoms d`+originJoin+`
 		WHERE ($1::text IS NULL OR d.kind = $1)`+keyset+`
 		ORDER BY `+kindRank+`, `+sortKey+`, d.denom LIMIT $2`, args...)
 	if err != nil {
@@ -134,13 +161,12 @@ func (r *Explorer) Tokens(ctx context.Context, kind *string, after *TokenKey, li
 func (r *Explorer) Token(ctx context.Context, denom string) (*Token, error) {
 	var t Token
 	var creatorName, creatorKind, adminName, adminKind *string
-	dest := append(tokenSummaryDest(&t.TokenSummary), &t.Description, &t.OriginChainID, &t.IBCBaseDenom, &t.IBCPath,
+	dest := append(tokenSummaryDest(&t.TokenSummary), &t.Description, &t.IBCBaseDenom, &t.IBCPath,
 		&t.Creator, &t.Admin, &t.CreatedHeight, &t.CreatedTxHash, &t.CreatedTime, &t.Website, &t.Markets,
 		&t.PriceUpdatedAt, &t.Metadata, &t.UpdatedAt, &creatorName, &creatorKind, &adminName, &adminKind)
-	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.origin_chain_id, d.ibc_base_denom,
-			d.ibc_path, d.creator, d.admin, d.created_height, d.created_tx_hash, d.created_time, d.website,
+	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.ibc_base_denom, d.ibc_path, d.creator, d.admin, d.created_height, d.created_tx_hash, d.created_time, d.website,
 			d.markets, d.price_updated_at, d.metadata, d.updated_at, lc.name, lc.kind, la.name, la.kind
-		FROM explorer.denoms d
+		FROM explorer.denoms d`+originJoin+`
 		LEFT JOIN explorer.labels lc ON lc.address = d.creator
 		LEFT JOIN explorer.labels la ON la.address = d.admin
 		WHERE d.denom = $1`, denom).Scan(dest...)
@@ -222,6 +248,39 @@ func (r *Explorer) DenomTransfers(ctx context.Context, denom string, before *Eve
 	})
 	if err != nil {
 		return nil, fmt.Errorf("denom transfers %s: %w", denom, err)
+	}
+	return out, nil
+}
+
+// TokenHolders returns up to limit holders of denom from the last snapshot,
+// largest balance first, after the key after (from the largest when nil).
+func (r *Explorer) TokenHolders(ctx context.Context, denom string, after *HolderKey, limit int) ([]TokenHolder, error) {
+	args := []any{denom, limit}
+	keyset, rank := "", int64(0)
+	if after != nil {
+		args = append(args, after.Balance, after.Address)
+		keyset = ` AND (h.balance < $3::numeric OR (h.balance = $3::numeric AND h.address > $4))`
+		rank = after.Rank
+	}
+	rows, err := r.db.Query(ctx, `SELECT h.address, h.balance::text, l.name, l.kind
+		FROM explorer.token_holders h
+		LEFT JOIN explorer.labels l ON l.address = h.address
+		WHERE h.denom = $1`+keyset+`
+		ORDER BY h.balance DESC, h.address LIMIT $2`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("token holders %s: %w", denom, err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (TokenHolder, error) {
+		var h TokenHolder
+		var name, kind *string
+		err := row.Scan(&h.Address, &h.Balance, &name, &kind)
+		rank++
+		h.Rank = rank
+		h.Label = label(&h.Address, name, kind)
+		return h, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("token holders %s: %w", denom, err)
 	}
 	return out, nil
 }

@@ -157,15 +157,21 @@ func TurnoutPct(t *Tally, bonded *string) *string {
 		}
 		sum.Add(sum, n)
 	}
-	// round(sum * 100 * 10^5 / den), half up: (2·num + den) / (2·den).
-	num := new(big.Int).Mul(sum, big.NewInt(10_000_000))
-	num.Mul(num, big.NewInt(2)).Add(num, den)
-	q := num.Quo(num, new(big.Int).Mul(den, big.NewInt(2))).String()
+	out := pct(sum, den)
+	return &out
+}
+
+// pct is part / whole in percent, rounded half up to five decimals; whole
+// is positive, part non-negative.
+func pct(part, whole *big.Int) string {
+	// round(part * 100 * 10^5 / whole), half up: (2·num + whole) / (2·whole).
+	num := new(big.Int).Mul(part, big.NewInt(10_000_000))
+	num.Mul(num, big.NewInt(2)).Add(num, whole)
+	q := num.Quo(num, new(big.Int).Mul(whole, big.NewInt(2))).String()
 	if len(q) <= 5 {
 		q = strings.Repeat("0", 6-len(q)) + q
 	}
-	out := q[:len(q)-5] + "." + q[len(q)-5:]
-	return &out
+	return q[:len(q)-5] + "." + q[len(q)-5:]
 }
 
 // textCursor is the JSON of a cursor whose key holds an address.

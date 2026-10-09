@@ -280,6 +280,10 @@ func (noTokens) DenomTransfers(context.Context, string, *repository.EventKey, in
 	return nil, nil
 }
 
+func (noTokens) TokenHolders(context.Context, string, *repository.HolderKey, int) ([]repository.TokenHolder, error) {
+	return nil, nil
+}
+
 // A URL-encoded denom stays one path segment, on the detail route and on the
 // routes below it.
 func TestTokenRoutes(t *testing.T) {
@@ -289,7 +293,9 @@ func TestTokenRoutes(t *testing.T) {
 		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney",
 		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney/events",
 		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney/transfers",
+		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney/holders",
 		"/api/v1/token?denom=factory/bze1x/uhoney",
+		"/api/v1/token/holders?denom=factory/bze1x/uhoney",
 		"/api/v1/token/events?denom=factory%2Fbze1x%2Fuhoney",
 	} {
 		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)

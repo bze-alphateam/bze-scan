@@ -94,6 +94,9 @@ documented template with the defaults:
 | `BACKFILL_BATCH` | `50` | heights per flush (M), one transaction each |
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
+| `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/prices` feeds the prices job every minute; empty turns the job off |
+| `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
+| `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -120,6 +123,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make e2e-up` / `make e2e-down` | starts / removes that PostgreSQL by hand |
 | `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
 | `make grpc-fixtures VALIDATORS="..." ACCOUNTS="..."` | records the fake gRPC server's fixtures (see below) |
+| `make registry-fixtures [CHAINS="..."]` | records the fake chain registry's files (see below) |
 | `make clean` | removes `build/` |
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
@@ -191,7 +195,18 @@ internal/statesync/validators/
                    the validators set (explorer.validators and the
                    validator_owner labels)
 internal/statesync/denoms/
-                   the denoms set (explorer.denoms)
+                   the denoms set (explorer.denoms, IBC denom resolution)
+internal/statesync/registry/
+                   the chain_registry set (explorer.chains, registry_assets)
+internal/statesync/holders/
+                   the holders set (token_holders, denoms.holders_count)
+internal/statesync/prices/
+                   the prices set (denoms.price_usd)
+internal/chainregistry/
+                   the Cosmos chain registry reader (GitHub contents API +
+                   raw files)
+internal/aggregator/
+                   the BZE aggregator's /api/prices reader
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
@@ -199,9 +214,12 @@ internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
                    fake CometBFT RPC node and fake gRPC server for tests,
                    fixtures in testdata/ (gRPC ones in testdata/grpc/)
+internal/testutil/fakeregistry/
+                   fake chain registry (listings + recorded chain.json and
+                   assetlist.json in testdata/)
 e2e/               acceptance tests (build tag e2e)
 scripts/           record-fixtures.sh, record-grpc-fixtures.sh (and its
-                   bech32conv helper)
+                   bech32conv helper), record-registry-fixtures.sh
 ```
 
 ## Code and test rules
@@ -262,11 +280,12 @@ every later route follows:
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count, price_usd, price_change_24h_pct (all three null until the holders and prices job), halted, logo_url; another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (always null: the aggregator does not publish it), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
-| `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=` | the same three with the denom as a query value, the chain's own convention for denoms with `/` |
+| `GET /api/v1/tokens/{denom}/holders?cursor&limit` | the last holders snapshot, largest balance first: rank, address, `label`, balance (base units) and `share_pct` (of the supply, five decimals, null without a supply); every non-zero balance, refreshed hourly |
+| `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=`, `/api/v1/token/holders?denom=` | the same four with the denom as a query value, the chain's own convention for denoms with `/` |
 | `GET /api/v1/proposals?status=deposit_period\|voting_period\|passed\|rejected\|failed\|canceled&cursor&limit` | every proposal, id descending: id, title, kind (`software_upgrade`, `community_pool_spend`, `parameter_change`, `cointrunk_publisher`, `ibc_client_update`, `text`, `other`), status, expedited, submit/deposit-end/voting-start/voting-end times, `tally` (`{yes, no, abstain, no_with_veto}` in base units, null until synced) and `turnout_pct` (the tally's sum over the bonded tokens it was measured against, five decimals, null without them); another status is a 400 |
 | `GET /api/v1/proposals/{id}` | the list item plus summary, metadata, proposer (and `proposer_label`), message_types, `messages` (proto JSON; a legacy content inside its `MsgExecLegacyContent`), total_deposit, tally_bonded_tokens, tally_updated_at, submit_height and submit_tx_hash (null for a proposal submitted below the indexed range), resolved_height, `validators_voted` (`{voted, total}`: bonded validators whose owner voted, of all bonded validators) and updated_at; 404 when unknown |
 | `GET /api/v1/proposals/{id}/votes?option=yes\|no\|abstain\|no_with_veto\|weighted&cursor&limit` | every vote the explorer indexed (the chain deletes them once tallied), newest first, one per voter (the latest): voter (and `voter_label`), option (null for a split vote; `weighted` lists those), options (the weights as SDK v0.50 encodes them), height, tx_index, tx_hash, time, and for a validator owner `validator` (moniker), `validator_operator` and `voting_power_pct` (its current share), null for other voters |
@@ -650,13 +669,15 @@ indexer) the state sync:
    current state. Keys go to an in-memory queue served by two workers; a
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
-3. resyncs a set in full when none ran for its interval (validators: one
-   minute, denoms: one hour), the safety net for what no event announces. A full resync, from
+3. resyncs a set in full when none ran for its interval (validators,
+   proposals, prices: one minute; denoms, holders: one hour; chain
+   registry: one day), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
 `last_success_at`, `last_error`, `cursor`). A node that is down fails the
-run: it is logged and recorded, the rows stay as they were, and the next
+run: it is logged and recorded (the prices set logs a failing aggregator once
+per change of state, not every minute), the rows stay as they were, and the next
 trigger retries. Nothing here is on the user's critical path. `bze-scan
 sync-state` runs the full resync of every set once and exits 1 when any
 failed.
@@ -696,7 +717,8 @@ the denom's shape: `native` for `ubze`, `factory` for `factory/…`, `ibc` for
 `ulp_<base>_<quote>` before), else `unknown`. `symbol`, `name`,
 `description` and `logo_url` (the metadata `uri`) come from the bank
 metadata and `exponent` is its display unit's (0 when the display unit is not
-listed, as for most IBC vouchers until the chain-registry story); `ubze` has
+listed, as in the placeholder metadata ibc-go writes for every IBC voucher);
+`ubze` has
 no bank metadata and takes the chain's constants (BZE, exponent 6). A factory
 denom's `creator` is the address in it and `admin` the tokenfactory admin
 (NULL once renounced). `markets` are the tradebin market ids (`base/quote`)
@@ -704,8 +726,57 @@ the denom trades in; `halted` is the tradebin halt (a node before v8.2.0
 answers `HaltedDenoms` with Unimplemented: nothing is halted). First sight
 (`created_*`) is the denom's earliest `created` token event, filled at the
 next resync once the event is indexed. A denom the bank no longer lists keeps
-its row with a zero supply. The holders, prices and IBC origin columns are
-left to their own jobs.
+its row with a zero supply. The holders and prices columns are left to their
+own jobs.
+
+An IBC denom is traced with transfer `DenomTrace` (`ibc_path`,
+`ibc_base_denom`). Its `origin_chain_id` is the counterparty chain of the
+path's first channel in `explorer.ibc_channels` (null until the IBC channels
+sync fills it). Its symbol, name, exponent and logo then come from the
+registry asset `(origin chain, base denom)` and win over the bank metadata,
+which for a voucher is ibc-go's placeholder (`UUSDC`, exponent 0). A
+multi-hop denom (`transfer/channel-0/transfer/channel-94814/uatone`) is
+followed through the first hop chain's asset for the rest of the path
+(`ibc/` + SHA-256 of it) and its earliest IBC trace to the home chain, which
+becomes the origin; when that fails the first hop's chain and the raw base
+denom stay. A chain or an asset the registry cache misses is published to
+the chain_registry set (by chain id, or `name:<registry name>` for a trace's
+chain).
+
+**Chain registry.** `explorer.chains` and `explorer.registry_assets` cache
+the Cosmos chain registry: the GitHub contents API lists its directories
+(mainnets and `testnets/`, `CHAIN_REGISTRY_API_URL`), each chain's
+`chain.json` and `assetlist.json` come from `raw.githubusercontent.com`
+(`CHAIN_REGISTRY_RAW_URL`, no API rate limit). The set refetches BZE
+(`CHAIN_ID`) and every chain the explorer met (channel counterparties,
+denom origins, chains already cached) daily, and a missed chain at once with
+a 10-minute cool-down per key. The registry is organised by directory: a
+chain id is found by reading `chain.json` files, the directory named like the
+chain id first (`cosmoshub` for `cosmoshub-4`); every one read is
+remembered until the next listing (daily), so the whole registry is read at
+most once a day. A chain id no directory holds gets a `chains` row with
+`registry_fetched_at` NULL, shown by its id. A chain row holds the pretty
+name, network type, bech32 prefix, logo (PNG, else SVG) and the first
+explorer's `tx_page`/`account_page` templates; an asset its symbol, name,
+display unit and its exponent, logo, CoinGecko id and `traces`. A failed
+fetch keeps the previous rows; `updated_at` moves only when a value changes.
+
+**Holders.** `explorer.token_holders` is a snapshot of bank `DenomOwners`,
+never a balance derived from events: at start and hourly every denom is paged
+(1,000 owners a page, 200 ms between pages, one denom after the other), each
+page upserted with the run's stamp; after the last page the denom's rows the
+run did not stamp are deleted and `holders_count` is recomputed (owners of at
+least `10^exponent` base units) in one transaction. The job's cursor in
+`sync_jobs` is the denom, page key and stamp being worked on, so a restart
+resumes at the failed page; `{}` once a run finished.
+
+**Prices.** With `AGGREGATOR_URL` set, every minute `GET /api/prices` of the
+BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A
+denom takes the price of its registry asset's CoinGecko id: BZE's own asset
+list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
+the origin chain's asset. A denom no longer priced is cleared; a failed fetch
+keeps every price. The explorer computes no DEX price, and the aggregator
+publishes no 24-hour change, so `price_change_24h_pct` stays null.
 
 A dirty denom (a token event, a tokenfactory change event) is resynced alone
 (bank `DenomMetadataByQueryString` and `SupplyOf`, the factory admin, the
@@ -829,15 +900,18 @@ txfeecollector. Each method answers from
 (the SDK's proto JSON), unmarshalled with the chain codec. The key is the
 request's non-empty string, integer and enum fields in field order joined by
 `.` (staking `Validator.<operator>`, `Delegation.<delegator>.<validator>`, gov
-`Proposal.47`, `Proposals.PROPOSAL_STATUS_VOTING_PERIOD`); without a
+`Proposal.47`, `Proposals.PROPOSAL_STATUS_VOTING_PERIOD`), then the page key
+of a request for a later page (`DenomOwners.<denom>.<next_key>`, "/" in the
+base64 key escaped as `%2F`); without a
 keyed file the keyless one answers, and without any file the method answers
 `Unimplemented`. A recorded gateway error (`{"code": 5, "message": …}`)
 answers that gRPC status. Tests count calls per method and per key, replace
 an answer (`SetResponse`) and stop the server to play a node that is down.
 So far the staking and slashing methods of the validators set, the account
 page's bank, staking and distribution reads, the denoms set's bank,
-tokenfactory and tradebin methods and the proposals set's gov and staking
-`Pool` methods are recorded; each later story adds its
+tokenfactory, tradebin and IBC transfer methods, the holders set's
+`DenomOwners` and the proposals set's gov and staking `Pool` methods are
+recorded; each later story adds its
 methods. Denoms in file names are path-escaped
 (`DenomAuthority.factory%2Fbze1…%2Fuvdl.json`).
 
@@ -849,12 +923,18 @@ make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m
 the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
-`AllMarkets`, every factory denom's `DenomAuthority`, and for each denom in
+`AllMarkets`, every factory denom's `DenomAuthority`, every IBC denom's
+transfer `DenomTrace` (19 recorded 2026-10-09, three of them multi-hop),
+and for each denom in
 `DENOMS` its `DenomMetadataByQueryString` (a 404 for `ubze`) and `SupplyOf`.
 tokenfactory `AllDenomBranding` and tradebin `HaltedDenoms` are recorded only
 from a gateway that serves them (chain v8.2.0 and later); mainnet runs v8.1.1
 (recorded 2026-10-09: 28 denoms with a supply, 28 with metadata, 12 markets),
 so they are absent and answer Unimplemented like the node.
+`make grpc-fixtures SETS=holders HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2`
+records the holders set: `bank/DenomOwners.json`, the answer for a denom
+nobody holds (the fallback for every other denom), and every page of each
+listed denom (GGE: five owners on three pages of two, recorded 2026-10-09).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
 gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47
@@ -871,3 +951,23 @@ to). Recorded on 2026-10-09: 57 validators, 22 bonded. For each address in
 `distribution/DelegationTotalRewards`: so far the owner of Thamar, who
 signs at height 25000439 (recorded on 2026-10-09: three balances, one
 delegation, no unbonding).
+
+### The fake chain registry and aggregator
+
+`fakeregistry.New` starts an `httptest` server standing in for the Cosmos
+chain registry: its `APIURL` answers the contents API listings (the root
+names every recorded chain, the directories `AddDirs` adds, `testnets` and
+`_IBC`; `testnets/` lists nothing) and its `RawURL` serves
+`testdata/<chain>/chain.json` and `assetlist.json`, 404 for anything else.
+Tests count requests per path and turn it down (`SetDown`, 503). The files
+are recorded from `raw.githubusercontent.com` by
+
+```
+make registry-fixtures CHAINS="beezee cosmoshub noble mirage"
+```
+
+(recorded 2026-10-09: BZE's own asset list maps `ubze` and its IBC denoms
+to CoinGecko ids; `mirage` is a chain without explorers). The e2e harness
+starts one with every sync environment, next to a fake aggregator answering
+`/api/prices` as getbze.com did on 2026-10-09, and points `sync-state` and
+`serve` at both, so no test reaches GitHub or getbze.com.

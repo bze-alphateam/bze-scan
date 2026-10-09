@@ -30,11 +30,13 @@ type fakeTokens struct {
 	token     *repository.Token
 	events    []repository.TokenEvent
 	transfers []repository.DenomTransfer
+	holders   []repository.TokenHolder
 	err       error
 
 	gotKind   *string
 	gotAfter  *repository.TokenKey
 	gotBefore *repository.EventKey
+	gotHolder *repository.HolderKey
 	gotDenom  string
 	gotLimit  int
 }
@@ -65,6 +67,11 @@ func (f *fakeTokens) DenomTransfers(_ context.Context, _ string, before *reposit
 	return f.transfers[:min(limit, len(f.transfers))], nil
 }
 
+func (f *fakeTokens) TokenHolders(_ context.Context, _ string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error) {
+	f.gotHolder, f.gotLimit = after, limit
+	return f.holders[:min(limit, len(f.holders))], nil
+}
+
 func tokenServer(f *fakeTokens) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
@@ -76,6 +83,8 @@ func tokenServer(f *fakeTokens) *echo.Echo {
 	e.GET("/api/v1/token", h.Token)
 	e.GET("/api/v1/token/events", h.TokenEvents)
 	e.GET("/api/v1/token/transfers", h.TokenTransfers)
+	e.GET("/api/v1/tokens/:denom/holders", h.TokenHolders)
+	e.GET("/api/v1/token/holders", h.TokenHolders)
 	return e
 }
 
@@ -210,4 +219,63 @@ func TestTokenReadFailuresAreInternal(t *testing.T) {
 		rec := get(t, e, path)
 		assert.Equal(t, http.StatusInternalServerError, rec.Code, path)
 	}
+}
+
+func TestTokenHoldersRankAndShareAndPage(t *testing.T) {
+	label := &repository.Label{Address: "bze1a", Name: "Burner", Kind: "module"}
+	f := &fakeTokens{token: honeyToken(), holders: []repository.TokenHolder{
+		{Rank: 1, Address: "bze1a", Balance: "600", Label: label},
+		{Rank: 2, Address: "bze1b", Balance: "333"},
+		{Rank: 3, Address: "bze1c", Balance: "67"},
+	}}
+	e := tokenServer(f)
+
+	rec := get(t, e, "/api/v1/tokens/"+url.PathEscape(honeyDenom)+"/holders?limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, 3, f.gotLimit)
+	assert.Nil(t, f.gotHolder)
+	page := decode[dto.List[dto.TokenHolder]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, int64(1), page.Items[0].Rank)
+	assert.Equal(t, "60.00000", *page.Items[0].SharePct, "600 of a supply of 1000")
+	assert.Equal(t, "Burner", page.Items[0].Label.Name)
+	assert.Equal(t, "33.30000", *page.Items[1].SharePct)
+	assert.Nil(t, page.Items[1].Label)
+	require.NotNil(t, page.NextCursor)
+
+	rec = get(t, e, "/api/v1/token/holders?denom="+url.QueryEscape(honeyDenom)+"&cursor="+*page.NextCursor)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, &repository.HolderKey{Balance: "333", Address: "bze1b", Rank: 2}, f.gotHolder, "the next page goes on counting")
+
+	for _, bad := range []string{"x", dto.EncodeCursor(1), dto.EncodeHolderCursor(repository.TokenHolder{Address: "a", Balance: "-1", Rank: 1}),
+		dto.EncodeHolderCursor(repository.TokenHolder{Address: "a", Balance: "1"})} {
+		rec := get(t, e, "/api/v1/tokens/"+url.PathEscape(honeyDenom)+"/holders?cursor="+bad)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, bad)
+	}
+	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/tokens/uother/holders").Code)
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/tokens/"+url.PathEscape(honeyDenom)+"/holders?limit=0").Code)
+}
+
+func TestTokenHoldersWithoutASupplyHaveNoShare(t *testing.T) {
+	tok := honeyToken()
+	tok.Supply = strp("0")
+	f := &fakeTokens{token: tok, holders: []repository.TokenHolder{{Rank: 1, Address: "bze1a", Balance: "5"}}}
+	rec := get(t, tokenServer(f), "/api/v1/tokens/"+url.PathEscape(honeyDenom)+"/holders")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Nil(t, decode[dto.List[dto.TokenHolder]](t, rec).Items[0].SharePct)
+}
+
+func TestIBCTokensCarryTheirOriginChain(t *testing.T) {
+	f := &fakeTokens{tokens: []repository.TokenSummary{
+		{Denom: "ibc/AB", Kind: "ibc", OriginChainID: strp("noble-1"), OriginChainName: strp("Noble"), OriginChainLogo: strp("https://x/noble.png")},
+		{Denom: "ibc/CD", Kind: "ibc", OriginChainID: strp("unknown-1")},
+		{Denom: "ibc/EF", Kind: "ibc"},
+	}}
+	rec := get(t, tokenServer(f), "/api/v1/tokens?kind=ibc")
+	require.Equal(t, http.StatusOK, rec.Code)
+	items := decode[dto.List[dto.TokenSummary]](t, rec).Items
+	assert.Equal(t, &dto.OriginChain{ChainID: "noble-1", Name: strp("Noble"), LogoURL: strp("https://x/noble.png")}, items[0].OriginChain)
+	assert.Equal(t, &dto.OriginChain{ChainID: "unknown-1"}, items[1].OriginChain, "a chain the registry does not know")
+	assert.Nil(t, items[2].OriginChain, "the channel's chain is not known yet")
 }
