@@ -1,0 +1,13 @@
+{
+  "delegation_response": {
+    "delegation": {
+      "delegator_address": "bze10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7czscsh",
+      "validator_address": "bzevaloper10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7qx0nyg",
+      "shares": "22964077674.000000000000000000"
+    },
+    "balance": {
+      "denom": "ubze",
+      "amount": "22964077674"
+    }
+  }
+}
