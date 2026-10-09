@@ -1,0 +1,25 @@
+{
+  "proposals": null,
+  "deposits": null,
+  "votes": [
+    {
+      "ProposalID": 47,
+      "Voter": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x",
+      "Options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "Option": "yes",
+      "Height": 23745061,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "Time": "2026-07-16T10:31:36.227458628Z"
+    }
+  ],
+  "statuses": null,
+  "dirty": [
+    "47"
+  ]
+}
