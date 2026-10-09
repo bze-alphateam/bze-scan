@@ -223,6 +223,10 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "transfers update")
 		case strings.Contains(s.sql, "UPDATE explorer.block_events AS t"):
 			out = append(out, "block_events update")
+		case strings.Contains(s.sql, "INSERT INTO explorer.token_events"):
+			out = append(out, "token_events")
+		case strings.Contains(s.sql, "UPDATE explorer.token_events AS t"):
+			out = append(out, "token_events update")
 		case strings.Contains(s.sql, "UPDATE explorer.transactions AS t"):
 			out = append(out, "transactions update")
 		case strings.Contains(s.sql, "UPDATE explorer.messages AS t"):
@@ -365,6 +369,11 @@ func blockWithTxs(h int64) *transform.Entities {
 	ents.BlockEvents = []transform.BlockEvent{
 		{Height: h, Seq: 3, Type: "bze.burner.RaffleWinnerEvent", Attrs: map[string]any{"winner": "bze1b", "amount": json.Number("12")}},
 	}
+	ents.TokenEvents = []transform.TokenEvent{
+		{Height: h, TxIndex: 0, Seq: 0, Denom: "factory/bze1a/uhoney", Kind: "minted", Actor: "bze1a",
+			Amount: "100000000000000000000000000000", Details: map[string]any{"recipient": "bze1a"}, Time: time.Unix(h, 0)},
+		{Height: h, TxIndex: -1, Seq: 0, Denom: "ibc/X", Kind: "halted", Time: time.Unix(h, 0)},
+	}
 	return ents
 }
 
@@ -384,10 +393,10 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
 		"the blocks row is written last in the same transaction")
 	assert.True(t, tx.committed)
-	for _, st := range tx.stmts[:4] {
+	for _, st := range tx.stmts[:5] {
 		assert.Contains(t, st.sql, "ON CONFLICT", "idempotent")
 		assert.Contains(t, st.sql, "DO NOTHING")
 	}
@@ -437,6 +446,18 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 		{"height": float64(100), "seq": float64(3), "type": "bze.burner.RaffleWinnerEvent",
 			"attrs": map[string]any{"winner": "bze1b", "amount": float64(12)}},
 	}, events)
+
+	tokens := payload(t, tx.stmts[4])
+	require.Len(t, tokens, 2)
+	assert.Equal(t, map[string]any{
+		"height": float64(100), "tx_index": float64(0), "seq": float64(0), "denom": "factory/bze1a/uhoney",
+		"kind": "minted", "actor": "bze1a", "amount": "100000000000000000000000000000",
+		"details": map[string]any{"recipient": "bze1a"}, "time": "1970-01-01T00:01:40Z",
+	}, withUTCTime(tokens[0]))
+	assert.Nil(t, tokens[1]["actor"], "a block-level event has no actor")
+	assert.Nil(t, tokens[1]["amount"])
+	assert.Nil(t, tokens[1]["details"])
+	assert.Contains(t, tx.stmts[4].sql, "NULLIF(details, 'null'::jsonb)")
 }
 
 // withUTCTime normalises the time column, which encoding/json writes in the

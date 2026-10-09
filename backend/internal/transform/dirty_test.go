@@ -2,6 +2,7 @@ package transform_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
@@ -39,13 +41,25 @@ func TestRecordedSlashMarksTheSlashedValidatorOnce(t *testing.T) {
 	assert.Equal(t, []string{statesync.ConsKey(scafireCons)}, ents.Dirty.Keys(statesync.Validators))
 }
 
-func TestBlocksWithoutStakingChangesAreClean(t *testing.T) {
+// Blocks without staking or token changes mark no validator and no denom;
+// the denoms their transfers moved are only "seen", which the denoms set
+// resyncs when it does not hold them yet.
+func TestBlocksWithoutStakingOrTokenChangesMarkOnlySeenDenoms(t *testing.T) {
 	n := fakenode.New(t)
 	for _, h := range []int64{24998316, 24999134, 25000894} {
 		ents, err := realTransformer(t).Transform(fetchInput(t, n, h))
 		require.NoError(t, err)
-		assert.True(t, ents.Dirty.Empty(), "height %d", h)
+		assert.Empty(t, ents.Dirty.Keys(statesync.Validators), "height %d", h)
+		keys := ents.Dirty.Keys(statesync.Denoms)
+		require.NotEmpty(t, keys, "height %d: every transaction moves its fee", h)
+		for _, k := range keys {
+			assert.True(t, strings.HasPrefix(k, "seen:"), "height %d: %s", h, k)
+		}
+		assert.Contains(t, keys, denoms.SeenKey("ubze"))
 	}
+	ents, err := realTransformer(t).Transform(fetchInput(t, n, 24998317))
+	require.NoError(t, err)
+	assert.True(t, ents.Dirty.Empty(), "an empty block moves nothing but routine mints")
 }
 
 // Scafire, slashed and jailed at 24160001, and ChainTools.
