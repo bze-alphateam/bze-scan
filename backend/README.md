@@ -57,6 +57,9 @@ Implemented so far:
   and messages, with the catch-up through the archive after a long outage
   (see Live indexer below).
 - `backfill`, standalone or inside `serve` (see Backfill below).
+- `reindex` (see Reindex below).
+- The state sync inside `serve` and the `sync-state` command, with the
+  validators set and `GET /api/v1/validators` (see State sync below).
 
 ## Configuration
 
@@ -73,7 +76,9 @@ documented template with the defaults:
 | `DATABASE_URL` | none | PostgreSQL URL of the node's database; required by `migrate` and `serve` (the API reads it, with or without the indexer). Never logged |
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
-| `INDEXER_ENABLED` | `true` | `false` runs the HTTP API only: the one way to run a second process against the same database |
+| `INDEXER_ENABLED` | `true` | runs the live indexer and the state sync in `serve`; `false` runs the HTTP API only: the one way to run a second process against the same database |
+| `NODE_GRPC_ADDR` | `127.0.0.1:9090` | `host:port` of the local node's gRPC server, which the state sync queries; never a public node |
+| `NODE_GRPC_TLS` | `false` | dial `NODE_GRPC_ADDR` with TLS |
 | `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node, by height only; the status checker compares its tip, the raw-JSON routes fetch their misses from it, the backfill and the catch-up read history from it |
 | `ARCHIVE_RPC_RETRY_URL` | empty | tried when `ARCHIVE_RPC_URL` fails; empty means `ARCHIVE_RPC_URL` again |
 | `STATUS_INTERVAL` | `60s` | period of the status checker's ticks (a Go duration) |
@@ -100,6 +105,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
 | `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
+| `bze-scan sync-state` | one full resync of every state-sync set (see State sync below); exit 0 when every set succeeded, 1 when any failed |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet -tags=e2e ./...` |
@@ -109,6 +115,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make e2e` | starts PostgreSQL from `../docker/compose.yml`, runs the acceptance tests in `e2e/` (build tag `e2e`, `-race`), tears the database down; the exit code is the tests' |
 | `make e2e-up` / `make e2e-down` | starts / removes that PostgreSQL by hand |
 | `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
+| `make grpc-fixtures VALIDATORS="..."` | records the fake gRPC server's fixtures (see below) |
 | `make clean` | removes `build/` |
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
@@ -162,14 +169,25 @@ internal/indexer/backfill/
 internal/indexer/reindex/
                    selectors, local-or-archive routing by height and the
                    reindex run over the backfill pipeline in update mode
+internal/grpcclient/
+                   the local node's gRPC connection (chain codec, 10 s per
+                   call)
+internal/statesync/
+                   the state sync: dirty sets, coalescing queue, workers,
+                   safety-net timers, sync_jobs
+internal/statesync/validators/
+                   the validators set (explorer.validators and the
+                   validator_owner labels)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
 internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
-                   fake CometBFT RPC node for tests, fixtures in testdata/
+                   fake CometBFT RPC node and fake gRPC server for tests,
+                   fixtures in testdata/ (gRPC ones in testdata/grpc/)
 e2e/               acceptance tests (build tag e2e)
-scripts/           record-fixtures.sh
+scripts/           record-fixtures.sh, record-grpc-fixtures.sh (and its
+                   bech32conv helper)
 ```
 
 ## Code and test rules
@@ -204,7 +222,9 @@ every later route follows:
   `limit` defaults to 25, maximum 100 (beyond is a 400). The cursor is the key
   of the last item (base64 of the key tuple); pass it back as `cursor` for the
   next page; `null` means the last page. Keyset queries carry a height
-  predicate so PostgreSQL prunes the partitions above the cursor.
+  predicate so PostgreSQL prunes the partitions above the cursor. The
+  validator list, tens of rows, uses the row's position in its order as the
+  key.
 - **Errors** answer `{"error": {"code": "...", "message": "..."}}` with
   `bad_request` (400), `not_found` (404), `upstream_error` (502/504, for the
   routes that call a node) or `internal` (500, details only in the log).
@@ -221,6 +241,7 @@ every later route follows:
 | `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer); 400 unless a positive integer, 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
 | `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
+| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400 |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
@@ -485,6 +506,59 @@ some failed, 1 on a configuration or database error (or an interrupt).
   triggered and the raw-JSON cache is not touched. The node's sink tables are
   never written.
 
+## State sync
+
+The current-state tables come from the local node's gRPC
+(`NODE_GRPC_ADDR`), never from a public node. Inside `serve` (with the
+indexer) the state sync:
+
+1. resyncs every registered set in full at start, in registration order, so
+   a resync lost at shutdown is harmless;
+2. resyncs what each live block changed: the transformer fills the block's
+   dirty set (validators, proposals, denoms, channels, params; only the
+   validators are marked so far) and the live indexer publishes it after the
+   write. The backfill and the reindex ignore it: history cannot change
+   current state. Keys go to an in-memory queue served by two workers; a
+   key already queued is not queued twice, and a queued full resync absorbs
+   the keys of its set;
+3. resyncs a set in full when none ran for its interval (validators: one
+   minute), the safety net for what no event announces. A full resync, from
+   a block or the timer, restarts the wait.
+
+Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
+`last_success_at`, `last_error`, `cursor`). A node that is down fails the
+run: it is logged and recorded, the rows stay as they were, and the next
+trigger retries. Nothing here is on the user's critical path. `bze-scan
+sync-state` runs the full resync of every set once and exits 1 when any
+failed.
+
+**Validators.** A full resync reads staking `Validators` (every status, 200
+per page), slashing `SigningInfos` and `Params`, and per validator staking
+`Delegation(owner, validator)` (the self-delegation, 0 when there is none)
+and `ValidatorDelegations` with `count_total` (the delegator count). The
+owner `bze1…` is the operator's key bytes; `consensus_address` is the
+upper-case hex address of the consensus key, as `/block` names the proposer.
+Ranks and `voting_power_pct` (five decimals, half up) are over the bonded
+tokens; other statuses are unranked. A validator the node no longer lists is
+kept with `status = unbonded`. Each owner gets a `labels` row
+(`validator_owner`, named after the moniker, `source = sync`; rows of another
+source are never overwritten). A dirty validator is resynced alone (staking
+`Validator`, slashing `SigningInfo`) and every bonded validator is re-ranked
+over the stored standings.
+
+A block marks a validator dirty on `delegate`, `unbond`, `redelegate` (both
+validators), `create_validator` and `cancel_unbonding_delegation` events and
+on `MsgEditValidator` / `MsgUnjail`; a `slash` event (which names a consensus
+address) or a validator leaving the active set (a validator update of power
+0) asks for a full resync. Other power changes follow the delegation events
+already marked.
+
+**`blocks.signatures_power_pct`** is the share of the bonded validators'
+tokens whose validator signed the commit, computed by the writers from the
+commit's consensus addresses against the current `validators` table: exact
+for a live block, approximate for history (the voting power at a past height
+is not in `/commit`), NULL before the first sync.
+
 ## Test fixtures and the fake node
 
 `internal/testutil/fakenode` serves the URI form of the by-height RPC routes
@@ -522,3 +596,30 @@ with `go test ./internal/transform -golden`.
 The script fetches `/block`, `/block_results` and `/commit` once per height,
 plus `/status` and one above-tip answer. It never calls `/tx`, `/tx_search` or
 `/block_search`.
+
+### The fake gRPC server
+
+`fakenode.NewGRPC` starts a real `grpc.Server` on a free local port serving
+the query services of staking, slashing, bank, distribution, gov, mint, IBC
+transfer and channel, tradebin, tokenfactory, rewards, burner, cointrunk and
+txfeecollector. Each method answers from
+`testdata/grpc/<service>/<Method>[.<key>].json`, the REST gateway's JSON
+(the SDK's proto JSON), unmarshalled with the chain codec. The key is the
+request's non-empty string fields in field order joined by `.` (staking
+`Validator.<operator>`, `Delegation.<delegator>.<validator>`); without a
+keyed file the keyless one answers, and without any file the method answers
+`Unimplemented`. A recorded gateway error (`{"code": 5, "message": …}`)
+answers that gRPC status. Tests count calls per method and per key, replace
+an answer (`SetResponse`) and stop the server to play a node that is down.
+So far the staking and slashing methods of the validators set are recorded;
+each later story adds its methods.
+
+```
+make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" REST=https://rest.getbze.com
+```
+
+records `staking/Validators.json`, `slashing/SigningInfos.json`,
+`slashing/Params.json`, every validator's self-delegation and delegator
+count, and, for each operator in `VALIDATORS`, its single `Validator` and
+`SigningInfo` answers (ChainTools, the validator block 25000440 delegates
+to). Recorded on 2026-10-09: 57 validators, 22 bonded.
