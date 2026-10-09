@@ -58,9 +58,9 @@ var modules = []struct{ module, name string }{
 	{"burner_raffle", "Burner raffle"},
 	{"tokenfactory", "Factory"},
 	{"tradebin", "DEX"},
-	{"txfeecollector", "Transaction fee collector"},
-	{"txfeecollector_burner", "Transaction fee collector (burner share)"},
-	{"txfeecollector_cp", "Transaction fee collector (community pool share)"},
+	{"txfeecollector", "Stakers fee collector"},
+	{"txfeecollector_burner", "Burner fee collector"},
+	{"txfeecollector_cp", "CP fee collector"},
 }
 
 // known are the known accounts (treasuries, exchanges). Rows are added here,
