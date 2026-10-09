@@ -48,7 +48,7 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	tx := dto.NewTx(&repository.Tx{
 		TxSummary: repository.TxSummary{Height: 7, Hash: "AB", Time: time.Unix(0, 0).In(time.FixedZone("x", 3600))},
 		Messages:  []repository.Message{{TypeURL: "/x.MsgY"}},
-	})
+	}, nil)
 	b, err := json.Marshal(tx)
 	require.NoError(t, err)
 
@@ -64,13 +64,36 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	assert.Nil(t, msg["body"])
 	assert.Contains(t, msg, "body")
 	assert.Equal(t, []any{}, msg["events"])
+	assert.Equal(t, []any{}, got["transfers"])
 
 	block := dto.NewBlock(&repository.Block{BlockSummary: repository.BlockSummary{Height: 9},
-		Transactions: []repository.BlockTx{{TxIndex: 2, Hash: "CD"}}})
+		Transactions: []repository.BlockTx{{TxIndex: 2, Hash: "CD"}}}, nil,
+		[]repository.BlockEvent{{Seq: 4, Type: "slash"}}, nil)
 	assert.Equal(t, int64(9), block.Transactions[0].Height, "every transaction carries its height")
 	b, err = json.Marshal(block)
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"fees_distributed":null`)
+	assert.Contains(t, string(b), `"transfers":[]`)
+	assert.Contains(t, string(b), `"events":[{"seq":4,"type":"slash","attrs":{}}]`)
+	assert.Contains(t, string(b), `"events_next_cursor":null`)
+}
+
+func TestNewTransfersCarriesTheLabelsAndTheDenom(t *testing.T) {
+	sender, recipient, symbol, exponent, msg := "bze1a", "bze1b", "BZE", 6, int64(0)
+	got := dto.NewTransfers([]repository.Transfer{
+		{Seq: 0, Kind: "transfer", Sender: &sender, Recipient: &recipient, Denom: "ubze", Amount: "5",
+			RecipientLabel: &repository.Label{Address: recipient, Name: "Fee collector", Kind: "module"}},
+		{Seq: 1, MsgIndex: &msg, Kind: "burn", Sender: &sender, Denom: "ubze", Amount: "7", Symbol: &symbol, Exponent: &exponent},
+	})
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[
+		{"seq":0,"msg_index":null,"kind":"transfer","sender":"bze1a","sender_label":null,
+		 "recipient":"bze1b","recipient_label":{"name":"Fee collector","kind":"module"},
+		 "denom":"ubze","amount":"5","symbol":null,"exponent":null},
+		{"seq":1,"msg_index":0,"kind":"burn","sender":"bze1a","sender_label":null,
+		 "recipient":null,"recipient_label":null,"denom":"ubze","amount":"7","symbol":"BZE","exponent":6}
+	]`, string(b))
 }
 
 func TestNewValidatorUptime(t *testing.T) {

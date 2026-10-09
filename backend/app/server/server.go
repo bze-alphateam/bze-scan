@@ -71,6 +71,7 @@ func New(deps Deps) *echo.Echo {
 	api := e.Group(APIPrefix)
 	api.GET("/blocks", explorer.Blocks)
 	api.GET("/blocks/:height", explorer.Block)
+	api.GET("/blocks/:height/events", explorer.BlockEvents)
 	api.GET("/txs", explorer.Txs)
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/validators", explorer.Validators)

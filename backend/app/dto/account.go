@@ -95,9 +95,7 @@ func NewAccount(a *repository.Account, live *chainstate.Account, denoms map[stri
 		Balances: []Balance{}, Delegations: []AccountDelegation{}, Unbonding: []AccountUnbonding{},
 		Rewards: []AccountReward{}, TotalRewards: []Coin{},
 	}
-	if a.Label != nil {
-		out.Label = &Label{Name: a.Label.Name, Kind: a.Label.Kind}
-	}
+	out.Label = newLabel(a.Label)
 	if a.FirstSeen != nil {
 		out.FirstSeen = &Seen{Height: a.FirstSeen.Height, Time: a.FirstSeen.Time.UTC()}
 	}
