@@ -11,24 +11,31 @@
 # A gateway error (404 for a missing delegation, say) is stored as the error
 # body and answered as that gRPC status.
 #
-# Recorded:
-#   staking/Validators.json, slashing/SigningInfos.json, slashing/Params.json
-#   per validator: staking/Delegation.<owner>.<operator>.json (self-delegation)
-#     and staking/ValidatorDelegations.<operator>.json (count_total)
-#   per operator in VALIDATORS: staking/Validator.<operator>.json and
-#     slashing/SigningInfo.<consaddr>.json (the single-validator resync)
+# Recorded, by set (SETS, default "validators accounts"):
+#   validators:
+#     staking/Validators.json, slashing/SigningInfos.json, slashing/Params.json
+#     per validator: staking/Delegation.<owner>.<operator>.json (self-delegation)
+#       and staking/ValidatorDelegations.<operator>.json (count_total)
+#     per operator in VALIDATORS: staking/Validator.<operator>.json and
+#       slashing/SigningInfo.<consaddr>.json (the single-validator resync)
+#   accounts, per address in ACCOUNTS (the account page's live reads):
+#     bank/AllBalances.<address>.json, staking/DelegatorDelegations.<address>.json,
+#     staking/DelegatorUnbondingDelegations.<address>.json,
+#     distribution/DelegationTotalRewards.<address>.json
 #
-# Usage: VALIDATORS="bzevaloper1…" scripts/record-grpc-fixtures.sh
-#        (or: make grpc-fixtures VALIDATORS="…" [REST=…])
+# Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
+#        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
 REST="${REST%/}"
+SETS="${SETS:-validators accounts}"
 VALIDATORS="${VALIDATORS:-}"
+ACCOUNTS="${ACCOUNTS:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-mkdir -p "${OUT}/staking" "${OUT}/slashing"
+mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -52,20 +59,35 @@ fetch() {
   echo "recorded ${route} -> ${dest#"${OUT}/"}"
 }
 
-fetch "cosmos/staking/v1beta1/validators?pagination.limit=200" staking/Validators.json
-fetch "cosmos/slashing/v1beta1/signing_infos?pagination.limit=200" slashing/SigningInfos.json
-fetch "cosmos/slashing/v1beta1/params" slashing/Params.json
+# has <set>: whether SETS names the set.
+has() { [[ " ${SETS} " == *" $1 "* ]]; }
 
-for op in $(jq -r '.validators[].operator_address' "${OUT}/staking/Validators.json"); do
-  owner="$("${CONV}" bze "${op}")"
-  fetch "cosmos/staking/v1beta1/validators/${op}/delegations/${owner}" "staking/Delegation.${owner}.${op}.json" 404
-  fetch "cosmos/staking/v1beta1/validators/${op}/delegations?pagination.limit=1&pagination.count_total=true" \
-    "staking/ValidatorDelegations.${op}.json"
-done
+if has validators; then
+  fetch "cosmos/staking/v1beta1/validators?pagination.limit=200" staking/Validators.json
+  fetch "cosmos/slashing/v1beta1/signing_infos?pagination.limit=200" slashing/SigningInfos.json
+  fetch "cosmos/slashing/v1beta1/params" slashing/Params.json
 
-for op in ${VALIDATORS}; do
-  fetch "cosmos/staking/v1beta1/validators/${op}" "staking/Validator.${op}.json"
-  key="$(jq -r '.validator.consensus_pubkey.key' "${OUT}/staking/Validator.${op}.json")"
-  cons="$("${CONV}" consaddr "${key}")"
-  fetch "cosmos/slashing/v1beta1/signing_infos/${cons}" "slashing/SigningInfo.${cons}.json"
-done
+  for op in $(jq -r '.validators[].operator_address' "${OUT}/staking/Validators.json"); do
+    owner="$("${CONV}" bze "${op}")"
+    fetch "cosmos/staking/v1beta1/validators/${op}/delegations/${owner}" "staking/Delegation.${owner}.${op}.json" 404
+    fetch "cosmos/staking/v1beta1/validators/${op}/delegations?pagination.limit=1&pagination.count_total=true" \
+      "staking/ValidatorDelegations.${op}.json"
+  done
+
+  for op in ${VALIDATORS}; do
+    fetch "cosmos/staking/v1beta1/validators/${op}" "staking/Validator.${op}.json"
+    key="$(jq -r '.validator.consensus_pubkey.key' "${OUT}/staking/Validator.${op}.json")"
+    cons="$("${CONV}" consaddr "${key}")"
+    fetch "cosmos/slashing/v1beta1/signing_infos/${cons}" "slashing/SigningInfo.${cons}.json"
+  done
+fi
+
+if has accounts; then
+  for acc in ${ACCOUNTS}; do
+    fetch "cosmos/bank/v1beta1/balances/${acc}?pagination.limit=1000" "bank/AllBalances.${acc}.json"
+    fetch "cosmos/staking/v1beta1/delegations/${acc}?pagination.limit=1000" "staking/DelegatorDelegations.${acc}.json"
+    fetch "cosmos/staking/v1beta1/delegators/${acc}/unbonding_delegations?pagination.limit=1000" \
+      "staking/DelegatorUnbondingDelegations.${acc}.json"
+    fetch "cosmos/distribution/v1beta1/delegators/${acc}/rewards" "distribution/DelegationTotalRewards.${acc}.json"
+  done
+fi

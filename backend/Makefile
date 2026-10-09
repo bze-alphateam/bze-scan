@@ -59,8 +59,8 @@ fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [ARCHIV
 	HEIGHTS="$(HEIGHTS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
 
 .PHONY: grpc-fixtures
-grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures VALIDATORS="bzevaloper1…" [REST=...]
-	VALIDATORS="$(VALIDATORS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
+grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [REST=...]
+	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
 
 .PHONY: clean
 clean: ## Remove build artifacts

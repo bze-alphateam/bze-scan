@@ -60,7 +60,19 @@ type ExplorerReader interface {
 	ValidatorBlocks(ctx context.Context, cons string, before *int64, limit int) ([]repository.BlockSummary, error)
 	ValidatorEvents(ctx context.Context, operator string, limit int) ([]repository.ValidatorEvent, error)
 	VotesOf(ctx context.Context, account string, limit int) ([]repository.ValidatorVote, error)
+	// SearchLabels returns the labels whose name contains q, any case.
+	SearchLabels(ctx context.Context, q string, limit int) ([]repository.Label, error)
+	// SearchValidators returns the validators whose moniker contains q, any
+	// case.
+	SearchValidators(ctx context.Context, q string, limit int) ([]repository.ValidatorMatch, error)
 }
+
+// Search by name: matches of each kind returned, and the shortest text
+// searched.
+const (
+	SearchNameMatches = 5
+	SearchNameMinLen  = 2
+)
 
 // Sizes of the lists of the validator page.
 const (
@@ -314,7 +326,9 @@ func (h *ExplorerController) validator(c *echo.Context) (*repository.ValidatorDe
 // Search serves GET /api/v1/search?q=. The input decides what is looked
 // up: digits a block, 64 hex characters a transaction, a bze1 address an
 // account (always returned, with whether it is indexed), a bzevaloper1
-// address a validator. No match is an empty list, not an error.
+// address a validator; any other text of at least SearchNameMinLen
+// characters the validators by moniker and the labelled accounts by name.
+// No match is an empty list, not an error.
 func (h *ExplorerController) Search(c *echo.Context) error {
 	q := strings.TrimSpace(c.QueryParam("q"))
 	if q == "" {
@@ -358,10 +372,37 @@ func (h *ExplorerController) Search(c *echo.Context) error {
 				results = append(results, dto.SearchResult{Type: dto.ResultValidator, ID: addr, Label: moniker})
 			}
 		}
+	} else if len([]rune(q)) >= SearchNameMinLen {
+		found, err := h.searchNames(ctx, q)
+		if err != nil {
+			return err
+		}
+		results = append(results, found...)
 	}
 
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, dto.SearchResponse{Results: results})
+}
+
+// searchNames returns the validators whose moniker and the labelled
+// accounts whose name contain q.
+func (h *ExplorerController) searchNames(ctx context.Context, q string) ([]dto.SearchResult, error) {
+	vals, err := h.repo.SearchValidators(ctx, q, SearchNameMatches)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := h.repo.SearchLabels(ctx, q, SearchNameMatches)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.SearchResult, 0, len(vals)+len(labels))
+	for _, v := range vals {
+		out = append(out, dto.SearchResult{Type: dto.ResultValidator, ID: v.OperatorAddress, Label: v.Moniker})
+	}
+	for _, l := range labels {
+		out = append(out, dto.SearchResult{Type: dto.ResultAccount, ID: l.Address, Label: l.Name})
+	}
+	return out, nil
 }
 
 func parseLimit(c *echo.Context) (int, error) {

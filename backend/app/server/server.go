@@ -27,6 +27,12 @@ const APIPrefix = "/api/v1"
 type Deps struct {
 	// Explorer reads the explorer tables.
 	Explorer controller.ExplorerReader
+	// Accounts reads the account rows and labels; nil leaves
+	// /api/v1/accounts out.
+	Accounts controller.AccountReader
+	// AccountState reads accounts live from the node; nil answers every
+	// account with the live part unavailable.
+	AccountState controller.AccountState
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
@@ -71,6 +77,9 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/validators/:operator", explorer.Validator)
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)
+	if deps.Accounts != nil {
+		api.GET("/accounts/:address", controller.NewAccountController(deps.Accounts, deps.AccountState).Account)
+	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)
 	}

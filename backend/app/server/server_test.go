@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
@@ -73,6 +74,31 @@ func TestRawRoutes(t *testing.T) {
 
 	rec := serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/raw/block/42")
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no raw reader, no routes")
+}
+
+// noAccounts knows no account and no denom.
+type noAccounts struct{}
+
+func (noAccounts) Account(_ context.Context, address string) (*repository.Account, error) {
+	return &repository.Account{Address: address}, nil
+}
+
+func (noAccounts) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
+	return nil, nil
+}
+
+func (noAccounts) Monikers(context.Context, []string) (map[string]string, error) {
+	return nil, nil
+}
+
+func TestAccountRoute(t *testing.T) {
+	const addr = "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls"
+	rec := serve(t, server.New(server.Deps{Accounts: noAccounts{}}), http.MethodGet, "/api/v1/accounts/"+addr)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"live":{"available":false}`, "no account state, no live part")
+
+	rec = serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/accounts/"+addr)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "no account reader, no route")
 }
 
 func TestUnknownPathAnswersNotFoundEnvelope(t *testing.T) {

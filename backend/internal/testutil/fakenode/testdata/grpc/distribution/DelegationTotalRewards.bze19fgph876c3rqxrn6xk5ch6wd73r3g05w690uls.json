@@ -1,0 +1,19 @@
+{
+  "rewards": [
+    {
+      "validator_address": "bzevaloper19fgph876c3rqxrn6xk5ch6wd73r3g05wzpsht0",
+      "reward": [
+        {
+          "denom": "ubze",
+          "amount": "19220134.987023431545472789"
+        }
+      ]
+    }
+  ],
+  "total": [
+    {
+      "denom": "ubze",
+      "amount": "19220134.987023431545472789"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
@@ -98,8 +99,31 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		ArchiveRetry: rawRetry,
 	})
 
+	// The chain codec decodes the node's gRPC answers and the indexed
+	// transactions; built once, it is costly.
+	var codec *chain.Codec
+	if cfg.NodeGRPCAddr != "" || cfg.IndexerEnabled || cfg.BackfillEnabled {
+		if codec, err = chain.NewCodec(); err != nil {
+			return err
+		}
+	}
+	// The account route reads balances and staking live through a
+	// connection of its own; nil (no gRPC address) answers them unavailable.
+	var accountState controller.AccountState
+	if cfg.NodeGRPCAddr != "" {
+		state, closeState, err := NewAccountState(cfg, codec)
+		if err != nil {
+			return err
+		}
+		defer closeState()
+		accountState = state
+	}
+
+	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
-		Explorer:           repository.NewExplorer(apiPool),
+		Explorer:           explorerRepo,
+		Accounts:           explorerRepo,
+		AccountState:       accountState,
 		Status:             checker,
 		Raw:                raw,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -116,10 +140,6 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// its own pool, the batch writer and one archive rate limiter.
 	var hist *history
 	if cfg.IndexerEnabled || cfg.BackfillEnabled {
-		codec, err := chain.NewCodec()
-		if err != nil {
-			return err
-		}
 		if hist, err = newHistory(ctx, cfg, opts, codec); err != nil {
 			return err
 		}
