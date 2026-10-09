@@ -36,6 +36,9 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// Proposals reads the proposals, votes and deposits; nil leaves
+	// /api/v1/proposals out.
+	Proposals controller.ProposalReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
@@ -93,6 +96,13 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/token", tokens.Token)
 		api.GET("/token/events", tokens.TokenEvents)
 		api.GET("/token/transfers", tokens.TokenTransfers)
+	}
+	if deps.Proposals != nil {
+		proposals := controller.NewProposalController(deps.Proposals)
+		api.GET("/proposals", proposals.Proposals)
+		api.GET("/proposals/:id", proposals.Proposal)
+		api.GET("/proposals/:id/votes", proposals.ProposalVotes)
+		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

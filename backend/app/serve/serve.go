@@ -124,6 +124,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Explorer:           explorerRepo,
 		Accounts:           explorerRepo,
 		Tokens:             explorerRepo,
+		Proposals:          explorerRepo,
 		AccountState:       accountState,
 		Status:             checker,
 		Raw:                raw,
