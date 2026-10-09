@@ -107,7 +107,7 @@ const resolveFailuresSQL = `UPDATE explorer.index_failures SET resolved_at = now
 		WHERE height = ANY($1::bigint[]) AND resolved_at IS NULL`
 
 // Write writes the entities of every height in batch in one transaction: the
-// transactions, messages, validator_events, transfers, block_events and
+// transactions, messages, validator_events, transfers, block_events, token_events and
 // blocks rows, block_time_ms where the previous
 // block is known, the accounts of the signers (counters moved for the
 // transactions inserted, deltas merged per address and applied in address
@@ -133,6 +133,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.ValidatorEvents = append(all.ValidatorEvents, e.ValidatorEvents...)
 		all.Transfers = append(all.Transfers, e.Transfers...)
 		all.BlockEvents = append(all.BlockEvents, e.BlockEvents...)
+		all.TokenEvents = append(all.TokenEvents, e.TokenEvents...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil

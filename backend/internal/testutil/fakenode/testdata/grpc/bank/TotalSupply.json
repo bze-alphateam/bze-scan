@@ -1,0 +1,120 @@
+{
+  "supply": [
+    {
+      "denom": "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE",
+      "amount": "99998000000"
+    },
+    {
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "amount": "20983185271838"
+    },
+    {
+      "denom": "factory/bze15pqjgk4la0mfphwddce00d05n3th3u66n3ptcv/2MARS",
+      "amount": "999999999999999591"
+    },
+    {
+      "denom": "factory/bze1972aqfzdg29ugjln74edx0xvcg4ehvysjptk77/CTL",
+      "amount": "1000000000000000"
+    },
+    {
+      "denom": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+      "amount": "1000001000"
+    },
+    {
+      "denom": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2",
+      "amount": "242628544509"
+    },
+    {
+      "denom": "ibc/062CA1F72787DB36CE8FEA8EC733293215A5554646650A9B92BFA498802A11AA",
+      "amount": "1"
+    },
+    {
+      "denom": "ibc/08EAEAB525E59C611D5BD8FAC4BE65DF65A69E62874377F6889BBD01A33F385F",
+      "amount": "7246131"
+    },
+    {
+      "denom": "ibc/12C0B8B561AFCFDA3C73DEE0F7F84AA2B860D48493C27E8E81A5D14724FAB08B",
+      "amount": "904878"
+    },
+    {
+      "denom": "ibc/19488A79F091167225A4BFA34BD3D04F11621E682EB14A58B4CA5D6234BA9487",
+      "amount": "2341807"
+    },
+    {
+      "denom": "ibc/4AA3B163580B4377250CD4486FB6AD098EB27822EE056949EC4A39B09C5E3B4E",
+      "amount": "390000"
+    },
+    {
+      "denom": "ibc/5FEB332D2B121921C792F1A0DBF7C3163FF205337B4AFE6E14F69E8E49545F49",
+      "amount": "3851"
+    },
+    {
+      "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "amount": "3384783843"
+    },
+    {
+      "denom": "ibc/689DD6F80E4DBCE14877462B182504037FAEAD0699D5804A7F5CB328D33ED24B",
+      "amount": "1000"
+    },
+    {
+      "denom": "ibc/693DDB2D9B4260D67C8136C22D837F37488E0FBD81857D8E9C6022332EA26E33",
+      "amount": "4524415918"
+    },
+    {
+      "denom": "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838",
+      "amount": "80403"
+    },
+    {
+      "denom": "ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011",
+      "amount": "15989530044"
+    },
+    {
+      "denom": "ibc/9D0AC973BAFA293781F9A86B2911069DF9D8ECE86CDD884F0DE4889AF666B28A",
+      "amount": "1000000000000"
+    },
+    {
+      "denom": "ibc/B2219CA05421EA988F83E5E824BF69362E80A6A87503EFD18B92C91C9E03763D",
+      "amount": "1960768975"
+    },
+    {
+      "denom": "ibc/C00D101A3572A5374E23F11944463D1325319E255D7C824B33AF2F927F532348",
+      "amount": "5100100000000000000"
+    },
+    {
+      "denom": "ibc/CDB3B51ECCC39A943FDBD2C71C4A5D22EDB7CF5B248E5F9E098E465BDEAFE70C",
+      "amount": "100"
+    },
+    {
+      "denom": "ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1",
+      "amount": "100000"
+    },
+    {
+      "denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "amount": "2042569242"
+    },
+    {
+      "denom": "ibc/FF39851E73089ACBD0B09BDF62FA3C67FBD77A2CD97CD159DBCE9C770561F8AF",
+      "amount": "852669795"
+    },
+    {
+      "denom": "ubze",
+      "amount": "281824497896344"
+    },
+    {
+      "denom": "ulp_factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl_ubze",
+      "amount": "1836207888731363200"
+    },
+    {
+      "denom": "ulp_ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",
+      "amount": "57547435733609949"
+    },
+    {
+      "denom": "ulp_ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011_ubze",
+      "amount": "136751309744224675"
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "0"
+  }
+}

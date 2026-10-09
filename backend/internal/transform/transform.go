@@ -45,6 +45,9 @@ type Entities struct {
 	Transfers []Transfer
 	// BlockEvents are the block_events rows of the heights.
 	BlockEvents []BlockEvent
+	// TokenEvents are the token_events rows of the heights' tokenfactory
+	// messages and tradebin typed events.
+	TokenEvents []TokenEvent
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -222,11 +225,13 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
+	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
 	for i, raw := range in.Block.Txs {
 		if err := t.transaction(ents, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
 		}
 	}
+	markSeenDenoms(ents)
 	return ents, nil
 }
 
@@ -311,6 +316,9 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 	byIndex := eventsByMsgIndex(res.Events)
 	if tx.Success {
 		txValidatorEvents(ents, b, i, decoded.Msgs, byIndex)
+		if err := txTokenEvents(ents, b, i, decoded.Msgs, byIndex); err != nil {
+			return err
+		}
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

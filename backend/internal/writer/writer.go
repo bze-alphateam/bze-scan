@@ -80,7 +80,7 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 }
 
 // WriteBlock writes the entities of one or more heights in one transaction:
-// the transactions, messages, validator_events, transfers and block_events
+// the transactions, messages, validator_events, transfers, block_events and token_events
 // rows, the accounts of their signers
 // (counters moved for the transactions inserted), the blocks rows
 // (block_time_ms from the previous row when it exists), the live floor at the
@@ -305,6 +305,19 @@ type blockEventRow struct {
 	Attrs  json.RawMessage `json:"attrs"`
 }
 
+// tokenEventRow is the JSON shape of the token_events bulk write.
+type tokenEventRow struct {
+	Height  int64           `json:"height"`
+	TxIndex int             `json:"tx_index"`
+	Seq     int             `json:"seq"`
+	Denom   string          `json:"denom"`
+	Kind    string          `json:"kind"`
+	Actor   *string         `json:"actor"`
+	Amount  *string         `json:"amount"`
+	Details json.RawMessage `json:"details"`
+	Time    time.Time       `json:"time"`
+}
+
 // ChunkRows bounds the rows of one multi-row statement.
 const ChunkRows = 1000
 
@@ -320,7 +333,7 @@ type statement struct {
 }
 
 // rowStatements returns the bulk writes of the transactions, messages,
-// validator_events, transfers and block_events of ents, in chunks of ChunkRows rows. top names the write in errors.
+// validator_events, transfers, block_events and token_events of ents, in chunks of ChunkRows rows. top names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
 	for _, t := range ents.Transactions {
@@ -373,6 +386,17 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		}
 		eventRows = append(eventRows, blockEventRow{Height: e.Height, Seq: e.Seq, Type: e.Type, Attrs: attrs})
 	}
+	tokenRows := make([]tokenEventRow, 0, len(ents.TokenEvents))
+	for _, e := range ents.TokenEvents {
+		details, err := json.Marshal(e.Details)
+		if err != nil {
+			return nil, fmt.Errorf("write %d: token_events: details: %w", top, err)
+		}
+		tokenRows = append(tokenRows, tokenEventRow{
+			Height: e.Height, TxIndex: e.TxIndex, Seq: e.Seq, Denom: e.Denom, Kind: e.Kind,
+			Actor: nullIfEmpty(e.Actor), Amount: nullIfEmpty(e.Amount), Details: details, Time: e.Time,
+		})
+	}
 	txs, err := chunked(top, "transactions", transactionsTable, mode, txRows, scanTransactionKeys)
 	if err != nil {
 		return nil, err
@@ -393,7 +417,11 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events), nil
+	tokens, err := chunked(top, "token_events", tokenEventsTable, mode, tokenRows, nil)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

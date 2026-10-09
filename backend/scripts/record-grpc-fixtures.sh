@@ -22,9 +22,19 @@
 #     bank/AllBalances.<address>.json, staking/DelegatorDelegations.<address>.json,
 #     staking/DelegatorUnbondingDelegations.<address>.json,
 #     distribution/DelegationTotalRewards.<address>.json
+#   denoms (the denoms sync):
+#     bank/TotalSupply.json, bank/DenomsMetadata.json, tradebin/AllMarkets.json
+#     per factory denom: tokenfactory/DenomAuthority.<denom>.json
+#     per denom in DENOMS (the single-denom resync):
+#       bank/DenomMetadataByQueryString.<denom>.json (a 404 for a denom without
+#       metadata) and bank/SupplyOf.<denom>.json
+#     tokenfactory AllDenomBranding and tradebin HaltedDenoms are recorded only
+#     from a gateway that serves them (chain v8.2.0 and later): an older node
+#     answers 501, and with no file the fake answers Unimplemented the same way.
+#   Denoms in file names are path-escaped (factory%2Fbze1…%2Fuvdl).
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
-#        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [REST=…])
+#        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -32,10 +42,11 @@ REST="${REST%/}"
 SETS="${SETS:-validators accounts}"
 VALIDATORS="${VALIDATORS:-}"
 ACCOUNTS="${ACCOUNTS:-}"
+DENOMS="${DENOMS:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution"
+mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -57,6 +68,21 @@ fetch() {
   rm -f "${tmp}"
   chmod 644 "${dest}"
   echo "recorded ${route} -> ${dest#"${OUT}/"}"
+}
+
+# esc <denom>: the denom path-escaped, as file names and query strings take it.
+esc() { jq -rn --arg d "$1" '$d|@uri'; }
+
+# optional <route-with-query> <destination>: fetch when the gateway serves the
+# route, skip on 501 (a query the node's chain version does not have).
+optional() {
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "${REST}/$1")"
+  if [[ "${code}" == "501" ]]; then
+    echo "skipped $1: HTTP 501, not served by this chain version"
+    return
+  fi
+  fetch "$1" "$2"
 }
 
 # has <set>: whether SETS names the set.
@@ -89,5 +115,24 @@ if has accounts; then
     fetch "cosmos/staking/v1beta1/delegators/${acc}/unbonding_delegations?pagination.limit=1000" \
       "staking/DelegatorUnbondingDelegations.${acc}.json"
     fetch "cosmos/distribution/v1beta1/delegators/${acc}/rewards" "distribution/DelegationTotalRewards.${acc}.json"
+  done
+fi
+
+if has denoms; then
+  fetch "cosmos/bank/v1beta1/supply?pagination.limit=1000" bank/TotalSupply.json
+  fetch "cosmos/bank/v1beta1/denoms_metadata?pagination.limit=1000" bank/DenomsMetadata.json
+  fetch "bze/tradebin/all_markets?pagination.limit=1000" tradebin/AllMarkets.json
+  optional "bze/tokenfactory/all_denom_branding?pagination.limit=1000" tokenfactory/AllDenomBranding.json
+  optional "bze/tradebin/halted_denoms?pagination.limit=1000" tradebin/HaltedDenoms.json
+
+  for d in $( (jq -r '.supply[].denom' "${OUT}/bank/TotalSupply.json"; jq -r '.metadatas[].base' "${OUT}/bank/DenomsMetadata.json") \
+      | grep '^factory/' | sort -u); do
+    fetch "bze/tokenfactory/denom_authority?denom=$(esc "${d}")" "tokenfactory/DenomAuthority.$(esc "${d}").json"
+  done
+
+  for d in ${DENOMS}; do
+    fetch "cosmos/bank/v1beta1/denoms_metadata_by_query_string?denom=$(esc "${d}")" \
+      "bank/DenomMetadataByQueryString.$(esc "${d}").json" 404
+    fetch "cosmos/bank/v1beta1/supply/by_denom?denom=$(esc "${d}")" "bank/SupplyOf.$(esc "${d}").json"
   done
 fi

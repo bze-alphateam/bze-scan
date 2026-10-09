@@ -334,7 +334,7 @@ func TestPublishFoldsAnEntryMarkedUnderSeveralKeys(t *testing.T) {
 	gate := make(chan struct{})
 	set := canonicalSet{
 		fakeSet: &fakeSet{name: "v", interval: time.Hour, rec: rec, gate: map[string]chan struct{}{"busy": gate}, started: make(chan string, 100)},
-		aliases: map[string]string{statesync.ConsKey("ab01"): "op1"},
+		aliases: map[string]string{statesync.ConsKey("ab01"): "op1", "known": ""},
 	}
 	s := statesync.New(statesync.Config{Workers: 1, Log: quietLog(), Clock: newFakeClock()}, &fakeJobs{}, set)
 	start(t, s)
@@ -346,8 +346,10 @@ func TestPublishFoldsAnEntryMarkedUnderSeveralKeys(t *testing.T) {
 	require.Equal(t, "busy", <-set.started)
 
 	// A delegation names the operator, the validator update the consensus
-	// address of the same validator; an unknown consensus address stays.
+	// address of the same validator; an unknown consensus address stays. A
+	// key the set folds to "" needs no resync.
 	var d statesync.Dirty
+	d.Mark("v", "known")
 	d.Mark("v", "op1")
 	d.Mark("v", statesync.ConsKey("AB01"))
 	d.Mark("v", statesync.ConsKey("CD02"))
@@ -356,7 +358,7 @@ func TestPublishFoldsAnEntryMarkedUnderSeveralKeys(t *testing.T) {
 
 	eventually(t, func() bool { return len(rec.list()) == 4 }, "busy, op1 and the unknown one")
 	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, []string{"v:*", "v:busy", "v:op1", "v:cons:CD02"}, rec.list(), "keys queue in sorted order, cons:AB01 as op1")
+	assert.Equal(t, []string{"v:*", "v:busy", "v:op1", "v:cons:CD02"}, rec.list(), "keys queue in sorted order, cons:AB01 as op1, known dropped")
 }
 
 func TestConsKey(t *testing.T) {

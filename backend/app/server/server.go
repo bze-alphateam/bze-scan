@@ -33,6 +33,9 @@ type Deps struct {
 	// AccountState reads accounts live from the node; nil answers every
 	// account with the live part unavailable.
 	AccountState controller.AccountState
+	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
+	// and /api/v1/token out.
+	Tokens controller.TokenReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
@@ -80,6 +83,16 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/search", explorer.Search)
 	if deps.Accounts != nil {
 		api.GET("/accounts/:address", controller.NewAccountController(deps.Accounts, deps.AccountState).Account)
+	}
+	if deps.Tokens != nil {
+		tokens := controller.NewTokenController(deps.Tokens)
+		api.GET("/tokens", tokens.Tokens)
+		api.GET("/tokens/:denom", tokens.Token)
+		api.GET("/tokens/:denom/events", tokens.TokenEvents)
+		api.GET("/tokens/:denom/transfers", tokens.TokenTransfers)
+		api.GET("/token", tokens.Token)
+		api.GET("/token/events", tokens.TokenEvents)
+		api.GET("/token/transfers", tokens.TokenTransfers)
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

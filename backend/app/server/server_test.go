@@ -257,3 +257,45 @@ func TestCORSHeadersOnlyWhenConfigured(t *testing.T) {
 	e = server.New(server.Deps{CORSAllowedOrigins: []string{"*"}})
 	assert.Equal(t, "*", request(e, http.MethodGet).Header().Get(echo.HeaderAccessControlAllowOrigin))
 }
+
+// noTokens knows the native denom only.
+type noTokens struct{}
+
+func (noTokens) Tokens(context.Context, *string, *repository.TokenKey, int) ([]repository.TokenSummary, error) {
+	return nil, nil
+}
+
+func (noTokens) Token(_ context.Context, denom string) (*repository.Token, error) {
+	if denom != "factory/bze1x/uhoney" {
+		return nil, repository.ErrNotFound
+	}
+	return &repository.Token{TokenSummary: repository.TokenSummary{Denom: denom, Kind: "factory"}}, nil
+}
+
+func (noTokens) TokenEvents(context.Context, string, *repository.EventKey, int) ([]repository.TokenEvent, error) {
+	return nil, nil
+}
+
+func (noTokens) DenomTransfers(context.Context, string, *repository.EventKey, int) ([]repository.DenomTransfer, error) {
+	return nil, nil
+}
+
+// A URL-encoded denom stays one path segment, on the detail route and on the
+// routes below it.
+func TestTokenRoutes(t *testing.T) {
+	e := server.New(server.Deps{Tokens: noTokens{}})
+	for _, path := range []string{
+		"/api/v1/tokens",
+		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney",
+		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney/events",
+		"/api/v1/tokens/factory%2Fbze1x%2Fuhoney/transfers",
+		"/api/v1/token?denom=factory/bze1x/uhoney",
+		"/api/v1/token/events?denom=factory%2Fbze1x%2Fuhoney",
+	} {
+		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)
+	}
+	assert.Equal(t, http.StatusNotFound, serve(t, e, http.MethodGet, "/api/v1/tokens/factory/bze1x/uhoney").Code,
+		"an unencoded denom is three segments")
+	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/tokens").Code,
+		"no token reader, no route")
+}

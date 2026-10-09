@@ -219,6 +219,21 @@ var (
 			{name: "amount", typ: "numeric"},
 		},
 	}
+	tokenEventsTable = table{
+		name: "explorer.token_events",
+		keys: []string{"height", "tx_index", "seq"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "seq", typ: "integer"},
+			{name: "denom", typ: "text"},
+			{name: "kind", typ: "text"},
+			{name: "actor", typ: "text"},
+			{name: "amount", typ: "numeric"},
+			{name: "details", typ: "jsonb", expr: "NULLIF(details, 'null'::jsonb)"},
+			{name: "time", typ: "timestamptz"},
+		},
+	}
 	blockEventsTable = table{
 		name: "explorer.block_events",
 		keys: []string{"height", "seq"},
