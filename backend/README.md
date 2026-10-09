@@ -24,6 +24,8 @@ One binary, `bze-scan`, with subcommands:
 - `sync-state` — one full refresh of validators, proposals, denominations,
   holders, labels, the Cosmos chain registry cache and token prices, for
   operations.
+- `version` — prints the commit the binary was built from (`dev` for a plain
+  `go build`; the image sets it with `-ldflags "-X main.version=<sha>"`).
 
 Every node call is by height (`/block`, `/block_results`, `/commit`, `/status`
 and gRPC state queries); the search routes are never used, on any node.
@@ -106,6 +108,7 @@ Invalid values stop the process at startup with every problem listed.
 | `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
 | `bze-scan sync-state` | one full resync of every state-sync set (see State sync below); exit 0 when every set succeeded, 1 when any failed |
+| `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet -tags=e2e ./...` |
@@ -120,16 +123,20 @@ Invalid values stop the process at startup with every problem listed.
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
 database `postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable`.
-CI runs three independent workflows on every pull request touching
-`backend/` (and, for e2e, `docker/`), each its own check:
+CI runs four independent workflows on every pull request touching
+`backend/` (and, for e2e and the image, `docker/`), each its own check:
 
 | Workflow | Runs |
 | --- | --- |
 | `backend-lint.yml` (Backend lint) | build, `make vet`, golangci-lint, `make tidy-check`, `make vulncheck` |
 | `backend-unit.yml` (Backend unit tests) | `make test` |
 | `backend-e2e.yml` (Backend e2e tests) | `make e2e` |
+| `backend-image.yml` (Backend image) | builds `docker/backend.Dockerfile` and runs `docker/smoke-test.sh` on it |
 
-`make check` runs all of it locally.
+On pushes to `main`, `backend-image.yml` calls the unit and e2e workflows
+itself and pushes the image to GHCR only when both pass (see
+`docker/README.md`); lint still runs on its own. `make check` runs all of it
+locally except the image.
 
 ## Layout
 
