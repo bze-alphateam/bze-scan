@@ -1,0 +1,70 @@
+{
+  "transactions": [
+    {
+      "Height": 24151894,
+      "TxIndex": 0,
+      "Hash": "9E8E02D3D772ED7DCD57C9E8C65E1D3D1B32DA162EF8069A5463892DBB812BA1",
+      "Time": "2026-08-12T11:10:22.360925315Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 160000,
+      "GasUsed": 121994,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "FeePayer": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta",
+      "Signers": [
+        "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.staking.v1beta1.MsgEditValidator"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 24151894,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.staking.v1beta1.MsgEditValidator",
+      "Sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta",
+      "Module": "staking",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.staking.v1beta1.MsgEditValidator",
+            "module": "staking",
+            "sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
+          }
+        },
+        {
+          "type": "edit_validator",
+          "attrs": {
+            "commission_rate": "commission_rates:\u003crate:\"100000000000000000\" max_rate:\"200000000000000000\" max_change_rate:\"10000000000000000\" \u003e update_time:\u003cseconds:1786313850 nanos:108825268 \u003e ",
+            "min_self_delegation": "1"
+          }
+        }
+      ],
+      "Body": {
+        "description": {
+          "moniker": "BonyNode💚",
+          "identity": "C5C24B65139B46BE",
+          "website": "https://bonynode.online",
+          "security_contact": "support@bonynode.online",
+          "details": "💚24/7 management and monitoring!"
+        },
+        "validator_address": "bzevaloper13nwzm5dfd26ue74jr6sc39gyn3qze0rjzyrzlz",
+        "commission_rate": null,
+        "min_self_delegation": null
+      }
+    }
+  ]
+}

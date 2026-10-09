@@ -235,20 +235,24 @@ every later route follows:
 - **Errors** answer `{"error": {"code": "...", "message": "..."}}` with
   `bad_request` (400), `not_found` (404), `upstream_error` (502/504, for the
   routes that call a node) or `internal` (500, details only in the log).
-- **Caching**: lists, search and every error are `Cache-Control: no-store`;
-  a block by height and a found transaction are
-  `public, max-age=31536000, immutable` (a committed height never changes).
+- **Caching**: lists, search, validators and every error are
+  `Cache-Control: no-store`; a block by height and a found transaction are
+  `public, max-age=31536000, immutable` (a committed height never changes),
+  except a block whose proposer is not named yet (no synced validator has its
+  consensus address), which stays `no-store` until it is.
 - **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
 
 | Route | Answers |
 | --- | --- |
-| `GET /api/v1/blocks?cursor&limit` | blocks, height descending: height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes |
+| `GET /api/v1/blocks?cursor&limit` | blocks, height descending: height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes, `proposer` (`{operator_address, moniker}` of the validator with that consensus address, null while none is synced) |
 | `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer); 400 unless a positive integer, 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
 | `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400 |
+| `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
+| `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
@@ -555,10 +559,42 @@ over the stored standings.
 
 A block marks a validator dirty on `delegate`, `unbond`, `redelegate` (both
 validators), `create_validator` and `cancel_unbonding_delegation` events and
-on `MsgEditValidator` / `MsgUnjail`; a `slash` event (which names a consensus
-address) or a validator leaving the active set (a validator update of power
-0) asks for a full resync. Other power changes follow the delegation events
-already marked.
+on `MsgEditValidator` / `MsgUnjail` by operator address, and on `slash` and
+`liveness` events and every entry of the block's `validator_updates` by
+consensus address (key `cons:<HEX>`: the transformer has no table to look
+the operator up in). The validators set folds a consensus key into the
+operator it learnt from its last resyncs before queueing
+(`statesync.Canonicaliser`), so a validator marked both ways is resynced
+once; keys published before the start resync are folded again after it. A
+consensus key of a validator the set has never seen runs a full resync;
+an unreadable address or key asks for one too.
+
+**Validator events** (`explorer.validator_events`, kept forever) come from
+two writers:
+
+- the transformer: `created` (`MsgCreateValidator`; details moniker,
+  commission rate, self bond), `description_changed` (the fields of
+  `MsgEditValidator` that are not `[do-not-modify]`), `commission_changed`
+  (`{"from", "to"}`: the message carries the new rate only, so the writer
+  takes `from` from the stored `validators.commission_rate` when it inserts
+  the row — exact on the live path, which writes before the sync updates the
+  rate, approximate for history; a reindex keeps the stored `from`),
+  `unjailed` (`MsgUnjail`) and `slashed` (the block's `slash` event,
+  `tx_index = -1`; details reason, power, burned, consensus_address). The
+  slash names a consensus address only: the writer resolves the operator
+  through `validators.consensus_address`, and when no validator is synced yet
+  the row keeps an empty operator until the next sync fills it in;
+- the sync: `jailed`, `tombstoned`, `bonded` and `unbonded`, which no SDK
+  event announces, when a resync finds the flag or the status (into or out of
+  `bonded`) changed against the stored row. They are written at the live
+  cursor's height (with that block's time), `tx_index = -1`, `seq` from
+  10,000 so they never meet the height's slash events; nothing is written
+  before the indexer has a cursor. Unjailing is the message's, not the
+  sync's.
+
+`first_seen_height`/`first_seen_time` are the earliest `created` event, else
+the first sync; a `created` event indexed later (by the backfill) moves them
+back.
 
 **`blocks.signatures_power_pct`** is the share of the bonded validators'
 tokens whose validator signed the commit, computed by the writers from the
@@ -594,7 +630,11 @@ out-of-gas `MsgCreateOrder`), 24999134 (multi-message `MsgCreateOrder`),
 24999205 (IBC `MsgTransfer`), 24999209 (relayer `MsgUpdateClient` with
 `MsgRecvPacket` / `MsgAcknowledgement`), 25000439 (`MsgWithdrawDelegatorReward`
 + `MsgWithdrawValidatorCommission`), 25000440 (authz `MsgExec`) and 25000894
-(`MsgSend`). Recording a new height leaves `status.json` and `above_tip.json`
+(`MsgSend`). Validator events: 22933748 (`MsgEditValidator` raising a
+commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
+24151894 (`MsgEditValidator` of a description) and 24160001 (a downtime
+`slash`, its `liveness` event and the validator update removing it from the
+active set). Recording a new height leaves `status.json` and `above_tip.json`
 as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten

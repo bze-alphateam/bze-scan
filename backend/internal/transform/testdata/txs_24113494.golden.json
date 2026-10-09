@@ -1,0 +1,97 @@
+{
+  "transactions": [
+    {
+      "Height": 24113494,
+      "TxIndex": 0,
+      "Hash": "E70A08591BB5D7A061256A995A6E249FD9C8A64E988113F62D3EF85AFEECDC12",
+      "Time": "2026-08-09T22:17:30.108825268Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 350000,
+      "GasUsed": 256701,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "3500"
+        }
+      ],
+      "FeePayer": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta",
+      "Signers": [
+        "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.staking.v1beta1.MsgCreateValidator"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 24113494,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.staking.v1beta1.MsgCreateValidator",
+      "Sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta",
+      "Module": "staking",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.staking.v1beta1.MsgCreateValidator",
+            "module": "staking",
+            "sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "3000000000ubze",
+            "spender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "3000000000ubze",
+            "receiver": "bze1tygms3xhhs3yv487phx3dw4a95jn7t7lule4a5"
+          }
+        },
+        {
+          "type": "create_validator",
+          "attrs": {
+            "amount": "3000000000ubze",
+            "validator": "bzevaloper13nwzm5dfd26ue74jr6sc39gyn3qze0rjzyrzlz"
+          }
+        }
+      ],
+      "Body": {
+        "description": {
+          "moniker": "BonyNode",
+          "identity": "",
+          "website": "https://bonynode.online",
+          "security_contact": "",
+          "details": "BonyNode validator"
+        },
+        "commission": {
+          "rate": "0.100000000000000000",
+          "max_rate": "0.200000000000000000",
+          "max_change_rate": "0.010000000000000000"
+        },
+        "min_self_delegation": "1",
+        "delegator_address": "",
+        "validator_address": "bzevaloper13nwzm5dfd26ue74jr6sc39gyn3qze0rjzyrzlz",
+        "pubkey": {
+          "@type": "/cosmos.crypto.ed25519.PubKey",
+          "key": "0+QWpq01Advi0YWhSCcJfL0NHPMgNxcSEmqYJZJbv7I="
+        },
+        "value": {
+          "denom": "ubze",
+          "amount": "3000000000"
+        }
+      }
+    }
+  ]
+}

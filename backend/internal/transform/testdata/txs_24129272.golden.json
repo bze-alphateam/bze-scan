@@ -1,0 +1,54 @@
+{
+  "transactions": [
+    {
+      "Height": 24129272,
+      "TxIndex": 0,
+      "Hash": "960D43F2FB75722EB40E5D8095CEED137A3F39CB3EF26E131F24CAF7DC2D9A4B",
+      "Time": "2026-08-10T23:42:35.390567726Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 200000,
+      "GasUsed": 121553,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "FeePayer": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher",
+      "Signers": [
+        "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.slashing.v1beta1.MsgUnjail"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 24129272,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.slashing.v1beta1.MsgUnjail",
+      "Sender": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher",
+      "Module": "slashing",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.slashing.v1beta1.MsgUnjail",
+            "module": "slashing",
+            "sender": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher"
+          }
+        }
+      ],
+      "Body": {
+        "validator_addr": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
+      }
+    }
+  ]
+}

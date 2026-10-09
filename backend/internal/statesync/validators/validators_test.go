@@ -326,6 +326,9 @@ func TestResyncOneOfAValidatorTheNodeNoLongerKnows(t *testing.T) {
 	assert.Equal(t, validators.Snapshot{
 		Unbonded: []string{"bzevaloper1gone"},
 		Ranks:    []validators.Ranking{{Operator: "bzevaloper1other", Rank: 1, VotingPowerPct: "100.00000"}},
+		Changes: []validators.Change{
+			{Operator: "bzevaloper1gone", Kind: validators.KindUnbonded, From: validators.StatusBonded, To: validators.StatusUnbonded},
+		},
 	}, st.saved[0])
 }
 
@@ -375,4 +378,114 @@ func TestRank(t *testing.T) {
 			assert.Equal(t, c.want, validators.Rank(c.in))
 		})
 	}
+}
+
+// Stored standings that differ from the recorded node: ChainTools is bonded
+// on the node, PaceVali jailed and unbonded.
+func TestFullResyncWritesTheTransitionsTheChainEmitsNoEventFor(t *testing.T) {
+	n := newFakeNode(t)
+	st := &fakeStore{standings: []validators.Standing{
+		{Operator: chainTools, Status: validators.StatusUnbonded, Tokens: sdkmath.NewInt(1)},
+		{Operator: paceVali, Status: validators.StatusBonded, Tokens: sdkmath.NewInt(1)},
+		{Operator: "bzevaloper1gone", Status: validators.StatusBonded, Tokens: sdkmath.NewInt(1)},
+		{Operator: "bzevaloper1goneunbonded", Status: validators.StatusUnbonded, Tokens: sdkmath.NewInt(1)},
+	}}
+	require.NoError(t, newSet(n, st).FullResync(context.Background()))
+	require.Len(t, st.saved, 1)
+	assert.ElementsMatch(t, []validators.Change{
+		{Operator: chainTools, Kind: validators.KindBonded, From: validators.StatusUnbonded, To: validators.StatusBonded},
+		{Operator: paceVali, Kind: validators.KindUnbonded, From: validators.StatusBonded, To: validators.StatusUnbonded},
+		{Operator: paceVali, Kind: validators.KindJailed, From: false, To: true},
+		{Operator: "bzevaloper1gone", Kind: validators.KindUnbonded, From: validators.StatusBonded, To: validators.StatusUnbonded},
+	}, st.saved[0].Changes, "validators new to the table and unchanged ones write none")
+}
+
+func TestResyncOneWritesItsTransitions(t *testing.T) {
+	cases := map[string]struct {
+		stored validators.Standing
+		want   []validators.Change
+	}{
+		"unchanged": {
+			stored: validators.Standing{Operator: chainTools, Status: validators.StatusBonded},
+		},
+		"bonded again": {
+			stored: validators.Standing{Operator: chainTools, Status: validators.StatusUnbonding},
+			want: []validators.Change{{Operator: chainTools, Kind: validators.KindBonded,
+				From: validators.StatusUnbonding, To: validators.StatusBonded}},
+		},
+		"a stored flag the node no longer has writes nothing: unjailing is the message's": {
+			stored: validators.Standing{Operator: chainTools, Status: validators.StatusBonded, Jailed: true, Tombstoned: true},
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			c.stored.Tokens = sdkmath.NewInt(1)
+			st := &fakeStore{standings: []validators.Standing{c.stored}}
+			require.NoError(t, newSet(newFakeNode(t), st).ResyncOne(context.Background(), chainTools))
+			require.Len(t, st.saved, 1)
+			assert.Equal(t, c.want, st.saved[0].Changes)
+		})
+	}
+}
+
+// A tombstoned signing info on a stored, untombstoned validator.
+func TestResyncFindsATombstoning(t *testing.T) {
+	n := newFakeNode(t)
+	st := &fakeStore{}
+	set := newSet(n, st)
+	require.NoError(t, set.FullResync(context.Background()))
+	var tombstoned []string
+	for _, v := range st.saved[0].Validators {
+		if v.Tombstoned {
+			tombstoned = append(tombstoned, v.OperatorAddress)
+		}
+	}
+	require.NotEmpty(t, tombstoned, "the recorded set has a tombstoned validator")
+
+	st.standings = []validators.Standing{{Operator: tombstoned[0], Status: validators.StatusUnbonded, Jailed: true, Tokens: sdkmath.NewInt(1)}}
+	require.NoError(t, set.FullResync(context.Background()))
+	assert.Contains(t, st.saved[1].Changes,
+		validators.Change{Operator: tombstoned[0], Kind: validators.KindTombstoned, From: false, To: true})
+}
+
+func TestResyncOneByConsensusAddress(t *testing.T) {
+	cons := statesync.ConsKey("090703A2C594C5BA93C0D0E263A9F79AEEE17D10")
+
+	n := newFakeNode(t)
+	st := &fakeStore{standings: []validators.Standing{{
+		Operator: chainTools, Status: validators.StatusBonded, Tokens: sdkmath.NewInt(1),
+		ConsensusAddress: "090703A2C594C5BA93C0D0E263A9F79AEEE17D10",
+	}}}
+	require.NoError(t, newSet(n, st).ResyncOne(context.Background(), cons))
+	require.Len(t, st.saved, 1)
+	assert.False(t, st.saved[0].Full)
+	assert.Equal(t, chainTools, st.saved[0].Validators[0].OperatorAddress)
+	assert.Equal(t, 1, n.callsOf("Validator"))
+
+	// A consensus address no stored validator has: one the sync has not
+	// seen yet, so everything is read again.
+	n, st = newFakeNode(t), &fakeStore{}
+	require.NoError(t, newSet(n, st).ResyncOne(context.Background(), cons))
+	require.Len(t, st.saved, 1)
+	assert.True(t, st.saved[0].Full)
+}
+
+func TestCanonicalLearnsFromTheResyncs(t *testing.T) {
+	cons := statesync.ConsKey("090703A2C594C5BA93C0D0E263A9F79AEEE17D10")
+	n, st := newFakeNode(t), &fakeStore{}
+	set := newSet(n, st)
+	assert.Equal(t, cons, set.Canonical(cons), "nothing synced yet")
+
+	require.NoError(t, set.ResyncOne(context.Background(), chainTools))
+	assert.Equal(t, chainTools, set.Canonical(cons), "from a single resync")
+	assert.Equal(t, chainTools, set.Canonical(chainTools))
+
+	set = newSet(n, st)
+	require.NoError(t, set.FullResync(context.Background()))
+	assert.Equal(t, chainTools, set.Canonical(cons), "from a full resync")
+
+	st.err = errors.New("db down")
+	set = newSet(n, st)
+	require.Error(t, set.FullResync(context.Background()))
+	assert.Equal(t, cons, set.Canonical(cons), "learnt from saved snapshots only")
 }

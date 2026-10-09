@@ -61,6 +61,16 @@ type fakeReader struct {
 	monikers map[string]string
 	vals     []repository.ValidatorSummary
 	err      error
+	// The validator page: one validator, its proposed blocks (newest
+	// first), events and votes.
+	validator   *repository.ValidatorDetail
+	proposed    []repository.BlockSummary
+	valEvents   []repository.ValidatorEvent
+	votes       []repository.ValidatorVote
+	gotCons     string
+	gotOperator string
+	gotAccount  string
+	gotLimits   map[string]int
 
 	gotBefore  *int64
 	gotTxKey   *repository.TxKey
@@ -156,6 +166,8 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
 	e.GET("/validators", h.Validators)
+	e.GET("/validators/:operator", h.Validator)
+	e.GET("/validators/:operator/blocks", h.ValidatorBlocks)
 	e.GET("/search", h.Search)
 	return e
 }
@@ -264,7 +276,7 @@ func TestBlockByHeight(t *testing.T) {
 	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
 	assert.JSONEq(t, `{
 		"height": 25000894, "time": "2026-10-07T12:00:00Z", "hash": "BH", "tx_count": 1, "tx_failed_count": 0,
-		"proposer_cons_address": null, "block_time_ms": null, "size_bytes": null,
+		"proposer_cons_address": null, "block_time_ms": null, "size_bytes": null, "proposer": null,
 		"minted": null, "inflation": null, "fees_distributed": null, "signatures_count": null, "signatures_power_pct": null,
 		"transactions": [{"height": 25000894, "tx_index": 0, "hash": "`+hashUpper+`", "success": true,
 			"msg_types": ["/cosmos.bank.v1beta1.MsgSend"], "fee": [{"denom":"ubze","amount":"2000"}], "signer": "`+account+`"}]

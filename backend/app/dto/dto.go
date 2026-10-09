@@ -68,6 +68,15 @@ type BlockSummary struct {
 	ProposerConsAddress *string   `json:"proposer_cons_address"`
 	BlockTimeMs         *int64    `json:"block_time_ms"`
 	SizeBytes           *int64    `json:"size_bytes"`
+	// Proposer is null while no synced validator has the proposer's
+	// consensus address.
+	Proposer *Proposer `json:"proposer"`
+}
+
+// Proposer names the validator that proposed a block.
+type Proposer struct {
+	OperatorAddress string `json:"operator_address"`
+	Moniker         string `json:"moniker"`
 }
 
 // Block is GET /api/v1/blocks/{height}.
@@ -150,22 +159,125 @@ type Validator struct {
 // NewValidator maps a validator list row. Uptime is 1 − missed / window,
 // from the slashing module's signing info, in percent.
 func NewValidator(v repository.ValidatorSummary) Validator {
-	out := Validator{
+	return Validator{
 		Rank: v.Rank, Moniker: v.Moniker, OperatorAddress: v.OperatorAddress, Tokens: v.Tokens,
 		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
+		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow),
 	}
-	if v.MissedBlocks != nil && v.SignedBlocksWindow != nil && *v.SignedBlocksWindow > 0 {
-		missed := min(max(*v.MissedBlocks, 0), *v.SignedBlocksWindow)
-		// percent with five decimals, half up: (window - missed) * 10^7 / window.
-		scaled := ((*v.SignedBlocksWindow-missed)*20_000_000 + *v.SignedBlocksWindow) / (2 * *v.SignedBlocksWindow)
-		s := strconv.FormatInt(scaled, 10)
-		for len(s) < 6 {
-			s = "0" + s
-		}
-		u := s[:len(s)-5] + "." + s[len(s)-5:]
-		out.Uptime = &u
+}
+
+// uptime is 1 − missed / window in percent with five decimals, half up;
+// nil while the window is unknown.
+func uptime(missedBlocks, window *int64) *string {
+	if missedBlocks == nil || window == nil || *window <= 0 {
+		return nil
+	}
+	missed := min(max(*missedBlocks, 0), *window)
+	// (window - missed) * 10^7 / window, half up.
+	scaled := ((*window-missed)*20_000_000 + *window) / (2 * *window)
+	s := strconv.FormatInt(scaled, 10)
+	for len(s) < 6 {
+		s = "0" + s
+	}
+	u := s[:len(s)-5] + "." + s[len(s)-5:]
+	return &u
+}
+
+// ValidatorDetail is GET /api/v1/validators/{operator}: the list item, every
+// other column, the last proposed blocks, the last events and the owner
+// account's last governance votes.
+type ValidatorDetail struct {
+	Validator
+	AccountAddress          string           `json:"account_address"`
+	ConsensusAddress        *string          `json:"consensus_address"`
+	ConsensusPubkey         *string          `json:"consensus_pubkey"`
+	Identity                *string          `json:"identity"`
+	Website                 *string          `json:"website"`
+	SecurityContact         *string          `json:"security_contact"`
+	Details                 *string          `json:"details"`
+	Tombstoned              bool             `json:"tombstoned"`
+	JailedUntil             *time.Time       `json:"jailed_until"`
+	DelegatorShares         string           `json:"delegator_shares"`
+	CommissionMaxRate       string           `json:"commission_max_rate"`
+	CommissionMaxChangeRate string           `json:"commission_max_change_rate"`
+	CommissionUpdateTime    *time.Time       `json:"commission_update_time"`
+	MinSelfDelegation       *string          `json:"min_self_delegation"`
+	SelfDelegation          *string          `json:"self_delegation"`
+	DelegatorCount          *int64           `json:"delegator_count"`
+	MissedBlocks            *int64           `json:"missed_blocks"`
+	SignedBlocksWindow      *int64           `json:"signed_blocks_window"`
+	FirstSeenHeight         *int64           `json:"first_seen_height"`
+	FirstSeenTime           *time.Time       `json:"first_seen_time"`
+	UpdatedAt               time.Time        `json:"updated_at"`
+	RecentBlocks            []BlockSummary   `json:"recent_blocks"`
+	Events                  []ValidatorEvent `json:"events"`
+	Votes                   []ValidatorVote  `json:"votes"`
+}
+
+// ValidatorEvent is an event of the validator page. TxIndex is -1 and
+// TxHash null for a block-level event (a slash) and for the transitions the
+// state sync found (jailed, tombstoned, bonded, unbonded).
+type ValidatorEvent struct {
+	Height  int64           `json:"height"`
+	TxIndex int64           `json:"tx_index"`
+	TxHash  *string         `json:"tx_hash"`
+	Kind    string          `json:"kind"`
+	Details json.RawMessage `json:"details"`
+	Time    time.Time       `json:"time"`
+}
+
+// ValidatorVote is a governance vote of the validator's owner account.
+// Option is null for a weighted vote, whose split is in Options.
+type ValidatorVote struct {
+	ProposalID int64           `json:"proposal_id"`
+	Title      *string         `json:"title"`
+	Option     *string         `json:"option"`
+	Options    json.RawMessage `json:"options"`
+	Height     int64           `json:"height"`
+	Time       time.Time       `json:"time"`
+}
+
+// NewValidatorDetail maps a validator row with its blocks, events and votes.
+func NewValidatorDetail(v *repository.ValidatorDetail, blocks []repository.BlockSummary,
+	events []repository.ValidatorEvent, votes []repository.ValidatorVote) ValidatorDetail {
+	out := ValidatorDetail{
+		Validator:      NewValidator(v.ValidatorSummary),
+		AccountAddress: v.AccountAddress, ConsensusAddress: v.ConsensusAddress, ConsensusPubkey: v.ConsensusPubkey,
+		Identity: v.Identity, Website: v.Website, SecurityContact: v.SecurityContact, Details: v.Details,
+		Tombstoned: v.Tombstoned, JailedUntil: utc(v.JailedUntil), DelegatorShares: v.DelegatorShares,
+		CommissionMaxRate: v.CommissionMaxRate, CommissionMaxChangeRate: v.CommissionMaxChangeRate,
+		CommissionUpdateTime: utc(v.CommissionUpdateTime), MinSelfDelegation: v.MinSelfDelegation,
+		SelfDelegation: v.SelfDelegation, DelegatorCount: v.DelegatorCount, MissedBlocks: v.MissedBlocks,
+		SignedBlocksWindow: v.SignedBlocksWindow, FirstSeenHeight: v.FirstSeenHeight,
+		FirstSeenTime: utc(v.FirstSeenTime), UpdatedAt: v.UpdatedAt.UTC(),
+		RecentBlocks: make([]BlockSummary, 0, len(blocks)),
+		Events:       make([]ValidatorEvent, 0, len(events)),
+		Votes:        make([]ValidatorVote, 0, len(votes)),
+	}
+	for _, b := range blocks {
+		out.RecentBlocks = append(out.RecentBlocks, NewBlockSummary(b))
+	}
+	for _, e := range events {
+		out.Events = append(out.Events, ValidatorEvent{
+			Height: e.Height, TxIndex: e.TxIndex, TxHash: e.TxHash, Kind: e.Kind,
+			Details: jsonOrNull(e.Details), Time: e.Time.UTC(),
+		})
+	}
+	for _, vote := range votes {
+		out.Votes = append(out.Votes, ValidatorVote{
+			ProposalID: vote.ProposalID, Title: vote.Title, Option: vote.Option,
+			Options: jsonOr(vote.Options, "[]"), Height: vote.Height, Time: vote.Time.UTC(),
+		})
 	}
 	return out
+}
+
+func utc(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }
 
 // Search result types.
@@ -192,10 +304,14 @@ type SearchResult struct {
 
 // NewBlockSummary maps a block list row.
 func NewBlockSummary(b repository.BlockSummary) BlockSummary {
-	return BlockSummary{
+	out := BlockSummary{
 		Height: b.Height, Time: b.Time.UTC(), Hash: b.Hash, TxCount: b.TxCount, TxFailedCount: b.TxFailedCount,
 		ProposerConsAddress: b.ProposerConsAddress, BlockTimeMs: b.BlockTimeMs, SizeBytes: b.SizeBytes,
 	}
+	if b.Proposer != nil {
+		out.Proposer = &Proposer{OperatorAddress: b.Proposer.OperatorAddress, Moniker: b.Proposer.Moniker}
+	}
+	return out
 }
 
 // NewBlock maps a block with its transactions.

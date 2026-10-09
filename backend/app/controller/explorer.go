@@ -54,7 +54,20 @@ type ExplorerReader interface {
 	// Validators lists the validators of status (all when nil) in rank
 	// order, after the list position after.
 	Validators(ctx context.Context, status *string, after int64, limit int) ([]repository.ValidatorSummary, error)
+	Validator(ctx context.Context, operator string) (*repository.ValidatorDetail, error)
+	// ValidatorBlocks lists the blocks proposed by consensus address cons,
+	// below before when it is set.
+	ValidatorBlocks(ctx context.Context, cons string, before *int64, limit int) ([]repository.BlockSummary, error)
+	ValidatorEvents(ctx context.Context, operator string, limit int) ([]repository.ValidatorEvent, error)
+	VotesOf(ctx context.Context, account string, limit int) ([]repository.ValidatorVote, error)
 }
+
+// Sizes of the lists of the validator page.
+const (
+	ValidatorRecentBlocks = 10
+	ValidatorRecentEvents = 20
+	ValidatorRecentVotes  = 20
+)
 
 // ExplorerController serves the block, transaction and search routes under
 // /api/v1.
@@ -112,7 +125,13 @@ func (h *ExplorerController) Block(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	// The proposer's name is the one field of a block that can still
+	// change: it is null until the state sync knows the validator.
+	cache := CacheImmutable
+	if b.ProposerConsAddress != nil && b.Proposer == nil {
+		cache = CacheNoStore
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, cache)
 	return c.JSON(http.StatusOK, dto.NewBlock(b))
 }
 
@@ -214,6 +233,82 @@ func (h *ExplorerController) Validators(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
+}
+
+// Validator serves GET /api/v1/validators/{operator}: the validator, its
+// last proposed blocks, its last events and its owner's last votes.
+func (h *ExplorerController) Validator(c *echo.Context) error {
+	ctx := c.Request().Context()
+	v, err := h.validator(c)
+	if err != nil {
+		return err
+	}
+	var blocks []repository.BlockSummary
+	if v.ConsensusAddress != nil {
+		if blocks, err = h.repo.ValidatorBlocks(ctx, *v.ConsensusAddress, nil, ValidatorRecentBlocks); err != nil {
+			return err
+		}
+	}
+	events, err := h.repo.ValidatorEvents(ctx, v.OperatorAddress, ValidatorRecentEvents)
+	if err != nil {
+		return err
+	}
+	votes, err := h.repo.VotesOf(ctx, v.AccountAddress, ValidatorRecentVotes)
+	if err != nil {
+		return err
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, dto.NewValidatorDetail(v, blocks, events, votes))
+}
+
+// ValidatorBlocks serves GET /api/v1/validators/{operator}/blocks?cursor&limit:
+// the blocks the validator proposed, by height descending.
+func (h *ExplorerController) ValidatorBlocks(c *echo.Context) error {
+	v, err := h.validator(c)
+	if err != nil {
+		return err
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var before *int64
+	if keys, err := parseCursor(c, 1); err != nil {
+		return err
+	} else if keys != nil {
+		before = &keys[0]
+	}
+	resp := dto.List[dto.BlockSummary]{Items: []dto.BlockSummary{}}
+	if v.ConsensusAddress != nil {
+		rows, err := h.repo.ValidatorBlocks(c.Request().Context(), *v.ConsensusAddress, before, limit+1)
+		if err != nil {
+			return err
+		}
+		for i, b := range rows {
+			if i == limit {
+				next := dto.EncodeCursor(rows[i-1].Height)
+				resp.NextCursor = &next
+				break
+			}
+			resp.Items = append(resp.Items, dto.NewBlockSummary(b))
+		}
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// validator loads the validator of the operator path parameter: 400 for
+// anything but a bzevaloper1 address, 404 when it is not synced.
+func (h *ExplorerController) validator(c *echo.Context) (*repository.ValidatorDetail, error) {
+	hrp, operator, ok := bech32Address(c.Param("operator"))
+	if !ok || hrp != validatorPrefix {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "operator must be a bzevaloper1 address")
+	}
+	v, err := h.repo.Validator(c.Request().Context(), operator)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("validator %s is not known", operator))
+	}
+	return v, err
 }
 
 // Search serves GET /api/v1/search?q=. The input decides what is looked

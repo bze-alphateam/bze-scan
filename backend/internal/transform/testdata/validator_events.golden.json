@@ -1,0 +1,86 @@
+{
+  "22933748": [
+    {
+      "Height": 22933748,
+      "TxIndex": 0,
+      "Seq": 0,
+      "Operator": "bzevaloper1mzqtykn6nq6ukeq0wvr0zvzldt8y2elur3vug3",
+      "ConsensusAddress": "",
+      "Kind": "commission_changed",
+      "Details": {
+        "to": "0.200000000000000000"
+      },
+      "CommissionFrom": true,
+      "Time": "2026-05-24T03:17:17.029546476Z"
+    }
+  ],
+  "24113494": [
+    {
+      "Height": 24113494,
+      "TxIndex": 0,
+      "Seq": 0,
+      "Operator": "bzevaloper13nwzm5dfd26ue74jr6sc39gyn3qze0rjzyrzlz",
+      "ConsensusAddress": "",
+      "Kind": "created",
+      "Details": {
+        "commission_rate": "0.100000000000000000",
+        "moniker": "BonyNode",
+        "self_bond": "3000000000ubze"
+      },
+      "CommissionFrom": false,
+      "Time": "2026-08-09T22:17:30.108825268Z"
+    }
+  ],
+  "24129272": [
+    {
+      "Height": 24129272,
+      "TxIndex": 0,
+      "Seq": 0,
+      "Operator": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu",
+      "ConsensusAddress": "",
+      "Kind": "unjailed",
+      "Details": null,
+      "CommissionFrom": false,
+      "Time": "2026-08-10T23:42:35.390567726Z"
+    }
+  ],
+  "24151894": [
+    {
+      "Height": 24151894,
+      "TxIndex": 0,
+      "Seq": 0,
+      "Operator": "bzevaloper13nwzm5dfd26ue74jr6sc39gyn3qze0rjzyrzlz",
+      "ConsensusAddress": "",
+      "Kind": "description_changed",
+      "Details": {
+        "to": {
+          "details": "💚24/7 management and monitoring!",
+          "identity": "C5C24B65139B46BE",
+          "moniker": "BonyNode💚",
+          "security_contact": "support@bonynode.online",
+          "website": "https://bonynode.online"
+        }
+      },
+      "CommissionFrom": false,
+      "Time": "2026-08-12T11:10:22.360925315Z"
+    }
+  ],
+  "24160001": [
+    {
+      "Height": 24160001,
+      "TxIndex": -1,
+      "Seq": 0,
+      "Operator": "",
+      "ConsensusAddress": "EFF58FAD4559319233C282F942C38A0BE8F50120",
+      "Kind": "slashed",
+      "Details": {
+        "burned": "613806200",
+        "consensus_address": "EFF58FAD4559319233C282F942C38A0BE8F50120",
+        "power": "6138062",
+        "reason": "missing_signature"
+      },
+      "CommissionFrom": false,
+      "Time": "2026-08-13T00:52:42.909984035Z"
+    }
+  ]
+}

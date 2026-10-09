@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,27 @@ const (
 // is known to touch the set but not which entry (a slash names a consensus
 // address, a validator leaving the active set names a key).
 const All = "*"
+
+// consPrefix starts the keys of the validators set that name a validator by
+// its consensus address: the slash and liveness events and the validator
+// updates of a block carry no operator address, and the transformer has no
+// table to look one up in.
+const consPrefix = "cons:"
+
+// ConsKey is the validators-set key of the validator whose consensus
+// address is hexAddr (upper-case hex, as /block reports the proposer).
+func ConsKey(hexAddr string) string {
+	if hexAddr == "" {
+		return ""
+	}
+	return consPrefix + strings.ToUpper(hexAddr)
+}
+
+// ConsAddress returns the consensus address of a key made by ConsKey, and
+// false for any other key.
+func ConsAddress(key string) (string, bool) {
+	return strings.CutPrefix(key, consPrefix)
+}
 
 // Dirty is the current state one block changed: per set name, the keys to
 // resync (a validator's operator address, a proposal id, a denom…). The zero
@@ -87,6 +109,14 @@ type Set interface {
 	FullResync(ctx context.Context) error
 	// ResyncOne rewrites the entry key (never All, which is a FullResync).
 	ResyncOne(ctx context.Context, key string) error
+}
+
+// Canonicaliser is implemented by sets whose entries have several keys (a
+// validator: its operator address and its consensus address). Publish folds
+// every key into the one Canonical returns before queueing, so one entry
+// marked under two keys is resynced once.
+type Canonicaliser interface {
+	Canonical(key string) string
 }
 
 // Cursorer is implemented by sets that keep a position across runs (a denom
@@ -183,9 +213,35 @@ func New(cfg Config, jobs JobStore, sets ...Set) *Syncer {
 func (s *Syncer) Publish(d Dirty) {
 	for _, set := range s.sets {
 		for _, k := range d.Keys(set.Name()) {
-			s.enqueue(job{set: set.Name(), key: k})
+			s.enqueue(s.canonical(job{set: set.Name(), key: k}))
 		}
 	}
+}
+
+// canonical folds the key of j when its set is a Canonicaliser.
+func (s *Syncer) canonical(j job) job {
+	if c, ok := s.byID[j.set].(Canonicaliser); ok && j.key != All {
+		j.key = c.Canonical(j.key)
+	}
+	return j
+}
+
+// refold folds the queued keys again and drops the duplicates: keys
+// published before the start resyncs taught the sets their aliases.
+func (s *Syncer) refold() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	queue := s.queue[:0:0]
+	queued := map[job]bool{}
+	for _, j := range s.queue {
+		j = s.canonical(j)
+		if queued[j] || (j.key != All && queued[job{set: j.set, key: All}]) {
+			continue
+		}
+		queued[j] = true
+		queue = append(queue, j)
+	}
+	s.queue, s.queued = queue, queued
 }
 
 func (s *Syncer) enqueue(j job) {
@@ -227,6 +283,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		}
 		_ = s.run(ctx, job{set: set.Name(), key: All})
 	}
+	s.refold()
 
 	var wg sync.WaitGroup
 	for range s.cfg.Workers {

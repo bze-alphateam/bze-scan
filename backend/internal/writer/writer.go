@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -237,6 +238,19 @@ type msgRow struct {
 	Body     json.RawMessage `json:"body"`
 }
 
+// validatorEventRow is the JSON shape of the validator_events bulk write.
+type validatorEventRow struct {
+	Height           int64           `json:"height"`
+	TxIndex          int             `json:"tx_index"`
+	Seq              int             `json:"seq"`
+	OperatorAddress  string          `json:"operator_address"`
+	Kind             string          `json:"kind"`
+	Details          json.RawMessage `json:"details"`
+	Time             time.Time       `json:"time"`
+	ConsensusAddress *string         `json:"consensus_address"`
+	CommissionFrom   bool            `json:"commission_from"`
+}
+
 // ChunkRows bounds the rows of one multi-row statement.
 const ChunkRows = 1000
 
@@ -251,8 +265,8 @@ type statement struct {
 	inserted func(rows pgx.Rows, into *Inserted) error
 }
 
-// rowStatements returns the bulk writes of the transactions and messages of
-// ents, in chunks of ChunkRows rows. top names the write in errors.
+// rowStatements returns the bulk writes of the transactions, messages and
+// validator_events of ents, in chunks of ChunkRows rows. top names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
 	for _, t := range ents.Transactions {
@@ -278,6 +292,18 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
 		})
 	}
+	valRows := make([]validatorEventRow, 0, len(ents.ValidatorEvents))
+	for _, v := range ents.ValidatorEvents {
+		details, err := json.Marshal(v.Details)
+		if err != nil {
+			return nil, fmt.Errorf("write %d: validator_events: details: %w", top, err)
+		}
+		valRows = append(valRows, validatorEventRow{
+			Height: v.Height, TxIndex: v.TxIndex, Seq: v.Seq, OperatorAddress: v.Operator, Kind: v.Kind,
+			Details: details, Time: v.Time, ConsensusAddress: nullIfEmpty(v.ConsensusAddress),
+			CommissionFrom: v.CommissionFrom,
+		})
+	}
 	txs, err := chunked(top, "transactions", transactionsTable, mode, txRows, scanTransactionKeys)
 	if err != nil {
 		return nil, err
@@ -286,7 +312,11 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return append(txs, msgs...), nil
+	vals, err := chunked(top, "validator_events", validatorEventsTable, mode, valRows, nil)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:
