@@ -187,4 +187,43 @@ var (
 			{name: "body", typ: "jsonb", expr: "NULLIF(body, 'null'::jsonb)"},
 		},
 	}
+	validatorEventsTable = table{
+		name: "explorer.validator_events",
+		keys: []string{"height", "tx_index", "seq"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "seq", typ: "integer"},
+			{name: "operator_address", typ: "text", expr: validatorEventOperator},
+			{name: "kind", typ: "text"},
+			{name: "details", typ: "jsonb", expr: validatorEventDetails},
+			{name: "time", typ: "timestamptz"},
+		},
+		inputs: []column{
+			{name: "consensus_address", typ: "text"},
+			{name: "commission_from", typ: "boolean"},
+		},
+	}
 )
+
+// validatorEventOperator is the operator of a validator_events row: the
+// transformer's, else (a slash) the one the row already holds, else the
+// validator with the slash's consensus address, else ” until the state
+// sync resolves it.
+const validatorEventOperator = `COALESCE(NULLIF(r.operator_address, ''),
+		(SELECT e.operator_address FROM explorer.validator_events e
+		  WHERE e.height = r.height AND e.tx_index = r.tx_index AND e.seq = r.seq AND e.operator_address <> ''),
+		(SELECT v.operator_address FROM explorer.validators v
+		  WHERE v.consensus_address = r.consensus_address ORDER BY v.operator_address LIMIT 1),
+		'')`
+
+// validatorEventDetails adds "from" to a commission change: the value the
+// row already holds (so a reindex keeps the live path's exact one), else the
+// validator's stored commission rate.
+const validatorEventDetails = `CASE WHEN r.commission_from THEN
+		jsonb_build_object('from', COALESCE(
+			(SELECT e.details->'from' FROM explorer.validator_events e
+			  WHERE e.height = r.height AND e.tx_index = r.tx_index AND e.seq = r.seq),
+			to_jsonb((SELECT v.commission_rate::text FROM explorer.validators v
+			           WHERE v.operator_address = r.operator_address)))) || r.details
+		ELSE NULLIF(r.details, 'null'::jsonb) END`

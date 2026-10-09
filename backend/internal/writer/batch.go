@@ -127,6 +127,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Blocks = append(all.Blocks, e.Blocks...)
 		all.Transactions = append(all.Transactions, e.Transactions...)
 		all.Messages = append(all.Messages, e.Messages...)
+		all.ValidatorEvents = append(all.ValidatorEvents, e.ValidatorEvents...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil

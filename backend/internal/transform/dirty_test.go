@@ -14,15 +14,29 @@ import (
 )
 
 // A recorded restake: an authz MsgExec of delegations to one validator,
-// whose power change is in the block's validator updates.
+// whose power change is in the block's validator updates. The delegation
+// names the operator, the update the consensus address of the same
+// validator; the syncer folds the two (statesync.Canonicaliser).
 func TestRecordedDelegationsMarkTheirValidator(t *testing.T) {
 	n := fakenode.New(t)
 	in := fetchInput(t, n, 25000440)
 	require.NotEmpty(t, in.Results.ValidatorUpdates)
 	ents, err := realTransformer(t).Transform(in)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m"}, ents.Dirty.Keys(statesync.Validators),
-		"a power change the events explain asks for that validator only")
+	assert.Equal(t, []string{
+		"bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+		statesync.ConsKey("090703A2C594C5BA93C0D0E263A9F79AEEE17D10"),
+	}, ents.Dirty.Keys(statesync.Validators))
+}
+
+// A recorded downtime slash: the liveness event, the slash event and the
+// validator update removing it from the active set all name one validator,
+// which is marked once.
+func TestRecordedSlashMarksTheSlashedValidatorOnce(t *testing.T) {
+	n := fakenode.New(t)
+	ents, err := realTransformer(t).Transform(fetchInput(t, n, 24160001))
+	require.NoError(t, err)
+	assert.Equal(t, []string{statesync.ConsKey(scafireCons)}, ents.Dirty.Keys(statesync.Validators))
 }
 
 func TestBlocksWithoutStakingChangesAreClean(t *testing.T) {
@@ -34,8 +48,20 @@ func TestBlocksWithoutStakingChangesAreClean(t *testing.T) {
 	}
 }
 
+// Scafire, slashed and jailed at 24160001, and ChainTools.
+const (
+	scafireBech32       = "bzevalcons1al6clt29tyceyv7zstu59su2p0502qfq8pu2d3"
+	scafireCons         = "EFF58FAD4559319233C282F942C38A0BE8F50120"
+	scafireUpdateKey    = `{"Sum":{"type":"tendermint.crypto.PublicKey_Ed25519","value":{"ed25519":"oR/+r77iVloVCK5qHDck8K/fOjwjQbUHnLJw4cuHOqg="}}}`
+	chainToolsCons      = "090703A2C594C5BA93C0D0E263A9F79AEEE17D10"
+	chainToolsUpdateKey = `{"Sum":{"type":"tendermint.crypto.PublicKey_Ed25519","value":{"ed25519":"ikmP1GM73Y1vVKsLZYjFENPGve7uLWV3Q+8YF60LHMA="}}}`
+)
+
 func TestValidatorDirtyRules(t *testing.T) {
 	ev := func(typ string, kv ...string) node.Event { return node.Event{Type: typ, Attributes: attrs(kv...)} }
+	update := func(pubKey string, power int64) node.ValidatorUpdate {
+		return node.ValidatorUpdate{PubKey: json.RawMessage(pubKey), Power: power}
+	}
 	cases := map[string]struct {
 		res      node.TxResult
 		msgs     []chain.Msg
@@ -68,16 +94,24 @@ func TestValidatorDirtyRules(t *testing.T) {
 				{TypeURL: "/cosmos.staking.v1beta1.MsgEditValidator", Body: json.RawMessage(`{"validator_address":"v1"}`)},
 			},
 		},
-		"a slash names a consensus address: every validator": {
+		"slash and liveness name a consensus address": {
+			finalize: []node.Event{
+				ev("liveness", "address", scafireBech32, "missed_blocks", "8001"),
+				ev("slash", "address", scafireBech32, "reason", "missing_signature"),
+			},
+			want: []string{statesync.ConsKey(scafireCons)},
+		},
+		"an unreadable consensus address: every validator": {
 			finalize: []node.Event{ev("slash", "address", "bzevalcons1x", "reason", "missing_signature")},
 			want:     []string{statesync.All},
 		},
-		"leaving the active set: every validator": {
-			updates: []node.ValidatorUpdate{{Power: 10}, {Power: 0}},
-			want:    []string{statesync.All},
+		"each validator update by its consensus address": {
+			updates: []node.ValidatorUpdate{update(scafireUpdateKey, 0), update(chainToolsUpdateKey, 10)},
+			want:    []string{statesync.ConsKey(chainToolsCons), statesync.ConsKey(scafireCons)},
 		},
-		"a power change alone is explained by its events": {
+		"an unreadable validator update: every validator": {
 			updates: []node.ValidatorUpdate{{Power: 10}},
+			want:    []string{statesync.All},
 		},
 		"other events": {
 			res: node.TxResult{Events: []node.Event{ev("withdraw_rewards", "validator", "v1"), ev("transfer", "sender", "x")}},

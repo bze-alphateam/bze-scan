@@ -315,3 +315,96 @@ func TestRunOnceRunsEverySetAndJoinsTheFailures(t *testing.T) {
 	a.err = nil
 	require.NoError(t, s.RunOnce(context.Background()))
 }
+
+// canonicalSet folds the keys of aliases into their canonical one.
+type canonicalSet struct {
+	*fakeSet
+	aliases map[string]string
+}
+
+func (s canonicalSet) Canonical(key string) string {
+	if c, ok := s.aliases[key]; ok {
+		return c
+	}
+	return key
+}
+
+func TestPublishFoldsAnEntryMarkedUnderSeveralKeys(t *testing.T) {
+	rec := &recorder{}
+	gate := make(chan struct{})
+	set := canonicalSet{
+		fakeSet: &fakeSet{name: "v", interval: time.Hour, rec: rec, gate: map[string]chan struct{}{"busy": gate}, started: make(chan string, 100)},
+		aliases: map[string]string{statesync.ConsKey("ab01"): "op1"},
+	}
+	s := statesync.New(statesync.Config{Workers: 1, Log: quietLog(), Clock: newFakeClock()}, &fakeJobs{}, set)
+	start(t, s)
+	eventually(t, func() bool { return rec.count("v:*") == 1 }, "the start resync")
+
+	var busy statesync.Dirty
+	busy.Mark("v", "busy")
+	s.Publish(busy)
+	require.Equal(t, "busy", <-set.started)
+
+	// A delegation names the operator, the validator update the consensus
+	// address of the same validator; an unknown consensus address stays.
+	var d statesync.Dirty
+	d.Mark("v", "op1")
+	d.Mark("v", statesync.ConsKey("AB01"))
+	d.Mark("v", statesync.ConsKey("CD02"))
+	s.Publish(d)
+	close(gate)
+
+	eventually(t, func() bool { return len(rec.list()) == 4 }, "busy, op1 and the unknown one")
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, []string{"v:*", "v:busy", "v:op1", "v:cons:CD02"}, rec.list(), "keys queue in sorted order, cons:AB01 as op1")
+}
+
+func TestConsKey(t *testing.T) {
+	assert.Equal(t, "cons:AB01", statesync.ConsKey("ab01"))
+	assert.Empty(t, statesync.ConsKey(""), "Mark ignores it")
+	addr, ok := statesync.ConsAddress("cons:AB01")
+	assert.True(t, ok)
+	assert.Equal(t, "AB01", addr)
+	_, ok = statesync.ConsAddress("bzevaloper1x")
+	assert.False(t, ok)
+}
+
+// learningSet knows its aliases only after its first full resync, as the
+// validators set does.
+type learningSet struct {
+	*fakeSet
+	mu      sync.Mutex
+	learned bool
+}
+
+func (s *learningSet) FullResync(ctx context.Context) error {
+	s.mu.Lock()
+	s.learned = true
+	s.mu.Unlock()
+	return s.fakeSet.FullResync(ctx)
+}
+
+func (s *learningSet) Canonical(key string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.learned && key == statesync.ConsKey("AB01") {
+		return "op1"
+	}
+	return key
+}
+
+func TestKeysPublishedBeforeTheStartAreFoldedAfterIt(t *testing.T) {
+	rec := &recorder{}
+	set := &learningSet{fakeSet: &fakeSet{name: "v", interval: time.Hour, rec: rec}}
+	s := statesync.New(statesync.Config{Workers: 1, Log: quietLog(), Clock: newFakeClock()}, &fakeJobs{}, set)
+
+	var d statesync.Dirty
+	d.Mark("v", "op1")
+	d.Mark("v", statesync.ConsKey("AB01"))
+	s.Publish(d)
+	start(t, s)
+
+	eventually(t, func() bool { return len(rec.list()) == 2 }, "the start resync and op1")
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, []string{"v:*", "v:op1"}, rec.list())
+}
