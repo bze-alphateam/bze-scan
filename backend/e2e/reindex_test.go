@@ -77,6 +77,8 @@ func (e *reindexEnv) rows(t *testing.T) []string {
 		SELECT 'b ' || xmin || ' ' || row_to_json(b)::text FROM explorer.blocks b
 		UNION ALL SELECT 't ' || xmin || ' ' || row_to_json(x)::text FROM explorer.transactions x
 		UNION ALL SELECT 'm ' || xmin || ' ' || row_to_json(m)::text FROM explorer.messages m
+		UNION ALL SELECT 'x ' || xmin || ' ' || row_to_json(x)::text FROM explorer.transfers x
+		UNION ALL SELECT 'e ' || xmin || ' ' || row_to_json(e)::text FROM explorer.block_events e
 		ORDER BY 1`)
 }
 
@@ -94,7 +96,7 @@ func withoutVersions(rows []string) []string {
 
 func (e *reindexEnv) deleteHeight(t *testing.T, h int64) {
 	t.Helper()
-	for _, table := range []string{"messages", "transactions", "blocks"} {
+	for _, table := range []string{"messages", "transactions", "transfers", "block_events", "blocks"} {
 		_, err := e.db.Exec(`DELETE FROM explorer.`+table+` WHERE height = $1`, h)
 		require.NoError(t, err)
 	}
@@ -197,6 +199,8 @@ func TestReindexOverwritesRowsThatDiffer(t *testing.T) {
 		`UPDATE explorer.blocks SET tx_count = 99, hash = 'WRONG', block_time_ms = 1 WHERE height = 24998321`,
 		`UPDATE explorer.transactions SET gas_used = 1, signers = '{}' WHERE height = 24998321`,
 		`UPDATE explorer.messages SET module = 'wrong', body = NULL, events = '[]' WHERE height = 24998321`,
+		`UPDATE explorer.transfers SET amount = 1, recipient = NULL, msg_index = 7 WHERE height = 24998321`,
+		`UPDATE explorer.block_events SET type = 'wrong', attrs = '{}' WHERE height = 24998321`,
 	} {
 		_, err := e.db.Exec(q)
 		require.NoError(t, err)

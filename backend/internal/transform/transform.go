@@ -40,6 +40,11 @@ type Entities struct {
 	// ValidatorEvents are the validator_events rows of the heights' slash
 	// events and validator messages.
 	ValidatorEvents []ValidatorEvent
+	// Transfers are the transfers rows of the heights' transactions and
+	// finalize-block events.
+	Transfers []Transfer
+	// BlockEvents are the block_events rows of the heights.
+	BlockEvents []BlockEvent
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -135,6 +140,7 @@ type Transformer struct {
 	log          logrus.FieldLogger
 	feeCollector string
 	distribution string
+	mint         string
 }
 
 // New returns a transformer for the BZE chain that decodes transactions with
@@ -145,6 +151,7 @@ func New(decoder Decoder, log logrus.FieldLogger) *Transformer {
 		log:          log,
 		feeCollector: chain.ModuleAddress(chain.FeeCollector),
 		distribution: chain.ModuleAddress(chain.Distribution),
+		mint:         chain.ModuleAddress(chain.Mint),
 	}
 }
 
@@ -211,6 +218,10 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 
 	ents.Blocks = []Block{b}
 	slashEvents(ents, b, in.Results.FinalizeBlockEvents)
+	if err := t.blockTransfers(ents, h, in.Results.FinalizeBlockEvents); err != nil {
+		return nil, fmt.Errorf("transform %d: %w", h, err)
+	}
+	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
 	for i, raw := range in.Block.Txs {
 		if err := t.transaction(ents, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
@@ -334,7 +345,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 		ents.Messages = append(ents.Messages, msg)
 	}
 	ents.Transactions = append(ents.Transactions, tx)
-	return nil
+	return txTransfers(ents, b.Height, i, res)
 }
 
 // eventsByMsgIndex groups a transaction's events by their msg_index

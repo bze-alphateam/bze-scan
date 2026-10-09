@@ -251,9 +251,10 @@ every later route follows:
 | Route | Answers |
 | --- | --- |
 | `GET /api/v1/blocks?cursor&limit` | blocks, height descending: height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes, `proposer` (`{operator_address, moniker}` of the validator with that consensus address, null while none is synced) |
-| `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer); 400 unless a positive integer, 404 when not indexed |
+| `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer), `transfers` (the block's own moves, as on the transaction page, `msg_index` null) and `events` (its first 100 stored block events: seq, type, attrs) with `events_next_cursor` (null when they are all there); 400 unless a positive integer, 404 when not indexed |
+| `GET /api/v1/blocks/{height}/events?cursor&limit` | the block's stored events in order (seq, type, attrs); immutable once the block is indexed; 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
-| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
+| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400 |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
@@ -470,6 +471,31 @@ registers by hand. `go.mod` repeats the chain's `replace` directives.
   Bytes that are not a transaction at all still get their `transactions` row
   from the block results.
 
+### Transfers and block events
+
+`explorer.transfers` is where the funds went, one row per coin:
+
+- In a transaction, its `transfer` (`kind = transfer`), `coinbase` (`mint`,
+  recipient only) and `burn` (`burn`, sender only) events in emission order,
+  `seq` counting from 0 and `msg_index` from the event (NULL for the ante
+  handler's fee transfer). A failed transaction keeps its fee row only. A
+  `transfer` without a sender (a `MsgMultiSend` output) takes the sender of
+  the message event before it.
+- In the block's finalize events, the same with `tx_index = -1`, minus the
+  routine moves the `blocks` row already summarises: the mint module's
+  `coinbase`, its transfer to `fee_collector` and `fee_collector`'s transfer
+  to `distribution`, recognised by the module addresses. Order settlements,
+  unbonding completions, payouts, burns and prizes are rows.
+
+`explorer.block_events` keeps the finalize events whose type the block-event
+classification (`internal/classify`) lists, `seq` being the event's position
+in the list and `attrs` its attributes (typed values decoded). Routine events
+(`mint`, `commission`, `rewards`, `proposer_reward`, `coin_spent`,
+`coin_received`, `coinbase`, `transfer`, `message`, `liveness`) are never
+stored. A type added to the classification later needs a reindex of the
+range. The wording a page shows ("transaction fee", "paid to the seller") is
+derived at read time; the tables hold facts only.
+
 ### Accounts
 
 Every signer of every transaction gets an `explorer.accounts` row:
@@ -657,7 +683,10 @@ out-of-gas `MsgCreateOrder`), 24999134 (multi-message `MsgCreateOrder`),
 commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
 24151894 (`MsgEditValidator` of a description) and 24160001 (a downtime
 `slash`, its `liveness` event and the validator update removing it from the
-active set). Recording a new height leaves `status.json` and `above_tip.json`
+active set). Transfers and block events come from the same heights: the fills
+of 24999134 (settlements at block level, `OrderExecutedEvent`), the failed
+transaction of 24999004 (its fee row only), the slash of 24160001 (a burn) and
+the empty 24998317. Recording a new height leaves `status.json` and `above_tip.json`
 as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten

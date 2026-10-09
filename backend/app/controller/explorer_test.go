@@ -83,6 +83,28 @@ type fakeReader struct {
 	labels     []repository.Label
 	gotSearch  []string
 	searchErrs map[string]error
+
+	// transfers by (height, tx_index); events of f.block.
+	transfers    map[[2]int64][]repository.Transfer
+	events       []repository.BlockEvent
+	gotTransfers [][2]int64
+	transfersErr error
+}
+
+func (f *fakeReader) Transfers(_ context.Context, height, txIndex int64) ([]repository.Transfer, error) {
+	f.gotTransfers = append(f.gotTransfers, [2]int64{height, txIndex})
+	return f.transfers[[2]int64{height, txIndex}], f.transfersErr
+}
+
+func (f *fakeReader) BlockEvents(_ context.Context, _, after int64, limit int) ([]repository.BlockEvent, error) {
+	f.gotAfter, f.gotLimit = after, limit
+	var out []repository.BlockEvent
+	for _, e := range f.events {
+		if e.Seq > after && len(out) < limit {
+			out = append(out, e)
+		}
+	}
+	return out, f.err
 }
 
 func (f *fakeReader) SearchLabels(_ context.Context, q string, limit int) ([]repository.Label, error) {
@@ -189,6 +211,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	h := controller.NewExplorerController(r)
 	e.GET("/blocks", h.Blocks)
 	e.GET("/blocks/:height", h.Block)
+	e.GET("/blocks/:height/events", h.BlockEvents)
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
 	e.GET("/validators", h.Validators)
@@ -291,12 +314,18 @@ func TestMalformedCursorIsBadRequest(t *testing.T) {
 }
 
 func TestBlockByHeight(t *testing.T) {
-	signer := account
+	signer, pool := account, "bze1pool"
 	f := &fakeReader{block: &repository.Block{
 		BlockSummary: repository.BlockSummary{Height: 25000894, Time: time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC), Hash: "BH", TxCount: 1},
 		Transactions: []repository.BlockTx{{TxIndex: 0, Hash: hashUpper, Success: true,
 			MsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"}, Fee: json.RawMessage(`[{"denom":"ubze","amount":"2000"}]`), Signer: &signer}},
-	}}
+	},
+		transfers: map[[2]int64][]repository.Transfer{{25000894, repository.BlockTxIndex}: {
+			{Seq: 0, Kind: "transfer", Sender: &pool, Recipient: &signer, Denom: "ubze", Amount: "9",
+				SenderLabel: &repository.Label{Address: pool, Name: "DEX", Kind: "module"}},
+		}},
+		events: []repository.BlockEvent{{Seq: 7, Type: "bze.tradebin.OrderExecutedEvent", Attrs: json.RawMessage(`{"id":"1"}`)}},
+	}
 	rec := get(t, newAPI(f), "/blocks/25000894")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
@@ -305,8 +334,70 @@ func TestBlockByHeight(t *testing.T) {
 		"proposer_cons_address": null, "block_time_ms": null, "size_bytes": null, "proposer": null,
 		"minted": null, "inflation": null, "fees_distributed": null, "signatures_count": null, "signatures_power_pct": null,
 		"transactions": [{"height": 25000894, "tx_index": 0, "hash": "`+hashUpper+`", "success": true,
-			"msg_types": ["/cosmos.bank.v1beta1.MsgSend"], "fee": [{"denom":"ubze","amount":"2000"}], "signer": "`+account+`"}]
+			"msg_types": ["/cosmos.bank.v1beta1.MsgSend"], "fee": [{"denom":"ubze","amount":"2000"}], "signer": "`+account+`"}],
+		"transfers": [{"seq": 0, "msg_index": null, "kind": "transfer", "sender": "bze1pool",
+			"sender_label": {"name": "DEX", "kind": "module"}, "recipient": "`+account+`", "recipient_label": null,
+			"denom": "ubze", "amount": "9", "symbol": null, "exponent": null}],
+		"events": [{"seq": 7, "type": "bze.tradebin.OrderExecutedEvent", "attrs": {"id": "1"}}],
+		"events_next_cursor": null
 	}`, rec.Body.String())
+	assert.Equal(t, [][2]int64{{25000894, -1}}, f.gotTransfers, "the block's own transfers")
+	assert.Equal(t, int64(-1), f.gotAfter)
+	assert.Equal(t, controller.BlockEventsInline+1, f.gotLimit)
+}
+
+func blockWithEvents(n int) *fakeReader {
+	f := &fakeReader{block: &repository.Block{BlockSummary: repository.BlockSummary{Height: 50}}}
+	for i := range n {
+		f.events = append(f.events, repository.BlockEvent{Seq: int64(2 * i), Type: "slash", Attrs: json.RawMessage(`{}`)})
+	}
+	return f
+}
+
+func TestBlockCarriesTheFirstEventsAndACursorToTheRest(t *testing.T) {
+	f := blockWithEvents(controller.BlockEventsInline + 3)
+	e := newAPI(f)
+	b := decode[dto.Block](t, get(t, e, "/blocks/50"))
+	require.Len(t, b.Events, controller.BlockEventsInline)
+	require.NotNil(t, b.EventsNextCursor)
+
+	rec := get(t, e, "/blocks/50/events?cursor="+*b.EventsNextCursor)
+	require.Equal(t, http.StatusOK, rec.Code)
+	page := decode[dto.List[dto.BlockEvent]](t, rec)
+	require.Len(t, page.Items, 3)
+	assert.Equal(t, int64(2*controller.BlockEventsInline), page.Items[0].Seq, "continues after the last inline event")
+	assert.Nil(t, page.NextCursor)
+}
+
+func TestBlockEventsPaginates(t *testing.T) {
+	f := blockWithEvents(5)
+	e := newAPI(f)
+
+	rec := get(t, e, "/blocks/50/events?limit=2")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl), "an indexed block's events never change")
+	page := decode[dto.List[dto.BlockEvent]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, []int64{0, 2}, []int64{page.Items[0].Seq, page.Items[1].Seq})
+	require.NotNil(t, page.NextCursor)
+
+	page = decode[dto.List[dto.BlockEvent]](t, get(t, e, "/blocks/50/events?limit=2&cursor="+*page.NextCursor))
+	assert.Equal(t, int64(2), f.gotAfter)
+	assert.Equal(t, []int64{4, 6}, []int64{page.Items[0].Seq, page.Items[1].Seq})
+
+	page = decode[dto.List[dto.BlockEvent]](t, get(t, e, "/blocks/50/events?limit=2&cursor="+*page.NextCursor))
+	require.Len(t, page.Items, 1)
+	assert.Nil(t, page.NextCursor)
+
+	rec = get(t, e, "/blocks/51/events")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "no-store", rec.Header().Get(echo.HeaderCacheControl))
+	for _, q := range []string{"/blocks/0/events", "/blocks/50/events?limit=0", "/blocks/50/events?cursor=x"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, q).Code, q)
+	}
+
+	f.err = errors.New("boom")
+	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/blocks/50/events").Code)
 }
 
 func TestBlockValidation(t *testing.T) {
@@ -349,11 +440,14 @@ func TestTxsFiltersByStatus(t *testing.T) {
 
 func TestTxByHash(t *testing.T) {
 	f := &fakeReader{tx: &repository.Tx{
-		TxSummary: repository.TxSummary{Height: 25000894, Hash: hashUpper, Success: true, MsgCount: 1},
+		TxSummary: repository.TxSummary{Height: 25000894, TxIndex: 3, Hash: hashUpper, Success: true, MsgCount: 1},
 		Signers:   []string{account},
 		Messages: []repository.Message{{TypeURL: "/cosmos.bank.v1beta1.MsgSend",
 			Body: json.RawMessage(`{"amount":[]}`), Events: json.RawMessage(`[{"type":"message","attrs":{}}]`)}},
-	}}
+	}, transfers: map[[2]int64][]repository.Transfer{{25000894, 3}: {
+		{Kind: "transfer", Denom: "ubze", Amount: "2000",
+			RecipientLabel: &repository.Label{Name: "Fee collector", Kind: "module"}},
+	}}}
 	e := newAPI(f)
 
 	rec := get(t, e, "/txs/"+strings.ToLower(hashUpper))
@@ -364,6 +458,9 @@ func TestTxByHash(t *testing.T) {
 	assert.Equal(t, []string{account}, tx.Signers)
 	require.Len(t, tx.Messages, 1)
 	assert.JSONEq(t, `{"amount":[]}`, string(tx.Messages[0].Body))
+	assert.Equal(t, [][2]int64{{25000894, 3}}, f.gotTransfers, "the transaction's own transfers")
+	require.Len(t, tx.Transfers, 1)
+	assert.Equal(t, "Fee collector", tx.Transfers[0].RecipientLabel.Name)
 
 	for _, h := range []string{"abc", hashUpper + "0", strings.Replace(hashUpper, "E", "G", 1)} {
 		rec := get(t, e, "/txs/"+h)
@@ -383,6 +480,20 @@ func TestRepositoryFailureIsInternal(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rec.Code, path)
 		assert.Equal(t, "internal", errorCode(t, rec), path)
 		assert.NotContains(t, rec.Body.String(), "10.0.0.1", path)
+	}
+}
+
+func TestTransfersFailureFailsTheDetailPages(t *testing.T) {
+	f := &fakeReader{
+		block:        &repository.Block{BlockSummary: repository.BlockSummary{Height: 9}},
+		tx:           &repository.Tx{TxSummary: repository.TxSummary{Height: 9, Hash: hashUpper}},
+		transfersErr: errors.New("boom"),
+	}
+	e := newAPI(f)
+	for _, path := range []string{"/blocks/9", "/txs/" + hashUpper} {
+		rec := get(t, e, path)
+		assert.Equal(t, http.StatusInternalServerError, rec.Code, path)
+		assert.Equal(t, "no-store", rec.Header().Get(echo.HeaderCacheControl), path)
 	}
 }
 

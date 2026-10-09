@@ -44,6 +44,12 @@ type ExplorerReader interface {
 	Block(ctx context.Context, height int64) (*repository.Block, error)
 	Txs(ctx context.Context, before *repository.TxKey, success *bool, limit int) ([]repository.TxSummary, error)
 	Tx(ctx context.Context, hash string) (*repository.Tx, error)
+	// Transfers returns the transfers of the transaction at (height,
+	// txIndex), or of the block itself for repository.BlockTxIndex.
+	Transfers(ctx context.Context, height, txIndex int64) ([]repository.Transfer, error)
+	// BlockEvents returns up to limit stored events of the block at height
+	// after seq after (from the first when negative).
+	BlockEvents(ctx context.Context, height, after int64, limit int) ([]repository.BlockEvent, error)
 	// TxPosition returns the height and the index in the block of a
 	// transaction.
 	TxPosition(ctx context.Context, hash string) (height, index int64, err error)
@@ -73,6 +79,10 @@ const (
 	SearchNameMatches = 5
 	SearchNameMinLen  = 2
 )
+
+// BlockEventsInline is how many events the block route carries; the
+// events route pages through the rest.
+const BlockEventsInline = MaxLimit
 
 // Sizes of the lists of the validator page.
 const (
@@ -123,19 +133,34 @@ func (h *ExplorerController) Blocks(c *echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// Block serves GET /api/v1/blocks/{height}: every column of the block and
-// its transactions.
+// Block serves GET /api/v1/blocks/{height}: every column of the block, its
+// transactions, its own transfers and its first BlockEventsInline events.
 func (h *ExplorerController) Block(c *echo.Context) error {
 	height, err := parseHeight(c.Param("height"))
 	if err != nil {
 		return err
 	}
-	b, err := h.repo.Block(c.Request().Context(), height)
+	ctx := c.Request().Context()
+	b, err := h.repo.Block(ctx, height)
 	if errors.Is(err, repository.ErrNotFound) {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("block %d is not indexed", height))
 	}
 	if err != nil {
 		return err
+	}
+	transfers, err := h.repo.Transfers(ctx, height, repository.BlockTxIndex)
+	if err != nil {
+		return err
+	}
+	events, err := h.repo.BlockEvents(ctx, height, -1, BlockEventsInline+1)
+	if err != nil {
+		return err
+	}
+	var eventsNext *string
+	if len(events) > BlockEventsInline {
+		events = events[:BlockEventsInline]
+		next := dto.EncodeCursor(events[len(events)-1].Seq)
+		eventsNext = &next
 	}
 	// The proposer's name is the one field of a block that can still
 	// change: it is null until the state sync knows the validator.
@@ -144,7 +169,50 @@ func (h *ExplorerController) Block(c *echo.Context) error {
 		cache = CacheNoStore
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, cache)
-	return c.JSON(http.StatusOK, dto.NewBlock(b))
+	return c.JSON(http.StatusOK, dto.NewBlock(b, transfers, events, eventsNext))
+}
+
+// BlockEvents serves GET /api/v1/blocks/{height}/events?cursor&limit: the
+// block's stored events in order. An indexed block's events never change.
+func (h *ExplorerController) BlockEvents(c *echo.Context) error {
+	height, err := parseHeight(c.Param("height"))
+	if err != nil {
+		return err
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	after := int64(-1)
+	if keys, err := parseCursor(c, 1); err != nil {
+		return err
+	} else if keys != nil {
+		after = keys[0]
+	}
+	ctx := c.Request().Context()
+	ok, err := h.repo.BlockExists(ctx, height)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("block %d is not indexed", height))
+	}
+
+	rows, err := h.repo.BlockEvents(ctx, height, after, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.BlockEvent]{Items: make([]dto.BlockEvent, 0, min(len(rows), limit))}
+	for i, e := range rows {
+		if i == limit {
+			next := dto.EncodeCursor(rows[i-1].Seq)
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewBlockEvent(e))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // Txs serves GET /api/v1/txs?cursor&limit&status=success|failed:
@@ -187,23 +255,28 @@ func (h *ExplorerController) Txs(c *echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// Tx serves GET /api/v1/txs/{hash}: every column of the transaction and its
-// messages. A well-formed hash that is not indexed is a 404, which the UI
+// Tx serves GET /api/v1/txs/{hash}: every column of the transaction, its
+// messages and its transfers. A well-formed hash that is not indexed is a 404, which the UI
 // shows as pending.
 func (h *ExplorerController) Tx(c *echo.Context) error {
 	hash, ok := normaliseHash(c.Param("hash"))
 	if !ok {
 		return echo.NewHTTPError(http.StatusBadRequest, "hash must be 64 hexadecimal characters")
 	}
-	t, err := h.repo.Tx(c.Request().Context(), hash)
+	ctx := c.Request().Context()
+	t, err := h.repo.Tx(ctx, hash)
 	if errors.Is(err, repository.ErrNotFound) {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("transaction %s is not indexed", hash))
 	}
 	if err != nil {
 		return err
 	}
+	transfers, err := h.repo.Transfers(ctx, t.Height, t.TxIndex)
+	if err != nil {
+		return err
+	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
-	return c.JSON(http.StatusOK, dto.NewTx(t))
+	return c.JSON(http.StatusOK, dto.NewTx(t, transfers))
 }
 
 // Validators serves GET

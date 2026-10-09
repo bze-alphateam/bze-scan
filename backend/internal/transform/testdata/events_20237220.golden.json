@@ -1,0 +1,104 @@
+{
+  "transfers": [
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "13157"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 1,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+      "Denom": "ubze",
+      "Amount": "1524"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 2,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze1r05pkm6e6pc39629dmkmravse8v9h3gvpg5rar",
+      "Denom": "ubze",
+      "Amount": "1661"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 3,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze1dnl83rxxgg29d7zgwam9sldnr6chtftd94r6ef",
+      "Denom": "ubze",
+      "Amount": "68688"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 4,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze1hmvnht5pmajf8gv6v9lqxe3yptl6zhpgch3wa4",
+      "Denom": "ubze",
+      "Amount": "54"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 0,
+      "Seq": 5,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze1uvcwvurgfvhyhlgvg6py724vyvevxhke53kvps",
+      "Denom": "ubze",
+      "Amount": "537121"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "139094"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 1,
+      "Seq": 1,
+      "MsgIndex": 1,
+      "Kind": "transfer",
+      "Sender": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee",
+      "Recipient": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "Denom": "ubze",
+      "Amount": "21730924671"
+    },
+    {
+      "Height": 20237220,
+      "TxIndex": 1,
+      "Seq": 2,
+      "MsgIndex": 2,
+      "Kind": "transfer",
+      "Sender": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee",
+      "Recipient": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "Denom": "ubze",
+      "Amount": "100000000"
+    }
+  ],
+  "block_events": null
+}

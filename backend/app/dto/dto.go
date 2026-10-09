@@ -88,6 +88,41 @@ type Block struct {
 	SignaturesCount    *int64          `json:"signatures_count"`
 	SignaturesPowerPct *string         `json:"signatures_power_pct"`
 	Transactions       []BlockTx       `json:"transactions"`
+	// Transfers are the moves the chain made by itself in the block, the
+	// routine minting and fee distribution left out.
+	Transfers []Transfer `json:"transfers"`
+	// Events are the block's first classified finalize-block events;
+	// EventsNextCursor continues them on /blocks/{height}/events, null when
+	// they are all here.
+	Events           []BlockEvent `json:"events"`
+	EventsNextCursor *string      `json:"events_next_cursor"`
+}
+
+// Transfer is one coin moved by a transfer, a mint or a burn, in base
+// units. MsgIndex is null for the fee and for a block's own transfers;
+// Sender is null for a mint, Recipient for a burn. Symbol and Exponent are
+// null when the explorer does not know the denom, the labels when it does
+// not know the address.
+type Transfer struct {
+	Seq            int64   `json:"seq"`
+	MsgIndex       *int64  `json:"msg_index"`
+	Kind           string  `json:"kind"`
+	Sender         *string `json:"sender"`
+	SenderLabel    *Label  `json:"sender_label"`
+	Recipient      *string `json:"recipient"`
+	RecipientLabel *Label  `json:"recipient_label"`
+	Denom          string  `json:"denom"`
+	Amount         string  `json:"amount"`
+	Symbol         *string `json:"symbol"`
+	Exponent       *int    `json:"exponent"`
+}
+
+// BlockEvent is a classified finalize-block event: its position in the
+// block's events, its type and its attributes (typed-event values decoded).
+type BlockEvent struct {
+	Seq   int64           `json:"seq"`
+	Type  string          `json:"type"`
+	Attrs json.RawMessage `json:"attrs"`
 }
 
 // BlockTx is a transaction of the block page.
@@ -126,6 +161,9 @@ type Tx struct {
 	Signers   []string  `json:"signers"`
 	Memo      *string   `json:"memo"`
 	Messages  []Message `json:"messages"`
+	// Transfers are the coins the transaction moved, the fee first; a failed
+	// transaction has its fee only.
+	Transfers []Transfer `json:"transfers"`
 }
 
 // Message is a message of the transaction page. Body is the decoded message
@@ -314,13 +352,20 @@ func NewBlockSummary(b repository.BlockSummary) BlockSummary {
 	return out
 }
 
-// NewBlock maps a block with its transactions.
-func NewBlock(b *repository.Block) Block {
+// NewBlock maps a block with its transactions, its own transfers and the
+// first page of its events (eventsNext continues them, nil when complete).
+func NewBlock(b *repository.Block, transfers []repository.Transfer, events []repository.BlockEvent, eventsNext *string) Block {
 	out := Block{
 		BlockSummary: NewBlockSummary(b.BlockSummary),
 		Minted:       b.Minted, Inflation: b.Inflation, FeesDistributed: jsonOrNull(b.FeesDistributed),
 		SignaturesCount: b.SignaturesCount, SignaturesPowerPct: b.SignaturesPowerPct,
-		Transactions: make([]BlockTx, 0, len(b.Transactions)),
+		Transactions:     make([]BlockTx, 0, len(b.Transactions)),
+		Transfers:        NewTransfers(transfers),
+		Events:           make([]BlockEvent, 0, len(events)),
+		EventsNextCursor: eventsNext,
+	}
+	for _, e := range events {
+		out.Events = append(out.Events, NewBlockEvent(e))
 	}
 	for _, t := range b.Transactions {
 		out.Transactions = append(out.Transactions, BlockTx{
@@ -339,13 +384,14 @@ func NewTxSummary(t repository.TxSummary) TxSummary {
 	}
 }
 
-// NewTx maps a transaction with its messages.
-func NewTx(t *repository.Tx) Tx {
+// NewTx maps a transaction with its messages and transfers.
+func NewTx(t *repository.Tx, transfers []repository.Transfer) Tx {
 	out := Tx{
 		TxSummary: NewTxSummary(t.TxSummary),
 		Code:      t.Code, Codespace: t.Codespace, ErrorLog: t.ErrorLog, GasWanted: t.GasWanted, GasUsed: t.GasUsed,
 		FeePayer: t.FeePayer, Signers: nonNil(t.Signers), Memo: t.Memo,
-		Messages: make([]Message, 0, len(t.Messages)),
+		Messages:  make([]Message, 0, len(t.Messages)),
+		Transfers: NewTransfers(transfers),
 	}
 	for _, m := range t.Messages {
 		out.Messages = append(out.Messages, Message{
@@ -354,6 +400,32 @@ func NewTx(t *repository.Tx) Tx {
 		})
 	}
 	return out
+}
+
+// NewTransfers maps transfers rows; none is an empty list.
+func NewTransfers(rows []repository.Transfer) []Transfer {
+	out := make([]Transfer, 0, len(rows))
+	for _, t := range rows {
+		out = append(out, Transfer{
+			Seq: t.Seq, MsgIndex: t.MsgIndex, Kind: t.Kind,
+			Sender: t.Sender, SenderLabel: newLabel(t.SenderLabel),
+			Recipient: t.Recipient, RecipientLabel: newLabel(t.RecipientLabel),
+			Denom: t.Denom, Amount: t.Amount, Symbol: t.Symbol, Exponent: t.Exponent,
+		})
+	}
+	return out
+}
+
+// NewBlockEvent maps a block_events row.
+func NewBlockEvent(e repository.BlockEvent) BlockEvent {
+	return BlockEvent{Seq: e.Seq, Type: e.Type, Attrs: jsonOr(e.Attrs, "{}")}
+}
+
+func newLabel(l *repository.Label) *Label {
+	if l == nil {
+		return nil
+	}
+	return &Label{Name: l.Name, Kind: l.Kind}
 }
 
 func nonNil(s []string) []string {

@@ -75,6 +75,7 @@ func TestAPI(t *testing.T) {
 		"tx list paginates and filters": testTxListPaginatesAndFilters,
 		"block detail":                  testBlockDetailMatchesTheIndex,
 		"tx detail":                     testTxDetailMatchesTheIndex,
+		"transfers and block events":    testTransfersOnTheDetailPages,
 		"errors":                        testErrors,
 		"search":                        testSearchResolvesEachKind,
 		"cors":                          testCORSHeadersWhenConfigured,

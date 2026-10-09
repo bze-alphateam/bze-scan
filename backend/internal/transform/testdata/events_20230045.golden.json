@@ -1,0 +1,149 @@
+{
+  "transfers": [
+    {
+      "Height": 20230045,
+      "TxIndex": -1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ubze",
+      "Amount": "32115785"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": -1,
+      "Seq": 1,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "Amount": "494089"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": -1,
+      "Seq": 2,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ubze",
+      "Amount": "261248390"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": -1,
+      "Seq": 3,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "Amount": "4019206"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": 0,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "22173"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": 0,
+      "Seq": 1,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "Denom": "ubze",
+      "Amount": "1000"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": 0,
+      "Seq": 2,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "Amount": "4019206"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": 0,
+      "Seq": 3,
+      "MsgIndex": 1,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "Denom": "ubze",
+      "Amount": "100000"
+    },
+    {
+      "Height": 20230045,
+      "TxIndex": 0,
+      "Seq": 4,
+      "MsgIndex": 1,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Denom": "ubze",
+      "Amount": "293364175"
+    }
+  ],
+  "block_events": [
+    {
+      "Height": 20230045,
+      "Seq": 74,
+      "Type": "bze.tradebin.OrderSavedEvent",
+      "Attrs": {
+        "amount": "4019206",
+        "id": "000000000000000002157016",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "mode": "EndBlock",
+        "order_type": "sell",
+        "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "price": "65"
+      }
+    },
+    {
+      "Height": 20230045,
+      "Seq": 83,
+      "Type": "bze.tradebin.OrderExecutedEvent",
+      "Attrs": {
+        "amount": "494089",
+        "id": "000000000000000002156990",
+        "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "mode": "EndBlock",
+        "order_type": "sell",
+        "price": "65",
+        "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      }
+    },
+    {
+      "Height": 20230045,
+      "Seq": 92,
+      "Type": "bze.tradebin.OrderExecutedEvent",
+      "Attrs": {
+        "amount": "4019206",
+        "id": "000000000000000002157016",
+        "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "mode": "EndBlock",
+        "order_type": "sell",
+        "price": "65",
+        "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      }
+    }
+  ]
+}

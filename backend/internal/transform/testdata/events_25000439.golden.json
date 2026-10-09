@@ -1,0 +1,38 @@
+{
+  "transfers": [
+    {
+      "Height": 25000439,
+      "TxIndex": 0,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "10000"
+    },
+    {
+      "Height": 25000439,
+      "TxIndex": 0,
+      "Seq": 1,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+      "Denom": "ubze",
+      "Amount": "29072284"
+    },
+    {
+      "Height": 25000439,
+      "TxIndex": 0,
+      "Seq": 2,
+      "MsgIndex": 1,
+      "Kind": "transfer",
+      "Sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+      "Recipient": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+      "Denom": "ubze",
+      "Amount": "105900120"
+    }
+  ],
+  "block_events": null
+}
