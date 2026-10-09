@@ -1,0 +1,802 @@
+{
+  "transactions": [
+    {
+      "Height": 22933748,
+      "TxIndex": 0,
+      "Hash": "1B10281AC53E6830AEA170C7655573EB911E89062661DEE5C0E232F77CE2F32D",
+      "Time": "2026-05-24T03:17:17.029546476Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 129068,
+      "GasUsed": 121234,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "1292"
+        }
+      ],
+      "FeePayer": "bze1mzqtykn6nq6ukeq0wvr0zvzldt8y2elum4nhuw",
+      "Signers": [
+        "bze1mzqtykn6nq6ukeq0wvr0zvzldt8y2elum4nhuw"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.staking.v1beta1.MsgEditValidator"
+      ]
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "Hash": "4002E58E68D609E63B2AC77F3AB4739D88AA0325D6E147E2B6EEC7D0C79A7C80",
+      "Time": "2026-05-24T03:17:17.029546476Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 1461889,
+      "GasUsed": 997849,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "97459"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 17,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder"
+      ]
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 2,
+      "Hash": "D2A912B3D4B27CE53A875DB3CBA42C926D23F75702289F7E8652705776CF96D1",
+      "Time": "2026-05-24T03:17:17.029546476Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 320181,
+      "GasUsed": 236743,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "21345"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 3,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 22933748,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.staking.v1beta1.MsgEditValidator",
+      "Sender": "bze1mzqtykn6nq6ukeq0wvr0zvzldt8y2elum4nhuw",
+      "Module": "staking",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.staking.v1beta1.MsgEditValidator",
+            "module": "staking",
+            "sender": "bze1mzqtykn6nq6ukeq0wvr0zvzldt8y2elum4nhuw"
+          }
+        },
+        {
+          "type": "edit_validator",
+          "attrs": {
+            "commission_rate": "commission_rates:\u003crate:\"200000000000000000\" max_rate:\"200000000000000000\" max_change_rate:\"10000000000000000\" \u003e update_time:\u003cseconds:1779592637 nanos:29546476 \u003e ",
+            "min_self_delegation": "1"
+          }
+        }
+      ],
+      "Body": {
+        "description": {
+          "moniker": "[do-not-modify]",
+          "identity": "[do-not-modify]",
+          "website": "[do-not-modify]",
+          "security_contact": "[do-not-modify]",
+          "details": "[do-not-modify]"
+        },
+        "validator_address": "bzevaloper1mzqtykn6nq6ukeq0wvr0zvzldt8y2elur3vug3",
+        "commission_rate": "0.200000000000000000",
+        "min_self_delegation": null
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534404",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534404",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534403",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534403",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534402",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534402",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 3,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534401",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534401",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 4,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534400",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534400",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 5,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534399",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534399",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 6,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534398",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534398",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 7,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534397",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534397",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 8,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534396",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534396",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 9,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534395",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534395",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 10,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534394",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534394",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 11,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534393",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534393",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 12,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534392",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534392",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 13,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534391",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534391",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 14,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534390",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534390",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 15,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534389",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534389",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 1,
+      "MsgIndex": 16,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534388",
+            "order_type": "buy"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534388",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 2,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534387",
+            "order_type": "sell"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534387",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 2,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534386",
+            "order_type": "sell"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534386",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22933748,
+      "TxIndex": 2,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCancelOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCancelMessageEvent",
+          "attrs": {
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "marketId": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "orderId": "000000000000000004534385",
+            "order_type": "sell"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004534385",
+        "order_type": "sell"
+      }
+    }
+  ]
+}

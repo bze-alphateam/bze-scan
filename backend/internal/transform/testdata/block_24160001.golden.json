@@ -1,0 +1,18 @@
+{
+  "height": 24160001,
+  "time": "2026-08-13T00:52:42.909984035Z",
+  "tx_count": 0,
+  "tx_failed_count": 0,
+  "hash": "CC3359171D5CDF0F18DDD013437385346625AC5F0129E93F589D418D45286E4A",
+  "proposer_cons_address": "2217EC92A4E73BA79E86E90FA6C4180429EB7C41",
+  "size_bytes": 6502,
+  "minted": "2522679",
+  "inflation": "0.050000000000000000",
+  "fees_distributed": [
+    {
+      "denom": "ubze",
+      "amount": "2522679"
+    }
+  ],
+  "signatures_count": 22
+}
