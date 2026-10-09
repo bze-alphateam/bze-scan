@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
@@ -58,6 +59,10 @@ type Codec struct {
 	cdc      codec.Codec
 	registry codectypes.InterfaceRegistry
 	txConfig client.TxConfig
+	// signersMu serialises the SDK's signer lookups: the function
+	// cosmossdk.io/x/tx caches per message type writes a variable shared
+	// by all its calls, so concurrent decodes of one type race.
+	signersMu sync.Mutex
 }
 
 // NewCodec builds the codec from the chain's app configuration without
@@ -146,7 +151,10 @@ func (c *Codec) Decode(raw []byte) (*Tx, error) {
 		out.Memo = m.GetMemo()
 	}
 	if s, ok := decoded.(authsigning.SigVerifiableTx); ok {
-		if signers, err := s.GetSigners(); err == nil {
+		c.signersMu.Lock()
+		signers, err := s.GetSigners()
+		c.signersMu.Unlock()
+		if err == nil {
 			for _, a := range signers {
 				out.Signers = append(out.Signers, accAddress(a))
 			}
@@ -205,7 +213,10 @@ func (c *Codec) decodeLenient(raw []byte, cause error) (*Tx, error) {
 func (c *Codec) msg(msg sdk.Msg) (Msg, []string) {
 	m := Msg{TypeURL: TypeURL(msg)}
 	var signers []string
-	if addrs, _, err := c.cdc.GetMsgV1Signers(msg); err == nil {
+	c.signersMu.Lock()
+	addrs, _, err := c.cdc.GetMsgV1Signers(msg)
+	c.signersMu.Unlock()
+	if err == nil {
 		for _, a := range addrs {
 			signers = append(signers, accAddress(a))
 		}
@@ -213,7 +224,6 @@ func (c *Codec) msg(msg sdk.Msg) (Msg, []string) {
 	if len(signers) > 0 {
 		m.Signer = signers[0]
 	}
-	var err error
 	if m.Body, err = c.MsgJSON(msg); err != nil {
 		m.Body, m.Err = nil, err
 	}

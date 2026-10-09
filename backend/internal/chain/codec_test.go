@@ -208,3 +208,24 @@ func TestNestedLegacyMessagesGetTheirCurrentType(t *testing.T) {
 	assert.Contains(t, string(decoded.Msgs[0].Body), `"@type":"/bze.tradebin.MsgCreateOrder"`)
 	assert.NotContains(t, string(decoded.Msgs[0].Body), "v1.MsgCreateOrder")
 }
+
+// The backfill decodes in several workers at once. The SDK's cached signer
+// lookup (cosmossdk.io/x/tx signing.Context) writes a variable shared by
+// every call for a message type, so concurrent decodes of one type race
+// unless the codec serialises them; run with -race.
+func TestDecodeIsSafeForConcurrentUse(t *testing.T) {
+	c := newCodec(t)
+	raw := fixtureTx(t, "25000894", 0)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range 20 {
+				tx, err := c.Decode(raw)
+				if assert.NoError(t, err) {
+					assert.Equal(t, []string{"bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"}, tx.Signers)
+				}
+			}
+		})
+	}
+	wg.Wait()
+}
