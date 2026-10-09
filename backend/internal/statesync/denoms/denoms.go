@@ -2,10 +2,22 @@
 // explorer.denoms from the local node's bank, tokenfactory and tradebin
 // queries. Supply and metadata always come from the node; the explorer never
 // computes them from events.
+//
+// An IBC denom is resolved through the node's denom trace (path and base
+// denom), the IBC channel of the path's first hop (its counterparty chain)
+// and the chain registry cache (the asset's symbol, name, exponent and logo:
+// they win over the bank metadata, which for an IBC voucher is the
+// placeholder ibc-go writes on first receipt, exponent 0 and the base
+// denom upper-cased as symbol). A multi-hop denom is followed through the
+// first hop chain's registry asset and its traces to its home chain; when
+// that fails, the first hop's chain and the raw base denom stay. A chain or
+// an asset missing from the cache is asked of the chain_registry set.
 package denoms
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -16,6 +28,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +37,7 @@ import (
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
@@ -96,10 +110,38 @@ type Tradebin interface {
 	HaltedDenoms(ctx context.Context, in *tradebintypes.QueryHaltedDenomsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryHaltedDenomsResponse, error)
 }
 
+// Transfer is the part of the IBC transfer query client the set uses;
+// ibctransfertypes.QueryClient satisfies it.
+type Transfer interface {
+	DenomTrace(ctx context.Context, in *ibctransfertypes.QueryDenomTraceRequest, opts ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error)
+}
+
+// RegistryAsset is a cached chain-registry asset.
+type RegistryAsset struct {
+	Symbol   string
+	Name     string
+	Exponent *int
+	LogoURL  string
+	Traces   json.RawMessage
+}
+
+// Lookup reads what other sets keep: the IBC channels and the chain
+// registry cache.
+type Lookup interface {
+	// ChannelChains maps the transfer channels to their counterparty chain
+	// ids; a channel whose chain is not known yet is absent.
+	ChannelChains(ctx context.Context) (map[string]string, error)
+	// Asset returns the registry asset base of chainID; nil when the cache
+	// has none.
+	Asset(ctx context.Context, chainID, base string) (*RegistryAsset, error)
+	// ChainID returns the chain id of the registry directory name; "" when
+	// the cache has none.
+	ChainID(ctx context.Context, registryName string) (string, error)
+}
+
 // Denom is one explorer.denoms row as the node describes it; first sight
 // (created_*) and updated_at are the store's, and the columns of the
-// holders, prices and IBC origin are left alone. Empty strings are stored as
-// NULL.
+// holders and prices are left alone. Empty strings are stored as NULL.
 type Denom struct {
 	Denom       string
 	Symbol      string
@@ -107,6 +149,10 @@ type Denom struct {
 	Exponent    int
 	Description string
 	Kind        string
+	// OriginChainID, IBCBaseDenom and IBCPath are an IBC denom's.
+	OriginChainID string
+	IBCBaseDenom  string
+	IBCPath       string
 	// Creator is the address in a factory denom.
 	Creator string
 	// Admin is the factory denom's admin; empty once renounced.
@@ -142,6 +188,14 @@ type Deps struct {
 	TokenFactory TokenFactory
 	Tradebin     Tradebin
 	Store        Store
+	// Transfer traces IBC denoms; nil leaves them unresolved.
+	Transfer Transfer
+	// Lookup resolves the origin of traced IBC denoms; nil stops at the
+	// trace.
+	Lookup Lookup
+	// Misses is told the chains whose registry cache an IBC denom missed;
+	// nil drops them.
+	Misses statesync.Publisher
 }
 
 // Set is the denoms set.
@@ -264,6 +318,11 @@ func (s *Set) FullResync(ctx context.Context) error {
 		return err
 	}
 
+	origins, err := s.origins(ctx)
+	if err != nil {
+		return err
+	}
+
 	all := slices.Sorted(maps.Keys(supply))
 	for d := range metadata {
 		if _, ok := supply[d]; !ok {
@@ -273,7 +332,7 @@ func (s *Set) FullResync(ctx context.Context) error {
 	slices.Sort(all)
 	snap := Snapshot{Full: true}
 	for _, d := range all {
-		row, err := s.row(ctx, d, metadata[d], supply[d], markets, halted)
+		row, err := s.row(ctx, d, metadata[d], supply[d], markets, halted, origins)
 		if err != nil {
 			return err
 		}
@@ -283,6 +342,7 @@ func (s *Set) FullResync(ctx context.Context) error {
 		return err
 	}
 	s.learn(true, all...)
+	origins.publish(s.deps.Misses)
 	return nil
 }
 
@@ -318,7 +378,11 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	row, err := s.row(ctx, key, md, sup.Amount.Amount.String(), markets, halted)
+	origins, err := s.origins(ctx)
+	if err != nil {
+		return err
+	}
+	row, err := s.row(ctx, key, md, sup.Amount.Amount.String(), markets, halted, origins)
 	if err != nil {
 		return err
 	}
@@ -326,6 +390,7 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 		return err
 	}
 	s.learn(false, key)
+	origins.publish(s.deps.Misses)
 	return nil
 }
 
@@ -382,9 +447,10 @@ func (s *Set) halted(ctx context.Context) (map[string]bool, error) {
 	}
 }
 
-// row maps one denom, querying the admin of a factory denom.
+// row maps one denom, querying the admin of a factory denom and the trace
+// of an IBC denom.
 func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, supply string,
-	markets map[string][]string, halted map[string]bool) (Denom, error) {
+	markets map[string][]string, halted map[string]bool, origins *origins) (Denom, error) {
 	row := Denom{
 		Denom:   denom,
 		Kind:    Kind(denom),
@@ -421,7 +487,159 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 			row.Admin = resp.DenomAuthority.Admin
 		}
 	}
+	if row.Kind == KindIBC && s.deps.Transfer != nil {
+		if err := s.ibc(ctx, &row, origins); err != nil {
+			return Denom{}, err
+		}
+	}
 	return row, nil
+}
+
+// origins is what one run resolves IBC denoms with: the channels' chains,
+// and the registry keys the cache missed.
+type origins struct {
+	lookup Lookup
+	chains map[string]string
+	misses statesync.Dirty
+}
+
+// origins reads the channels' chains for one run; nil without a Lookup.
+func (s *Set) origins(ctx context.Context) (*origins, error) {
+	if s.deps.Lookup == nil {
+		return nil, nil
+	}
+	chains, err := s.deps.Lookup.ChannelChains(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &origins{lookup: s.deps.Lookup, chains: chains}, nil
+}
+
+// miss asks the chain_registry set for key (a chain id or a
+// RegistryNameKey).
+func (o *origins) miss(key string) {
+	o.misses.Mark(statesync.ChainRegistry, key)
+}
+
+func (o *origins) publish(p statesync.Publisher) {
+	if o != nil && p != nil && !o.misses.Empty() {
+		p.Publish(o.misses)
+	}
+}
+
+// ibc fills an IBC denom's trace, origin and display fields from the
+// registry asset.
+func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) error {
+	hash := strings.TrimPrefix(row.Denom, "ibc/")
+	resp, err := s.deps.Transfer.DenomTrace(ctx, &ibctransfertypes.QueryDenomTraceRequest{Hash: hash})
+	switch {
+	case status.Code(err) == codes.NotFound:
+		return nil
+	case err != nil:
+		return fmt.Errorf("transfer DenomTrace %s: %w", row.Denom, err)
+	case resp.DenomTrace == nil:
+		return nil
+	}
+	trace := resp.DenomTrace
+	row.IBCPath, row.IBCBaseDenom = trace.Path, trace.BaseDenom
+	if o == nil {
+		return nil
+	}
+	hops := channels(trace.Path)
+	if len(hops) == 0 {
+		return nil
+	}
+	first := o.chains[hops[0]]
+	if first == "" {
+		return nil // the channel's chain is not known until the channels sync fills it
+	}
+	row.OriginChainID = first
+	asset, err := s.originAsset(ctx, row, trace, first, o)
+	if err != nil || asset == nil {
+		return err
+	}
+	if asset.Symbol != "" {
+		row.Symbol = asset.Symbol
+	}
+	if asset.Name != "" {
+		row.Name = asset.Name
+	}
+	if asset.LogoURL != "" {
+		row.LogoURL = asset.LogoURL
+	}
+	if asset.Exponent != nil {
+		row.Exponent = *asset.Exponent
+	}
+	return nil
+}
+
+// originAsset returns the registry asset of a traced denom whose first hop
+// is the chain first: the asset itself for one hop; for several, the first
+// hop chain's asset for the rest of the path leads, through its traces, to
+// the home chain, which then becomes the origin. nil when the cache has
+// none (and the missing chain is asked for).
+func (s *Set) originAsset(ctx context.Context, row *Denom, trace *ibctransfertypes.DenomTrace, first string, o *origins) (*RegistryAsset, error) {
+	if len(channels(trace.Path)) == 1 {
+		asset, err := o.lookup.Asset(ctx, first, trace.BaseDenom)
+		if asset == nil && err == nil {
+			o.miss(first)
+		}
+		return asset, err
+	}
+	_, rest, _ := strings.Cut(trace.Path, "/")
+	_, rest, _ = strings.Cut(rest, "/")
+	via, err := o.lookup.Asset(ctx, first, IBCDenom(rest+"/"+trace.BaseDenom))
+	if err != nil {
+		return nil, err
+	}
+	if via == nil {
+		o.miss(first)
+		return nil, nil
+	}
+	name, base, ok := chainregistry.Home(via.Traces)
+	if !ok {
+		return nil, nil
+	}
+	home, err := o.lookup.ChainID(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if home == "" {
+		o.miss(statesync.RegistryNameKey(name))
+		return nil, nil
+	}
+	asset, err := o.lookup.Asset(ctx, home, base)
+	if err != nil {
+		return nil, err
+	}
+	if asset == nil {
+		o.miss(home)
+		return nil, nil
+	}
+	row.OriginChainID, row.IBCBaseDenom = home, base
+	return asset, nil
+}
+
+// channels returns the channel ids of an IBC path (port/channel pairs:
+// transfer/channel-0/transfer/channel-169), the first hop first; nil for a
+// path that is not pairs.
+func channels(path string) []string {
+	parts := strings.Split(path, "/")
+	if path == "" || len(parts)%2 != 0 {
+		return nil
+	}
+	out := make([]string, 0, len(parts)/2)
+	for i := 1; i < len(parts); i += 2 {
+		out = append(out, parts[i])
+	}
+	return out
+}
+
+// IBCDenom is the voucher denom of a full IBC path with its base denom
+// (transfer/channel-3/uusdc): ibc/ and the upper-case hex SHA-256 of it.
+func IBCDenom(fullPath string) string {
+	sum := sha256.Sum256([]byte(fullPath))
+	return "ibc/" + strings.ToUpper(hex.EncodeToString(sum[:]))
 }
 
 // applyMetadata fills the display fields from bank metadata: the exponent is

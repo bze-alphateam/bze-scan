@@ -12,6 +12,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -340,4 +341,169 @@ func TestFailuresKeepTheRows(t *testing.T) {
 	st.err = errors.New("db down")
 	require.ErrorContains(t, set.FullResync(context.Background()), "db down")
 	assert.Equal(t, denoms.SeenKey(usdc), set.Canonical(denoms.SeenKey(usdc)), "a failed save teaches nothing")
+}
+
+// DenomTrace answers the recorded traces of the IBC denoms.
+func (n *fakeNode) DenomTrace(_ context.Context, in *ibctransfertypes.QueryDenomTraceRequest, _ ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
+	if err := n.count("DenomTrace"); err != nil {
+		return nil, err
+	}
+	var resp ibctransfertypes.QueryDenomTraceResponse
+	fakenode.LoadGRPCFixture(n.t, "transfer", "DenomTrace", in.Hash, &resp)
+	return &resp, nil
+}
+
+// fakeLookup answers the channels and the registry cache from maps.
+type fakeLookup struct {
+	channels map[string]string
+	assets   map[string]*denoms.RegistryAsset // "chain|base"
+	names    map[string]string                // registry name → chain id
+}
+
+func (l *fakeLookup) ChannelChains(context.Context) (map[string]string, error) {
+	return l.channels, nil
+}
+
+func (l *fakeLookup) Asset(_ context.Context, chainID, base string) (*denoms.RegistryAsset, error) {
+	return l.assets[chainID+"|"+base], nil
+}
+
+func (l *fakeLookup) ChainID(_ context.Context, name string) (string, error) {
+	return l.names[name], nil
+}
+
+// publisher records what the set asks of the other sets.
+type publisher struct{ keys []string }
+
+func (p *publisher) Publish(d statesync.Dirty) {
+	p.keys = append(p.keys, d.Keys(statesync.ChainRegistry)...)
+}
+
+// Recorded multi-hop denoms: ATONE through Osmosis, a cw20 through Osmosis
+// and Juno.
+const (
+	atoneViaOsmosis = "ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1"
+	cw20ViaJuno     = "ibc/12C0B8B561AFCFDA3C73DEE0F7F84AA2B860D48493C27E8E81A5D14724FAB08B"
+	atom            = "ibc/5FEB332D2B121921C792F1A0DBF7C3163FF205337B4AFE6E14F69E8E49545F49"
+)
+
+func six() *int { e := 6; return &e }
+
+func ibcSet(t *testing.T, l *fakeLookup) (*denoms.Set, *fakeStore, *publisher) {
+	n, st, p := newFakeNode(t), &fakeStore{}, &publisher{}
+	return denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: n, Lookup: l, Misses: p}, 0), st, p
+}
+
+func TestIBCDenomsAreTracedEvenWithoutChannels(t *testing.T) {
+	set, st, p := ibcSet(t, &fakeLookup{})
+	require.NoError(t, set.FullResync(context.Background()))
+	u := byDenom(st.last(t))[usdc]
+	assert.Equal(t, "transfer/channel-3", u.IBCPath)
+	assert.Equal(t, "uusdc", u.IBCBaseDenom)
+	assert.Empty(t, u.OriginChainID, "channel-3's chain is not known before the channels sync")
+	assert.Equal(t, "UUSDC", u.Symbol, "ibc-go's placeholder metadata until the origin is known")
+	assert.Empty(t, p.keys, "nothing to ask of the registry")
+}
+
+func TestIBCDenomsTakeTheRegistryAssetOfTheirOrigin(t *testing.T) {
+	l := &fakeLookup{
+		channels: map[string]string{"channel-3": "noble-1", "channel-11": "cosmoshub-4"},
+		assets: map[string]*denoms.RegistryAsset{
+			"noble-1|uusdc": {Symbol: "USDC", Name: "USD Coin", Exponent: six(), LogoURL: "https://x/usdc.png"},
+		},
+	}
+	set, st, p := ibcSet(t, l)
+	require.NoError(t, set.FullResync(context.Background()))
+	rows := byDenom(st.last(t))
+
+	u := rows[usdc]
+	assert.Equal(t, "noble-1", u.OriginChainID)
+	assert.Equal(t, "USDC", u.Symbol, "the registry wins over ibc-go's placeholder metadata")
+	assert.Equal(t, "USD Coin", u.Name)
+	assert.Equal(t, 6, u.Exponent)
+	assert.Equal(t, "https://x/usdc.png", u.LogoURL)
+	assert.Contains(t, u.Description, "IBC token from", "the bank's description stays")
+
+	a := rows[atom]
+	assert.Equal(t, "cosmoshub-4", a.OriginChainID, "the origin is known even when its asset is not cached")
+	assert.Equal(t, "UATOM", a.Symbol)
+	assert.Equal(t, []string{"cosmoshub-4"}, p.keys, "the missing asset asks for its chain")
+}
+
+func TestAMultiHopDenomIsFollowedToItsHomeChain(t *testing.T) {
+	// On Osmosis, ATONE that came from AtomOne over channel-94814.
+	onOsmosis := denoms.IBCDenom("transfer/channel-94814/uatone")
+	l := &fakeLookup{
+		channels: map[string]string{"channel-0": "osmosis-1"},
+		assets: map[string]*denoms.RegistryAsset{
+			"osmosis-1|" + onOsmosis: {Symbol: "ATONE", Traces: json.RawMessage(
+				`[{"type":"ibc","counterparty":{"chain_name":"atomone","base_denom":"uatone","channel_id":"channel-2"}}]`)},
+			"atomone-1|uatone": {Symbol: "ATONE", Name: "AtomOne", Exponent: six()},
+		},
+		names: map[string]string{"atomone": "atomone-1"},
+	}
+	set, st, p := ibcSet(t, l)
+	require.NoError(t, set.FullResync(context.Background()))
+	rows := byDenom(st.last(t))
+
+	a := rows[atoneViaOsmosis]
+	assert.Equal(t, "transfer/channel-0/transfer/channel-94814", a.IBCPath)
+	assert.Equal(t, "atomone-1", a.OriginChainID, "the home chain, not the first hop")
+	assert.Equal(t, "uatone", a.IBCBaseDenom)
+	assert.Equal(t, "ATONE", a.Symbol)
+	assert.Equal(t, 6, a.Exponent)
+
+	c := rows[cw20ViaJuno]
+	assert.Equal(t, "osmosis-1", c.OriginChainID, "unresolved: the first hop's chain")
+	assert.Equal(t, "cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l", c.IBCBaseDenom, "and the raw base denom")
+	assert.Contains(t, p.keys, "osmosis-1", "the first hop chain's asset is missing")
+}
+
+func TestAMultiHopDenomWhoseHomeChainIsNotCachedAsksForItByName(t *testing.T) {
+	onOsmosis := denoms.IBCDenom("transfer/channel-94814/uatone")
+	l := &fakeLookup{
+		channels: map[string]string{"channel-0": "osmosis-1"},
+		assets: map[string]*denoms.RegistryAsset{"osmosis-1|" + onOsmosis: {Traces: json.RawMessage(
+			`[{"type":"ibc","counterparty":{"chain_name":"atomone","base_denom":"uatone"}}]`)}},
+	}
+	set, st, p := ibcSet(t, l)
+	require.NoError(t, set.FullResync(context.Background()))
+	a := byDenom(st.last(t))[atoneViaOsmosis]
+	assert.Equal(t, "osmosis-1", a.OriginChainID)
+	assert.Contains(t, p.keys, statesync.RegistryNameKey("atomone"))
+
+	// Once the registry set cached AtomOne but not the asset, the chain is
+	// asked for by its id.
+	l.names = map[string]string{"atomone": "atomone-1"}
+	p.keys = nil
+	require.NoError(t, set.FullResync(context.Background()))
+	assert.Contains(t, p.keys, "atomone-1")
+	assert.NotContains(t, p.keys, statesync.RegistryNameKey("atomone"))
+}
+
+func TestIBCDenom(t *testing.T) {
+	assert.Equal(t, usdc, denoms.IBCDenom("transfer/channel-3/uusdc"))
+	assert.Equal(t, atom, denoms.IBCDenom("transfer/channel-11/uatom"))
+}
+
+func TestATraceTheNodeDoesNotKnowLeavesTheDenomUntraced(t *testing.T) {
+	n, st := newFakeNode(t), &fakeStore{}
+	set := denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: noTrace{}}, 0)
+	require.NoError(t, set.ResyncOne(context.Background(), usdc))
+	assert.Empty(t, byDenom(st.last(t))[usdc].IBCPath)
+
+	failing := denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: brokenTrace{}}, 0)
+	require.Error(t, failing.ResyncOne(context.Background(), usdc))
+}
+
+type noTrace struct{}
+
+func (noTrace) DenomTrace(context.Context, *ibctransfertypes.QueryDenomTraceRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
+	return nil, status.Error(codes.NotFound, "no trace")
+}
+
+type brokenTrace struct{}
+
+func (brokenTrace) DenomTrace(context.Context, *ibctransfertypes.QueryDenomTraceRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
+	return nil, errors.New("node down")
 }

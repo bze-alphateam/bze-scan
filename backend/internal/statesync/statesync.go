@@ -31,7 +31,79 @@ const (
 	Denoms     = "denoms"
 	Channels   = "channels"
 	Params     = "params"
+	// ChainRegistry is the Cosmos chain registry cache; its keys are chain
+	// ids, or RegistryNameKey of a registry directory.
+	ChainRegistry = "chain_registry"
+	Holders       = "holders"
+	Prices        = "prices"
 )
+
+// registryNamePrefix starts the chain_registry keys that name a chain by its
+// registry directory (the chain_name of an asset's trace) instead of its
+// chain id.
+const registryNamePrefix = "name:"
+
+// RegistryNameKey is the chain_registry key of the chain whose registry
+// name (directory) is name.
+func RegistryNameKey(name string) string {
+	if name == "" {
+		return ""
+	}
+	return registryNamePrefix + name
+}
+
+// RegistryName returns the name of a key made by RegistryNameKey, and false
+// for a chain id.
+func RegistryName(key string) (string, bool) {
+	return strings.CutPrefix(key, registryNamePrefix)
+}
+
+// Publisher queues the keys of a Dirty; *Syncer satisfies it. Sets that ask
+// other sets for a resync (a denom whose registry asset is missing) hold
+// one.
+type Publisher interface {
+	Publish(d Dirty)
+}
+
+// Deferred is a Publisher bound after construction: the sets are built
+// before the Syncer that runs them. Until Bind it drops what it gets.
+type Deferred struct {
+	mu sync.RWMutex
+	to Publisher
+}
+
+// Bind forwards every later Publish to p.
+func (d *Deferred) Bind(p Publisher) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.to = p
+}
+
+// Publish forwards dirty to the bound Publisher.
+func (d *Deferred) Publish(dirty Dirty) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.to != nil {
+		d.to.Publish(dirty)
+	}
+}
+
+// loggedError is a failure its set already logged.
+type loggedError struct{ err error }
+
+func (e loggedError) Error() string { return e.err.Error() }
+func (e loggedError) Unwrap() error { return e.err }
+
+// Logged marks err as already logged by the set that returns it: the run is
+// still recorded as failed in sync_jobs, but the Syncer does not log it
+// again (a set polled every minute logs its failures once per change of
+// state, not once per run).
+func Logged(err error) error {
+	if err == nil {
+		return nil
+	}
+	return loggedError{err: err}
+}
 
 // All is the key that asks for a full resync of a set: what a block changed
 // is known to touch the set but not which entry (a slash names a consensus
@@ -365,9 +437,13 @@ func (s *Syncer) run(ctx context.Context, j job) error {
 		r.Cursor = c.Cursor()
 	}
 	lg := s.cfg.Log.WithFields(log.Fields{"set": j.set, "key": j.key, "took_ms": r.Finished.Sub(started).Milliseconds()})
-	if err != nil {
+	var logged loggedError
+	switch {
+	case errors.As(err, &logged):
+		lg.WithError(err).Debug("state sync: resync failed, logged by the set")
+	case err != nil:
 		lg.WithError(err).Warn("state sync: resync failed, rows kept, retried on the next trigger")
-	} else {
+	default:
 		lg.Debug("state sync: resynced")
 		if j.key == All {
 			select {
