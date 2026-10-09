@@ -123,6 +123,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
 		Accounts:           explorerRepo,
+		Tokens:             explorerRepo,
 		AccountState:       accountState,
 		Status:             checker,
 		Raw:                raw,
