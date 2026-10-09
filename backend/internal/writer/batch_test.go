@@ -24,8 +24,8 @@ func TestBatchWriteIsOneTransactionOfOneBatch(t *testing.T) {
 	tx := db.txs[0]
 	assert.Equal(t, 1, tx.batches)
 	assert.True(t, tx.committed)
-	assert.Equal(t, []string{"transactions", "messages", "block", "block times"}, sqlOf(tx),
-		"never the live floor or the cursor")
+	assert.Equal(t, []string{"transactions", "messages", "block", "block times", "accounts"}, sqlOf(tx),
+		"never the live floor or the cursor; the accounts once the inserted keys are known")
 
 	assert.Len(t, payload(t, tx.stmts[0]), 4, "both heights' transactions in one insert")
 	blocks := payload(t, tx.stmts[2])
@@ -135,7 +135,7 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 	tx := db.txs[0]
 	assert.Equal(t, []string{
 		"transactions update", "transactions", "messages update", "messages",
-		"block update", "block", "block times", "resolve failures",
+		"block update", "block", "block times", "resolve failures", "accounts",
 	}, sqlOf(tx), "each table's update before its insert, both in the flush's transaction")
 
 	for _, tc := range writtenTables {
@@ -157,7 +157,7 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 			assert.Contains(t, insert, "RETURNING "+tc.keys, "the inserted keys drive the counters")
 		})
 	}
-	assert.Equal(t, []any{[]int64{104, 103}}, tx.stmts[len(tx.stmts)-1].args, "the flush's heights are resolved")
+	assert.Equal(t, []any{[]int64{104, 103}}, tx.stmts[len(tx.stmts)-2].args, "the flush's heights are resolved")
 }
 
 func TestBatchWriteInInsertModeNeverUpdates(t *testing.T) {

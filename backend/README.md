@@ -49,14 +49,14 @@ Implemented so far:
   the process serves HTTP; it checks neither the database nor a node).
   Unknown paths answer 404 with the JSON error envelope
   `{"error":{"code":"not_found","message":"Not Found"}}`.
-- The read API under `/api/v1`: blocks, transactions and search (see HTTP
-  API below).
+- The read API under `/api/v1`: blocks, transactions, validators, accounts
+  and search (see HTTP API below).
 - `GET /api/v1/status` with its checker (see HTTP API below).
 - The raw-JSON routes under `/api/v1/raw` with their in-memory cache (see
   HTTP API below).
 - `migrate` (see Migrations below).
-- The live indexer inside `serve`, writing `explorer.blocks`, transactions
-  and messages, with the catch-up through the archive after a long outage
+- The live indexer inside `serve`, writing `explorer.blocks`, transactions,
+  messages, validator events and accounts, with the catch-up through the archive after a long outage
   (see Live indexer below).
 - `backfill`, standalone or inside `serve` (see Backfill below).
 - `reindex` (see Reindex below).
@@ -79,7 +79,7 @@ documented template with the defaults:
 | `NODE_RPC_URL` | `http://127.0.0.1:26657` | CometBFT RPC of the local node, read by height only |
 | `CHAIN_ID` | `beezee-1` | `serve` refuses to start the indexer when the node's `/status` reports another network |
 | `INDEXER_ENABLED` | `true` | runs the live indexer and the state sync in `serve`; `false` runs the HTTP API only: the one way to run a second process against the same database |
-| `NODE_GRPC_ADDR` | `127.0.0.1:9090` | `host:port` of the local node's gRPC server, which the state sync queries; never a public node |
+| `NODE_GRPC_ADDR` | `127.0.0.1:9090` | `host:port` of the local node's gRPC server, which the state sync and the account route's live reads query (the API on a connection of its own, 3 s per call); never a public node |
 | `NODE_GRPC_TLS` | `false` | dial `NODE_GRPC_ADDR` with TLS |
 | `ARCHIVE_RPC_URL` | `https://rpc.getbze.com` | CometBFT RPC of an archive node, by height only; the status checker compares its tip, the raw-JSON routes fetch their misses from it, the backfill and the catch-up read history from it |
 | `ARCHIVE_RPC_RETRY_URL` | empty | tried when `ARCHIVE_RPC_URL` fails; empty means `ARCHIVE_RPC_URL` again |
@@ -118,7 +118,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make e2e` | starts PostgreSQL from `../docker/compose.yml`, runs the acceptance tests in `e2e/` (build tag `e2e`, `-race`), tears the database down; the exit code is the tests' |
 | `make e2e-up` / `make e2e-down` | starts / removes that PostgreSQL by hand |
 | `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
-| `make grpc-fixtures VALIDATORS="..."` | records the fake gRPC server's fixtures (see below) |
+| `make grpc-fixtures VALIDATORS="..." ACCOUNTS="..."` | records the fake gRPC server's fixtures (see below) |
 | `make clean` | removes `build/` |
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
@@ -179,6 +179,10 @@ internal/indexer/reindex/
 internal/grpcclient/
                    the local node's gRPC connection (chain codec, 10 s per
                    call)
+internal/chainstate/
+                   live account reads (balances, delegations, unbonding,
+                   rewards) behind a 5 s in-memory cache
+internal/labels/   the module and known account labels `migrate` seeds
 internal/statesync/
                    the state sync: dirty sets, coalescing queue, workers,
                    safety-net timers, sync_jobs
@@ -235,7 +239,7 @@ every later route follows:
 - **Errors** answer `{"error": {"code": "...", "message": "..."}}` with
   `bad_request` (400), `not_found` (404), `upstream_error` (502/504, for the
   routes that call a node) or `internal` (500, details only in the log).
-- **Caching**: lists, search, validators and every error are
+- **Caching**: lists, search, validators, accounts and every error are
   `Cache-Control: no-store`; a block by height and a found transaction are
   `public, max-age=31536000, immutable` (a committed height never changes),
   except a block whose proposer is not named yet (no synced validator has its
@@ -253,7 +257,8 @@ every later route follows:
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400 |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
-| `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; no match is an empty list; an empty `q` is a 400 |
+| `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
+| `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
 The status checker runs inside `serve` (with or without the indexer): it
@@ -320,7 +325,12 @@ bze-scan migrate version    # print the current version (0 when none)
   classification of `internal/classify` into `explorer.message_kinds` and
   `explorer.block_event_kinds` (upsert every entry, delete the rows without
   one), then runs `explorer.reclassify_unknown()` so activity stored as
-  `other` picks up the entries added since.
+  `other` picks up the entries added since. The third seeds
+  `explorer.labels` from `internal/labels` (`source = seed`): one `module`
+  row per module account the chain's app declares (the address derived as
+  `authtypes.NewModuleAddress` does) and the `known` accounts (none yet);
+  seed rows no longer listed are deleted. The state sync adds the
+  `validator_owner` rows.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -459,6 +469,19 @@ registers by hand. `go.mod` repeats the chain's `replace` directives.
   row keeps the type URL with a NULL body, and the indexer logs a warning.
   Bytes that are not a transaction at all still get their `transactions` row
   from the block results.
+
+### Accounts
+
+Every signer of every transaction gets an `explorer.accounts` row:
+`first_seen_height`/`first_seen_time` move back with `LEAST`,
+`last_seen_height` forward with `GREATEST`, and `tx_count` counts the
+transactions the write actually inserted (the keys the `transactions`
+insert returned), so writing a height again, or a reindex, never counts
+twice. `activity_count` stays 0 until the activity feed. Both writers merge
+the deltas of a write per address and apply them in address order
+(`mergeDeltas` in `internal/writer`, shared with the later per-token
+totals), so concurrent writes lock the rows in the same order; a write that
+still hits a deadlock (SQLSTATE 40P01) is retried once.
 
 ## Reindex
 
@@ -658,15 +681,24 @@ keyed file the keyless one answers, and without any file the method answers
 `Unimplemented`. A recorded gateway error (`{"code": 5, "message": …}`)
 answers that gRPC status. Tests count calls per method and per key, replace
 an answer (`SetResponse`) and stop the server to play a node that is down.
-So far the staking and slashing methods of the validators set are recorded;
-each later story adds its methods.
+So far the staking and slashing methods of the validators set and the
+account page's bank, staking and distribution reads are recorded; each later
+story adds its methods.
 
 ```
-make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" REST=https://rest.getbze.com
+make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
+
+`SETS` limits the run to some sets (`validators`, `accounts`; both by
+default), so adding an account does not re-record the validators.
 
 records `staking/Validators.json`, `slashing/SigningInfos.json`,
 `slashing/Params.json`, every validator's self-delegation and delegator
 count, and, for each operator in `VALIDATORS`, its single `Validator` and
 `SigningInfo` answers (ChainTools, the validator block 25000440 delegates
-to). Recorded on 2026-10-09: 57 validators, 22 bonded.
+to). Recorded on 2026-10-09: 57 validators, 22 bonded. For each address in
+`ACCOUNTS` it records `bank/AllBalances`, `staking/DelegatorDelegations`,
+`staking/DelegatorUnbondingDelegations` and
+`distribution/DelegationTotalRewards`: so far the owner of Thamar, who
+signs at height 25000439 (recorded on 2026-10-09: three balances, one
+delegation, no unbonding).

@@ -79,6 +79,32 @@ type fakeReader struct {
 	gotHash    string
 	gotStatus  *string
 	gotAfter   int64
+
+	labels     []repository.Label
+	gotSearch  []string
+	searchErrs map[string]error
+}
+
+func (f *fakeReader) SearchLabels(_ context.Context, q string, limit int) ([]repository.Label, error) {
+	f.gotSearch = append(f.gotSearch, fmt.Sprintf("labels %s %d", q, limit))
+	var out []repository.Label
+	for _, l := range f.labels {
+		if strings.Contains(strings.ToLower(l.Name), strings.ToLower(q)) && len(out) < limit {
+			out = append(out, l)
+		}
+	}
+	return out, f.searchErrs["labels"]
+}
+
+func (f *fakeReader) SearchValidators(_ context.Context, q string, limit int) ([]repository.ValidatorMatch, error) {
+	f.gotSearch = append(f.gotSearch, fmt.Sprintf("validators %s %d", q, limit))
+	var out []repository.ValidatorMatch
+	for op, m := range f.monikers {
+		if strings.Contains(strings.ToLower(m), strings.ToLower(q)) && len(out) < limit {
+			out = append(out, repository.ValidatorMatch{OperatorAddress: op, Moniker: m})
+		}
+	}
+	return out, f.searchErrs["validators"]
 }
 
 func (f *fakeReader) Validators(_ context.Context, status *string, after int64, limit int) ([]repository.ValidatorSummary, error) {
@@ -397,6 +423,43 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/search").Code)
 	assert.JSONEq(t, `{"results":[]}`, get(t, e, "/search?q=hello").Body.String())
+}
+
+func TestSearchByName(t *testing.T) {
+	f := &fakeReader{
+		monikers: map[string]string{valoper: "Vidulum"},
+		labels: []repository.Label{
+			{Address: account, Name: "Vidulum (validator owner)", Kind: "validator_owner"},
+			{Address: zeroAddress("bze"), Name: "DEX", Kind: "module"},
+		},
+	}
+	e := newAPI(f)
+	rec := get(t, e, "/search?q=%20vidu%20")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, []dto.SearchResult{
+		{Type: "validator", ID: valoper, Label: "Vidulum"},
+		{Type: "account", ID: account, Label: "Vidulum (validator owner)"},
+	}, decode[dto.SearchResponse](t, rec).Results, "validators first, then the labelled accounts")
+	assert.Equal(t, []string{
+		fmt.Sprintf("validators vidu %d", controller.SearchNameMatches),
+		fmt.Sprintf("labels vidu %d", controller.SearchNameMatches),
+	}, f.gotSearch)
+
+	rec = get(t, e, "/search?q=dex")
+	assert.Equal(t, []dto.SearchResult{{Type: "account", ID: zeroAddress("bze"), Label: "DEX"}},
+		decode[dto.SearchResponse](t, rec).Results)
+
+	f.gotSearch = nil
+	assert.JSONEq(t, `{"results":[]}`, get(t, e, "/search?q=x").Body.String())
+	assert.Empty(t, f.gotSearch, "one character searches no name")
+	get(t, e, "/search?q=25000894")
+	get(t, e, "/search?q="+account)
+	assert.Empty(t, f.gotSearch, "a height or an address searches no name")
+
+	for _, which := range []string{"labels", "validators"} {
+		f.searchErrs = map[string]error{which: errors.New("db down")}
+		assert.Equal(t, http.StatusInternalServerError, get(t, e, "/search?q=dex").Code, which)
+	}
 }
 
 func validatorRows(n int) []repository.ValidatorSummary {

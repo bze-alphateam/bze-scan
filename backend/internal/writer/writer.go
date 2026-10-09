@@ -80,11 +80,12 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 }
 
 // WriteBlock writes the entities of one or more heights in one transaction:
-// the transactions and messages rows, the blocks rows (block_time_ms from the
-// previous row when it exists), the live floor at the first write ever, and
-// the cursor moved to the highest height. Partitions are topped up first when
-// a height enters the last one. A blocks row therefore proves its height is
-// complete.
+// the transactions and messages rows, the accounts of their signers
+// (counters moved for the transactions inserted), the blocks rows
+// (block_time_ms from the previous row when it exists), the live floor at the
+// first write ever, and the cursor moved to the highest height. Partitions
+// are topped up first when a height enters the last one. A blocks row
+// therefore proves its height is complete. A deadlock retries the write once.
 func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) error {
 	if ents == nil || len(ents.Blocks) == 0 {
 		return nil
@@ -98,7 +99,19 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 	if err != nil {
 		return err
 	}
+	if err := withDeadlockRetry(ctx, func(ctx context.Context) error {
+		return w.write(ctx, ents, top, topUp)
+	}); err != nil {
+		return err
+	}
+	if topUp {
+		w.parts.toppedUp(top)
+	}
+	return nil
+}
 
+// write is one attempt of WriteBlock.
+func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top int64, topUp bool) error {
 	tx, err := w.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("write %d: begin: %w", top, err)
@@ -114,10 +127,18 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 	if err != nil {
 		return err
 	}
+	inserted := newInserted()
 	for _, st := range rows {
-		if _, err := tx.Exec(ctx, st.sql, st.args...); err != nil {
+		if err := runStatement(ctx, tx, st, &inserted); err != nil {
 			return fmt.Errorf("write %d: %s: %w", top, st.table, err)
 		}
+	}
+	accounts, err := accountStatements(top, ents, inserted.Transactions)
+	if err != nil {
+		return err
+	}
+	if err := execAll(ctx, tx, top, accounts); err != nil {
+		return err
 	}
 	for i := range ents.Blocks {
 		if err := insertBlock(ctx, tx, &ents.Blocks[i]); err != nil {
@@ -139,11 +160,22 @@ func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) e
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("write %d: commit: %w", top, err)
 	}
-
-	if topUp {
-		w.parts.toppedUp(top)
-	}
 	return nil
+}
+
+// runStatement runs st in tx, reading the keys it returns into inserted
+// when it has a reader.
+func runStatement(ctx context.Context, tx pgx.Tx, st statement, inserted *Inserted) error {
+	if st.inserted == nil {
+		_, err := tx.Exec(ctx, st.sql, st.args...)
+		return err
+	}
+	rows, err := tx.Query(ctx, st.sql, st.args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	return st.inserted(rows, inserted)
 }
 
 // RecordFailure records a height the live indexer gave up on in
@@ -324,16 +356,29 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 // insert of the missing ones, whose returned keys scan reads.
 func chunked[T any](top int64, label string, tbl table, mode Mode, rows []T,
 	scan func(pgx.Rows, *Inserted) error) ([]statement, error) {
+	payloads, err := jsonChunks(top, label, rows)
+	if err != nil {
+		return nil, err
+	}
 	var out []statement
+	for _, payload := range payloads {
+		if mode == ModeUpdate {
+			out = append(out, statement{table: label + " update", sql: tbl.updateSQL(), args: []any{payload}})
+		}
+		out = append(out, statement{table: label, sql: tbl.insertSQL(), args: []any{payload}, inserted: scan})
+	}
+	return out, nil
+}
+
+// jsonChunks marshals rows into JSON arrays of up to ChunkRows rows.
+func jsonChunks[T any](top int64, label string, rows []T) ([][]byte, error) {
+	var out [][]byte
 	for lo := 0; lo < len(rows); lo += ChunkRows {
 		payload, err := json.Marshal(rows[lo:min(lo+ChunkRows, len(rows))])
 		if err != nil {
 			return nil, fmt.Errorf("write %d: %s: %w", top, label, err)
 		}
-		if mode == ModeUpdate {
-			out = append(out, statement{table: label + " update", sql: tbl.updateSQL(), args: []any{payload}})
-		}
-		out = append(out, statement{table: label, sql: tbl.insertSQL(), args: []any{payload}, inserted: scan})
+		out = append(out, payload)
 	}
 	return out, nil
 }

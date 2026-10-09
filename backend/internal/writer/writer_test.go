@@ -37,10 +37,20 @@ type mockTx struct {
 
 func (tx *mockTx) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	tx.stmts = append(tx.stmts, statement{sql, args})
-	if tx.db.execErr != nil && strings.Contains(sql, tx.db.execErrOn) {
-		return pgconn.CommandTag{}, tx.db.execErr
+	if err := tx.db.failOn(sql); err != nil {
+		return pgconn.CommandTag{}, err
 	}
 	return pgconn.CommandTag{}, nil
+}
+
+// Query records the statement like Exec and returns the rows configured in
+// db.returning for it.
+func (tx *mockTx) Query(_ context.Context, sql string, args ...any) (pgx.Rows, error) {
+	tx.stmts = append(tx.stmts, statement{sql, args})
+	if err := tx.db.failOn(sql); err != nil {
+		return nil, err
+	}
+	return &mockRows{rows: tx.db.returnedBy(sql), i: -1}, nil
 }
 
 // SendBatch records the queued statements like Execs and runs their result
@@ -51,8 +61,8 @@ func (tx *mockTx) SendBatch(_ context.Context, b *pgx.Batch) pgx.BatchResults {
 	var err error
 	for _, q := range b.QueuedQueries {
 		tx.stmts = append(tx.stmts, statement{q.SQL, q.Arguments})
-		if err == nil && tx.db.execErr != nil && strings.Contains(q.SQL, tx.db.execErrOn) {
-			err = tx.db.execErr
+		if err == nil {
+			err = tx.db.failOn(q.SQL)
 		}
 		if err == nil && q.Fn != nil {
 			err = q.Fn(mockBatchResults{rows: tx.db.returnedBy(q.SQL)})
@@ -136,13 +146,15 @@ func (r mockRow) Scan(dest ...any) error {
 // mockDB answers QueryRow by the first matching SQL fragment in rows and
 // records every transaction.
 type mockDB struct {
-	rows       map[string]mockRow
-	returning  map[string][][]any // rows a batched statement returns, by SQL fragment
-	queries    []string
-	txs        []*mockTx
-	execErr    error
-	execErrOn  string
-	beginCalls int
+	rows      map[string]mockRow
+	returning map[string][][]any // rows a batched statement returns, by SQL fragment
+	queries   []string
+	txs       []*mockTx
+	execErr   error
+	execErrOn string
+	// execErrOnce clears execErr after it was returned once.
+	execErrOnce bool
+	beginCalls  int
 }
 
 func newMockDB(lastPartition int64) *mockDB {
@@ -154,6 +166,18 @@ func (db *mockDB) Begin(context.Context) (pgx.Tx, error) {
 	tx := &mockTx{db: db}
 	db.txs = append(db.txs, tx)
 	return tx, nil
+}
+
+// failOn returns the configured error when sql matches it.
+func (db *mockDB) failOn(sql string) error {
+	if db.execErr == nil || !strings.Contains(sql, db.execErrOn) {
+		return nil
+	}
+	err := db.execErr
+	if db.execErrOnce {
+		db.execErr = nil
+	}
+	return err
 }
 
 func (db *mockDB) returnedBy(sql string) [][]any {
@@ -205,6 +229,8 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "failure")
 		case strings.Contains(s.sql, "DO NOTHING") && strings.Contains(s.sql, "indexer_state"):
 			out = append(out, "floor")
+		case strings.Contains(s.sql, "INSERT INTO explorer.accounts"):
+			out = append(out, "accounts")
 		case strings.Contains(s.sql, "GREATEST"):
 			out = append(out, "cursor")
 		default:
@@ -341,7 +367,7 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"transactions", "messages", "block", "floor", "cursor"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
 		"the blocks row is written last in the same transaction")
 	assert.True(t, tx.committed)
 	for _, st := range tx.stmts[:2] {
