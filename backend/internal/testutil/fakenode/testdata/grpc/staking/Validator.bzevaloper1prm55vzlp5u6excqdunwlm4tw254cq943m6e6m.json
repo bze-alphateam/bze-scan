@@ -1,0 +1,33 @@
+{
+  "validator": {
+    "operator_address": "bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m",
+    "consensus_pubkey": {
+      "@type": "/cosmos.crypto.ed25519.PubKey",
+      "key": "ikmP1GM73Y1vVKsLZYjFENPGve7uLWV3Q+8YF60LHMA="
+    },
+    "jailed": false,
+    "status": "BOND_STATUS_BONDED",
+    "tokens": "7895930982372",
+    "delegator_shares": "7895930982372.000000000000000000",
+    "description": {
+      "moniker": "ChainTools",
+      "identity": "1857FF1BC2EA6A69",
+      "website": "https://chaintools.tech",
+      "security_contact": "contact@chaintools.tech",
+      "details": "STAKE | LEARN | EARN | Delegate to our validators and dive into blockchain technology with us."
+    },
+    "unbonding_height": "0",
+    "unbonding_time": "1970-01-01T00:00:00Z",
+    "commission": {
+      "commission_rates": {
+        "rate": "0.050000000000000000",
+        "max_rate": "0.500000000000000000",
+        "max_change_rate": "0.100000000000000000"
+      },
+      "update_time": "2022-04-29T05:31:29.027929378Z"
+    },
+    "min_self_delegation": "1",
+    "unbonding_on_hold_ref_count": "0",
+    "unbonding_ids": []
+  }
+}

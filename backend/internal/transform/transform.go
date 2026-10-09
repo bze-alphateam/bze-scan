@@ -21,6 +21,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
 // Input is everything the node answered for one height.
@@ -36,6 +37,9 @@ type Entities struct {
 	Blocks       []Block
 	Transactions []Transaction
 	Messages     []Message
+	// Dirty is the current state the heights changed, for the state sync.
+	// The live indexer publishes it after the write; the backfill ignores it.
+	Dirty statesync.Dirty
 }
 
 // Block is one explorer.blocks row. BlockTimeMs is not here: the writer
@@ -57,9 +61,12 @@ type Block struct {
 	// none.
 	FeesDistributed sdk.Coins
 	SignaturesCount int
-	// SignaturesPowerPct stays nil: the voting power at the height is not in
-	// /commit (filled later from the validators table).
-	SignaturesPowerPct *string
+	// Signers are the consensus addresses (upper-case hex) of the commit's
+	// signatures. The writers turn them into signatures_power_pct against
+	// the current validators table: the voting power at the height is not in
+	// /commit, so the share is exact for live blocks and approximate for
+	// history.
+	Signers []string
 }
 
 // FeesDistributedJSON is the fees_distributed column value: a JSON array of
@@ -167,10 +174,13 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	for _, s := range in.Commit.Signatures {
 		if s.BlockIDFlag == node.BlockIDFlagCommit {
 			b.SignaturesCount++
+			b.Signers = append(b.Signers, strings.ToUpper(s.ValidatorAddress))
 		}
 	}
 
+	ents := &Entities{}
 	for _, ev := range in.Results.FinalizeBlockEvents {
+		markValidators(&ents.Dirty, ev)
 		switch ev.Type {
 		case "mint":
 			if b.Minted != nil {
@@ -194,7 +204,16 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 		}
 	}
 
-	ents := &Entities{Blocks: []Block{b}}
+	// A validator leaving the active set (jailed, or pushed out) changes
+	// statuses no event names; the power changes of the others follow the
+	// delegation and slash events already marked.
+	for _, u := range in.Results.ValidatorUpdates {
+		if u.Power == 0 {
+			ents.Dirty.Mark(statesync.Validators, statesync.All)
+		}
+	}
+
+	ents.Blocks = []Block{b}
 	for i, raw := range in.Block.Txs {
 		if err := t.transaction(ents, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
@@ -269,6 +288,15 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 	}
 	if len(tx.Signers) == 0 && len(decoded.Signers) > 0 {
 		tx.Signers = decoded.Signers
+	}
+
+	if tx.Success {
+		for _, ev := range res.Events {
+			markValidators(&ents.Dirty, ev)
+		}
+		for _, m := range decoded.Msgs {
+			markValidatorMsg(&ents.Dirty, m)
+		}
 	}
 
 	tx.MsgCount = len(decoded.Msgs)
@@ -360,6 +388,45 @@ func decodeJSON(s string) (any, bool) {
 		return nil, false
 	}
 	return v, true
+}
+
+// markValidators marks the validators an event changes: the delegation
+// events name the validator; a slash names a consensus address only, so it
+// asks for every validator.
+func markValidators(d *statesync.Dirty, ev node.Event) {
+	switch ev.Type {
+	case "delegate", "unbond", "create_validator", "cancel_unbonding_delegation":
+		v, _ := ev.Get("validator")
+		d.Mark(statesync.Validators, v)
+	case "redelegate":
+		src, _ := ev.Get("source_validator")
+		dst, _ := ev.Get("destination_validator")
+		d.Mark(statesync.Validators, src)
+		d.Mark(statesync.Validators, dst)
+	case "slash":
+		d.Mark(statesync.Validators, statesync.All)
+	}
+}
+
+// markValidatorMsg marks the validator of the messages whose events do not
+// name it: an edit (description, commission) and an unjail.
+func markValidatorMsg(d *statesync.Dirty, m chain.Msg) {
+	field := ""
+	switch m.TypeURL {
+	case "/cosmos.staking.v1beta1.MsgEditValidator":
+		field = "validator_address"
+	case "/cosmos.slashing.v1beta1.MsgUnjail":
+		field = "validator_addr"
+	default:
+		return
+	}
+	var body map[string]any
+	if json.Unmarshal(m.Body, &body) != nil {
+		return
+	}
+	if v, ok := body[field].(string); ok {
+		d.Mark(statesync.Validators, v)
+	}
 }
 
 func mintSummary(b *Block, ev node.Event) error {

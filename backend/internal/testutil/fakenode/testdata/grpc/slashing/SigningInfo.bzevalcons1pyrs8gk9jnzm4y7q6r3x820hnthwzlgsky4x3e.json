@@ -1,0 +1,10 @@
+{
+  "val_signing_info": {
+    "address": "bzevalcons1pyrs8gk9jnzm4y7q6r3x820hnthwzlgsky4x3e",
+    "start_height": "544492",
+    "index_offset": "24462880",
+    "jailed_until": "1970-01-01T00:00:00Z",
+    "tombstoned": false,
+    "missed_blocks_counter": "0"
+  }
+}

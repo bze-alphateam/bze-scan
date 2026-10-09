@@ -51,6 +51,9 @@ type ExplorerReader interface {
 	TxExists(ctx context.Context, hash string) (bool, error)
 	AccountIndexed(ctx context.Context, address string) (bool, error)
 	ValidatorMoniker(ctx context.Context, operator string) (string, error)
+	// Validators lists the validators of status (all when nil) in rank
+	// order, after the list position after.
+	Validators(ctx context.Context, status *string, after int64, limit int) ([]repository.ValidatorSummary, error)
 }
 
 // ExplorerController serves the block, transaction and search routes under
@@ -170,6 +173,47 @@ func (h *ExplorerController) Tx(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
 	return c.JSON(http.StatusOK, dto.NewTx(t))
+}
+
+// Validators serves GET
+// /api/v1/validators?status=bonded|unbonding|unbonded|all&cursor&limit: the
+// bonded validators by rank, then the others by tokens. status defaults to
+// all.
+func (h *ExplorerController) Validators(c *echo.Context) error {
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var after int64
+	if keys, err := parseCursor(c, 1); err != nil {
+		return err
+	} else if keys != nil {
+		after = keys[0]
+	}
+	var status *string
+	switch s := c.QueryParam("status"); s {
+	case "", "all":
+	case "bonded", "unbonding", "unbonded":
+		status = &s
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, "status must be bonded, unbonding, unbonded or all")
+	}
+
+	rows, err := h.repo.Validators(c.Request().Context(), status, after, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.Validator]{Items: make([]dto.Validator, 0, min(len(rows), limit))}
+	for i, v := range rows {
+		if i == limit {
+			next := dto.EncodeCursor(rows[i-1].Position)
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewValidator(v))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // Search serves GET /api/v1/search?q=. The input decides what is looked

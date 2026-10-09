@@ -27,6 +27,7 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "migrate")
 	assert.Contains(t, out.String(), "backfill")
 	assert.Contains(t, out.String(), "reindex")
+	assert.Contains(t, out.String(), "sync-state")
 }
 
 func TestBackfillRequiresDatabaseURL(t *testing.T) {
@@ -55,11 +56,11 @@ func TestBackfillRejectsInvalidConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "BACKFILL_FLOOR")
 }
 
-func TestMigrateCommandsRequireDatabaseURL(t *testing.T) {
+func TestDatabaseCommandsRequireDatabaseURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", "")
 
-	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}} {
+	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}, {"sync-state"}} {
 		root := cli.NewRootCmd()
 		root.SetArgs(args)
 		root.SetOut(&bytes.Buffer{})

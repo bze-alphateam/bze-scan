@@ -195,12 +195,12 @@ func TestRunFailsWhenAddressIsTaken(t *testing.T) {
 
 func TestAPIRoutesLiveUnderTheVersionPrefix(t *testing.T) {
 	e := server.New(server.Deps{})
-	for _, path := range []string{"/blocks", "/txs", "/search?q=1"} {
+	for _, path := range []string{"/blocks", "/txs", "/validators", "/search?q=1"} {
 		assert.Equal(t, http.StatusNotFound, serve(t, e, http.MethodGet, path).Code, path)
 	}
 	// Validation answers before any repository call, so a nil repository is
 	// enough to prove the routes exist.
-	for _, path := range []string{"/blocks/x", "/txs/x", "/blocks?limit=0", "/txs?limit=0", "/search"} {
+	for _, path := range []string{"/blocks/x", "/txs/x", "/blocks?limit=0", "/txs?limit=0", "/validators?status=x", "/search"} {
 		rec := serve(t, e, http.MethodGet, server.APIPrefix+path)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, path)
 	}

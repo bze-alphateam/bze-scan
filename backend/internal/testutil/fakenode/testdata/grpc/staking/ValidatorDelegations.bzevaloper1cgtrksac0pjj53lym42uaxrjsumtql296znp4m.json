@@ -1,0 +1,19 @@
+{
+  "delegation_responses": [
+    {
+      "delegation": {
+        "delegator_address": "bze1xn96wrw8fs5hhy8k8lj5e4szn9l6n9ue4mxfse",
+        "validator_address": "bzevaloper1cgtrksac0pjj53lym42uaxrjsumtql296znp4m",
+        "shares": "700000000.000000000000000000"
+      },
+      "balance": {
+        "denom": "ubze",
+        "amount": "700000000"
+      }
+    }
+  ],
+  "pagination": {
+    "next_key": "PBquSYqvO/LgoYXWYkNSPad9G7k=",
+    "total": "5"
+  }
+}

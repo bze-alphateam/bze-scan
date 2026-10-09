@@ -1587,5 +1587,6 @@
     }
   ],
   "BeginBlockEvents": null,
-  "EndBlockEvents": null
+  "EndBlockEvents": null,
+  "ValidatorUpdates": null
 }

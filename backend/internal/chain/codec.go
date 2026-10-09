@@ -16,6 +16,8 @@ import (
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	gogoproto "github.com/cosmos/gogoproto/proto"
+	"google.golang.org/grpc/encoding"
 
 	bzeapp "github.com/bze-alphateam/bze/app"
 )
@@ -227,4 +229,29 @@ func accAddress(b []byte) string {
 		return ""
 	}
 	return s
+}
+
+// GRPC is the gRPC codec for the chain's query services: protobuf, with the
+// Any values of a message (a validator's consensus key, for instance)
+// resolved against the chain's registry.
+func (c *Codec) GRPC() encoding.Codec {
+	return codec.NewProtoCodec(c.registry).GRPCCodec()
+}
+
+// ProtoJSON renders a message as proto JSON, the shape of the REST
+// gateway's answers.
+func (c *Codec) ProtoJSON(msg gogoproto.Message) ([]byte, error) {
+	return c.cdc.MarshalJSON(msg)
+}
+
+// ParseProtoJSON reads proto JSON (a REST gateway answer, for instance) into
+// msg, resolving "@type" values against the chain's registry.
+func (c *Codec) ParseProtoJSON(bz []byte, msg gogoproto.Message) error {
+	return c.cdc.UnmarshalJSON(bz, msg)
+}
+
+// InterfaceRegistry resolves the Any values of the chain's messages (a
+// validator's consensus key, for instance).
+func (c *Codec) InterfaceRegistry() codectypes.InterfaceRegistry {
+	return c.registry
 }

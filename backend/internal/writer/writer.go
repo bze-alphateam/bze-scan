@@ -184,7 +184,8 @@ func insertBlock(ctx context.Context, tx pgx.Tx, b *transform.Block) error {
 		return fmt.Errorf("write %d: fees_distributed: %w", b.Height, err)
 	}
 	// block_time_ms: header time minus the previous block's, when that block
-	// is already indexed. ON CONFLICT DO NOTHING keeps a rewrite a no-op.
+	// is already indexed; signatures_power_pct from the current validators.
+	// ON CONFLICT DO NOTHING keeps a rewrite a no-op.
 	_, err = tx.Exec(ctx, `INSERT INTO explorer.blocks (
 			height, time, tx_count, tx_failed_count, block_time_ms, hash,
 			proposer_cons_address, size_bytes, minted, inflation, fees_distributed,
@@ -192,11 +193,11 @@ func insertBlock(ctx context.Context, tx pgx.Tx, b *transform.Block) error {
 		VALUES ($1, $2, $3, $4,
 			(SELECT (EXTRACT(EPOCH FROM ($2::timestamptz - p.time)) * 1000)::integer
 			   FROM explorer.blocks p WHERE p.height = $1::bigint - 1),
-			$5, $6, $7, $8, $9, $10, $11, $12)
+			$5, $6, $7, $8, $9, $10, $11, `+signaturesPowerPct("$12::text[]")+`)
 		ON CONFLICT (height) DO NOTHING`,
 		b.Height, b.Time, b.TxCount, b.TxFailedCount, b.Hash,
 		nullIfEmpty(b.ProposerConsAddress), b.SizeBytes, b.Minted, b.Inflation, fees,
-		b.SignaturesCount, b.SignaturesPowerPct)
+		b.SignaturesCount, nonNil(b.Signers))
 	if err != nil {
 		return fmt.Errorf("write %d: blocks: %w", b.Height, err)
 	}

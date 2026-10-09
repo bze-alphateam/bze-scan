@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
@@ -67,6 +68,12 @@ type CatchUp interface {
 	CatchUp(ctx context.Context, from, to int64) error
 }
 
+// DirtyPublisher receives the current state each written height changed;
+// *statesync.Syncer satisfies it. Publish must not block.
+type DirtyPublisher interface {
+	Publish(d statesync.Dirty)
+}
+
 // Deps are the indexer's dependencies.
 type Deps struct {
 	Listener    Listener
@@ -78,6 +85,8 @@ type Deps struct {
 	// CatchUp is optional: nil records the heights the node has pruned in
 	// index_failures.
 	CatchUp CatchUp
+	// Dirty is optional: nil publishes no dirty sets.
+	Dirty DirtyPublisher
 }
 
 // Defaults of Config.
@@ -114,6 +123,7 @@ type Indexer struct {
 	transformer Transformer
 	raw         RawCache
 	catchUp     CatchUp
+	dirty       DirtyPublisher
 }
 
 // New returns an indexer woken by deps.Listener, reading deps.Node,
@@ -134,7 +144,7 @@ func New(cfg Config, deps Deps) *Indexer {
 	if cfg.Sleep == nil {
 		cfg.Sleep = sleep
 	}
-	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer, raw: deps.Raw, catchUp: deps.CatchUp}
+	return &Indexer{cfg: cfg, listener: deps.Listener, node: deps.Node, store: deps.Store, transformer: deps.Transformer, raw: deps.Raw, catchUp: deps.CatchUp, dirty: deps.Dirty}
 }
 
 // Run listens and indexes until ctx is cancelled, reconnecting with backoff
@@ -321,6 +331,11 @@ func (ix *Indexer) indexOnce(ctx context.Context, h int64) error {
 	}
 	if ix.raw != nil {
 		ix.raw.PutHeight(h, rawBlock, rawResults, rawCommit)
+	}
+	// After the write: the state sync then reads a node that is at least
+	// at this height.
+	if ix.dirty != nil && !ents.Dirty.Empty() {
+		ix.dirty.Publish(ents.Dirty)
 	}
 	return nil
 }

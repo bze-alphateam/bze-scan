@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -51,9 +52,16 @@ type Config struct {
 	// ChainID is the chain the node must report in /status node_info.network;
 	// serve refuses to start the indexer on another chain.
 	ChainID string
-	// IndexerEnabled runs the live indexer in serve. false runs the API only:
-	// the one way to run a second process against the same database.
+	// IndexerEnabled runs the live indexer and the state sync in serve.
+	// false runs the API only: the one way to run a second process against
+	// the same database.
 	IndexerEnabled bool
+
+	// NodeGRPCAddr is host:port of the local node's gRPC server, which the
+	// state sync queries. Never a public node.
+	NodeGRPCAddr string
+	// NodeGRPCTLS dials NodeGRPCAddr with TLS.
+	NodeGRPCTLS bool
 
 	// ArchiveRPCURL is the CometBFT RPC of an archive node: the status
 	// checker compares its tip with the local node's, and the raw-JSON routes
@@ -107,12 +115,13 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		HTTPAddr:    envString("HTTP_ADDR", ":8080"),
-		LogLevel:    strings.ToLower(envString("LOG_LEVEL", "info")),
-		LogFormat:   strings.ToLower(envString("LOG_FORMAT", LogFormatText)),
-		DatabaseURL: envString("DATABASE_URL", ""),
-		NodeRPCURL:  strings.TrimRight(envString("NODE_RPC_URL", "http://127.0.0.1:26657"), "/"),
-		ChainID:     envString("CHAIN_ID", "beezee-1"),
+		HTTPAddr:     envString("HTTP_ADDR", ":8080"),
+		LogLevel:     strings.ToLower(envString("LOG_LEVEL", "info")),
+		LogFormat:    strings.ToLower(envString("LOG_FORMAT", LogFormatText)),
+		DatabaseURL:  envString("DATABASE_URL", ""),
+		NodeRPCURL:   strings.TrimRight(envString("NODE_RPC_URL", "http://127.0.0.1:26657"), "/"),
+		ChainID:      envString("CHAIN_ID", "beezee-1"),
+		NodeGRPCAddr: envString("NODE_GRPC_ADDR", "127.0.0.1:9090"),
 
 		ArchiveRPCURL:      strings.TrimRight(envString("ARCHIVE_RPC_URL", "https://rpc.getbze.com"), "/"),
 		ArchiveRPCRetryURL: strings.TrimRight(envString("ARCHIVE_RPC_RETRY_URL", ""), "/"),
@@ -135,6 +144,16 @@ func Load() (*Config, error) {
 		fail("INDEXER_ENABLED must be true or false (got %q)", indexer)
 	} else {
 		cfg.IndexerEnabled = v
+	}
+
+	if host, port, err := net.SplitHostPort(cfg.NodeGRPCAddr); err != nil || host == "" || port == "" {
+		fail("NODE_GRPC_ADDR must be host:port (got %q)", cfg.NodeGRPCAddr)
+	}
+	grpcTLS := envString("NODE_GRPC_TLS", "false")
+	if v, err := strconv.ParseBool(grpcTLS); err != nil {
+		fail("NODE_GRPC_TLS must be true or false (got %q)", grpcTLS)
+	} else {
+		cfg.NodeGRPCTLS = v
 	}
 
 	if u, err := url.Parse(cfg.NodeRPCURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

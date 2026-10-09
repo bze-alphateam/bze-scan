@@ -1,7 +1,7 @@
 // Package serve runs the production process: the HTTP API over the explorer
 // tables, the status checker and, when enabled, the live indexer (with the
-// catch-up through the archive) and the backfill, as components of one
-// errgroup. It also runs the backfill standalone for the backfill command.
+// catch-up through the archive and the state sync it feeds) and the
+// backfill, as components of one errgroup. It also runs the backfill standalone for the backfill command.
 // It lives outside cmd/ so acceptance tests can run the real wiring
 // in-process.
 package serve
@@ -48,12 +48,13 @@ type component struct {
 }
 
 // Run runs every component until ctx is cancelled (by SIGINT/SIGTERM in
-// production) or one of them fails. Later work registers the state sync here.
+// production) or one of them fails.
 func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	log.WithFields(log.Fields{
 		"http_addr":        cfg.HTTPAddr,
 		"log_level":        cfg.LogLevel,
 		"indexer_enabled":  cfg.IndexerEnabled,
+		"node_grpc_addr":   cfg.NodeGRPCAddr,
 		"backfill_enabled": cfg.BackfillEnabled,
 	}).Info("starting bze-scan")
 
@@ -138,6 +139,13 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			// finishes the height in flight first.
 			defer pool.Close()
 
+			syncer, closeSync, err := NewStateSync(ctx, cfg, codec)
+			if err != nil {
+				return err
+			}
+			defer closeSync()
+			components = append(components, component{name: "state sync", run: syncer.Run})
+
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
 				Node:        nodeClient,
@@ -145,6 +153,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),
+				Dirty:       syncer,
 			})
 			components = append(components, component{name: "live indexer", run: ix.Run})
 		}

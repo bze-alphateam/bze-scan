@@ -85,6 +85,17 @@ type BlockResults struct {
 	// adapter rejects them.
 	BeginBlockEvents []Event
 	EndBlockEvents   []Event
+	// ValidatorUpdates are the consensus power changes the block's end
+	// applies.
+	ValidatorUpdates []ValidatorUpdate
+}
+
+// ValidatorUpdate is one entry of validator_updates.
+type ValidatorUpdate struct {
+	PubKey json.RawMessage `json:"pub_key"`
+	// Power is the new consensus power; 0 removes the validator from the
+	// active set.
+	Power int64 `json:"power,string"`
 }
 
 // TxResult is one entry of txs_results.
@@ -198,11 +209,12 @@ func (c *Client) Block(ctx context.Context, height int64) (*Block, []byte, error
 // BlockResults calls /block_results?height=height.
 func (c *Client) BlockResults(ctx context.Context, height int64) (*BlockResults, []byte, error) {
 	var res struct {
-		Height              int64      `json:"height,string"`
-		TxsResults          []TxResult `json:"txs_results"`
-		FinalizeBlockEvents []Event    `json:"finalize_block_events"`
-		BeginBlockEvents    []Event    `json:"begin_block_events"`
-		EndBlockEvents      []Event    `json:"end_block_events"`
+		Height              int64             `json:"height,string"`
+		TxsResults          []TxResult        `json:"txs_results"`
+		FinalizeBlockEvents []Event           `json:"finalize_block_events"`
+		BeginBlockEvents    []Event           `json:"begin_block_events"`
+		EndBlockEvents      []Event           `json:"end_block_events"`
+		ValidatorUpdates    []ValidatorUpdate `json:"validator_updates"`
 	}
 	raw, err := c.call(ctx, "block_results", height, &res)
 	if err != nil {
@@ -217,6 +229,7 @@ func (c *Client) BlockResults(ctx context.Context, height int64) (*BlockResults,
 		FinalizeBlockEvents: res.FinalizeBlockEvents,
 		BeginBlockEvents:    res.BeginBlockEvents,
 		EndBlockEvents:      res.EndBlockEvents,
+		ValidatorUpdates:    res.ValidatorUpdates,
 	}, raw, nil
 }
 

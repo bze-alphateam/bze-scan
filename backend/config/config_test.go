@@ -13,6 +13,7 @@ import (
 )
 
 var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
+	"NODE_GRPC_ADDR", "NODE_GRPC_TLS",
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT"}
@@ -35,6 +36,7 @@ func TestLoadDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":8080", LogLevel: "info", LogFormat: "text",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		NodeGRPCAddr:  "127.0.0.1:9090",
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
@@ -51,6 +53,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: "127.0.0.1:9090", LogLevel: "debug", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		NodeGRPCAddr:  "127.0.0.1:9090",
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
@@ -137,6 +140,7 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &config.Config{HTTPAddr: ":7070", LogLevel: "warn", LogFormat: "json",
 		NodeRPCURL: "http://127.0.0.1:26657", ChainID: "beezee-1", IndexerEnabled: true,
+		NodeGRPCAddr:  "127.0.0.1:9090",
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
@@ -158,18 +162,24 @@ func TestLoadIndexerSettings(t *testing.T) {
 	t.Setenv("NODE_RPC_URL", "https://rpc.example.org:443/")
 	t.Setenv("CHAIN_ID", "beezee-testnet")
 	t.Setenv("INDEXER_ENABLED", "false")
+	t.Setenv("NODE_GRPC_ADDR", "grpc.example.org:443")
+	t.Setenv("NODE_GRPC_TLS", "true")
 
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "https://rpc.example.org:443", cfg.NodeRPCURL)
 	assert.Equal(t, "beezee-testnet", cfg.ChainID)
 	assert.False(t, cfg.IndexerEnabled)
+	assert.Equal(t, "grpc.example.org:443", cfg.NodeGRPCAddr)
+	assert.True(t, cfg.NodeGRPCTLS)
 }
 
 func TestLoadRejectsInvalidIndexerSettings(t *testing.T) {
 	cases := map[string]string{
 		"INDEXER_ENABLED": "maybe",
 		"NODE_RPC_URL":    "127.0.0.1:26657",
+		"NODE_GRPC_ADDR":  "http://127.0.0.1:9090",
+		"NODE_GRPC_TLS":   "sometimes",
 	}
 	for key, value := range cases {
 		t.Run(key, func(t *testing.T) {

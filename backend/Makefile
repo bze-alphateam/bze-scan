@@ -3,6 +3,7 @@ CMD         := ./cmd/bze-scan
 BUILD_DIR   := build
 COMPOSE     := docker compose -f ../docker/compose.yml
 ARCHIVE_RPC ?= https://rpc.getbze.com
+REST        ?= https://rest.getbze.com
 # The PostgreSQL of docker/compose.yml unless DATABASE_URL is set.
 DATABASE_URL ?= postgres://bze:bze@localhost:15432/bze_index?sslmode=disable
 
@@ -56,6 +57,10 @@ e2e: e2e-up ## Run acceptance tests (starts PostgreSQL, runs tests, tears it dow
 .PHONY: fixtures
 fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [ARCHIVE_RPC=...]
 	HEIGHTS="$(HEIGHTS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
+
+.PHONY: grpc-fixtures
+grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures VALIDATORS="bzevaloper1…" [REST=...]
+	VALIDATORS="$(VALIDATORS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
 
 .PHONY: clean
 clean: ## Remove build artifacts
