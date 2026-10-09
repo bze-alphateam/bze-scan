@@ -108,8 +108,10 @@ const resolveFailuresSQL = `UPDATE explorer.index_failures SET resolved_at = now
 
 // Write writes the entities of every height in batch in one transaction: the
 // transactions, messages and blocks rows, block_time_ms where the previous
-// block is known, then the PostFlush hooks. Partitions are topped up first
-// when a height enters the last one.
+// block is known, the accounts of the signers (counters moved for the
+// transactions inserted, deltas merged per address and applied in address
+// order), then the PostFlush hooks. Partitions are topped up first when a
+// height enters the last one. A deadlock retries the flush once.
 //
 // In ModeInsert existing rows are kept, so writing a height again changes
 // nothing. In ModeUpdate existing rows that differ are overwritten, rows the
@@ -173,13 +175,27 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	if err != nil {
 		return err
 	}
+	if err := withDeadlockRetry(ctx, func(ctx context.Context) error {
+		return w.write(ctx, &all, mode, stmts, lo, hi, topUp)
+	}); err != nil {
+		return err
+	}
+	if topUp {
+		w.parts.toppedUp(hi)
+	}
+	return nil
+}
+
+// write is one attempt of Write.
+func (w *BatchWriter) write(ctx context.Context, all *transform.Entities, mode Mode, stmts []statement,
+	lo, hi int64, topUp bool) error {
 	tx, err := w.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("flush %d..%d: begin: %w", lo, hi, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	flushed := &Flush{Entities: &all, Mode: mode, Inserted: newInserted()}
+	flushed := &Flush{Entities: all, Mode: mode, Inserted: newInserted()}
 	b := &pgx.Batch{}
 	if topUp {
 		b.Queue(topUpSQL, hi, hi+PartitionTopUp)
@@ -198,6 +214,14 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	if err := tx.SendBatch(ctx, b).Close(); err != nil {
 		return fmt.Errorf("flush %d..%d: %w", lo, hi, err)
 	}
+	// The counters need the keys the batch inserted.
+	accounts, err := accountStatements(hi, all, flushed.Inserted.Transactions)
+	if err != nil {
+		return err
+	}
+	if err := execAll(ctx, tx, hi, accounts); err != nil {
+		return err
+	}
 	for _, hook := range w.hooks {
 		if err := hook(ctx, tx, flushed); err != nil {
 			return fmt.Errorf("flush %d..%d: post-flush: %w", lo, hi, err)
@@ -205,9 +229,6 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("flush %d..%d: commit: %w", lo, hi, err)
-	}
-	if topUp {
-		w.parts.toppedUp(hi)
 	}
 	return nil
 }
