@@ -267,6 +267,10 @@ every later route follows:
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
 | `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=` | the same three with the denom as a query value, the chain's own convention for denoms with `/` |
+| `GET /api/v1/proposals?status=deposit_period\|voting_period\|passed\|rejected\|failed\|canceled&cursor&limit` | every proposal, id descending: id, title, kind (`software_upgrade`, `community_pool_spend`, `parameter_change`, `cointrunk_publisher`, `ibc_client_update`, `text`, `other`), status, expedited, submit/deposit-end/voting-start/voting-end times, `tally` (`{yes, no, abstain, no_with_veto}` in base units, null until synced) and `turnout_pct` (the tally's sum over the bonded tokens it was measured against, five decimals, null without them); another status is a 400 |
+| `GET /api/v1/proposals/{id}` | the list item plus summary, metadata, proposer (and `proposer_label`), message_types, `messages` (proto JSON; a legacy content inside its `MsgExecLegacyContent`), total_deposit, tally_bonded_tokens, tally_updated_at, submit_height and submit_tx_hash (null for a proposal submitted below the indexed range), resolved_height, `validators_voted` (`{voted, total}`: bonded validators whose owner voted, of all bonded validators) and updated_at; 404 when unknown |
+| `GET /api/v1/proposals/{id}/votes?option=yes\|no\|abstain\|no_with_veto\|weighted&cursor&limit` | every vote the explorer indexed (the chain deletes them once tallied), newest first, one per voter (the latest): voter (and `voter_label`), option (null for a split vote; `weighted` lists those), options (the weights as SDK v0.50 encodes them), height, tx_index, tx_hash, time, and for a validator owner `validator` (moniker), `validator_operator` and `voting_power_pct` (its current share), null for other voters |
+| `GET /api/v1/proposals/{id}/deposits?cursor&limit` | every deposit, the initial one included, newest first: depositor (and `depositor_label`), amount (coins), height, tx_index, tx_hash, time |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
@@ -526,6 +530,41 @@ transaction (or per block, `tx_index = -1`), `actor` the message's signer:
 Every denom a token event names is marked dirty for the denoms set, and so
 are the tokenfactory change events.
 
+### Governance
+
+Proposals, votes and deposits are kept forever; the gov module deletes the
+votes once it tallies a proposal, so the explorer is the only place keeping
+them. From the events of a successful transaction:
+
+- `MsgSubmitProposal` writes the `proposals` row: id and proposer from the
+  `submit_proposal` event, title, summary, metadata, expedited and messages
+  from the body (a v1beta1 submission's legacy content is wrapped in a
+  `MsgExecLegacyContent`, as gov v1 queries show it), `kind` from the message
+  types (the legacy content's type for a `MsgExecLegacyContent`; the first
+  message with a kind wins, no message is `text`), status `voting_period`
+  when the initial deposit opened the voting (`voting_period_start`), else
+  `deposit_period`, and submit height, transaction and time. A row the sync
+  wrote first only gets the submit fields it lacks.
+- Every `proposal_deposit` event with a depositor is a `proposal_deposits`
+  row (the initial deposit included; one depositor's deposits in one
+  transaction are one row); `voting_period_start` moves the proposal out of
+  its deposit period.
+- Every `proposal_vote` event upserts the voter's `proposal_votes` row:
+  `options` as SDK v0.50 encodes them (`[{"option":1,"weight":"1.0…"}]`;
+  the pre-v0.47 text form is converted), `option` when one option holds the
+  whole weight. A later vote replaces an earlier one; an earlier one written
+  later (the backfill walks down) never does.
+- `cancel_proposal` sets status `canceled` (the chain deletes the proposal).
+
+From the block's finalize events, `active_proposal` sets `passed`,
+`rejected` or `failed` from `proposal_result` with `resolved_height`
+(`expedited_proposal_rejected` puts an expedited proposal back into its
+voting period as a regular one), and `inactive_proposal` sets `rejected`
+(dropped for lack of deposit) or `failed`. Both are also `block_events`
+rows. A resolution never goes back to an earlier one, and an open status
+never undoes a resolution. Every proposal these events name is dirty for
+the proposals set.
+
 ### Accounts
 
 Every signer of every transaction gets an `explorer.accounts` row:
@@ -677,6 +716,22 @@ a new IBC voucher appears within its first block without every `ubze` move
 costing a resync. Before its first full resync the set knows nothing yet and
 keeps the seen keys for the fold after it.
 
+**Proposals.** The set's first run lists every proposal (gov `Proposals`,
+100 per page), so one submitted before the live floor exists too; every
+minute after, it refreshes the proposals in their voting period (the node's
+list of them plus the stored ones it no longer lists). A dirty proposal is
+resynced alone (gov `Proposal`). Title, summary, metadata, status, times,
+messages and `total_deposit` come from the node. In the voting period the
+tally is the node's running `TallyResult`, measured against the staking
+pool's bonded tokens (`tally_bonded_tokens`, for turnout), `tally_updated_at`
+the sync's time; once resolved it is the proposal's final tally, as of its
+voting end, and the last bonded tokens are kept. An answer read before a
+resolution was indexed never overwrites the resolved status or tally. A
+proposal the node no longer has (dropped, canceled) keeps the row its events
+wrote. A proposal the sync writes before its resolution is indexed takes
+`resolved_height` from the stored `active_proposal`/`inactive_proposal`
+block event.
+
 **Validator events** (`explorer.validator_events`, kept forever) come from
 two writers:
 
@@ -745,7 +800,12 @@ commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
 active set). Transfers and block events come from the same heights: the fills
 of 24999134 (settlements at block level, `OrderExecutedEvent`), the failed
 transaction of 24999004 (its fee row only), the slash of 24160001 (a burn) and
-the empty 24998317. No recorded height carries tokenfactory or tradebin
+the empty 24998317. Governance: 23745024 (`MsgSubmitProposal` of proposal 47
+with its whole deposit), 23745061 (a validator owner's vote), 23745456 (a
+delegator's vote) and 23821225 (`active_proposal`, passed); 20121960 carries
+the legacy (v1beta1) submission of proposal 44. No recorded height has a
+`MsgDeposit`, a weighted vote, a cancel or another resolution: those tests
+encode the messages with the chain codec. No recorded height carries tokenfactory or tradebin
 token activity (branding and halts exist only from chain v8.2.0, which
 mainnet does not run yet): the token-event tests encode real messages with
 the chain codec and give them the events the chain emits, and the cases are
@@ -767,15 +827,17 @@ transfer and channel, tradebin, tokenfactory, rewards, burner, cointrunk and
 txfeecollector. Each method answers from
 `testdata/grpc/<service>/<Method>[.<key>].json`, the REST gateway's JSON
 (the SDK's proto JSON), unmarshalled with the chain codec. The key is the
-request's non-empty string fields in field order joined by `.` (staking
-`Validator.<operator>`, `Delegation.<delegator>.<validator>`); without a
+request's non-empty string, integer and enum fields in field order joined by
+`.` (staking `Validator.<operator>`, `Delegation.<delegator>.<validator>`, gov
+`Proposal.47`, `Proposals.PROPOSAL_STATUS_VOTING_PERIOD`); without a
 keyed file the keyless one answers, and without any file the method answers
 `Unimplemented`. A recorded gateway error (`{"code": 5, "message": …}`)
 answers that gRPC status. Tests count calls per method and per key, replace
 an answer (`SetResponse`) and stop the server to play a node that is down.
 So far the staking and slashing methods of the validators set, the account
-page's bank, staking and distribution reads and the denoms set's bank,
-tokenfactory and tradebin methods are recorded; each later story adds its
+page's bank, staking and distribution reads, the denoms set's bank,
+tokenfactory and tradebin methods and the proposals set's gov and staking
+`Pool` methods are recorded; each later story adds its
 methods. Denoms in file names are path-escaped
 (`DenomAuthority.factory%2Fbze1…%2Fuvdl.json`).
 
@@ -783,7 +845,7 @@ methods. Denoms in file names are path-escaped
 make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
 
-`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`;
+`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`;
 the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
@@ -793,6 +855,11 @@ tokenfactory `AllDenomBranding` and tradebin `HaltedDenoms` are recorded only
 from a gateway that serves them (chain v8.2.0 and later); mainnet runs v8.1.1
 (recorded 2026-10-09: 28 denoms with a supply, 28 with metadata, 12 markets),
 so they are absent and answer Unimplemented like the node.
+`make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
+gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
+listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47
+proposals, all passed, none voting; the e2e test turns proposal 47 back into
+its voting period with `SetResponse`).
 
 records `staking/Validators.json`, `slashing/SigningInfos.json`,
 `slashing/Params.json`, every validator's self-delegation and delegator
