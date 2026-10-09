@@ -43,8 +43,9 @@ func (tx *mockTx) Exec(_ context.Context, sql string, args ...any) (pgconn.Comma
 	return pgconn.CommandTag{}, nil
 }
 
-// SendBatch records the queued statements like Execs; Close fails when one
-// of them matches the configured error.
+// SendBatch records the queued statements like Execs and runs their result
+// callbacks over the rows configured in db.returning; Close fails when one of
+// them matches the configured error.
 func (tx *mockTx) SendBatch(_ context.Context, b *pgx.Batch) pgx.BatchResults {
 	tx.batches++
 	var err error
@@ -53,16 +54,49 @@ func (tx *mockTx) SendBatch(_ context.Context, b *pgx.Batch) pgx.BatchResults {
 		if err == nil && tx.db.execErr != nil && strings.Contains(q.SQL, tx.db.execErrOn) {
 			err = tx.db.execErr
 		}
+		if err == nil && q.Fn != nil {
+			err = q.Fn(mockBatchResults{rows: tx.db.returnedBy(q.SQL)})
+		}
 	}
 	return mockBatchResults{err: err}
 }
 
 type mockBatchResults struct {
 	pgx.BatchResults
-	err error
+	rows [][]any
+	err  error
 }
 
 func (r mockBatchResults) Close() error { return r.err }
+
+func (r mockBatchResults) Query() (pgx.Rows, error) { return &mockRows{rows: r.rows, i: -1}, nil }
+
+// mockRows yields canned rows of int64 or int values.
+type mockRows struct {
+	pgx.Rows
+	rows [][]any
+	i    int
+}
+
+func (r *mockRows) Next() bool {
+	r.i++
+	return r.i < len(r.rows)
+}
+
+func (r *mockRows) Scan(dest ...any) error {
+	for j, d := range dest {
+		switch d := d.(type) {
+		case *int64:
+			*d = int64(r.rows[r.i][j].(int))
+		case *int:
+			*d = r.rows[r.i][j].(int)
+		}
+	}
+	return nil
+}
+
+func (r *mockRows) Close()     {}
+func (r *mockRows) Err() error { return nil }
 
 func (tx *mockTx) Commit(context.Context) error {
 	tx.committed = true
@@ -103,6 +137,7 @@ func (r mockRow) Scan(dest ...any) error {
 // records every transaction.
 type mockDB struct {
 	rows       map[string]mockRow
+	returning  map[string][][]any // rows a batched statement returns, by SQL fragment
 	queries    []string
 	txs        []*mockTx
 	execErr    error
@@ -119,6 +154,15 @@ func (db *mockDB) Begin(context.Context) (pgx.Tx, error) {
 	tx := &mockTx{db: db}
 	db.txs = append(db.txs, tx)
 	return tx, nil
+}
+
+func (db *mockDB) returnedBy(sql string) [][]any {
+	for frag, rows := range db.returning {
+		if strings.Contains(sql, frag) {
+			return rows
+		}
+	}
+	return nil
 }
 
 func (db *mockDB) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
@@ -147,8 +191,16 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "messages")
 		case strings.Contains(s.sql, "INSERT INTO explorer.blocks"):
 			out = append(out, "block")
+		case strings.Contains(s.sql, "UPDATE explorer.transactions AS t"):
+			out = append(out, "transactions update")
+		case strings.Contains(s.sql, "UPDATE explorer.messages AS t"):
+			out = append(out, "messages update")
+		case strings.Contains(s.sql, "UPDATE explorer.blocks AS t"):
+			out = append(out, "block update")
 		case strings.Contains(s.sql, "UPDATE explorer.blocks"):
 			out = append(out, "block times")
+		case strings.Contains(s.sql, "UPDATE explorer.index_failures"):
+			out = append(out, "resolve failures")
 		case strings.Contains(s.sql, "index_failures"):
 			out = append(out, "failure")
 		case strings.Contains(s.sql, "DO NOTHING") && strings.Contains(s.sql, "indexer_state"):

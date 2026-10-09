@@ -99,6 +99,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make run` | runs `bze-scan serve` |
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
 | `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
+| `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
 | `make vet` | `go vet -tags=e2e ./...` |
@@ -127,12 +128,13 @@ CI runs three independent workflows on every pull request touching
 
 ```
 cmd/bze-scan/      main: runs app/cli
-app/cli/           cobra root and subcommands (serve, migrate, backfill)
+app/cli/           cobra root and subcommands (serve, migrate, backfill,
+                   reindex) and their exit codes
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
 app/serve/         the serve process: its components in one errgroup; the
-                   standalone backfill
+                   standalone backfill and the reindex job
 app/server/        echo wiring and the graceful HTTP runner
 app/controller/    thin HTTP handlers: parsing, validation, status codes
 app/dto/           JSON shapes of the API and the keyset cursor
@@ -150,12 +152,16 @@ internal/node/     CometBFT RPC client, by-height routes only
 internal/transform/
                    node answers of one height -> explorer rows (no I/O)
 internal/writer/   transactional, idempotent writes (the live writer, the
-                   batch writer of the backfill)
+                   batch writer of the backfill and the reindex; insert and
+                   update modes)
 internal/indexer/live/
                    LISTEN/NOTIFY listener, height cursor, retries
 internal/indexer/backfill/
                    the fetch-parallel, write-serial pipeline, the main job
                    (checkpoint, advisory lock) and the catch-up
+internal/indexer/reindex/
+                   selectors, local-or-archive routing by height and the
+                   reindex run over the backfill pipeline in update mode
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
@@ -421,6 +427,63 @@ registers by hand. `go.mod` repeats the chain's `replace` directives.
   row keeps the type URL with a NULL body, and the indexer logs a warning.
   Bytes that are not a transaction at all still get their `transactions` row
   from the block results.
+
+## Reindex
+
+`bze-scan reindex` runs chosen heights through the backfill pipeline again
+and overwrites what is there: the repair tool after an outage, for the
+heights listed in `index_failures`, and after a transformer fix that changes
+what a height produces. It needs the same `DATABASE_URL`, `NODE_RPC_URL`,
+`ARCHIVE_RPC_URL` and `ARCHIVE_RPC_RETRY_URL` as `serve`, and takes its
+tuning from the `BACKFILL_*` variables (`BACKFILL_ENABLED` and
+`BACKFILL_FLOOR` are ignored).
+
+```
+bze-scan reindex --heights 24998319,24998402      # a list
+bze-scan reindex --from 24990000 --to 24998000    # a range, both included
+bze-scan reindex --failed [--source live|backfill|reindex]
+                                                  # every open index_failures row
+bze-scan reindex --failed --dry-run               # print the selection, exit
+bze-scan reindex --from 1 --to 100 --workers 4    # override BACKFILL_WORKERS
+```
+
+Exactly one selector is allowed. Heights are dispatched highest first. The
+command prints `reindex done heights=N failed=M duration=…` on stdout, lists
+each failed height on stderr, and exits 0 when every height succeeded, 2 when
+some failed, 1 on a configuration or database error (or an interrupt).
+
+- **Source per height.** The local node when the height is at or above its
+  `earliest_block_height` (read once from its `/status`), the archive below
+  it, with the retries on `ARCHIVE_RPC_RETRY_URL`. A height the local node
+  pruned during the run goes to the archive too; when the local node does
+  not answer `/status`, every height does. `BACKFILL_RATE_LIMIT` paces all
+  requests, local ones included. Old heights pass through the archive
+  adapter as in the backfill.
+- **Update mode.** Every table is written by an `UPDATE` of the rows whose
+  values differ, then the `INSERT … ON CONFLICT DO NOTHING RETURNING <key>`
+  of the backfill. The rows the insert returns are exactly the rows this
+  write inserted, also when another writer inserted the same key
+  concurrently. They reach the `PostFlush` hooks as `Flush.Inserted`, and any
+  counter or total moves only for them, so a reindex never counts twice.
+  (`RETURNING (xmax = 0)` cannot tell an insert from an update here:
+  PostgreSQL refuses system columns on partitioned tables.) Identical rows
+  are left alone, so reindexing a healthy range rewrites nothing.
+  `block_time_ms` is recomputed for the flushed heights and the one above.
+  A table added by a later story joins the update path through its spec in
+  `internal/writer/tables.go`, and its tests get a reindex case.
+- **Failures.** A height written resolves its open `index_failures` rows
+  (`resolved_at = now()`, every source); a height that fails after its
+  retries is upserted with source `reindex`.
+- **Checkpoint.** A `backfill_checkpoints` row named
+  `reindex-<RFC 3339 start time>` records the range, `lowest_dispatched`
+  and `blocks_done` after every flush, and ends `done`, or `error` with the
+  cause after a database error or an interrupt. A reindex does not resume:
+  run it again, it is idempotent.
+- **Beside `serve`.** Nothing stops both from writing the same height, and
+  idempotent writes make them converge on the same rows, so reindexing the
+  live head while `serve` runs is pointless but harmless. No state resync is
+  triggered and the raw-JSON cache is not touched. The node's sink tables are
+  never written.
 
 ## Test fixtures and the fake node
 

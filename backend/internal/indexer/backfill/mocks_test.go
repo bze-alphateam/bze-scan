@@ -11,6 +11,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
+	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
 var genesisTime = time.Date(2021, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -123,12 +124,13 @@ type recordedFailure struct {
 type mockWriter struct {
 	mu       sync.Mutex
 	batches  [][]int64
+	modes    []writer.Mode
 	failures []recordedFailure
 	writeErr error
 	flushed  chan struct{} // receives after every flush when set
 }
 
-func (w *mockWriter) Write(_ context.Context, batch []*transform.Entities) error {
+func (w *mockWriter) Write(_ context.Context, batch []*transform.Entities, mode writer.Mode) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.writeErr != nil {
@@ -141,6 +143,7 @@ func (w *mockWriter) Write(_ context.Context, batch []*transform.Entities) error
 		}
 	}
 	w.batches = append(w.batches, hs)
+	w.modes = append(w.modes, mode)
 	if w.flushed != nil {
 		select {
 		case w.flushed <- struct{}{}:
