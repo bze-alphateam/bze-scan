@@ -1,8 +1,10 @@
 # Local development and acceptance tests.
 #
-# `make e2e` (in backend/) starts only the postgres service. The backend and UI
-# services join this file behind a profile in later work, so the plain
-# `up postgres` keeps starting the database alone.
+# `make e2e` (in backend/) starts only the postgres service. The backend sits
+# behind the `full` profile, so it starts only when asked for:
+#
+#   docker compose -f docker/compose.yml --profile full up -d --build
+#   docker compose -f docker/compose.yml --profile full run --rm backend migrate up
 name: bze-scan
 
 services:
@@ -26,3 +28,36 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
+
+  # The backend image built from this checkout (docker/backend.Dockerfile).
+  # Configuration comes from backend/.env (copy backend/.env.dist), except the
+  # database, which is this file's postgres. Addresses in .env that point at
+  # 127.0.0.1 mean the container itself: use host.docker.internal for a node
+  # running on the host.
+  backend:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    image: bze-scan-backend:local
+    env_file:
+      - path: ../backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://bze:bze@postgres:5432/bze_index?sslmode=disable
+      HTTP_ADDR: ":8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # serve drains on SIGTERM; 15 s covers the HTTP shutdown and the indexer.
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

@@ -1,12 +1,9 @@
 name: Backend e2e tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "docker/**"
-      - ".github/workflows/backend-e2e.yml"
+  # On main these run from backend-image.yml, which publishes the image only
+  # after both pass.
+  workflow_call:
   pull_request:
     paths:
       - "backend/**"
@@ -17,9 +14,10 @@ permissions:
   contents: read
 
 # A newer push to a pull request cancels its run in progress; runs on main
-# always finish.
+# always finish. The group is spelled out: called from backend-image.yml,
+# github.workflow would name the caller and share its group.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: backend-e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

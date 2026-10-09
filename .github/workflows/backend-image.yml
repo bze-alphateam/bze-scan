@@ -1,0 +1,86 @@
+name: Backend image
+
+# Builds docker/backend.Dockerfile and smoke-tests the image on every pull
+# request (never pushed). On pushes to main it runs the unit and e2e
+# workflows first and, only when both pass, pushes
+# ghcr.io/bze-alphateam/bze-scan-backend:<sha8> and :latest. Deploying is
+# not this repository's job.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "docker/**"
+      - ".dockerignore"
+      - ".github/workflows/backend-image.yml"
+      - ".github/workflows/backend-unit.yml"
+      - ".github/workflows/backend-e2e.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "docker/**"
+      - ".dockerignore"
+      - ".github/workflows/backend-image.yml"
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels its run in progress; runs on main
+# always finish, one at a time, so tags are pushed in commit order.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/bze-alphateam/bze-scan-backend
+
+jobs:
+  # On main the test workflows run from here (they have no push trigger of
+  # their own), so the publish job can wait for them.
+  unit:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/backend-unit.yml
+
+  e2e:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/backend-e2e.yml
+
+  image:
+    needs: [unit, e2e]
+    # Pull requests skip unit and e2e here (their own workflows run them).
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: vars
+        # The first 8 characters of the commit, like the other BZE images.
+        run: echo "sha=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: >
+          docker build -f docker/backend.Dockerfile
+          --build-arg GIT_SHA=${{ steps.vars.outputs.sha }}
+          -t "$IMAGE:${{ steps.vars.outputs.sha }}" -t "$IMAGE:latest" .
+
+      - name: Smoke test
+        run: docker/smoke-test.sh "$IMAGE:${{ steps.vars.outputs.sha }}" ${{ steps.vars.outputs.sha }}
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name == 'push'
+        run: |
+          docker push "$IMAGE:${{ steps.vars.outputs.sha }}"
+          docker push "$IMAGE:latest"

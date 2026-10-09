@@ -28,6 +28,25 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "backfill")
 	assert.Contains(t, out.String(), "reindex")
 	assert.Contains(t, out.String(), "sync-state")
+	assert.Contains(t, out.String(), "version")
+}
+
+func TestVersionPrintsTheBuildCommit(t *testing.T) {
+	for _, tc := range []struct {
+		opts []cli.Option
+		want string
+	}{
+		{nil, "dev\n"},
+		{[]cli.Option{cli.WithVersion("1a2b3c4d")}, "1a2b3c4d\n"},
+	} {
+		root := cli.NewRootCmd(tc.opts...)
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetArgs([]string{"version"})
+
+		require.NoError(t, root.Execute())
+		assert.Equal(t, tc.want, out.String())
+	}
 }
 
 func TestBackfillRequiresDatabaseURL(t *testing.T) {
