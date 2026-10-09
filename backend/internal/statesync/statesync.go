@@ -114,7 +114,9 @@ type Set interface {
 // Canonicaliser is implemented by sets whose entries have several keys (a
 // validator: its operator address and its consensus address). Publish folds
 // every key into the one Canonical returns before queueing, so one entry
-// marked under two keys is resynced once.
+// marked under two keys is resynced once. An empty key drops it: the set
+// knows the entry needs no resync (a denom seen in a transfer that the set
+// already holds).
 type Canonicaliser interface {
 	Canonical(key string) string
 }
@@ -208,12 +210,15 @@ func New(cfg Config, jobs JobStore, sets ...Set) *Syncer {
 }
 
 // Publish queues the keys of d for the registered sets; keys of other sets
-// are dropped. It never blocks: a key already queued is not queued again,
-// and a set with a full resync queued needs none of its keys.
+// are dropped, and so are keys a Canonicaliser folds to "". It never blocks:
+// a key already queued is not queued again, and a set with a full resync
+// queued needs none of its keys.
 func (s *Syncer) Publish(d Dirty) {
 	for _, set := range s.sets {
 		for _, k := range d.Keys(set.Name()) {
-			s.enqueue(s.canonical(job{set: set.Name(), key: k}))
+			if j := s.canonical(job{set: set.Name(), key: k}); j.key != "" {
+				s.enqueue(j)
+			}
 		}
 	}
 }
@@ -235,7 +240,7 @@ func (s *Syncer) refold() {
 	queued := map[job]bool{}
 	for _, j := range s.queue {
 		j = s.canonical(j)
-		if queued[j] || (j.key != All && queued[job{set: j.set, key: All}]) {
+		if j.key == "" || queued[j] || (j.key != All && queued[job{set: j.set, key: All}]) {
 			continue
 		}
 		queued[j] = true

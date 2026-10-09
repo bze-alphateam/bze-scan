@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "description": "IBC token from transfer/channel-3/uusdc",
+    "denom_units": [
+      {
+        "denom": "uusdc",
+        "exponent": 0,
+        "aliases": []
+      }
+    ],
+    "base": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+    "display": "transfer/channel-3/uusdc",
+    "name": "transfer/channel-3/uusdc IBC token",
+    "symbol": "UUSDC",
+    "uri": "",
+    "uri_hash": ""
+  }
+}

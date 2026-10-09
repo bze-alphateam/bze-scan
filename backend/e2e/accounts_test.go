@@ -92,11 +92,12 @@ func TestAccounts(t *testing.T) {
 	assert.Equal(t, int64(1), acc.TxCount)
 	assert.Zero(t, acc.ActivityCount)
 	assert.True(t, acc.Live.Available)
+	six := 6
 	assert.Equal(t, []dto.Balance{
-		{Denom: "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl", Amount: "25065076620"},
-		{Denom: "factory/bze15pqjgk4la0mfphwddce00d05n3th3u66n3ptcv/2MARS", Amount: "17"},
-		{Denom: "ubze", Amount: "30063263"},
-	}, acc.Balances, "symbols come with the tokens story")
+		{Denom: "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl", Amount: "25065076620", Symbol: strp("VDL"), Exponent: &six},
+		{Denom: "factory/bze15pqjgk4la0mfphwddce00d05n3th3u66n3ptcv/2MARS", Amount: "17", Symbol: strp("C2M"), Exponent: &six},
+		{Denom: "ubze", Amount: "30063263", Symbol: strp("BZE"), Exponent: &six},
+	}, acc.Balances, "the denoms the sync wrote give the display data")
 	moniker := "Thamar"
 	assert.Equal(t, []dto.AccountDelegation{{Validator: thamar, Moniker: &moniker, Amount: "123881169576"}}, acc.Delegations)
 	assert.Equal(t, "123881169576", *acc.TotalStaked)
@@ -176,3 +177,5 @@ func TestMigrateSeedsOneLabelPerModuleAccount(t *testing.T) {
 	migrateUp(t, url)
 	assert.Equal(t, first, queryStrings(t, db, query), "migrating again rewrites no row")
 }
+
+func strp(s string) *string { return &s }

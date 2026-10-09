@@ -10,6 +10,15 @@ import (
 // Bech32Prefix is the human-readable part of BZE account addresses.
 const Bech32Prefix = "bze"
 
+// BondDenom is the chain's native denom, in base units. Its display unit is
+// BZE with six decimals; the chain stores no bank metadata for it.
+const (
+	BondDenom         = "ubze"
+	BondDenomSymbol   = "BZE"
+	BondDenomName     = "BeeZee"
+	BondDenomExponent = 6
+)
+
 // Module account names, as the SDK modules register them.
 const (
 	FeeCollector = authtypes.FeeCollectorName

@@ -4,15 +4,20 @@ import (
 	"context"
 	"fmt"
 
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 
+	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
+	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
+
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/validators"
 )
 
@@ -38,6 +43,12 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Slashing: slashingtypes.NewQueryClient(conn),
 			Store:    validators.NewPGStore(pool),
 			Keys:     codec.InterfaceRegistry(),
+		}, 0),
+		denoms.New(denoms.Deps{
+			Bank:         banktypes.NewQueryClient(conn),
+			TokenFactory: tokenfactorytypes.NewQueryClient(conn),
+			Tradebin:     tradebintypes.NewQueryClient(conn),
+			Store:        denoms.NewPGStore(pool),
 		}, 0),
 	)
 	return syncer, func() {

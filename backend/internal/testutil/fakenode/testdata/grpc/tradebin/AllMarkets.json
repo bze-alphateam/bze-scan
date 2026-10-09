@@ -1,0 +1,68 @@
+{
+  "market": [
+    {
+      "base": "factory/bze12gyp30f29zg26nuqrwdhl26ej4q066pt572fhm/GGE",
+      "quote": "ubze",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "quote": "ubze",
+      "creator": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
+    },
+    {
+      "base": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+      "quote": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "creator": "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw"
+    },
+    {
+      "base": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw"
+    },
+    {
+      "base": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+      "quote": "ubze",
+      "creator": "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw"
+    },
+    {
+      "base": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2",
+      "quote": "ubze",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "ibc/12C0B8B561AFCFDA3C73DEE0F7F84AA2B860D48493C27E8E81A5D14724FAB08B",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "ibc/693DDB2D9B4260D67C8136C22D837F37488E0FBD81857D8E9C6022332EA26E33",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "ibc/B2219CA05421EA988F83E5E824BF69362E80A6A87503EFD18B92C91C9E03763D",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "quote": "ubze",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    },
+    {
+      "base": "ibc/FF39851E73089ACBD0B09BDF62FA3C67FBD77A2CD97CD159DBCE9C770561F8AF",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1uvevmkmrvcctaqf7zw9ka4tekzc76hyv7nen75"
+    },
+    {
+      "base": "ubze",
+      "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "0"
+  }
+}
