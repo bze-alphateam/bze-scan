@@ -48,6 +48,14 @@ type Entities struct {
 	// TokenEvents are the token_events rows of the heights' tokenfactory
 	// messages and tradebin typed events.
 	TokenEvents []TokenEvent
+	// Proposals are the proposals rows of the heights' submissions,
+	// ProposalDeposits and ProposalVotes the deposits and votes, and
+	// ProposalStatuses the status changes their events and the block's
+	// resolutions carry.
+	Proposals        []ProposalSubmission
+	ProposalDeposits []ProposalDeposit
+	ProposalVotes    []ProposalVote
+	ProposalStatuses []ProposalStatus
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -226,6 +234,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	}
 	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
 	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
+	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	for i, raw := range in.Block.Txs {
 		if err := t.transaction(ents, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
@@ -319,6 +328,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 		if err := txTokenEvents(ents, b, i, decoded.Msgs, byIndex); err != nil {
 			return err
 		}
+		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

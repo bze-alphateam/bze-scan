@@ -1,0 +1,41 @@
+{
+  "proposal": {
+    "id": "46",
+    "messages": [
+      {
+        "@type": "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+        "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+        "plan": {
+          "name": "v8.1.0",
+          "time": "0001-01-01T00:00:00Z",
+          "height": "22551810",
+          "info": "{\"binaries\":{\"darwin/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-darwin-amd64?checksum=sha256:bd7e1539c4ef20732040e369f700bec19997afd198bc164ec78ad581a4fdc8c8\",\"darwin/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-darwin-arm64?checksum=sha256:bfc778d9ed467bbd411b870f610126ef3ff7e015a371d141511751b73a7605f3\",\"linux/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-linux-amd64?checksum=sha256:3f84058417a0a8e2a2bf9d002012b0d4d77e5ccf83bd677cb7c4afd647c97a3e\",\"linux/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-linux-arm64?checksum=sha256:815d68d5663b2d5b07da8ac4333126f84651df6db108b435891ebd377ee39985\"},\"tag\":\"v8.1.0\"}",
+          "upgraded_client_state": null
+        }
+      }
+    ],
+    "status": "PROPOSAL_STATUS_PASSED",
+    "final_tally_result": {
+      "yes_count": "104767203291302",
+      "abstain_count": "0",
+      "no_count": "0",
+      "no_with_veto_count": "0"
+    },
+    "submit_time": "2026-04-22T12:58:45.039535765Z",
+    "deposit_end_time": "2026-04-24T12:58:45.039535765Z",
+    "total_deposit": [
+      {
+        "denom": "ubze",
+        "amount": "100000000000"
+      }
+    ],
+    "voting_start_time": "2026-04-22T12:59:39.167291709Z",
+    "voting_end_time": "2026-04-27T12:59:39.167291709Z",
+    "metadata": "",
+    "title": "Upgrade network to v8.1.0",
+    "summary": "If passed, this proposal will upgrade the blockchain to version 8.1.0. # v8.1.0 Upgrade Summary\n\nThis upgrade removes the `crisis` module, updates dependencies, improves fee handling, and introduces bounded EndBlock queue processing in several modules for better safety and performance.\n\n## Module Highlights\n\n- **Burner**: moved burning and raffle cleanup to bounded EndBlock processing, improved IBC burn/liquidity handling, and tightened raffle protections.\n- **Epochs**: added safer epoch lookup with proper error handling.\n- **CoinTrunk**: improved validation and fixed article ID pointer update behavior.\n- **Rewards**: moved reward processing to bounded EndBlock queues, added anti-spam gas protection, and fixed multiple reward accounting issues.\n- **TokenFactory**: tightened subdenom validation and routed creation fees through the fee collection flow.\n- **TradeBin**: introduced governance-tunable queue/gas parameters, improved order queue safety, migrated fee params to `sdk.Coin`, and enhanced liquidity and validation checks.\n- **TxFeeCollector**: added governance-controlled minimum gas fee and balance iteration limits, and moved fee conversion to EndBlock with split distribution.\n\n## Full Release Notes\n\nFull release notes: https://github.com/bze-alphateam/bze/releases/tag/v8.1.0",
+    "proposer": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+    "expedited": false,
+    "failed_reason": ""
+  }
+}

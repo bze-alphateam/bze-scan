@@ -1,0 +1,64 @@
+{
+  "transactions": [
+    {
+      "Height": 23745456,
+      "TxIndex": 0,
+      "Hash": "31E68FD695DB9D0900166C35E8EBA36DA2F24188660549B6D4625331A35294D1",
+      "Time": "2026-07-16T11:08:49.696353222Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 200000,
+      "GasUsed": 94269,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "10000"
+        }
+      ],
+      "FeePayer": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+      "Signers": [
+        "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+      ],
+      "Memo": "ping.pub",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/cosmos.gov.v1beta1.MsgVote"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 23745456,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/cosmos.gov.v1beta1.MsgVote",
+      "Sender": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+      "Module": "gov",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.gov.v1beta1.MsgVote",
+            "module": "gov",
+            "sender": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+          }
+        },
+        {
+          "type": "proposal_vote",
+          "attrs": {
+            "option": "[{\"option\":1,\"weight\":\"1.000000000000000000\"}]",
+            "proposal_id": "47",
+            "voter": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+          }
+        }
+      ],
+      "Body": {
+        "proposal_id": "47",
+        "voter": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+        "option": "VOTE_OPTION_YES"
+      }
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/stretchr/testify/assert"
@@ -72,13 +73,34 @@ func TestGRPCErrors(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 
 	// No file: Unimplemented, counted all the same.
-	_, err = staking.Pool(ctx, &stakingtypes.QueryPoolRequest{})
+	_, err = staking.Params(ctx, &stakingtypes.QueryParamsRequest{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
-	assert.Equal(t, 1, g.Requests("staking", "Pool"))
+	assert.Equal(t, 1, g.Requests("staking", "Params"))
 	_, err = distrtypes.NewQueryClient(conn).Params(ctx, &distrtypes.QueryParamsRequest{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err), "a registered service without fixtures yet")
 	err = conn.Invoke(ctx, "/cosmos.auth.v1beta1.Query/Params", &stakingtypes.QueryPoolRequest{}, &stakingtypes.QueryPoolResponse{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err), "a service the fake does not serve")
+}
+
+// Integer and enum fields key a request too: a proposal by its id, the
+// proposals list by its status filter; zero values do not.
+func TestGRPCKeysIntegersAndEnums(t *testing.T) {
+	g := fakenode.NewGRPC(t)
+	gov := govv1.NewQueryClient(dial(t, g))
+	ctx := context.Background()
+
+	p, err := gov.Proposal(ctx, &govv1.QueryProposalRequest{ProposalId: 47})
+	require.NoError(t, err)
+	assert.Equal(t, "Upgrade network to v8.1.1", p.Proposal.Title)
+	assert.Equal(t, 1, g.RequestsFor("gov", "Proposal", "47"))
+
+	all, err := gov.Proposals(ctx, &govv1.QueryProposalsRequest{})
+	require.NoError(t, err)
+	assert.Len(t, all.Proposals, 47)
+	voting, err := gov.Proposals(ctx, &govv1.QueryProposalsRequest{ProposalStatus: govv1.StatusVotingPeriod})
+	require.NoError(t, err)
+	assert.Empty(t, voting.Proposals)
+	assert.Equal(t, 1, g.RequestsFor("gov", "Proposals", "PROPOSAL_STATUS_VOTING_PERIOD"))
 }
 
 func TestGRPCOverridesAndStop(t *testing.T) {

@@ -134,6 +134,10 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Transfers = append(all.Transfers, e.Transfers...)
 		all.BlockEvents = append(all.BlockEvents, e.BlockEvents...)
 		all.TokenEvents = append(all.TokenEvents, e.TokenEvents...)
+		all.Proposals = append(all.Proposals, e.Proposals...)
+		all.ProposalDeposits = append(all.ProposalDeposits, e.ProposalDeposits...)
+		all.ProposalVotes = append(all.ProposalVotes, e.ProposalVotes...)
+		all.ProposalStatuses = append(all.ProposalStatuses, e.ProposalStatuses...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil

@@ -1,0 +1,1966 @@
+{
+  "proposals": [
+    {
+      "id": "1",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.params.v1beta1.ParameterChangeProposal",
+            "title": "Inflation Parameter Change - Let the Rewards begin",
+            "description": "The swap grace period is over, it's time to enable inflation so that onchain rewards begin.  This proposal is a signal to start our rewards and that most users have gone through the swap.\n  The following parameter changes in this proposal are:\n  Inflation Min:  5%\n Inflation Max 15%\n Goal Bonded: 25%\n Inflation Change Rate: 2.\n This values are temporary until we stop supporting the old chain and decide how many coins we will burn from the current 400M supply.\n  Vote Yes to pass these changes. \n No to reject the changes",
+            "changes": [
+              {
+                "subspace": "mint",
+                "key": "InflationMax",
+                "value": "\"0.150000000000000000\""
+              },
+              {
+                "subspace": "mint",
+                "key": "InflationMin",
+                "value": "\"0.050000000000000000\""
+              },
+              {
+                "subspace": "mint",
+                "key": "GoalBonded",
+                "value": "\"0.200000000000000000\""
+              },
+              {
+                "subspace": "mint",
+                "key": "InflationRateChange",
+                "value": "\"0.100000000000000000\""
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "54772697352822",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2022-07-03T09:56:36.227743950Z",
+      "deposit_end_time": "2022-07-05T09:56:36.227743950Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2022-07-03T09:56:36.227743950Z",
+      "voting_end_time": "2022-07-08T09:56:36.227743950Z",
+      "metadata": "",
+      "title": "Inflation Parameter Change - Let the Rewards begin",
+      "summary": "The swap grace period is over, it's time to enable inflation so that onchain rewards begin.  This proposal is a signal to start our rewards and that most users have gone through the swap.\n  The following parameter changes in this proposal are:\n  Inflation Min:  5%\n Inflation Max 15%\n Goal Bonded: 25%\n Inflation Change Rate: 2.\n This values are temporary until we stop supporting the old chain and decide how many coins we will burn from the current 400M supply.\n  Vote Yes to pass these changes. \n No to reject the changes",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "2",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "v5.1.2",
+            "description": "This upgrade will fix IBC proposals routing that will allow us to upgrade Osmosis-BZE client",
+            "plan": {
+              "name": "v5.1.2",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "3646700",
+              "info": "release:https://github.com/bze-alphateam/bze/releases/tag/v5.1.2",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "88398071489263",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2022-11-21T08:19:52.664899567Z",
+      "deposit_end_time": "2022-11-23T08:19:52.664899567Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2022-11-21T08:21:54.160426102Z",
+      "voting_end_time": "2022-11-26T08:21:54.160426102Z",
+      "metadata": "",
+      "title": "v5.1.2",
+      "summary": "This upgrade will fix IBC proposals routing that will allow us to upgrade Osmosis-BZE client",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "3",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/ibc.core.client.v1.ClientUpdateProposal",
+            "title": "Reactivate expired IBC client 07-tendermint-2",
+            "description": "The IBC client 07-tendermint-2 used by channel-0 for Osmosis transfers is currently in an expired state. If accepted, this proposal will update client 07-tendermint-2 with the data from 07-tendermint-6",
+            "subject_client_id": "07-tendermint-2",
+            "substitute_client_id": "07-tendermint-6"
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "79326643112105",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2022-11-28T09:54:24.550122882Z",
+      "deposit_end_time": "2022-11-30T09:54:24.550122882Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100001000000"
+        }
+      ],
+      "voting_start_time": "2022-11-28T12:34:42.656165262Z",
+      "voting_end_time": "2022-12-03T12:34:42.656165262Z",
+      "metadata": "",
+      "title": "Reactivate expired IBC client 07-tendermint-2",
+      "summary": "The IBC client 07-tendermint-2 used by channel-0 for Osmosis transfers is currently in an expired state. If accepted, this proposal will update client 07-tendermint-2 with the data from 07-tendermint-6",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "4",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund Osmosis pool incentives",
+            "description": "This proposal is for funding the Osmosis (BZE/OSMO) liquidity pool incentives. \\n\\n We are using the funds to reward liquidity providers for 350 days.\\n\\n Rewards distribution amongst 350 days:\\n\\n 7 days - 3,500,000 BZE\\n\\n 14 days - 5,000,000 BZE",
+            "recipient": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "8500000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "83979717263085",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2022-12-14T21:26:34.061351940Z",
+      "deposit_end_time": "2022-12-16T21:26:34.061351940Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2022-12-14T21:26:34.061351940Z",
+      "voting_end_time": "2022-12-19T21:26:34.061351940Z",
+      "metadata": "",
+      "title": "Fund Osmosis pool incentives",
+      "summary": "This proposal is for funding the Osmosis (BZE/OSMO) liquidity pool incentives. \\n\\n We are using the funds to reward liquidity providers for 350 days.\\n\\n Rewards distribution amongst 350 days:\\n\\n 7 days - 3,500,000 BZE\\n\\n 14 days - 5,000,000 BZE",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "5",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Second round of Osmosis pool incentives",
+            "description": "As you may have noticed in our chats we have discussed to increase Osmosis pool incentives. \\n\\n We plan on using another 15M BZE for the existing incentives. This should increase the rewards with 200%-300%\\n\\n Rewards distribution: \\n\\n 7 days - 6,000,000 BZE\\n\\n 14 days - 9,000,000 BZE",
+            "recipient": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "10000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "84454666791343",
+        "abstain_count": "0",
+        "no_count": "2201709928",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-01-20T18:13:45.535257789Z",
+      "deposit_end_time": "2023-01-22T18:13:45.535257789Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-01-20T18:13:45.535257789Z",
+      "voting_end_time": "2023-01-25T18:13:45.535257789Z",
+      "metadata": "",
+      "title": "Second round of Osmosis pool incentives",
+      "summary": "As you may have noticed in our chats we have discussed to increase Osmosis pool incentives. \\n\\n We plan on using another 15M BZE for the existing incentives. This should increase the rewards with 200%-300%\\n\\n Rewards distribution: \\n\\n 7 days - 6,000,000 BZE\\n\\n 14 days - 9,000,000 BZE",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "6",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Second round of Osmosis pool incentives: II",
+            "description": "In proposal #5 we vote for 15,000,000 BZE to be added to LP incentives. That proposal spends only 10,000,000 BZE from the community pool funds. This is the second proposal to spend the rest of 5,000,000 BZE.",
+            "recipient": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "5000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "91185420862312",
+        "abstain_count": "0",
+        "no_count": "2201709928",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-01-20T20:16:14.420715074Z",
+      "deposit_end_time": "2023-01-22T20:16:14.420715074Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-01-20T20:16:14.420715074Z",
+      "voting_end_time": "2023-01-25T20:16:14.420715074Z",
+      "metadata": "",
+      "title": "Second round of Osmosis pool incentives: II",
+      "summary": "In proposal #5 we vote for 15,000,000 BZE to be added to LP incentives. That proposal spends only 10,000,000 BZE from the community pool funds. This is the second proposal to spend the rest of 5,000,000 BZE.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "7",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "BeeZee v6 - CoinTrunk Upgrade",
+            "description": "If this proposal passes our network will be upgraded to v6.\\n\\n This version adds 3 new modules: the well known authz module, and two custom modules: cointrunk and burner.\\n\\n Besides this, ibc-go was upgraded to v2 and Cosmos SDK to v.0.45.10",
+            "plan": {
+              "name": "v6.0.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "4875460",
+              "info": "{tag:v6.0.0,commit_hash:bd386e7d3ef540fb9343a70b13ac818c32c0d817}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "65851656142160",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-09T16:36:02.715625264Z",
+      "deposit_end_time": "2023-02-11T16:36:02.715625264Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-09T16:38:25.592220454Z",
+      "voting_end_time": "2023-02-14T16:38:25.592220454Z",
+      "metadata": "",
+      "title": "BeeZee v6 - CoinTrunk Upgrade",
+      "summary": "If this proposal passes our network will be upgraded to v6.\\n\\n This version adds 3 new modules: the well known authz module, and two custom modules: cointrunk and burner.\\n\\n Besides this, ibc-go was upgraded to v2 and Cosmos SDK to v.0.45.10",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "8",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add twitter.com as accepted domain",
+            "description": "If pass this proposal adds twitter.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+            "domain": "twitter.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:29:10.206031163Z",
+      "deposit_end_time": "2023-02-22T18:29:10.206031163Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:29:10.206031163Z",
+      "voting_end_time": "2023-02-25T18:29:10.206031163Z",
+      "metadata": "",
+      "title": "Add twitter.com as accepted domain",
+      "summary": "If pass this proposal adds twitter.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "9",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add twitter.com pictures domain as accepted domain",
+            "description": "If pass this proposal adds pbs.twimg.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles pictures with original source on this particular domain.",
+            "domain": "pbs.twimg.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:31:26.376731975Z",
+      "deposit_end_time": "2023-02-22T18:31:26.376731975Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:31:26.376731975Z",
+      "voting_end_time": "2023-02-25T18:31:26.376731975Z",
+      "metadata": "",
+      "title": "Add twitter.com pictures domain as accepted domain",
+      "summary": "If pass this proposal adds pbs.twimg.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles pictures with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "10",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add medium.com domain as accepted domain",
+            "description": "If pass this proposal adds medium.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+            "domain": "medium.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:32:39.799535761Z",
+      "deposit_end_time": "2023-02-22T18:32:39.799535761Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:32:39.799535761Z",
+      "voting_end_time": "2023-02-25T18:32:39.799535761Z",
+      "metadata": "",
+      "title": "Add medium.com domain as accepted domain",
+      "summary": "If pass this proposal adds medium.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "11",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add miro.medium.com domain as accepted domain",
+            "description": "If pass this proposal adds miro.medium.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles pictures with original source on this particular domain.",
+            "domain": "miro.medium.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:33:26.476356204Z",
+      "deposit_end_time": "2023-02-22T18:33:26.476356204Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:33:26.476356204Z",
+      "voting_end_time": "2023-02-25T18:33:26.476356204Z",
+      "metadata": "",
+      "title": "Add miro.medium.com domain as accepted domain",
+      "summary": "If pass this proposal adds miro.medium.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles pictures with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "12",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add cointelegraph.com domain as accepted domain",
+            "description": "If pass this proposal adds cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+            "domain": "cointelegraph.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:35:07.755115282Z",
+      "deposit_end_time": "2023-02-22T18:35:07.755115282Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:35:07.755115282Z",
+      "voting_end_time": "2023-02-25T18:35:07.755115282Z",
+      "metadata": "",
+      "title": "Add cointelegraph.com domain as accepted domain",
+      "summary": "If pass this proposal adds cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "13",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add s3.cointelegraph.com domain as accepted domain",
+            "description": "If pass this proposal adds s3.cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles picture with original source on this particular domain.",
+            "domain": "s3.cointelegraph.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "73191022458024",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-20T18:35:58.829056656Z",
+      "deposit_end_time": "2023-02-22T18:35:58.829056656Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-20T18:35:58.829056656Z",
+      "voting_end_time": "2023-02-25T18:35:58.829056656Z",
+      "metadata": "",
+      "title": "Add s3.cointelegraph.com domain as accepted domain",
+      "summary": "If pass this proposal adds s3.cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles picture with original source on this particular domain.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "14",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.PublisherProposal",
+            "title": "Add publisher BZE Alpha Team",
+            "description": "This proposal adds an official Alpha Team address as publisher in CoinTrunk module. This will allow us to publish unlimited articles without any cost.",
+            "name": "BZEAlphaTeam",
+            "address": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "61430179571726",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-25T06:52:10.278435874Z",
+      "deposit_end_time": "2023-02-27T06:52:10.278435874Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-25T06:52:10.278435874Z",
+      "voting_end_time": "2023-03-02T06:52:10.278435874Z",
+      "metadata": "",
+      "title": "Add publisher BZE Alpha Team",
+      "summary": "This proposal adds an official Alpha Team address as publisher in CoinTrunk module. This will allow us to publish unlimited articles without any cost.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "15",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund Burner with 150,000,000 BZE",
+            "description": "If pass this proposal will withdraw 150M BZE from the community pool and fund the burner module in order to burn them. This proposal will not perform the actual burning, it will just allow us to move the coins from community pool fund to burner module. This burn is meant to happen because a lot of coins remained unswapped and there's no reason to hold them. In general we aim for deflation whenever possible. This is one chance to lower the supply and automatically lower the % of minted coins per year.",
+            "recipient": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "150000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "61430185092179",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-02-25T07:01:28.330930043Z",
+      "deposit_end_time": "2023-02-27T07:01:28.330930043Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-02-25T07:01:28.330930043Z",
+      "voting_end_time": "2023-03-02T07:01:28.330930043Z",
+      "metadata": "",
+      "title": "Fund Burner with 150,000,000 BZE",
+      "summary": "If pass this proposal will withdraw 150M BZE from the community pool and fund the burner module in order to burn them. This proposal will not perform the actual burning, it will just allow us to move the coins from community pool fund to burner module. This burn is meant to happen because a lot of coins remained unswapped and there's no reason to hold them. In general we aim for deflation whenever possible. This is one chance to lower the supply and automatically lower the % of minted coins per year.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "16",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.burner.v1.BurnCoinsProposal",
+            "title": "Burning #1 - 150M BZE",
+            "description": "If this proposal passes 150,000,000 BZE will be burned and removed from the total supply. This amount is part of the bag that was unclaimed during the swap from v4 blockchain to v5. Having a lower supply will also lower the amount of coins minted anually."
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "67365540149229",
+        "abstain_count": "0",
+        "no_count": "2305709928",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-03-02T11:39:57.022765107Z",
+      "deposit_end_time": "2023-03-04T11:39:57.022765107Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-03-02T11:41:10.439911297Z",
+      "voting_end_time": "2023-03-07T11:41:10.439911297Z",
+      "metadata": "",
+      "title": "Burning #1 - 150M BZE",
+      "summary": "If this proposal passes 150,000,000 BZE will be burned and removed from the total supply. This amount is part of the bag that was unclaimed during the swap from v4 blockchain to v5. Having a lower supply will also lower the amount of coins minted anually.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "17",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add images.cointelegraph.com as accepted domain",
+            "description": "If pass this proposal adds images.cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original pictures from cointelegraph.",
+            "domain": "images.cointelegraph.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "79273192734410",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-03-11T23:18:00.259609603Z",
+      "deposit_end_time": "2023-03-13T23:18:00.259609603Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-03-11T23:18:00.259609603Z",
+      "voting_end_time": "2023-03-16T23:18:00.259609603Z",
+      "metadata": "",
+      "title": "Add images.cointelegraph.com as accepted domain",
+      "summary": "If pass this proposal adds images.cointelegraph.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original pictures from cointelegraph.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "18",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add youtube images domain as accepted domain",
+            "description": "If pass this proposal adds i.ytimg.com - the domain hosting YT images -  as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original pictures from YT.",
+            "domain": "i.ytimg.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "64828204225595",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-03-14T09:31:12.489178245Z",
+      "deposit_end_time": "2023-03-16T09:31:12.489178245Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-03-14T09:31:12.489178245Z",
+      "voting_end_time": "2023-03-19T09:31:12.489178245Z",
+      "metadata": "",
+      "title": "Add youtube images domain as accepted domain",
+      "summary": "If pass this proposal adds i.ytimg.com - the domain hosting YT images -  as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original pictures from YT.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "19",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add youtube.com as an accepted domain",
+            "description": "If pass this proposal adds youtube.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source from YT.",
+            "domain": "youtube.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "64828132235595",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-03-14T09:32:20.093096734Z",
+      "deposit_end_time": "2023-03-16T09:32:20.093096734Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-03-14T09:32:20.093096734Z",
+      "voting_end_time": "2023-03-19T09:32:20.093096734Z",
+      "metadata": "",
+      "title": "Add youtube.com as an accepted domain",
+      "summary": "If pass this proposal adds youtube.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source from YT.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "20",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "v6.1.0 - various fixes and dependencies upgrades",
+            "description": "If this proposal passes our network will be upgraded to v6.1 at height 9079079. This upgrade brings various improvements, fixes  and SDK + IBC-Go upgrades. Visit BZE Alpha Team github and discord for more info.",
+            "plan": {
+              "name": "v6.1.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "9079079",
+              "info": "{tag:v6.1.0,commit_hash:e8157ad95fffb2c7429b7f5619dea888a36bcdb0, height: 9079079}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "72587992059158",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-11-12T07:59:41.365356309Z",
+      "deposit_end_time": "2023-11-14T07:59:41.365356309Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-11-12T08:01:23.540643548Z",
+      "voting_end_time": "2023-11-17T08:01:23.540643548Z",
+      "metadata": "",
+      "title": "v6.1.0 - various fixes and dependencies upgrades",
+      "summary": "If this proposal passes our network will be upgraded to v6.1 at height 9079079. This upgrade brings various improvements, fixes  and SDK + IBC-Go upgrades. Visit BZE Alpha Team github and discord for more info.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "21",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.params.v1beta1.ParameterChangeProposal",
+            "title": "Change maximum number of validators to 40",
+            "description": "If this proposal passes the max nimber of validators on BZE network will be lowered from 195 to 40. This modification is needed to make sure we always have more trusted validators than unknown ones",
+            "changes": [
+              {
+                "subspace": "staking",
+                "key": "MaxValidators",
+                "value": "40"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "69739160290339",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-11-21T12:29:13.683928533Z",
+      "deposit_end_time": "2023-11-23T12:29:13.683928533Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-11-21T12:29:13.683928533Z",
+      "voting_end_time": "2023-11-26T12:29:13.683928533Z",
+      "metadata": "",
+      "title": "Change maximum number of validators to 40",
+      "summary": "If this proposal passes the max nimber of validators on BZE network will be lowered from 195 to 40. This modification is needed to make sure we always have more trusted validators than unknown ones",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "22",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add x.com as an accepted domain",
+            "description": "If pass this proposal adds x.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source from X.",
+            "domain": "x.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "58266324198972",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-12-07T08:41:56.984240297Z",
+      "deposit_end_time": "2023-12-09T08:41:56.984240297Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-12-07T08:41:56.984240297Z",
+      "voting_end_time": "2023-12-12T08:41:56.984240297Z",
+      "metadata": "",
+      "title": "Add x.com as an accepted domain",
+      "summary": "If pass this proposal adds x.com as an accepted domain in cointrunk module. Having it as an accepted domain allows us to post CoinTrunk articles with original source from X.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "23",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund Osmosis pool incentives 2024",
+            "description": "This proposal is for funding the Osmosis (BZE/OSMO) liquidity pool incentives. We are using the funds to reward liquidity providers for 400 days. Rewards distribution amongst 400 days:\\n\\n 7 days - 4.8M BZE\\n\\n 14 days - 9.6M BZE",
+            "recipient": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "14400000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "78466660623795",
+        "abstain_count": "0",
+        "no_count": "12795709928",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2023-12-29T13:25:45.021955916Z",
+      "deposit_end_time": "2023-12-31T13:25:45.021955916Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2023-12-29T13:28:11.192035553Z",
+      "voting_end_time": "2024-01-03T13:28:11.192035553Z",
+      "metadata": "",
+      "title": "Fund Osmosis pool incentives 2024",
+      "summary": "This proposal is for funding the Osmosis (BZE/OSMO) liquidity pool incentives. We are using the funds to reward liquidity providers for 400 days. Rewards distribution amongst 400 days:\\n\\n 7 days - 4.8M BZE\\n\\n 14 days - 9.6M BZE",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "24",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.gov.v1beta1.TextProposal",
+            "title": "Submit only one OSMO LP incentive",
+            "description": "Proposal no. 23 passed and 14,400,000 BZE where withdrawn from the community pool funds in order to be used as incentives for Osmosis LP providers as follows: \\n\\n - 7 days unbonding - 4.8M BZE\\n\\n - 14 days unbonding - 9.6M BZE. \\n\\n If this proposal passes the distribution of the incentives will be changed to:\\n\\n - 14 days - 14.4M BZE.\\n\\n The duration of the incentives remains the same as in proposal no. 23: 400 days."
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "75588487269723",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-01-04T09:34:57.117061854Z",
+      "deposit_end_time": "2024-01-06T09:34:57.117061854Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-01-04T09:36:24.017054208Z",
+      "voting_end_time": "2024-01-09T09:36:24.017054208Z",
+      "metadata": "",
+      "title": "Submit only one OSMO LP incentive",
+      "summary": "Proposal no. 23 passed and 14,400,000 BZE where withdrawn from the community pool funds in order to be used as incentives for Osmosis LP providers as follows: \\n\\n - 7 days unbonding - 4.8M BZE\\n\\n - 14 days unbonding - 9.6M BZE. \\n\\n If this proposal passes the distribution of the incentives will be changed to:\\n\\n - 14 days - 14.4M BZE.\\n\\n The duration of the incentives remains the same as in proposal no. 23: 400 days.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "25",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund burner module with 29M BZE",
+            "description": "If this proposal passed the Burner module will be funded with 29M BZE from the Community Pool, leaving more than 50M BZE coins available for community funding. BZE Alpha Team proposes the funding of the Burner module in order to lower the total supply and decrease the number coins minted yearly. The burning proposal will be submitted as soon as this one passes.",
+            "recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "29000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "67274204328864",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-03-06T18:40:46.608747318Z",
+      "deposit_end_time": "2024-03-08T18:40:46.608747318Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-03-06T18:43:21.398880245Z",
+      "voting_end_time": "2024-03-11T18:43:21.398880245Z",
+      "metadata": "",
+      "title": "Fund burner module with 29M BZE",
+      "summary": "If this proposal passed the Burner module will be funded with 29M BZE from the Community Pool, leaving more than 50M BZE coins available for community funding. BZE Alpha Team proposes the funding of the Burner module in order to lower the total supply and decrease the number coins minted yearly. The burning proposal will be submitted as soon as this one passes.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "26",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.burner.v1.BurnCoinsProposal",
+            "title": "Burn 29,000,000 BZE",
+            "description": "If this proposal passes 29,000,000 BZE will be burned and removed from the total supply. The burning module will handle the actual burning once this proposal passes. The amount represents more than 10% of the current total supply and more than 15% of the circulating supply. BZE Alpha Team is eager to provide periodical coin burning events. These events are stored on the blockchain and can be viewed directly by querying the network via CLI or using the burning module rest endpoint: https://rest.getbze.com/bze/burner/v1/all_burned_coins"
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "65451597027755",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-03-12T19:41:31.938205182Z",
+      "deposit_end_time": "2024-03-14T19:41:31.938205182Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-03-12T19:41:31.938205182Z",
+      "voting_end_time": "2024-03-17T19:41:31.938205182Z",
+      "metadata": "",
+      "title": "Burn 29,000,000 BZE",
+      "summary": "If this proposal passes 29,000,000 BZE will be burned and removed from the total supply. The burning module will handle the actual burning once this proposal passes. The amount represents more than 10% of the current total supply and more than 15% of the circulating supply. BZE Alpha Team is eager to provide periodical coin burning events. These events are stored on the blockchain and can be viewed directly by querying the network via CLI or using the burning module rest endpoint: https://rest.getbze.com/bze/burner/v1/all_burned_coins",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "27",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.params.v1beta1.ParameterChangeProposal",
+            "title": "Set Maximum Block Size to 3MB",
+            "description": "The block size should be increased to a value between 2MB and 5MB to better handle potential transaction spam on the network. This recommendation comes from the interchain security team, following various tests conducted on the Cosmos Hub testnet.",
+            "changes": [
+              {
+                "subspace": "baseapp",
+                "key": "BlockParams",
+                "value": "{\n                \"max_bytes\": \"3145728\"\n            }"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "70417545351799",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-04-24T13:15:47.281021068Z",
+      "deposit_end_time": "2024-04-26T13:15:47.281021068Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-04-24T13:15:47.281021068Z",
+      "voting_end_time": "2024-04-29T13:15:47.281021068Z",
+      "metadata": "",
+      "title": "Set Maximum Block Size to 3MB",
+      "summary": "The block size should be increased to a value between 2MB and 5MB to better handle potential transaction spam on the network. This recommendation comes from the interchain security team, following various tests conducted on the Cosmos Hub testnet.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "28",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.params.v1beta1.ParameterChangeProposal",
+            "title": "Increase TxSizeCostPerByte 15x",
+            "description": "This Proposal increases the cost of bytes to reduce the potential impact of spam. github.com/notional-labs/placid",
+            "changes": [
+              {
+                "subspace": "auth",
+                "key": "TxSizeCostPerByte",
+                "value": "\"150\""
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "78501560201971",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-05-22T01:58:58.041757950Z",
+      "deposit_end_time": "2024-05-24T01:58:58.041757950Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-05-22T01:58:58.041757950Z",
+      "voting_end_time": "2024-05-27T01:58:58.041757950Z",
+      "metadata": "",
+      "title": "Increase TxSizeCostPerByte 15x",
+      "summary": "This Proposal increases the cost of bytes to reduce the potential impact of spam. github.com/notional-labs/placid",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "29",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "Upgrade network to v7.0.0",
+            "description": "If passed this proposal is upgrading the BeeZee blockchain at block height 12723000 to version v7.0.0 which includes the following modules new: token factory, epochs, rewards and tradebin. More details about these modules here https://medium.com/bzedge-community/bze-v7-a-new-era-for-our-blockchain-21c92fe527b2",
+            "plan": {
+              "name": "v7.0.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "12723000",
+              "info": "{tag: v7.0.0}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "98793812704503",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-07-10T09:54:13.396130083Z",
+      "deposit_end_time": "2024-07-12T09:54:13.396130083Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-07-10T09:56:02.364617044Z",
+      "voting_end_time": "2024-07-15T09:56:02.364617044Z",
+      "metadata": "",
+      "title": "Upgrade network to v7.0.0",
+      "summary": "If passed this proposal is upgrading the BeeZee blockchain at block height 12723000 to version v7.0.0 which includes the following modules new: token factory, epochs, rewards and tradebin. More details about these modules here https://medium.com/bzedge-community/bze-v7-a-new-era-for-our-blockchain-21c92fe527b2",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "30",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add crypto.news as accepted domain on cointrunk module",
+            "description": "If this proposal passes the blockchain will accept content from crypto.news internet domain to be posted on cointrunk articles",
+            "domain": "crypto.news",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "89904830481678",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-09-11T14:01:10.594415667Z",
+      "deposit_end_time": "2024-09-13T14:01:10.594415667Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-09-11T14:01:10.594415667Z",
+      "voting_end_time": "2024-09-16T14:01:10.594415667Z",
+      "metadata": "",
+      "title": "Add crypto.news as accepted domain on cointrunk module",
+      "summary": "If this proposal passes the blockchain will accept content from crypto.news internet domain to be posted on cointrunk articles",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "31",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.AcceptedDomainProposal",
+            "title": "Add coingape.com as accepted domain on cointrunk module",
+            "description": "If this proposal passes the blockchain will accept content from coingape.com internet domain to be posted on cointrunk articles",
+            "domain": "coingape.com",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "89302447608976",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-09-11T14:01:57.406555499Z",
+      "deposit_end_time": "2024-09-13T14:01:57.406555499Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-09-11T14:01:57.406555499Z",
+      "voting_end_time": "2024-09-16T14:01:57.406555499Z",
+      "metadata": "",
+      "title": "Add coingape.com as accepted domain on cointrunk module",
+      "summary": "If this proposal passes the blockchain will accept content from coingape.com internet domain to be posted on cointrunk articles",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "32",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "Upgrade network to v7.1.0",
+            "description": "If passed this proposal is upgrading the BeeZee blockchain at block height 13710000 to version v7.1.0 which includes the following changes: improved DEX matching engine, added burning raffles to burner module, added ante handler to check tx fee denoms. More details about these changes here https://medium.com/bzedge-community/bze-status-update-sept-03-2024-b3c7874e08bd",
+            "plan": {
+              "name": "v7.1.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "13710000",
+              "info": "{tag: v7.1.0}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "111528361560725",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-09-15T17:23:41.890614176Z",
+      "deposit_end_time": "2024-09-17T17:23:41.890614176Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-09-15T17:23:59.112717418Z",
+      "voting_end_time": "2024-09-20T17:23:59.112717418Z",
+      "metadata": "",
+      "title": "Upgrade network to v7.1.0",
+      "summary": "If passed this proposal is upgrading the BeeZee blockchain at block height 13710000 to version v7.1.0 which includes the following changes: improved DEX matching engine, added burning raffles to burner module, added ante handler to check tx fee denoms. More details about these changes here https://medium.com/bzedge-community/bze-status-update-sept-03-2024-b3c7874e08bd",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "33",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund listing on nonkyc.io centralized exchange",
+            "description": "BZE Alpha Team proposes to spend 4,000,000 BZE to list BZE on nonkyc.io exchange. The coins will be converted to USDT in a private sale and we will use 2500 USDT to pay for the listing and the rest to provide liquidity on their exchange and the market maker bot. The private sale is conducted by Faneatiku (Alpha Team) to private sellers willing to support and help BZE. This listing is required to meet Coingeko requirements to display our data correctly.",
+            "recipient": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "4000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "105067455602752",
+        "abstain_count": "0",
+        "no_count": "1858731108808",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-09-25T15:54:56.331628494Z",
+      "deposit_end_time": "2024-09-27T15:54:56.331628494Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-09-25T15:56:18.677008258Z",
+      "voting_end_time": "2024-09-30T15:56:18.677008258Z",
+      "metadata": "",
+      "title": "Fund listing on nonkyc.io centralized exchange",
+      "summary": "BZE Alpha Team proposes to spend 4,000,000 BZE to list BZE on nonkyc.io exchange. The coins will be converted to USDT in a private sale and we will use 2500 USDT to pay for the listing and the rest to provide liquidity on their exchange and the market maker bot. The private sale is conducted by Faneatiku (Alpha Team) to private sellers willing to support and help BZE. This listing is required to meet Coingeko requirements to display our data correctly.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "34",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund October Marketing Campaign",
+            "description": "The BZE Alpha Team proposes to spend 6,000,000 BZE from the community pool for paid marketing campaigns. The campaigns setup was discussed on discord and we are in search for marketing partners too. The funds will be sold to private sellers willing to help BZE and stake their coins for mid-long term. The entire proposal background can be viewed and discussed on BZE Discord server.",
+            "recipient": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "6000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "105060455802742",
+        "abstain_count": "0",
+        "no_count": "1858731108808",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-09-25T15:55:48.268370421Z",
+      "deposit_end_time": "2024-09-27T15:55:48.268370421Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-09-25T15:56:30.404432394Z",
+      "voting_end_time": "2024-09-30T15:56:30.404432394Z",
+      "metadata": "",
+      "title": "Fund October Marketing Campaign",
+      "summary": "The BZE Alpha Team proposes to spend 6,000,000 BZE from the community pool for paid marketing campaigns. The campaigns setup was discussed on discord and we are in search for marketing partners too. The funds will be sold to private sellers willing to help BZE and stake their coins for mid-long term. The entire proposal background can be viewed and discussed on BZE Discord server.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "35",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "Upgrade network to v7.1.1",
+            "description": "If passed this proposal is upgrading the BeeZee blockchain at block height 14182500 to version v7.1.1 which includes some small fixes important for an enhanced user experience on BZE DEX",
+            "plan": {
+              "name": "v7.1.1",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "14182500",
+              "info": "{tag: v7.1.1}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "101309328404197",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2024-10-17T07:19:59.607768451Z",
+      "deposit_end_time": "2024-10-19T07:19:59.607768451Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2024-10-17T07:20:22.774289214Z",
+      "voting_end_time": "2024-10-22T07:20:22.774289214Z",
+      "metadata": "",
+      "title": "Upgrade network to v7.1.1",
+      "summary": "If passed this proposal is upgrading the BeeZee blockchain at block height 14182500 to version v7.1.1 which includes some small fixes important for an enhanced user experience on BZE DEX",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "36",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.gov.v1beta1.TextProposal",
+            "title": "Limit BZE Max Supply to 400M",
+            "description": "If this proposal passes, the BZE Alpha Team will introduce a maximum supply of 400,000,000 BZE on the BeeZee blockchain. Once this cap is reached, the blockchain will halt the minting of new coins until some are burned. When coins are burned, minting will resume, but only up to the maximum supply limit. Furthermore, the mechanism for resuming minting after reaching the max supply will be adjustable through governance proposals, ensuring full community control over this process."
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "93073786034427",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-01-19T00:10:39.274760110Z",
+      "deposit_end_time": "2025-01-21T00:10:39.274760110Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-01-19T00:11:16.162052223Z",
+      "voting_end_time": "2025-01-24T00:11:16.162052223Z",
+      "metadata": "",
+      "title": "Limit BZE Max Supply to 400M",
+      "summary": "If this proposal passes, the BZE Alpha Team will introduce a maximum supply of 400,000,000 BZE on the BeeZee blockchain. Once this cap is reached, the blockchain will halt the minting of new coins until some are burned. When coins are burned, minting will resume, but only up to the maximum supply limit. Furthermore, the mechanism for resuming minting after reaching the max supply will be adjustable through governance proposals, ensuring full community control over this process.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "37",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.params.v1beta1.ParameterChangeProposal",
+            "title": "Adjust blocks per year",
+            "description": "The average block time on BeeZee blockchain, calculated from the previous two years, is 5.7 seconds. We need to adjust the blocks_per_year parameter to reflect the number of yearly created blocks as accurate as we can, in order to have an accurate inflation. If this proposal passes, it will set the blocks_per_year parameter to 5543269",
+            "changes": [
+              {
+                "subspace": "mint",
+                "key": "BlocksPerYear",
+                "value": "\"5543269\""
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "90599443847828",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-02-09T21:43:24.450505720Z",
+      "deposit_end_time": "2025-02-11T21:43:24.450505720Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-02-09T21:43:24.450505720Z",
+      "voting_end_time": "2025-02-14T21:43:24.450505720Z",
+      "metadata": "",
+      "title": "Adjust blocks per year",
+      "summary": "The average block time on BeeZee blockchain, calculated from the previous two years, is 5.7 seconds. We need to adjust the blocks_per_year parameter to reflect the number of yearly created blocks as accurate as we can, in order to have an accurate inflation. If this proposal passes, it will set the blocks_per_year parameter to 5543269",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "38",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund AlphaTeam",
+            "description": "BZE Alpha Team proposes to spend 4,000,000 BZE to cover the expenses of the project for 1 year. The expenses include campaigns, bounties, infrastructure and anything else related to BZE. The team does all the efforts to avoid selling the coins so they will most likely end up delegated to most validators conributing to our project.",
+            "recipient": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "4000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "90332444208095",
+        "abstain_count": "0",
+        "no_count": "267000210010",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-02-09T21:51:35.204867065Z",
+      "deposit_end_time": "2025-02-11T21:51:35.204867065Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-02-09T21:51:35.204867065Z",
+      "voting_end_time": "2025-02-14T21:51:35.204867065Z",
+      "metadata": "",
+      "title": "Fund AlphaTeam",
+      "summary": "BZE Alpha Team proposes to spend 4,000,000 BZE to cover the expenses of the project for 1 year. The expenses include campaigns, bounties, infrastructure and anything else related to BZE. The team does all the efforts to avoid selling the coins so they will most likely end up delegated to most validators conributing to our project.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "39",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.distribution.v1beta1.CommunityPoolSpendProposal",
+            "title": "Fund burner module with 1M BZE",
+            "description": "If this proposal passed, the Burner module will be funded with 1M BZE from the Community Pool. Starting with BeeZee v7.2 the Burner module will burn all the coins he holds once every 4 weeks. Let's add 1M to its balance to make sure the fire burns a bigger pot when that time comes!",
+            "recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "1000000000000"
+              }
+            ]
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "90599445090692",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-02-09T22:04:02.602104200Z",
+      "deposit_end_time": "2025-02-11T22:04:02.602104200Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-02-09T22:04:02.602104200Z",
+      "voting_end_time": "2025-02-14T22:04:02.602104200Z",
+      "metadata": "",
+      "title": "Fund burner module with 1M BZE",
+      "summary": "If this proposal passed, the Burner module will be funded with 1M BZE from the Community Pool. Starting with BeeZee v7.2 the Burner module will burn all the coins he holds once every 4 weeks. Let's add 1M to its balance to make sure the fire burns a bigger pot when that time comes!",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "40",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "Upgrade network to v7.2.0",
+            "description": "If passed this proposal is upgrading the BeeZee blockchain at block height 15951000 to version v7.2.0 which includes bulk DEX order execution and various improvements",
+            "plan": {
+              "name": "v7.2.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "15951000",
+              "info": "{tag: v7.2.0, commit: 6aef7d8d30283e1669cd07d71fcb78aadeb93c0f}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "92719198275051",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-02-10T19:22:04.156072398Z",
+      "deposit_end_time": "2025-02-12T19:22:04.156072398Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-02-10T19:22:27.314189666Z",
+      "voting_end_time": "2025-02-15T19:22:27.314189666Z",
+      "metadata": "",
+      "title": "Upgrade network to v7.2.0",
+      "summary": "If passed this proposal is upgrading the BeeZee blockchain at block height 15951000 to version v7.2.0 which includes bulk DEX order execution and various improvements",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "41",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/ibc.core.client.v1.ClientUpdateProposal",
+            "title": "Update IBC Client to dungeon-1",
+            "description": "This proposal updates the expired IBC client and restoring the IBC connection to dungeon-1",
+            "subject_client_id": "07-tendermint-34",
+            "substitute_client_id": "07-tendermint-37"
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "104510039319134",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-02-20T09:59:16.473302728Z",
+      "deposit_end_time": "2025-02-22T09:59:16.473302728Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100010000000"
+        }
+      ],
+      "voting_start_time": "2025-02-20T10:07:39.266741184Z",
+      "voting_end_time": "2025-02-25T10:07:39.266741184Z",
+      "metadata": "",
+      "title": "Update IBC Client to dungeon-1",
+      "summary": "This proposal updates the expired IBC client and restoring the IBC connection to dungeon-1",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "42",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.PublisherProposal",
+            "title": "Add CosmosBG as Publisher",
+            "description": "If this proposal passes CosmosBG will be added as publisher on CoinTrunk module. CosmosBG is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check his chronicles on twitter(x) https://x.com/IvanM10529875. Make sure you follow him for latest news, BZE news are always included in his tweets.",
+            "name": "CosmosBG",
+            "address": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "101331110598381",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-04-03T07:55:22.026290915Z",
+      "deposit_end_time": "2025-04-05T07:55:22.026290915Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-04-03T07:55:22.026290915Z",
+      "voting_end_time": "2025-04-08T07:55:22.026290915Z",
+      "metadata": "",
+      "title": "Add CosmosBG as Publisher",
+      "summary": "If this proposal passes CosmosBG will be added as publisher on CoinTrunk module. CosmosBG is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check his chronicles on twitter(x) https://x.com/IvanM10529875. Make sure you follow him for latest news, BZE news are always included in his tweets.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "43",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/bze.cointrunk.v1.PublisherProposal",
+            "title": "Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
+            "description": "If this proposal passes, ⚛️ Cosmos Ecosystem ⚛️  will be added as publisher on CoinTrunk module. ⚛️ Cosmos Ecosystem ⚛️  is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check them on twitter(x) https://x.com/CosmosEcosystem. Make sure you follow them for latest news, BZE news are always included.",
+            "name": "⚛️ Cosmos Ecosystem⚛️",
+            "address": "bze1g9dkuc6nf85hetsuhhznqnx4ma0y8l62xek0qz",
+            "active": true
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "99467225294527",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-05-01T15:24:34.039118513Z",
+      "deposit_end_time": "2025-05-03T15:24:34.039118513Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-05-01T15:24:34.039118513Z",
+      "voting_end_time": "2025-05-06T15:24:34.039118513Z",
+      "metadata": "",
+      "title": "Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
+      "summary": "If this proposal passes, ⚛️ Cosmos Ecosystem ⚛️  will be added as publisher on CoinTrunk module. ⚛️ Cosmos Ecosystem ⚛️  is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check them on twitter(x) https://x.com/CosmosEcosystem. Make sure you follow them for latest news, BZE news are always included.",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "44",
+      "messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "V8 Upgrade",
+            "description": "## Upgraded Cosmos SDK to 0.50 and IBC to v8\\n\\n## Extended Burner module\\n- Burner can now burn factory tokens\\n- IBC coins are exchanged to BZE if they have a liquidity pool with enough liquidity, and the resulting BZE is burned\\n- Liquidity pool shares are locked in the blackhole address\\n\\n## Extended Tradebin module\\n- Added liquidity pools using the constant product formula\\n- Granted the minter role to the Tradebin module for LP share minting\\n\\n## Added TX Fee Collector module\\n- Allows users to pay transaction fees in any denomination that has a liquidity pool with BZE\\n- Exchanges fees collected in other denominations to BZE and distributes them to delegators\\n\\n## Rewards module\\n- Migrated 75,000 BZE (75000000000 ubze) from the Rewards module account to the Community Pool. This amount was accumulated during the creation of three staking rewards and, due to a bug, was never sent to the Community Pool as intended.\\n\\n## Removed module\\n- Removed the unused Scavenge module\n",
+            "plan": {
+              "name": "v8.0.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "20237800",
+              "info": "{\"binaries\":{\"darwin/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-darwin-amd64?checksum=sha256:e1150c9f68e39209475a15e05811fd703c4d6d62c186d54cb6cbef09f205b303\",\"darwin/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-darwin-arm64?checksum=sha256:e4c3f486a46e7ecf370b7781b1663d87632ce7b994e443013307f02c5c0f5b61\",\"linux/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-linux-amd64?checksum=sha256:1506e974d8015167b63af421b63fe282d93224d0ed4638998e5b2027ac49497e\",\"linux/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-linux-arm64?checksum=sha256:81b947c25abdc8332e32c4d12fe7c5e6640598bf795a49b20f7cedd73a362379\"}}",
+              "upgraded_client_state": null
+            }
+          },
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "122587882543872",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-11-19T21:51:15.317374005Z",
+      "deposit_end_time": "2025-11-21T21:51:15.317374005Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-11-19T21:52:20.471486016Z",
+      "voting_end_time": "2025-11-24T21:52:20.471486016Z",
+      "metadata": "",
+      "title": "V8 Upgrade",
+      "summary": "## Upgraded Cosmos SDK to 0.50 and IBC to v8\\n\\n## Extended Burner module\\n- Burner can now burn factory tokens\\n- IBC coins are exchanged to BZE if they have a liquidity pool with enough liquidity, and the resulting BZE is burned\\n- Liquidity pool shares are locked in the blackhole address\\n\\n## Extended Tradebin module\\n- Added liquidity pools using the constant product formula\\n- Granted the minter role to the Tradebin module for LP share minting\\n\\n## Added TX Fee Collector module\\n- Allows users to pay transaction fees in any denomination that has a liquidity pool with BZE\\n- Exchanges fees collected in other denominations to BZE and distributes them to delegators\\n\\n## Rewards module\\n- Migrated 75,000 BZE (75000000000 ubze) from the Rewards module account to the Community Pool. This amount was accumulated during the creation of three staking rewards and, due to a bug, was never sent to the Community Pool as intended.\\n\\n## Removed module\\n- Removed the unused Scavenge module\n",
+      "proposer": "",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "45",
+      "messages": [
+        {
+          "@type": "/cosmos.distribution.v1beta1.MsgCommunityPoolSpend",
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+          "recipient": "bze1jx4x3kn8mlz2s03zdpf2a38x9gl66llvjqdd55",
+          "amount": [
+            {
+              "denom": "ubze",
+              "amount": "3000000000000"
+            }
+          ]
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "103512603744251",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2025-12-08T10:20:36.474855289Z",
+      "deposit_end_time": "2025-12-10T10:20:36.474855289Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2025-12-08T10:21:17.372761837Z",
+      "voting_end_time": "2025-12-13T10:21:17.372761837Z",
+      "metadata": "",
+      "title": "Fund Liquidity Pools",
+      "summary": "### Fund BZE Liquidity Pools\n\nIf this proposal passes, we will spend 3M BZE from the community pool to improve liquidity on BeeZee DEX.\n\n#### Funds usage\n- appx. 1,200,000 BZE will be paired with 2,000 USDC for BZE/USDC LP\n- 250,000 BZE will be added to BZE/VDL LP and the resulted shares will be locked forever\n- 250,000 BZE will be used for infrastructure costs\n- 500,000 BZE will be paid to BZE Alpha Team for the 2,000 USDC contribution to BZE/USDC LP. The entire amount will be staked.\n- The remaining amount (appx. 800,000 BZE) is a reserve of funds for immediate usage and will be used for the upcoming liquidity pools and monthly costs with the Community Team.\n",
+      "proposer": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "46",
+      "messages": [
+        {
+          "@type": "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+          "plan": {
+            "name": "v8.1.0",
+            "time": "0001-01-01T00:00:00Z",
+            "height": "22551810",
+            "info": "{\"binaries\":{\"darwin/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-darwin-amd64?checksum=sha256:bd7e1539c4ef20732040e369f700bec19997afd198bc164ec78ad581a4fdc8c8\",\"darwin/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-darwin-arm64?checksum=sha256:bfc778d9ed467bbd411b870f610126ef3ff7e015a371d141511751b73a7605f3\",\"linux/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-linux-amd64?checksum=sha256:3f84058417a0a8e2a2bf9d002012b0d4d77e5ccf83bd677cb7c4afd647c97a3e\",\"linux/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.0/bzed-linux-arm64?checksum=sha256:815d68d5663b2d5b07da8ac4333126f84651df6db108b435891ebd377ee39985\"},\"tag\":\"v8.1.0\"}",
+            "upgraded_client_state": null
+          }
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "104767203291302",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2026-04-22T12:58:45.039535765Z",
+      "deposit_end_time": "2026-04-24T12:58:45.039535765Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2026-04-22T12:59:39.167291709Z",
+      "voting_end_time": "2026-04-27T12:59:39.167291709Z",
+      "metadata": "",
+      "title": "Upgrade network to v8.1.0",
+      "summary": "If passed, this proposal will upgrade the blockchain to version 8.1.0. # v8.1.0 Upgrade Summary\n\nThis upgrade removes the `crisis` module, updates dependencies, improves fee handling, and introduces bounded EndBlock queue processing in several modules for better safety and performance.\n\n## Module Highlights\n\n- **Burner**: moved burning and raffle cleanup to bounded EndBlock processing, improved IBC burn/liquidity handling, and tightened raffle protections.\n- **Epochs**: added safer epoch lookup with proper error handling.\n- **CoinTrunk**: improved validation and fixed article ID pointer update behavior.\n- **Rewards**: moved reward processing to bounded EndBlock queues, added anti-spam gas protection, and fixed multiple reward accounting issues.\n- **TokenFactory**: tightened subdenom validation and routed creation fees through the fee collection flow.\n- **TradeBin**: introduced governance-tunable queue/gas parameters, improved order queue safety, migrated fee params to `sdk.Coin`, and enhanced liquidity and validation checks.\n- **TxFeeCollector**: added governance-controlled minimum gas fee and balance iteration limits, and moved fee conversion to EndBlock with split distribution.\n\n## Full Release Notes\n\nFull release notes: https://github.com/bze-alphateam/bze/releases/tag/v8.1.0",
+      "proposer": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "expedited": false,
+      "failed_reason": ""
+    },
+    {
+      "id": "47",
+      "messages": [
+        {
+          "@type": "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+          "plan": {
+            "name": "v8.1.1",
+            "time": "0001-01-01T00:00:00Z",
+            "height": "23855000",
+            "info": "{\"binaries\":{\"darwin/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.1/bzed-darwin-amd64?checksum=sha256:7c52738fa984314d2004ca52ac897e17142af1993900f2df84c286d117cbcdbd\",\"darwin/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.1/bzed-darwin-arm64?checksum=sha256:e49b9af02108097f65364592c2a2db7c2b4ca56bbc6f855295697bb31230f8a9\",\"linux/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.1/bzed-linux-amd64?checksum=sha256:8b9b084cea168df60c028b1a80150bf7cfd3305c7a44e67a6283d33bcdb3dc57\",\"linux/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.1.1/bzed-linux-arm64?checksum=sha256:e387743e726110039ff70df987ecfd962aecaadeb50e054847084a3c2acc8856\"},\"tag\":\"v8.1.1\"}",
+            "upgraded_client_state": null
+          }
+        }
+      ],
+      "status": "PROPOSAL_STATUS_PASSED",
+      "final_tally_result": {
+        "yes_count": "106584798486204",
+        "abstain_count": "0",
+        "no_count": "0",
+        "no_with_veto_count": "0"
+      },
+      "submit_time": "2026-07-16T10:28:03.533454546Z",
+      "deposit_end_time": "2026-07-18T10:28:03.533454546Z",
+      "total_deposit": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "voting_start_time": "2026-07-16T10:28:03.533454546Z",
+      "voting_end_time": "2026-07-21T10:28:03.533454546Z",
+      "metadata": "",
+      "title": "Upgrade network to v8.1.1",
+      "summary": "If passed, this proposal will upgrade the blockchain to version 8.1.1. This version bumps IBC and CometBFT dependencies and fixes a bug in LP creation.",
+      "proposer": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "expedited": false,
+      "failed_reason": ""
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "0"
+  }
+}

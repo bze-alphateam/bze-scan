@@ -24,6 +24,7 @@ const (
 	FeeCollector = authtypes.FeeCollectorName
 	Distribution = "distribution"
 	Mint         = "mint"
+	Gov          = "gov"
 )
 
 // ModuleAddress returns the bech32 account address of the module account

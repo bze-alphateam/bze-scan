@@ -1,0 +1,17 @@
+{
+  "proposals": null,
+  "deposits": null,
+  "votes": null,
+  "statuses": [
+    {
+      "ProposalID": 47,
+      "Status": "passed",
+      "Height": 23821225,
+      "Resolved": true,
+      "ExpeditedOff": false
+    }
+  ],
+  "dirty": [
+    "47"
+  ]
+}

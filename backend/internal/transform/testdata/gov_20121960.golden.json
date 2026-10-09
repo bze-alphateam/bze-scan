@@ -1,0 +1,44 @@
+{
+  "proposals": [
+    {
+      "ID": 44,
+      "Title": "V8 Upgrade",
+      "Summary": "## Upgraded Cosmos SDK to 0.50 and IBC to v8\\n\\n## Extended Burner module\\n- Burner can now burn factory tokens\\n- IBC coins are exchanged to BZE if they have a liquidity pool with enough liquidity, and the resulting BZE is burned\\n- Liquidity pool shares are locked in the blackhole address\\n\\n## Extended Tradebin module\\n- Added liquidity pools using the constant product formula\\n- Granted the minter role to the Tradebin module for LP share minting\\n\\n## Added TX Fee Collector module\\n- Allows users to pay transaction fees in any denomination that has a liquidity pool with BZE\\n- Exchanges fees collected in other denominations to BZE and distributes them to delegators\\n\\n## Rewards module\\n- Migrated 75,000 BZE (75000000000 ubze) from the Rewards module account to the Community Pool. This amount was accumulated during the creation of three staking rewards and, due to a bug, was never sent to the Community Pool as intended.\\n\\n## Removed module\\n- Removed the unused Scavenge module\n",
+      "Metadata": "",
+      "Proposer": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x",
+      "Expedited": false,
+      "Kind": "software_upgrade",
+      "MessageTypes": [
+        "/cosmos.gov.v1.MsgExecLegacyContent"
+      ],
+      "Messages": [
+        {
+          "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+          "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+          "content": {
+            "@type": "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal",
+            "title": "V8 Upgrade",
+            "description": "## Upgraded Cosmos SDK to 0.50 and IBC to v8\\n\\n## Extended Burner module\\n- Burner can now burn factory tokens\\n- IBC coins are exchanged to BZE if they have a liquidity pool with enough liquidity, and the resulting BZE is burned\\n- Liquidity pool shares are locked in the blackhole address\\n\\n## Extended Tradebin module\\n- Added liquidity pools using the constant product formula\\n- Granted the minter role to the Tradebin module for LP share minting\\n\\n## Added TX Fee Collector module\\n- Allows users to pay transaction fees in any denomination that has a liquidity pool with BZE\\n- Exchanges fees collected in other denominations to BZE and distributes them to delegators\\n\\n## Rewards module\\n- Migrated 75,000 BZE (75000000000 ubze) from the Rewards module account to the Community Pool. This amount was accumulated during the creation of three staking rewards and, due to a bug, was never sent to the Community Pool as intended.\\n\\n## Removed module\\n- Removed the unused Scavenge module\n",
+            "plan": {
+              "name": "v8.0.0",
+              "time": "0001-01-01T00:00:00Z",
+              "height": "20237800",
+              "info": "{\"binaries\":{\"darwin/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-darwin-amd64?checksum=sha256:e1150c9f68e39209475a15e05811fd703c4d6d62c186d54cb6cbef09f205b303\",\"darwin/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-darwin-arm64?checksum=sha256:e4c3f486a46e7ecf370b7781b1663d87632ce7b994e443013307f02c5c0f5b61\",\"linux/amd64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-linux-amd64?checksum=sha256:1506e974d8015167b63af421b63fe282d93224d0ed4638998e5b2027ac49497e\",\"linux/arm64\":\"https://github.com/bze-alphateam/bze/releases/download/v8.0.0/bzed-linux-arm64?checksum=sha256:81b947c25abdc8332e32c4d12fe7c5e6640598bf795a49b20f7cedd73a362379\"}}",
+              "upgraded_client_state": null
+            }
+          }
+        }
+      ],
+      "Status": "deposit_period",
+      "Height": 20121960,
+      "TxHash": "2373F76A6ABA87C1CB679892CB078DB4A580589383E169A80E387777EDFAF460",
+      "Time": "2025-11-19T21:51:15.317374005Z"
+    }
+  ],
+  "deposits": null,
+  "votes": null,
+  "statuses": null,
+  "dirty": [
+    "44"
+  ]
+}

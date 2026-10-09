@@ -50,9 +50,10 @@ var Services = map[string]string{
 //	testdata/grpc/<service>/<Method>.<key>.json   when the request has a key
 //	testdata/grpc/<service>/<Method>.json         otherwise, or as the fallback
 //
-// The key of a request is the values of its non-empty top-level string
-// fields, in field order, path-escaped and joined by "." (Validator's
-// validator_addr; Delegation's delegator_addr and validator_addr). A file
+// The key of a request is the values of its non-empty top-level string,
+// integer and enum fields, in field order, path-escaped and joined by "."
+// (Validator's validator_addr; Delegation's delegator_addr and
+// validator_addr; Proposal's proposal_id). A file
 // holding a gateway error ({"code":5,"message":"…","details":[]}) answers
 // that gRPC status. A method without a file answers codes.Unimplemented, as a
 // node does for a service it does not register. Recorded by
@@ -274,15 +275,49 @@ func (g *GRPC) requestKey(md protoreflect.MessageDescriptor, req gogoproto.Messa
 	var parts []string
 	for i := range md.Fields().Len() {
 		fd := md.Fields().Get(i)
-		if fd.Kind() != protoreflect.StringKind || fd.IsList() || fd.IsMap() {
+		if fd.IsList() || fd.IsMap() {
 			continue
 		}
-		var v string
-		if b, ok := fields[string(fd.Name())]; ok && json.Unmarshal(b, &v) == nil && v != "" {
+		if v := keyValue(fd, fields[string(fd.Name())]); v != "" {
 			parts = append(parts, url.PathEscape(v))
 		}
 	}
 	return strings.Join(parts, "."), nil
+}
+
+// keyValue is the key part of one scalar field's proto JSON value: a string
+// as it is, an integer in decimal (Proposal's proposal_id), an enum by name
+// (Proposals' proposal_status); "" for a zero value or another kind.
+func keyValue(fd protoreflect.FieldDescriptor, raw json.RawMessage) string {
+	if raw == nil {
+		return ""
+	}
+	switch fd.Kind() {
+	case protoreflect.StringKind:
+		var v string
+		_ = json.Unmarshal(raw, &v)
+		return v
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind,
+		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind,
+		protoreflect.Uint32Kind, protoreflect.Fixed32Kind, protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		// 64-bit integers are JSON strings, 32-bit ones numbers.
+		v := strings.Trim(string(raw), `"`)
+		if v == "0" {
+			return ""
+		}
+		return v
+	case protoreflect.EnumKind:
+		var name string
+		if json.Unmarshal(raw, &name) != nil {
+			return ""
+		}
+		if ev := fd.Enum().Values().ByName(protoreflect.Name(name)); ev == nil || ev.Number() == 0 {
+			return ""
+		}
+		return name
+	default:
+		return ""
+	}
 }
 
 func methodDescriptor(service, method string) (protoreflect.MethodDescriptor, error) {

@@ -1,0 +1,28 @@
+{
+  "transfers": [
+    {
+      "Height": 23821225,
+      "TxIndex": -1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+      "Recipient": "bze1dte8cgjyxnsg4zmrlhfv4h4hnxv5vy8khzfx4f",
+      "Denom": "ubze",
+      "Amount": "100000000000"
+    }
+  ],
+  "block_events": [
+    {
+      "Height": 23821225,
+      "Seq": 61,
+      "Type": "active_proposal",
+      "Attrs": {
+        "mode": "EndBlock",
+        "proposal_id": "47",
+        "proposal_log": "passed",
+        "proposal_result": "proposal_passed"
+      }
+    }
+  ]
+}

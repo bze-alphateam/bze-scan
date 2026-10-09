@@ -299,3 +299,35 @@ func TestTokenRoutes(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/tokens").Code,
 		"no token reader, no route")
 }
+
+// noProposals knows proposal 47 only.
+type noProposals struct{}
+
+func (noProposals) Proposals(context.Context, *string, *int64, int) ([]repository.ProposalSummary, error) {
+	return nil, nil
+}
+
+func (noProposals) Proposal(_ context.Context, id int64) (*repository.Proposal, error) {
+	if id != 47 {
+		return nil, repository.ErrNotFound
+	}
+	return &repository.Proposal{ProposalSummary: repository.ProposalSummary{ID: id}}, nil
+}
+
+func (noProposals) ProposalVotes(context.Context, int64, *string, *repository.VoteKey, int) ([]repository.ProposalVote, error) {
+	return nil, nil
+}
+
+func (noProposals) ProposalDeposits(context.Context, int64, *repository.DepositKey, int) ([]repository.ProposalDeposit, error) {
+	return nil, nil
+}
+
+func TestProposalRoutes(t *testing.T) {
+	e := server.New(server.Deps{Proposals: noProposals{}})
+	for _, path := range []string{"/api/v1/proposals", "/api/v1/proposals/47", "/api/v1/proposals/47/votes", "/api/v1/proposals/47/deposits"} {
+		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)
+	}
+	assert.Equal(t, http.StatusNotFound, serve(t, e, http.MethodGet, "/api/v1/proposals/48/votes").Code)
+	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/proposals").Code,
+		"no proposal reader, no route")
+}
