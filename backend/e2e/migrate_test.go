@@ -155,7 +155,7 @@ func TestMigrateUpBuildsTheExplorerSchema(t *testing.T) {
 	db := connect(t, dbURL)
 
 	res := migrateUp(t, dbURL)
-	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification"}}, res)
+	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification", "labels"}}, res)
 
 	var version int64
 	var dirty bool
