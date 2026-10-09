@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +19,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/proposals"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/validators"
 )
 
@@ -49,6 +51,12 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			TokenFactory: tokenfactorytypes.NewQueryClient(conn),
 			Tradebin:     tradebintypes.NewQueryClient(conn),
 			Store:        denoms.NewPGStore(pool),
+		}, 0),
+		proposals.New(proposals.Deps{
+			Gov:     govv1.NewQueryClient(conn),
+			Staking: stakingtypes.NewQueryClient(conn),
+			JSON:    codec,
+			Store:   proposals.NewPGStore(pool),
 		}, 0),
 	)
 	return syncer, func() {
