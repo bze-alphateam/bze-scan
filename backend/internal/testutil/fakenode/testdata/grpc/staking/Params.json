@@ -1,0 +1,10 @@
+{
+  "params": {
+    "unbonding_time": "1814400s",
+    "max_validators": 40,
+    "max_entries": 7,
+    "historical_entries": 10000,
+    "bond_denom": "ubze",
+    "min_commission_rate": "0.000000000000000000"
+  }
+}

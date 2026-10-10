@@ -6,10 +6,10 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -74,10 +74,10 @@ func TestGRPCErrors(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 
 	// No file: Unimplemented, counted all the same.
-	_, err = staking.Params(ctx, &stakingtypes.QueryParamsRequest{})
+	_, err = staking.HistoricalInfo(ctx, &stakingtypes.QueryHistoricalInfoRequest{Height: 5})
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
-	assert.Equal(t, 1, g.Requests("staking", "Params"))
-	_, err = distrtypes.NewQueryClient(conn).Params(ctx, &distrtypes.QueryParamsRequest{})
+	assert.Equal(t, 1, g.Requests("staking", "HistoricalInfo"))
+	_, err = channeltypes.NewQueryClient(conn).Channels(ctx, &channeltypes.QueryChannelsRequest{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err), "a registered service without fixtures yet")
 	err = conn.Invoke(ctx, "/cosmos.auth.v1beta1.Query/Params", &stakingtypes.QueryPoolRequest{}, &stakingtypes.QueryPoolResponse{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err), "a service the fake does not serve")

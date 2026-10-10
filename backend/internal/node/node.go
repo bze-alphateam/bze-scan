@@ -56,6 +56,8 @@ func NewWithDoer(baseURL string, doer Doer) *Client {
 // Status is the part of /status the backend uses.
 type Status struct {
 	Network           string
+	Moniker           string
+	CatchingUp        bool
 	LatestBlockHeight int64
 	LatestBlockTime   time.Time
 	// EarliestBlockHeight is the lowest height the node still serves (1 on
@@ -148,11 +150,13 @@ func (c *Client) Status(ctx context.Context) (*Status, []byte, error) {
 	var res struct {
 		NodeInfo struct {
 			Network string `json:"network"`
+			Moniker string `json:"moniker"`
 		} `json:"node_info"`
 		SyncInfo struct {
 			LatestBlockHeight   int64     `json:"latest_block_height,string"`
 			LatestBlockTime     time.Time `json:"latest_block_time"`
 			EarliestBlockHeight int64     `json:"earliest_block_height,string"`
+			CatchingUp          bool      `json:"catching_up"`
 		} `json:"sync_info"`
 	}
 	raw, err := c.call(ctx, "status", 0, &res)
@@ -161,6 +165,8 @@ func (c *Client) Status(ctx context.Context) (*Status, []byte, error) {
 	}
 	return &Status{
 		Network:           res.NodeInfo.Network,
+		Moniker:           res.NodeInfo.Moniker,
+		CatchingUp:        res.SyncInfo.CatchingUp,
 		LatestBlockHeight: res.SyncInfo.LatestBlockHeight,
 		LatestBlockTime:   res.SyncInfo.LatestBlockTime,
 

@@ -28,6 +28,8 @@ func TestStatus(t *testing.T) {
 	assert.Equal(t, n.RecordedStatusHeight(), st.LatestBlockHeight)
 	assert.False(t, st.LatestBlockTime.IsZero())
 	assert.Equal(t, int64(1), st.EarliestBlockHeight)
+	assert.Equal(t, "a_team_pub_xl", st.Moniker)
+	assert.False(t, st.CatchingUp)
 	assert.NotEmpty(t, raw)
 
 	n.SetStatusHeight(fixtureHeight)

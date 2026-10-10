@@ -1,0 +1,25 @@
+{
+  "params": {
+    "createMarketFee": {
+      "denom": "ubze",
+      "amount": "25000000000"
+    },
+    "marketMakerFee": {
+      "denom": "ubze",
+      "amount": "1000"
+    },
+    "marketTakerFee": {
+      "denom": "ubze",
+      "amount": "100000"
+    },
+    "makerFeeDestination": "burner",
+    "takerFeeDestination": "burner",
+    "native_denom": "ubze",
+    "orderBookExtraGasWindow": "100",
+    "orderBookQueueExtraGas": "25000",
+    "fillOrdersExtraGas": "5000",
+    "minNativeLiquidityForModuleSwap": "100000000000",
+    "orderBookPerBlockMessages": "500",
+    "orderBookQueueMessageScanExtraGas": "5000"
+  }
+}

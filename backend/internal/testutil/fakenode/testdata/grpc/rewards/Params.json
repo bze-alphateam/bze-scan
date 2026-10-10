@@ -1,0 +1,13 @@
+{
+  "params": {
+    "createStakingRewardFee": {
+      "denom": "ubze",
+      "amount": "25000000000"
+    },
+    "createTradingRewardFee": {
+      "denom": "ubze",
+      "amount": "50000000000"
+    },
+    "extraGasForExitStake": "1000000"
+  }
+}

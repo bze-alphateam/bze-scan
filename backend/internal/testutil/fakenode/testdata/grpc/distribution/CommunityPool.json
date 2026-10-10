@@ -1,0 +1,12 @@
+{
+  "pool": [
+    {
+      "denom": "factory/bze15pqjgk4la0mfphwddce00d05n3th3u66n3ptcv/2MARS",
+      "amount": "581.776280493973343155"
+    },
+    {
+      "denom": "ubze",
+      "amount": "34939146569152.357342022929412238"
+    }
+  ]
+}
