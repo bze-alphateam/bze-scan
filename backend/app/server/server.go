@@ -41,6 +41,13 @@ type Deps struct {
 	Proposals controller.ProposalReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
+	// Stats reads the home tiles and the validators header; nil leaves
+	// /api/v1/stats out and answers the header as null.
+	Stats controller.StatsReader
+	// Params reads the live module parameters and ParamChanges their
+	// recorded changes; /api/v1/params needs both.
+	Params       controller.LiveParams
+	ParamChanges controller.ParamChangeReader
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
@@ -73,7 +80,7 @@ func New(deps Deps) *echo.Echo {
 	health := controller.NewHealthController()
 	e.GET("/health", health.Health)
 
-	explorer := controller.NewExplorerController(deps.Explorer)
+	explorer := controller.NewExplorerController(deps.Explorer, deps.Stats)
 	api := e.Group(APIPrefix)
 	api.GET("/blocks", explorer.Blocks)
 	api.GET("/blocks/:height", explorer.Block)
@@ -105,6 +112,12 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id", proposals.Proposal)
 		api.GET("/proposals/:id/votes", proposals.ProposalVotes)
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
+	}
+	if deps.Stats != nil {
+		api.GET("/stats", controller.NewStatsController(deps.Stats).Stats)
+	}
+	if deps.Params != nil && deps.ParamChanges != nil {
+		api.GET("/params", controller.NewParamsController(deps.Params, deps.ParamChanges).Params)
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

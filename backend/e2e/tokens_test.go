@@ -140,7 +140,9 @@ func TestADenomFirstSeenInABlockIsSyncedAfterIt(t *testing.T) {
 	assert.Equal(t, []string{"ibc UUSDC " + supply.Amount.Amount}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', kind, symbol, supply) FROM explorer.denoms WHERE denom = $1`, usdcDenom))
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 1, e.grpc.Requests("bank", "SupplyOf"), "the unknown denom only, never ubze")
+	assert.Equal(t, 1, e.grpc.Requests("bank", "SupplyOf")-e.grpc.RequestsFor("bank", "SupplyOf", "ubze"),
+		"the denoms set asks for the unknown denom only (ubze's supply is the chain state's)")
+	assert.Equal(t, 1, e.grpc.RequestsFor("bank", "SupplyOf", url.PathEscape(usdcDenom)))
 	assert.Equal(t, recordedDenoms, e.count(t, `SELECT count(*) FROM explorer.denoms`))
 }
 

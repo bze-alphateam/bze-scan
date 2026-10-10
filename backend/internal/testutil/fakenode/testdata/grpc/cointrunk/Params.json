@@ -1,0 +1,13 @@
+{
+  "params": {
+    "anon_article_limit": "5",
+    "anon_article_cost": {
+      "denom": "ubze",
+      "amount": "25000000000"
+    },
+    "publisher_respect_params": {
+      "tax": "0.200000000000000000",
+      "denom": "ubze"
+    }
+  }
+}

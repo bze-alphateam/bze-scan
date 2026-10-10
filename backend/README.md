@@ -22,8 +22,9 @@ One binary, `bze-scan`, with subcommands:
 - `reindex` — re-runs a list of heights or a range through the same pipeline,
   from the local node while it still has them and from archive nodes otherwise.
 - `sync-state` — one full refresh of validators, proposals, denominations,
-  holders, labels, the Cosmos chain registry cache and token prices, for
-  operations.
+  holders, labels, the Cosmos chain registry cache, token prices, the
+  parameter snapshots and the chain state, for operations (it reads the
+  node's gRPC and its `/status`).
 - `version` — prints the commit the binary was built from (`dev` for a plain
   `go build`; the image sets it with `-ldflags "-X main.version=<sha>"`).
 
@@ -61,8 +62,9 @@ Implemented so far:
 - `backfill`, standalone or inside `serve` (see Backfill below).
 - `reindex` (see Reindex below).
 - The state sync inside `serve` and the `sync-state` command, with the
-  validators and denoms sets, `GET /api/v1/validators` and the token routes
-  (see State sync below).
+  validators, denoms, proposals, holders, prices, params and chain-state
+  sets, `GET /api/v1/validators`, the token, proposal, stats and parameters
+  routes (see State sync below).
 
 ## Configuration
 
@@ -244,7 +246,8 @@ scripts/           record-fixtures.sh, record-grpc-fixtures.sh (and its
 
 Every route but `/health` lives under `/api/v1` and reads the explorer tables
 only: never the CometBFT indexer's tables, never a node, except the raw-JSON
-routes, which ask an archive node on a cache miss. Conventions, which
+routes, which ask an archive node on a cache miss, and the live reads of the
+account and parameters routes (the local node's gRPC). Conventions, which
 every later route follows:
 
 - **JSON** with snake_case names. Amounts and other big decimals are strings
@@ -277,7 +280,7 @@ every later route follows:
 | `GET /api/v1/blocks/{height}/events?cursor&limit` | the block's stored events in order (seq, type, attrs); immutable once the block is indexed; 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
 | `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
-| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400 |
+| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
@@ -292,6 +295,8 @@ every later route follows:
 | `GET /api/v1/proposals/{id}/votes?option=yes\|no\|abstain\|no_with_veto\|weighted&cursor&limit` | every vote the explorer indexed (the chain deletes them once tallied), newest first, one per voter (the latest): voter (and `voter_label`), option (null for a split vote; `weighted` lists those), options (the weights as SDK v0.50 encodes them), height, tx_index, tx_hash, time, and for a validator owner `validator` (moniker), `validator_operator` and `voting_power_pct` (its current share), null for other voters |
 | `GET /api/v1/proposals/{id}/deposits?cursor&limit` | every deposit, the initial one included, newest first: depositor (and `depositor_label`), amount (coins), height, tx_index, tx_hash, time |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
+| `GET /api/v1/stats` | the home tiles, from the indexed blocks and transactions and the `chain_state` rows (no node call): `latest_height`, `latest_time`, `avg_block_time_ms` (the average `block_time_ms` of the last hour) and `txs_24h` (transactions of the last 24 hours), both windows measured back from the latest indexed block; `bonded_tokens`, `supply` and `community_pool` (whole base units of `ubze`), `staked_share` (bonded over supply), `inflation`, `reward_rate` (inflation × (1 − community tax) ÷ staked share: the yearly staking reward before commission), all three percentages with five decimals; `validators` (`{active, total}`), `max_validators`, `unbonding_period` (seconds), `price_usd` and `price_change_24h_pct` of `ubze` (null until the prices job), and `daily: []` (reserved for the daily series). Every chain-state field is null until its row exists |
+| `GET /api/v1/params` | the live parameters of every module the parameters page shows (txfeecollector, staking, mint, distribution, slashing, gov, tradebin, tokenfactory, rewards, burner, cointrunk), keyed by module: `{"<module>": {"params": <proto JSON as the node answers>, "last_change": {"height", "time", "proposal_id"} \| null}}`. Values are read from the local node's gRPC through a 30 s in-process cache, so the page never disagrees with the chain; `last_change` is the module's latest recorded change (null before one), its `proposal_id` null for a change no proposal explains. A module the node fails to answer is left out; none answering is a 502 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
 The status checker runs inside `serve` (with or without the indexer): it
@@ -664,15 +669,15 @@ indexer) the state sync:
 1. resyncs every registered set in full at start, in registration order, so
    a resync lost at shutdown is harmless;
 2. resyncs what each live block changed: the transformer fills the block's
-   dirty set (validators, proposals, denoms, channels, params; validators
-   and denoms are marked so far) and the live indexer publishes it after the
+   dirty set (validators, proposals, denoms, channels, params; a passed
+   proposal marks params) and the live indexer publishes it after the
    write. The backfill and the reindex ignore it: history cannot change
    current state. Keys go to an in-memory queue served by two workers; a
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
-   proposals, prices: one minute; denoms, holders: one hour; chain
-   registry: one day), the safety net for what no event announces. A full resync, from
+   proposals, prices, chain state: one minute; denoms, holders: one hour;
+   chain registry, params: one day), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
@@ -810,6 +815,39 @@ wrote. A proposal the sync writes before its resolution is indexed takes
 `resolved_height` from the stored `active_proposal`/`inactive_proposal`
 block event.
 
+**Parameters.** The params set snapshots the parameters of every module the
+parameters page shows (`internal/params`: txfeecollector, staking, mint,
+distribution, slashing, gov, tradebin, tokenfactory, rewards, burner,
+cointrunk) at start, daily and after every passed proposal (the
+transformer marks `params` with the proposal id on an `active_proposal`
+whose result is `proposal_passed`), reading them at the height `/status`
+reports. A module whose JSON equals its latest snapshot writes nothing;
+otherwise a `param_snapshots` row with `changed_keys`, the top-level keys
+that differ (`{}` for a module's first snapshot). Upgrade handlers change
+parameters without any message, so diffing is the only general method. The
+change is attributed (`proposal_id`) to the proposal that triggered the run
+when it is a passed `parameter_change` or `software_upgrade`, else to the
+passed software upgrade whose plan height lies between the module's
+previous snapshot and this one (an upgrade's handler runs at its plan
+height, after the proposal passed), else to none. A module the node fails
+to answer is skipped and the others are written. The rows only explain
+changes: `/api/v1/params` shows the live values.
+
+**Chain state.** Every minute `explorer.chain_state` gets one row per key,
+overwritten in place with the height the node answered at (every gRPC read
+of a run is pinned to the height `/status` reports, so one run's numbers
+agree): `staking_pool` (bonded and not-bonded tokens), `supply` (`ubze`),
+`mint` (inflation, annual provisions, mint params), `community_pool` (the
+pool's coins, decimals as the chain keeps them), `chain_params`
+(`max_validators`, `unbonding_time_s`, `community_tax`, from the staking and
+distribution params), `validator_counts` (bonded, jailed, total from
+`validators`), `price_ubze` (`price_usd` and `price_change_24h_pct` copied
+from `denoms`, null until the prices job) and `node_status` (moniker,
+network, latest height and time, catching up). A key that fails keeps its
+previous row; a node whose `/status` fails writes nothing. It runs last at
+start, after the validators and prices it copies. `/api/v1/stats` and the
+validators header read these rows, never the node.
+
 **Validator events** (`explorer.validator_events`, kept forever) come from
 two writers:
 
@@ -917,8 +955,9 @@ an answer (`SetResponse`) and stop the server to play a node that is down.
 So far the staking and slashing methods of the validators set, the account
 page's bank, staking and distribution reads, the denoms set's bank,
 tokenfactory, tradebin and IBC transfer methods, the holders set's
-`DenomOwners` and the proposals set's gov and staking `Pool` methods are
-recorded; each later story adds its
+`DenomOwners`, the proposals set's gov and staking `Pool` methods and the
+chain_state and params sets' pool, supply, mint, community pool and module
+`Params` methods are recorded; each later story adds its
 methods. Denoms in file names are path-escaped
 (`DenomAuthority.factory%2Fbze1…%2Fuvdl.json`).
 
@@ -926,7 +965,7 @@ methods. Denoms in file names are path-escaped
 make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
 
-`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`;
+`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`, `holders`, `chain`;
 the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
@@ -947,6 +986,14 @@ gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47
 proposals, all passed, none voting; the e2e test turns proposal 47 back into
 its voting period with `SetResponse`).
+`make grpc-fixtures SETS=chain` records the chain_state and params sets:
+staking `Pool` and `Params`, bank `SupplyOf` ubze, mint `Inflation`,
+`AnnualProvisions` and `Params`, distribution `CommunityPool` and `Params`,
+and the `Params` of slashing, gov (recorded from `/params/tallying`, whose
+`params` is the whole set), tradebin, tokenfactory, rewards, burner,
+cointrunk and txfeecollector (recorded 2026-10-10; the committed `Pool` and
+`SupplyOf` ubze stay those of 2026-10-09, which the e2e numbers are computed
+from).
 
 records `staking/Validators.json`, `slashing/SigningInfos.json`,
 `slashing/Params.json`, every validator's self-delegation and delegator
