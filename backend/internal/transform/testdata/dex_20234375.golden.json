@@ -1,0 +1,77 @@
+{
+  "order_messages": null,
+  "orders": null,
+  "order_fills": [
+    {
+      "height": 20234375,
+      "seq": 84,
+      "order_id": "000000000000000002157504",
+      "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
+      "side": "buy",
+      "price": "0.5",
+      "amount": "1764544",
+      "maker": "bze12uvarc5pdkgdrjjm6el9q2veakkkgv6rxpnu7l",
+      "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-11-27T08:03:29.577390244Z"
+    },
+    {
+      "height": 20234375,
+      "seq": 93,
+      "order_id": "000000000000000002157497",
+      "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
+      "side": "buy",
+      "price": "0.4",
+      "amount": "1157125",
+      "maker": "bze12uvarc5pdkgdrjjm6el9q2veakkkgv6rxpnu7l",
+      "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-11-27T08:03:29.577390244Z"
+    },
+    {
+      "height": 20234375,
+      "seq": 102,
+      "order_id": "000000000000000002157491",
+      "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
+      "side": "buy",
+      "price": "0.3",
+      "amount": "8225059",
+      "maker": "bze12uvarc5pdkgdrjjm6el9q2veakkkgv6rxpnu7l",
+      "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-11-27T08:03:29.577390244Z"
+    },
+    {
+      "height": 20234375,
+      "seq": 111,
+      "order_id": "000000000000000002157487",
+      "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
+      "side": "buy",
+      "price": "0.2",
+      "amount": "8688150",
+      "maker": "bze12uvarc5pdkgdrjjm6el9q2veakkkgv6rxpnu7l",
+      "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-11-27T08:03:29.577390244Z"
+    },
+    {
+      "height": 20234375,
+      "seq": 120,
+      "order_id": "000000000000000002157480",
+      "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
+      "side": "buy",
+      "price": "0.1",
+      "amount": "9277381",
+      "maker": "bze12uvarc5pdkgdrjjm6el9q2veakkkgv6rxpnu7l",
+      "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-11-27T08:03:29.577390244Z"
+    }
+  ],
+  "order_cancels": null
+}
