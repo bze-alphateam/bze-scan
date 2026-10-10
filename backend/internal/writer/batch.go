@@ -28,6 +28,12 @@ type (
 		Height            int64
 		TxIndex, MsgIndex int
 	}
+	// ActivityKey is the natural key of an account_activity row.
+	ActivityKey struct {
+		Address string
+		Height  int64
+		TxIndex int
+	}
 )
 
 // Inserted holds the keys of the rows a flush actually inserted, as opposed
@@ -38,10 +44,12 @@ type Inserted struct {
 	Blocks       map[int64]bool
 	Transactions map[TxKey]bool
 	Messages     map[MsgKey]bool
+	Activity     map[ActivityKey]bool
 }
 
 func newInserted() Inserted {
-	return Inserted{Blocks: map[int64]bool{}, Transactions: map[TxKey]bool{}, Messages: map[MsgKey]bool{}}
+	return Inserted{Blocks: map[int64]bool{}, Transactions: map[TxKey]bool{}, Messages: map[MsgKey]bool{},
+		Activity: map[ActivityKey]bool{}}
 }
 
 // Flush is what a PostFlush hook sees: every entity of the flush, the mode
@@ -107,11 +115,12 @@ const resolveFailuresSQL = `UPDATE explorer.index_failures SET resolved_at = now
 		WHERE height = ANY($1::bigint[]) AND resolved_at IS NULL`
 
 // Write writes the entities of every height in batch in one transaction: the
-// transactions, messages, validator_events, transfers, block_events, token_events and
-// blocks rows, block_time_ms where the previous
-// block is known, the accounts of the signers (counters moved for the
-// transactions inserted, deltas merged per address and applied in address
-// order), then the PostFlush hooks. Partitions are topped up first when a
+// transactions, messages, validator_events, transfers, block_events, token_events,
+// account_activity and blocks rows, block_time_ms where the previous
+// block is known, the accounts of the signers and of the activity rows
+// (counters moved for the transactions and activity rows inserted, deltas
+// merged per address and applied in address order), then the PostFlush
+// hooks. Partitions are topped up first when a
 // height enters the last one. A deadlock retries the flush once.
 //
 // In ModeInsert existing rows are kept, so writing a height again changes
@@ -138,6 +147,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.ProposalDeposits = append(all.ProposalDeposits, e.ProposalDeposits...)
 		all.ProposalVotes = append(all.ProposalVotes, e.ProposalVotes...)
 		all.ProposalStatuses = append(all.ProposalStatuses, e.ProposalStatuses...)
+		all.Activity = append(all.Activity, e.Activity...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil
@@ -223,7 +233,7 @@ func (w *BatchWriter) write(ctx context.Context, all *transform.Entities, mode M
 		return fmt.Errorf("flush %d..%d: %w", lo, hi, err)
 	}
 	// The counters need the keys the batch inserted.
-	accounts, err := accountStatements(hi, all, flushed.Inserted.Transactions)
+	accounts, err := accountStatements(hi, all, flushed.Inserted)
 	if err != nil {
 		return err
 	}

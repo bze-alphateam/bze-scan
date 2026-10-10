@@ -234,6 +234,24 @@ var (
 			{name: "time", typ: "timestamptz"},
 		},
 	}
+	activityTable = table{
+		name: "explorer.account_activity",
+		keys: []string{"address", "height", "tx_index"},
+		cols: []column{
+			{name: "address", typ: "text"},
+			{name: "height", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "time", typ: "timestamptz"},
+			{name: "category", typ: "text"},
+			{name: "kind", typ: "text"},
+			{name: "is_signer", typ: "boolean"},
+			{name: "success", typ: "boolean"},
+			{name: "counterparty", typ: "text"},
+			{name: "deltas", typ: "jsonb"},
+			{name: "msg_types", typ: "text[]"},
+			{name: "details", typ: "jsonb", expr: "NULLIF(details, 'null'::jsonb)"},
+		},
+	}
 	blockEventsTable = table{
 		name: "explorer.block_events",
 		keys: []string{"height", "seq"},

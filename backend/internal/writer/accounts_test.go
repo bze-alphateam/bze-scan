@@ -49,9 +49,9 @@ func TestAccountsCountOnlyTheInsertedTransactions(t *testing.T) {
 	require.Len(t, stmts, 1)
 	assert.Equal(t, []map[string]any{
 		{"address": "bze1a", "first_height": float64(100), "first_time": "1970-01-01T00:01:40Z",
-			"last_height": float64(100), "tx_count": float64(1)},
+			"last_height": float64(100), "tx_count": float64(1), "activity_count": float64(0)},
 		{"address": "bze1b", "first_height": float64(100), "first_time": "1970-01-01T00:01:40Z",
-			"last_height": float64(100), "tx_count": float64(1)},
+			"last_height": float64(100), "tx_count": float64(1), "activity_count": float64(0)},
 	}, withUTCTimes(payload(t, stmts[0])), "a signer listed twice counts once")
 }
 
@@ -73,9 +73,37 @@ func TestAccountsUpsertSQL(t *testing.T) {
 		"first_seen_height = LEAST(a.first_seen_height, EXCLUDED.first_seen_height)",
 		"last_seen_height = GREATEST(a.last_seen_height, EXCLUDED.last_seen_height)",
 		"tx_count = a.tx_count + EXCLUDED.tx_count",
+		"activity_count = a.activity_count + EXCLUDED.activity_count",
 	} {
 		assert.Contains(t, sql, part)
 	}
+}
+
+// Activity rows move activity_count only when inserted, and give
+// participants who never signed their accounts row.
+func TestAccountsCountOnlyTheInsertedActivity(t *testing.T) {
+	db := newMockDB(49)
+	db.returning = map[string][][]any{
+		"INSERT INTO explorer.transactions":     {{100, 0}},
+		"INSERT INTO explorer.account_activity": {{"bze1b", 100, 0}, {"bze1b", 100, -1}},
+	}
+	ents := signed(100, []string{"bze1a"})
+	at := time.Unix(100, 0)
+	ents.Activity = []transform.Activity{
+		{Address: "bze1a", Height: 100, TxIndex: 0, Time: at, IsSigner: true}, // already stored
+		{Address: "bze1b", Height: 100, TxIndex: 0, Time: at},
+		{Address: "bze1b", Height: 100, TxIndex: -1, Time: at},
+	}
+
+	require.NoError(t, writer.NewLiveWriter(db).WriteBlock(context.Background(), ents))
+	stmts := accountsStatements(db.txs[0])
+	require.Len(t, stmts, 1)
+	assert.Equal(t, []map[string]any{
+		{"address": "bze1a", "first_height": float64(100), "first_time": "1970-01-01T00:01:40Z",
+			"last_height": float64(100), "tx_count": float64(1), "activity_count": float64(0)},
+		{"address": "bze1b", "first_height": float64(100), "first_time": "1970-01-01T00:01:40Z",
+			"last_height": float64(100), "tx_count": float64(0), "activity_count": float64(2)},
+	}, withUTCTimes(payload(t, stmts[0])))
 }
 
 func TestBlocksWithoutSignersWriteNoAccounts(t *testing.T) {
@@ -101,11 +129,11 @@ func TestAccountDeltasAreMergedAndSorted(t *testing.T) {
 	assert.Equal(t, a, b)
 	assert.Equal(t, []map[string]any{
 		{"address": "bze1a", "first_height": float64(10), "first_time": "1970-01-01T00:00:10Z",
-			"last_height": float64(12), "tx_count": float64(2)},
+			"last_height": float64(12), "tx_count": float64(2), "activity_count": float64(0)},
 		{"address": "bze1b", "first_height": float64(10), "first_time": "1970-01-01T00:00:10Z",
-			"last_height": float64(10), "tx_count": float64(1)},
+			"last_height": float64(10), "tx_count": float64(1), "activity_count": float64(0)},
 		{"address": "bze1c", "first_height": float64(10), "first_time": "1970-01-01T00:00:10Z",
-			"last_height": float64(10), "tx_count": float64(1)},
+			"last_height": float64(10), "tx_count": float64(1), "activity_count": float64(0)},
 	}, a)
 }
 
