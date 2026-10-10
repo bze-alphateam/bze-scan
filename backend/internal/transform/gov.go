@@ -163,6 +163,9 @@ func blockGovEvents(ents *Entities, b Block, events []node.Event) {
 			st.Status = proposals.StatusRejected
 		case result == resultPassed:
 			st.Status = proposals.StatusPassed
+			// A passed proposal may have changed parameters: the params set
+			// snapshots them and attributes a change to it.
+			ents.Dirty.Mark(statesync.Params, proposals.Key(id))
 		case result == resultFailed:
 			st.Status = proposals.StatusFailed
 		case result == resultExpeditedRejected:

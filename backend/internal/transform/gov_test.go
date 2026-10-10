@@ -157,6 +157,7 @@ func govInput(t *testing.T) transform.Input {
 		plain("active_proposal", "", "proposal_id", "56", "proposal_result", "expedited_proposal_rejected"),
 		plain("active_proposal", "", "proposal_id", "57", "proposal_result", "proposal_failed"),
 		plain("inactive_proposal", "", "proposal_id", "58", "proposal_result", "proposal_failed"),
+		plain("active_proposal", "", "proposal_id", "59", "proposal_result", "proposal_passed"),
 	}
 	return in
 }
@@ -184,11 +185,14 @@ func TestGovDepositsVotesAndResolutions(t *testing.T) {
 		{ProposalID: 56, Status: "voting_period", Height: 10, ExpeditedOff: true},
 		{ProposalID: 57, Status: "failed", Height: 10, Resolved: true},
 		{ProposalID: 58, Status: "failed", Height: 10, Resolved: true},
+		{ProposalID: 59, Status: "passed", Height: 10, Resolved: true},
 		{ProposalID: 50, Status: "voting_period", Height: 10},
 		{ProposalID: 52, Status: "canceled", Height: 10, Resolved: true},
 	}, ents.ProposalStatuses)
-	assert.Equal(t, []string{"50", "51", "52", "54", "55", "56", "57", "58"}, ents.Dirty.Keys(statesync.Proposals),
+	assert.Equal(t, []string{"50", "51", "52", "54", "55", "56", "57", "58", "59"}, ents.Dirty.Keys(statesync.Proposals),
 		"the failed transaction's proposal 53 is not dirty")
+	assert.Equal(t, []string{"59"}, ents.Dirty.Keys(statesync.Params),
+		"only a passed proposal asks for a parameters snapshot")
 }
 
 func TestVoteOptions(t *testing.T) {
