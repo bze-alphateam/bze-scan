@@ -67,7 +67,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{
-		"schema", "notify_trigger", "history_tables", "state_tables", "operational", "functions",
+		"schema", "notify_trigger", "history_tables", "state_tables", "operational", "functions", "dex_lookups",
 	}, idents)
 }
 

@@ -24,7 +24,8 @@ func TestBatchWriteIsOneTransactionOfOneBatch(t *testing.T) {
 	tx := db.txs[0]
 	assert.Equal(t, 1, tx.batches)
 	assert.True(t, tx.committed)
-	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "account_activity", "block", "block times", "accounts"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "account_activity",
+		"order_messages", "order_fills", "block", "block times", "accounts"}, sqlOf(tx),
 		"never the live floor or the cursor; the accounts once the inserted keys are known")
 
 	assert.Len(t, payload(t, tx.stmts[0]), 4, "both heights' transactions in one insert")
@@ -32,13 +33,15 @@ func TestBatchWriteIsOneTransactionOfOneBatch(t *testing.T) {
 	assert.Len(t, payload(t, tx.stmts[3]), 2, "both heights' block events in one insert")
 	assert.Len(t, payload(t, tx.stmts[4]), 4, "both heights' token events in one insert")
 	assert.Len(t, payload(t, tx.stmts[5]), 4, "both heights' activity in one insert")
-	blocks := payload(t, tx.stmts[6])
+	assert.Len(t, payload(t, tx.stmts[6]), 2, "both heights' order messages in one insert")
+	assert.Len(t, payload(t, tx.stmts[7]), 2, "both heights' fills in one insert")
+	blocks := payload(t, tx.stmts[8])
 	require.Len(t, blocks, 3)
 	assert.InDelta(t, 104, blocks[0]["height"], 0, "arrival order")
 	assert.Nil(t, blocks[0]["fees_distributed"])
-	assert.Contains(t, tx.stmts[6].sql, "NULLIF(fees_distributed, 'null'::jsonb)")
-	assert.Contains(t, tx.stmts[6].sql, "ON CONFLICT (height) DO NOTHING")
-	assert.Equal(t, []any{int64(102), int64(105)}, tx.stmts[7].args,
+	assert.Contains(t, tx.stmts[8].sql, "NULLIF(fees_distributed, 'null'::jsonb)")
+	assert.Contains(t, tx.stmts[8].sql, "ON CONFLICT (height) DO NOTHING")
+	assert.Equal(t, []any{int64(102), int64(105)}, tx.stmts[9].args,
 		"block times from the lowest height to one above the highest")
 }
 
@@ -134,6 +137,8 @@ var writtenTables = []struct {
 	{"block_events", "explorer.block_events", "height, seq", "attrs"},
 	{"token_events", "explorer.token_events", "height, tx_index, seq", "details"},
 	{"account_activity", "explorer.account_activity", "address, height, tx_index", "deltas"},
+	{"order_messages", "explorer.order_messages", "height, message_id", "tx_hash"},
+	{"order_fills", "explorer.order_fills", "height, seq", "taker_tx_hash"},
 }
 
 func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
@@ -145,7 +150,7 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 		"transactions update", "transactions", "messages update", "messages",
 		"transfers update", "transfers", "block_events update", "block_events",
 		"token_events update", "token_events", "account_activity update", "account_activity",
-		"block update", "block", "block times", "resolve failures", "accounts",
+		"order_messages update", "order_messages", "order_fills update", "order_fills", "block update", "block", "block times", "resolve failures", "accounts",
 	}, sqlOf(tx), "each table's update before its insert, both in the flush's transaction")
 
 	for _, tc := range writtenTables {

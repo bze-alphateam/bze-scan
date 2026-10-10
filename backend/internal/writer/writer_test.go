@@ -231,6 +231,14 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "account_activity")
 		case strings.Contains(s.sql, "UPDATE explorer.account_activity AS t"):
 			out = append(out, "account_activity update")
+		case strings.Contains(s.sql, "INSERT INTO explorer.order_messages"):
+			out = append(out, "order_messages")
+		case strings.Contains(s.sql, "UPDATE explorer.order_messages AS t"):
+			out = append(out, "order_messages update")
+		case strings.Contains(s.sql, "INSERT INTO explorer.order_fills"):
+			out = append(out, "order_fills")
+		case strings.Contains(s.sql, "UPDATE explorer.order_fills AS t"):
+			out = append(out, "order_fills update")
 		case strings.Contains(s.sql, "UPDATE explorer.token_events AS t"):
 			out = append(out, "token_events update")
 		case strings.Contains(s.sql, "UPDATE explorer.transactions AS t"):
@@ -388,6 +396,14 @@ func blockWithTxs(h int64) *transform.Entities {
 			Success: true, Deltas: []chain.Coin{}, MsgTypes: []string{},
 			Details: []transform.Event{{Type: "bze.burner.RaffleWinnerEvent", Attrs: map[string]any{"winner": "bze1b"}}}},
 	}
+	ents.OrderMessages = []transform.OrderMessage{
+		{Height: h, MessageID: "000000000000000000000001", TxIndex: 0, MsgIndex: 0, TxHash: "H0", Kind: "create"},
+	}
+	ents.OrderFills = []transform.OrderFill{
+		{Height: h, Seq: 4, OrderID: "000000000000000000000009", MarketID: "ufoo/ubze", Side: "sell", Price: "1.5",
+			Amount: "10", Maker: "bze1b", Taker: "bze1a", TakerMessageID: "000000000000000000000001", TakerTxHash: "H0",
+			Time: time.Unix(h, 0)},
+	}
 	return ents
 }
 
@@ -407,7 +423,8 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "account_activity", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "account_activity",
+		"order_messages", "order_fills", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
 		"the blocks row is written last in the same transaction")
 	assert.True(t, tx.committed)
 	for _, st := range tx.stmts[:5] {
