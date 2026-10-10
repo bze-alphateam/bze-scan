@@ -105,12 +105,20 @@ type Config struct {
 	// AggregatorURL is the BZE aggregator API's base URL, whose /api/prices
 	// the prices job reads every minute. Empty turns the prices job off.
 	AggregatorURL string
+	// PriceChangeMarket is the aggregator market id whose ticker gives the
+	// native denom's 24-hour change (the BZE/USDC liquidity pool); empty
+	// leaves the change null.
+	PriceChangeMarket string
 	// ChainRegistryAPIURL is the GitHub contents API of the Cosmos chain
 	// registry (the directory listings) and ChainRegistryRawURL the raw
 	// files' base; the chain_registry job runs only with both.
 	ChainRegistryAPIURL string
 	ChainRegistryRawURL string
 }
+
+// DefaultPriceChangeMarket is mainnet's BZE/USDC.n liquidity pool as the
+// aggregator names it (USDC.n priced in ubze).
+const DefaultPriceChangeMarket = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
 
 // Load reads the environment (and a .env file when present), applies
 // defaults and validates. It returns an error describing every invalid
@@ -138,6 +146,7 @@ func Load() (*Config, error) {
 		ArchiveRPCRetryURL: strings.TrimRight(envString("ARCHIVE_RPC_RETRY_URL", ""), "/"),
 
 		AggregatorURL:       strings.TrimRight(envString("AGGREGATOR_URL", ""), "/"),
+		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
 	}

@@ -6,12 +6,12 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5"
 )
 
 // DB is the part of a pgx pool the store needs; *pgxpool.Pool satisfies it.
 type DB interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 // PGStore writes the set into the price columns of explorer.denoms.
@@ -26,7 +26,6 @@ func NewPGStore(db DB) *PGStore {
 
 // saveSQL prices every denom by the CoinGecko id of its registry asset: on
 // BZE's own asset list ($1), else on its origin chain's for an IBC denom.
-// The 24-hour change is not published by the aggregator and is left alone.
 const saveSQL = `WITH priced AS (
 		SELECT d.denom, p.price
 		FROM explorer.denoms d
@@ -38,14 +37,31 @@ const saveSQL = `WITH priced AS (
 	FROM priced
 	WHERE d.denom = priced.denom AND (priced.price IS NOT NULL OR d.price_usd IS NOT NULL)`
 
-// Save writes the prices.
-func (s *PGStore) Save(ctx context.Context, chainID string, prices map[string]string) error {
-	ids := slices.Sorted(maps.Keys(prices))
+// changeSQL sets one denom's 24-hour change.
+const changeSQL = `UPDATE explorer.denoms SET price_change_24h_pct = $2::numeric
+	WHERE denom = $1 AND price_change_24h_pct IS DISTINCT FROM $2::numeric`
+
+// Save writes the prices and the change in one transaction.
+func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
+	ids := slices.Sorted(maps.Keys(snap.Prices))
 	values := make([]string, len(ids))
 	for i, id := range ids {
-		values[i] = prices[id]
+		values[i] = snap.Prices[id]
 	}
-	if _, err := s.db.Exec(ctx, saveSQL, chainID, ids, values); err != nil {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("prices save: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	batch := &pgx.Batch{}
+	batch.Queue(saveSQL, snap.ChainID, ids, values)
+	if !snap.KeepChange && snap.ChangeDenom != "" {
+		batch.Queue(changeSQL, snap.ChangeDenom, snap.Change)
+	}
+	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+		return fmt.Errorf("prices save: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("prices save: %w", err)
 	}
 	return nil

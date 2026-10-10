@@ -12,7 +12,7 @@ import (
 
 // TokenSummary is one row of the tokens list. The holders count and the
 // price fields are null until the holders and prices jobs fill them; the
-// 24-hour change stays null (the aggregator does not publish it). The
+// 24-hour change is the native denom's only (from the BZE/USDC pool). The
 // origin chain is an IBC denom's, null for the others and until the IBC
 // channel is known.
 type TokenSummary struct {

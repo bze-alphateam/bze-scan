@@ -95,6 +95,7 @@ documented template with the defaults:
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 | `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/prices` feeds the prices job every minute; empty turns the job off |
+| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.n pool, `ibc/6490…8AF4_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves (the USDC.n → USDC.inj migration); empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
 
@@ -280,7 +281,7 @@ every later route follows:
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (always null: the aggregator does not publish it), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
@@ -775,8 +776,14 @@ BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A
 denom takes the price of its registry asset's CoinGecko id: BZE's own asset
 list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
 the origin chain's asset. A denom no longer priced is cleared; a failed fetch
-keeps every price. The explorer computes no DEX price, and the aggregator
-publishes no 24-hour change, so `price_change_24h_pct` stays null.
+keeps every price. The explorer computes no DEX price. `ubze`'s
+`price_change_24h_pct` comes from the aggregator's `/api/dex/tickers`, read at
+most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.n
+liquidity pool, which prices USDC.n in ubze), as last over open when `ubze`
+is the market's base and open over last when it is the quote, in percent
+with four decimals. A market the aggregator no longer lists clears it, a
+failed read keeps it, a market that does not trade `ubze` is an error. Every
+other denom's change stays null.
 
 A dirty denom (a token event, a tokenfactory change event) is resynced alone
 (bank `DenomMetadataByQueryString` and `SupplyOf`, the factory admin, the

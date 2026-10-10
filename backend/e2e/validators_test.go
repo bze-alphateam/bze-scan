@@ -62,6 +62,7 @@ func newSyncEnv(t *testing.T) *syncEnv {
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
 	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL, cfg.AggregatorURL = e.reg.APIURL, e.reg.RawURL, e.agg.URL
+	cfg.PriceChangeMarket = config.DefaultPriceChangeMarket
 	return cfg
 }
 

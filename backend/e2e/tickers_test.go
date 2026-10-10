@@ -22,8 +22,19 @@ import (
 const recordedPrices = `[{"denom":"bzedge","price":0.00016806,"price_denom":"usd"},` +
 	`{"denom":"osmosis","price":0.03403806,"price_denom":"usd"},{"denom":"cosmos","price":1.96,"price_denom":"usd"}]`
 
-// fakeAggregator answers /api/prices with recordedPrices until it is told to
-// fail.
+// recordedTickers are the two BZE/USDC.n markets of /api/dex/tickers on
+// getbze.com on 2026-10-09: the order book and the liquidity pool, whose
+// ticker gives BZE's 24-hour change (USDC.n +2.18 % in ubze: BZE -2.1362 %).
+const recordedTickers = `[{"base":"ubze","quote":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
+	`"market_id":"ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4","last_price":0.00018,` +
+	`"base_volume":544336.988678,"quote_volume":103.836199,"bid":0.00017,"ask":0.00022,"high":0.00021,"low":0.00018,` +
+	`"open_price":0.00018,"change":0},{"base":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
+	`"quote":"ubze","market_id":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",` +
+	`"last_price":5747.1387947581325,"base_volume":144.033022,"quote_volume":828644.939685,"bid":0,"ask":0,` +
+	`"high":6040.911873237037,"low":5604.113494443305,"open_price":5624.368717574341,"change":2.18}]`
+
+// fakeAggregator answers /api/prices with recordedPrices and
+// /api/dex/tickers with recordedTickers until it is told to fail.
 type fakeAggregator struct {
 	URL  string
 	mu   sync.Mutex
@@ -37,14 +48,15 @@ func newFakeAggregator(t *testing.T) *fakeAggregator {
 		a.mu.Lock()
 		down := a.down
 		a.mu.Unlock()
+		body := map[string]string{"/api/prices": recordedPrices, "/api/dex/tickers": recordedTickers}[r.URL.Path]
 		switch {
-		case r.URL.Path != "/api/prices":
+		case body == "":
 			http.NotFound(w, r)
 		case down:
 			http.Error(w, "bad gateway", http.StatusBadGateway)
 		default:
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(recordedPrices))
+			_, _ = w.Write([]byte(body))
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -134,6 +146,8 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		osmoDenom + " 0.034038060000",
 		"ubze 0.000168060000",
 	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_usd) FROM explorer.denoms WHERE price_usd IS NOT NULL ORDER BY denom`))
+	assert.Equal(t, []string{"ubze -2.1362"}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_change_24h_pct)
+		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool only")
 
 	// The API: prices, holder counts and origins on the list, the holders
 	// ranked.
@@ -144,7 +158,9 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	}
 	require.NotNil(t, tokens["ubze"].PriceUSD)
 	assert.Equal(t, "0.000168060000", *tokens["ubze"].PriceUSD)
-	assert.Nil(t, tokens["ubze"].PriceChange24hPct, "the aggregator publishes no 24-hour change")
+	require.NotNil(t, tokens["ubze"].PriceChange24hPct)
+	assert.Equal(t, "-2.1362", *tokens["ubze"].PriceChange24hPct)
+	assert.Nil(t, tokens[atomDenom].PriceChange24hPct, "a change for BZE only")
 	require.NotNil(t, tokens[ggeDenom].HoldersCount)
 	assert.Equal(t, int64(4), *tokens[ggeDenom].HoldersCount)
 	require.NotNil(t, tokens[atomDenom].OriginChain)

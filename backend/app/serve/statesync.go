@@ -94,9 +94,11 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	)
 	if cfg.AggregatorURL != "" {
 		sets = append(sets, prices.New(prices.Deps{
-			Source:  aggregator.New(outbound, cfg.AggregatorURL),
-			Store:   prices.NewPGStore(pool),
-			ChainID: cfg.ChainID,
+			Source:       aggregator.New(outbound, cfg.AggregatorURL),
+			Store:        prices.NewPGStore(pool),
+			ChainID:      cfg.ChainID,
+			Denom:        chain.BondDenom,
+			ChangeMarket: cfg.PriceChangeMarket,
 		}, 0))
 	}
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
