@@ -100,6 +100,8 @@ func (r *mockRows) Scan(dest ...any) error {
 			*d = int64(r.rows[r.i][j].(int))
 		case *int:
 			*d = r.rows[r.i][j].(int)
+		case *string:
+			*d = r.rows[r.i][j].(string)
 		}
 	}
 	return nil
@@ -225,6 +227,10 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "block_events update")
 		case strings.Contains(s.sql, "INSERT INTO explorer.token_events"):
 			out = append(out, "token_events")
+		case strings.Contains(s.sql, "INSERT INTO explorer.account_activity"):
+			out = append(out, "account_activity")
+		case strings.Contains(s.sql, "UPDATE explorer.account_activity AS t"):
+			out = append(out, "account_activity update")
 		case strings.Contains(s.sql, "UPDATE explorer.token_events AS t"):
 			out = append(out, "token_events update")
 		case strings.Contains(s.sql, "UPDATE explorer.transactions AS t"):
@@ -374,6 +380,14 @@ func blockWithTxs(h int64) *transform.Entities {
 			Amount: "100000000000000000000000000000", Details: map[string]any{"recipient": "bze1a"}, Time: time.Unix(h, 0)},
 		{Height: h, TxIndex: -1, Seq: 0, Denom: "ibc/X", Kind: "halted", Time: time.Unix(h, 0)},
 	}
+	ents.Activity = []transform.Activity{
+		{Address: "bze1a", Height: h, TxIndex: 0, Time: time.Unix(h, 0), Category: "sent", Kind: "send",
+			IsSigner: true, Success: true, Counterparty: "bze1b",
+			Deltas: []chain.Coin{{Denom: "ubze", Amount: "-12"}}, MsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"}},
+		{Address: "bze1b", Height: h, TxIndex: -1, Time: time.Unix(h, 0), Category: "burner", Kind: "raffle_won",
+			Success: true, Deltas: []chain.Coin{}, MsgTypes: []string{},
+			Details: []transform.Event{{Type: "bze.burner.RaffleWinnerEvent", Attrs: map[string]any{"winner": "bze1b"}}}},
+	}
 	return ents
 }
 
@@ -393,7 +407,7 @@ func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), blockWithTxs(100)))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
+	assert.Equal(t, []string{"transactions", "messages", "transfers", "block_events", "token_events", "account_activity", "accounts", "block", "floor", "cursor"}, sqlOf(tx),
 		"the blocks row is written last in the same transaction")
 	assert.True(t, tx.committed)
 	for _, st := range tx.stmts[:5] {

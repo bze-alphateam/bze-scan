@@ -1,0 +1,111 @@
+[
+  {
+    "address": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+    "height": 24999209,
+    "tx_index": 0,
+    "time": "2026-10-08T17:00:24.03027282Z",
+    "category": "cross_chain",
+    "kind": "ibc_in",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "5051266516"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.channel.v1.MsgRecvPacket"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1wf3f5kyrkmpnjy7xxg4mhqscchykfazl22quam",
+    "height": 24999209,
+    "tx_index": 0,
+    "time": "2026-10-08T17:00:24.03027282Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-42551"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgRecvPacket"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+    "height": 24999209,
+    "tx_index": 1,
+    "time": "2026-10-08T17:00:24.03027282Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-284330"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgAcknowledgement"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1r3zze3xjwwl2tek986uhkw2cs50j29yeyxa3td",
+    "height": 24999209,
+    "tx_index": 2,
+    "time": "2026-10-08T17:00:24.03027282Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-14197"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgAcknowledgement"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1r3zze3xjwwl2tek986uhkw2cs50j29yeyxa3td",
+    "height": 24999209,
+    "tx_index": 3,
+    "time": "2026-10-08T17:00:24.03027282Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-44656"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgRecvPacket"
+    ],
+    "details": null
+  }
+]

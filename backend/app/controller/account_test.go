@@ -27,6 +27,19 @@ type fakeAccounts struct {
 	denomsErr   error
 	gotDenoms   []string
 	gotMonikers []string
+	// activity is what Activity answers; the got* fields record its
+	// arguments.
+	activity    []repository.Activity
+	activityErr error
+	gotCategory *string
+	gotBefore   *repository.ActivityKey
+	gotLimit    int
+}
+
+func (f *fakeAccounts) Activity(_ context.Context, _ string, category *string, before *repository.ActivityKey,
+	limit int) ([]repository.Activity, error) {
+	f.gotCategory, f.gotBefore, f.gotLimit = category, before, limit
+	return f.activity, f.activityErr
 }
 
 func (f *fakeAccounts) Account(_ context.Context, address string) (*repository.Account, error) {

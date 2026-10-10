@@ -80,9 +80,9 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 }
 
 // WriteBlock writes the entities of one or more heights in one transaction:
-// the transactions, messages, validator_events, transfers, block_events, token_events
-// and governance rows, the accounts of their signers
-// (counters moved for the transactions inserted), the blocks rows
+// the transactions, messages, validator_events, transfers, block_events, token_events,
+// account_activity and governance rows, the accounts of their signers and
+// activity rows (counters moved for the rows inserted), the blocks rows
 // (block_time_ms from the previous row when it exists), the live floor at the
 // first write ever, and the cursor moved to the highest height. Partitions
 // are topped up first when a height enters the last one. A blocks row
@@ -134,7 +134,7 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 			return fmt.Errorf("write %d: %s: %w", top, st.table, err)
 		}
 	}
-	accounts, err := accountStatements(top, ents, inserted.Transactions)
+	accounts, err := accountStatements(top, ents, inserted)
 	if err != nil {
 		return err
 	}
@@ -318,6 +318,22 @@ type tokenEventRow struct {
 	Time    time.Time       `json:"time"`
 }
 
+// activityRow is the JSON shape of the account_activity bulk write.
+type activityRow struct {
+	Address      string          `json:"address"`
+	Height       int64           `json:"height"`
+	TxIndex      int             `json:"tx_index"`
+	Time         time.Time       `json:"time"`
+	Category     string          `json:"category"`
+	Kind         string          `json:"kind"`
+	IsSigner     bool            `json:"is_signer"`
+	Success      bool            `json:"success"`
+	Counterparty *string         `json:"counterparty"`
+	Deltas       json.RawMessage `json:"deltas"`
+	MsgTypes     []string        `json:"msg_types"`
+	Details      json.RawMessage `json:"details"`
+}
+
 // ChunkRows bounds the rows of one multi-row statement.
 const ChunkRows = 1000
 
@@ -333,7 +349,8 @@ type statement struct {
 }
 
 // rowStatements returns the bulk writes of the transactions, messages,
-// validator_events, transfers, block_events and token_events of ents, then
+// validator_events, transfers, block_events, token_events and
+// account_activity of ents, then
 // its governance writes (govStatements), in chunks of ChunkRows rows. top
 // names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
@@ -399,6 +416,24 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 			Actor: nullIfEmpty(e.Actor), Amount: nullIfEmpty(e.Amount), Details: details, Time: e.Time,
 		})
 	}
+	activityRows := make([]activityRow, 0, len(ents.Activity))
+	for _, a := range ents.Activity {
+		deltas, err := json.Marshal(nonNil(a.Deltas))
+		if err != nil {
+			return nil, fmt.Errorf("write %d: account_activity: deltas: %w", top, err)
+		}
+		var details json.RawMessage
+		if a.Details != nil {
+			if details, err = json.Marshal(a.Details); err != nil {
+				return nil, fmt.Errorf("write %d: account_activity: details: %w", top, err)
+			}
+		}
+		activityRows = append(activityRows, activityRow{
+			Address: a.Address, Height: a.Height, TxIndex: a.TxIndex, Time: a.Time, Category: a.Category,
+			Kind: a.Kind, IsSigner: a.IsSigner, Success: a.Success, Counterparty: nullIfEmpty(a.Counterparty),
+			Deltas: deltas, MsgTypes: nonNil(a.MsgTypes), Details: details,
+		})
+	}
 	txs, err := chunked(top, "transactions", transactionsTable, mode, txRows, scanTransactionKeys)
 	if err != nil {
 		return nil, err
@@ -423,11 +458,15 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
+	activity, err := chunked(top, "account_activity", activityTable, mode, activityRows, scanActivityKeys)
+	if err != nil {
+		return nil, err
+	}
 	gov, err := govStatements(top, ents, mode)
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events, tokens, gov), nil
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:
@@ -491,6 +530,17 @@ func scanMessageKeys(rows pgx.Rows, into *Inserted) error {
 			return err
 		}
 		into.Messages[k] = true
+	}
+	return rows.Err()
+}
+
+func scanActivityKeys(rows pgx.Rows, into *Inserted) error {
+	for rows.Next() {
+		var k ActivityKey
+		if err := rows.Scan(&k.Address, &k.Height, &k.TxIndex); err != nil {
+			return err
+		}
+		into.Activity[k] = true
 	}
 	return rows.Err()
 }

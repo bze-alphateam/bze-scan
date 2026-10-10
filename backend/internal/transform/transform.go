@@ -56,6 +56,9 @@ type Entities struct {
 	ProposalDeposits []ProposalDeposit
 	ProposalVotes    []ProposalVote
 	ProposalStatuses []ProposalStatus
+	// Activity are the account_activity rows of the heights' transactions
+	// and block events.
+	Activity []Activity
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -233,6 +236,9 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
+	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
+		return nil, fmt.Errorf("transform %d: %w", h, err)
+	}
 	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	for i, raw := range in.Block.Txs {
@@ -322,6 +328,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 	}
 
 	tx.MsgCount = len(decoded.Msgs)
+	firstMsg := len(ents.Messages)
 	byIndex := eventsByMsgIndex(res.Events)
 	if tx.Success {
 		txValidatorEvents(ents, b, i, decoded.Msgs, byIndex)
@@ -363,6 +370,9 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 		ents.Messages = append(ents.Messages, msg)
 	}
 	ents.Transactions = append(ents.Transactions, tx)
+	if err := txActivity(ents, &tx, ents.Messages[firstMsg:], res.Events); err != nil {
+		return err
+	}
 	return txTransfers(ents, b.Height, i, res)
 }
 

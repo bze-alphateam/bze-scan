@@ -1,0 +1,128 @@
+[
+  {
+    "address": "bze164h5f2p7vw3dxx64qlvxvpcu7us39kvqsdvsry",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "147"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1dcp4vp48j5knhnde55ph42pze355fv2h0jr5j5",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "172"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "52"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-26198"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1wl6jw4zvxdhkxel3vve9twsgw43lk6u87r78da",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "164"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1xajjqrvvkfv52gy2fhg30ltq789n9kz3wgq3hd",
+    "height": 25000440,
+    "tx_index": 0,
+    "time": "2026-10-08T19:00:05.794345835Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1tj0t93t6xjwe5dqptr62ej4pqvy2es0rg6yvdy",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "1124"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  }
+]

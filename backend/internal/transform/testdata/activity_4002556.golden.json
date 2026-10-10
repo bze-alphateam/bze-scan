@@ -1,0 +1,19 @@
+[
+  {
+    "address": "bze1wf3f5kyrkmpnjy7xxg4mhqscchykfazl22quam",
+    "height": 4002556,
+    "tx_index": 0,
+    "time": "2022-12-21T18:05:20.490765551Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgAcknowledgement"
+    ],
+    "details": null
+  }
+]

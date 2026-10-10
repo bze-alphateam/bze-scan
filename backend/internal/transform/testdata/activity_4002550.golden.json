@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e",
+    "height": 4002550,
+    "tx_index": 0,
+    "time": "2022-12-21T18:04:46.316782531Z",
+    "category": "cross_chain",
+    "kind": "ibc_out",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-5005250"
+      }
+    ],
+    "msg_types": [
+      "/ibc.applications.transfer.v1.MsgTransfer"
+    ],
+    "details": null
+  }
+]

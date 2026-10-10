@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta",
+    "height": 24151894,
+    "tx_index": 0,
+    "time": "2026-08-12T11:10:22.360925315Z",
+    "category": "staking",
+    "kind": "validator",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-2000"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.staking.v1beta1.MsgEditValidator"
+    ],
+    "details": null
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "address": "bze1lpmfdfzknt3kg4l4ujkduzn245zj85xf77ty4s",
+    "height": 10002165,
+    "tx_index": 0,
+    "time": "2024-01-21T00:02:28.007068285Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-5069"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1yqvxyhzqd4e6mg6hhd0x08jr5yg6mdzjr6tmpa",
+    "height": 10002165,
+    "tx_index": 0,
+    "time": "2024-01-21T00:02:28.007068285Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1lpmfdfzknt3kg4l4ujkduzn245zj85xf77ty4s",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "4369"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  }
+]

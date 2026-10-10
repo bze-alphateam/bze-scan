@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx",
+    "height": 10002192,
+    "tx_index": 0,
+    "time": "2024-01-21T00:05:04.256036908Z",
+    "category": "staking",
+    "kind": "claim_rewards",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "111264336"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward"
+    ],
+    "details": null
+  }
+]

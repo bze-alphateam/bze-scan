@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher",
+    "height": 24129272,
+    "tx_index": 0,
+    "time": "2026-08-10T23:42:35.390567726Z",
+    "category": "staking",
+    "kind": "validator",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-2000"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.slashing.v1beta1.MsgUnjail"
+    ],
+    "details": null
+  }
+]

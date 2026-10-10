@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+    "height": 20237060,
+    "tx_index": 0,
+    "time": "2025-11-27T12:20:32.946349199Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-8000"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  }
+]

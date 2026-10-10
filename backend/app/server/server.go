@@ -92,7 +92,9 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)
 	if deps.Accounts != nil {
-		api.GET("/accounts/:address", controller.NewAccountController(deps.Accounts, deps.AccountState).Account)
+		accounts := controller.NewAccountController(deps.Accounts, deps.AccountState)
+		api.GET("/accounts/:address", accounts.Account)
+		api.GET("/accounts/:address/activity", accounts.Activity)
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)

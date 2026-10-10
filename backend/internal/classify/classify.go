@@ -27,7 +27,35 @@ const (
 	KindOther  = "other"
 	KindRelay  = "relay"
 	KindGroup  = "group"
+	// KindFeeOnly is the activity of an address that only paid a fee: the
+	// fee payer of a failed transaction, a fee granter.
+	KindFeeOnly = "fee_only"
+	// KindIBCIn and KindIBCRefund are the participant adjustments of the
+	// relay messages: the receiver of an incoming transfer, the sender
+	// refunded after a rejection or a timeout.
+	KindIBCIn     = "ibc_in"
+	KindIBCRefund = "ibc_refund"
 )
+
+// Type URLs the activity rules single out.
+const (
+	MsgRecvPacket      = "/ibc.core.channel.v1.MsgRecvPacket"
+	MsgAcknowledgement = "/ibc.core.channel.v1.MsgAcknowledgement"
+	MsgTimeout         = "/ibc.core.channel.v1.MsgTimeout"
+	MsgTimeoutOnClose  = "/ibc.core.channel.v1.MsgTimeoutOnClose"
+	MsgUpdateClient    = "/ibc.core.client.v1.MsgUpdateClient"
+)
+
+// IsRelayParticipantMsg reports whether a non-signer named by a message of
+// typeURL gets an activity row only when its balance changed: the packet
+// relay messages and client updates, which relayers sign.
+func IsRelayParticipantMsg(typeURL string) bool {
+	switch typeURL {
+	case MsgRecvPacket, MsgAcknowledgement, MsgTimeout, MsgTimeoutOnClose, MsgUpdateClient:
+		return true
+	}
+	return false
+}
 
 // MessageKind classifies one message type.
 type MessageKind struct {

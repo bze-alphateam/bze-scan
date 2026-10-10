@@ -83,6 +83,10 @@ func (noAccounts) Account(_ context.Context, address string) (*repository.Accoun
 	return &repository.Account{Address: address}, nil
 }
 
+func (noAccounts) Activity(context.Context, string, *string, *repository.ActivityKey, int) ([]repository.Activity, error) {
+	return nil, nil
+}
+
 func (noAccounts) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
 	return nil, nil
 }
@@ -96,6 +100,10 @@ func TestAccountRoute(t *testing.T) {
 	rec := serve(t, server.New(server.Deps{Accounts: noAccounts{}}), http.MethodGet, "/api/v1/accounts/"+addr)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"live":{"available":false}`, "no account state, no live part")
+
+	rec = serve(t, server.New(server.Deps{Accounts: noAccounts{}}), http.MethodGet, "/api/v1/accounts/"+addr+"/activity")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String())
 
 	rec = serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/accounts/"+addr)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no account reader, no route")

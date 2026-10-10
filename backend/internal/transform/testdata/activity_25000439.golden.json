@@ -1,0 +1,24 @@
+[
+  {
+    "address": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+    "height": 25000439,
+    "tx_index": 0,
+    "time": "2026-10-08T18:59:59.903660365Z",
+    "category": "staking",
+    "kind": "claim_rewards",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "bzevaloper19fgph876c3rqxrn6xk5ch6wd73r3g05wzpsht0",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "134962404"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+      "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission"
+    ],
+    "details": null
+  }
+]

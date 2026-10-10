@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x",
+    "height": 23745061,
+    "tx_index": 0,
+    "time": "2026-07-16T10:31:36.227458628Z",
+    "category": "governance",
+    "kind": "vote",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-2000"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.gov.v1.MsgVote"
+    ],
+    "details": null
+  }
+]
