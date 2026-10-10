@@ -11,6 +11,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainstate"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
+	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 )
 
 // AccountStateTimeout bounds each live account query: the page renders
@@ -33,4 +34,20 @@ func NewAccountState(cfg *config.Config, codec *chain.Codec) (reader *chainstate
 		Distribution: distrtypes.NewQueryClient(conn),
 	})
 	return reader, func() { _ = conn.Close() }, nil
+}
+
+// ParamsTimeout bounds each live parameters query.
+const ParamsTimeout = 5 * time.Second
+
+// NewLiveParams builds the parameters route's reader over the local node's
+// gRPC (NODE_GRPC_ADDR): every module's live parameters, cached
+// params.DefaultTTL. The connection is lazy. Call closeFn when done.
+func NewLiveParams(cfg *config.Config, codec *chain.Codec) (reader *params.Cached, closeFn func(), err error) {
+	conn, err := grpcclient.Dial(grpcclient.Config{
+		Addr: cfg.NodeGRPCAddr, TLS: cfg.NodeGRPCTLS, Timeout: ParamsTimeout,
+	}, codec.GRPC())
+	if err != nil {
+		return nil, nil, err
+	}
+	return params.NewCached(params.NewGRPC(conn, codec), 0, nil), func() { _ = conn.Close() }, nil
 }

@@ -118,6 +118,17 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		defer closeState()
 		accountState = state
 	}
+	// The parameters route reads them live too; without a gRPC address it
+	// is left out.
+	var liveParams controller.LiveParams
+	if cfg.NodeGRPCAddr != "" {
+		lp, closeParams, err := NewLiveParams(cfg, codec)
+		if err != nil {
+			return err
+		}
+		defer closeParams()
+		liveParams = lp
+	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
@@ -125,6 +136,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Accounts:           explorerRepo,
 		Tokens:             explorerRepo,
 		Proposals:          explorerRepo,
+		Stats:              explorerRepo,
+		Params:             liveParams,
+		ParamChanges:       explorerRepo,
 		AccountState:       accountState,
 		Status:             checker,
 		Raw:                raw,
