@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"net/http"
+	"slices"
 
 	"github.com/labstack/echo/v5"
 
@@ -17,6 +18,10 @@ type AccountReader interface {
 	// Account returns the accounts row and label of an address; an address
 	// the explorer has never seen has neither, which is not an error.
 	Account(ctx context.Context, address string) (*repository.Account, error)
+	// Activity returns up to limit activity rows of address, newest first,
+	// of category when not nil, after before when not nil.
+	Activity(ctx context.Context, address string, category *string, before *repository.ActivityKey,
+		limit int) ([]repository.Activity, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 	Monikers(ctx context.Context, operators []string) (map[string]string, error)
 }
@@ -27,7 +32,8 @@ type AccountState interface {
 	Account(ctx context.Context, address string) (*chainstate.Account, error)
 }
 
-// AccountController serves GET /api/v1/accounts/{address}.
+// AccountController serves GET /api/v1/accounts/{address} and its
+// activity list.
 type AccountController struct {
 	repo AccountReader
 	live AccountState
@@ -88,4 +94,54 @@ func (h *AccountController) Account(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, dto.NewAccount(acc, live, denoms, monikers))
+}
+
+// Activity serves GET /api/v1/accounts/{address}/activity?category&cursor&limit:
+// the address's activity rows, newest first, one per transaction or block
+// that touched it, optionally of one category. Anything but a bze1 address
+// or a known category is a 400; an address without activity is an empty
+// list.
+func (h *AccountController) Activity(c *echo.Context) error {
+	hrp, address, ok := bech32Address(c.Param("address"))
+	if !ok || hrp != accountPrefix {
+		return echo.NewHTTPError(http.StatusBadRequest, "address must be a bze1 address")
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var category *string
+	if s := c.QueryParam("category"); s != "" {
+		if !slices.Contains(dto.ActivityCategories, s) {
+			return echo.NewHTTPError(http.StatusBadRequest, "category is not known")
+		}
+		category = &s
+	}
+	var before *repository.ActivityKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if before, err = dto.DecodeActivityCursor(s); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+
+	ctx := c.Request().Context()
+	rows, err := h.repo.Activity(ctx, address, category, before, limit+1)
+	if err != nil {
+		return err
+	}
+	page := rows[:min(len(rows), limit)]
+	denoms, err := h.repo.Denoms(ctx, dto.ActivityDenoms(page))
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.Activity]{Items: make([]dto.Activity, 0, len(page))}
+	for _, a := range page {
+		resp.Items = append(resp.Items, dto.NewActivity(a, denoms))
+	}
+	if len(rows) > limit {
+		next := dto.EncodeActivityCursor(rows[limit-1])
+		resp.NextCursor = &next
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
 }

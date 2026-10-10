@@ -90,7 +90,7 @@ func TestAccounts(t *testing.T) {
 	require.NotNil(t, acc.FirstSeen)
 	assert.Equal(t, hRewards, acc.FirstSeen.Height)
 	assert.Equal(t, int64(1), acc.TxCount)
-	assert.Zero(t, acc.ActivityCount)
+	assert.Equal(t, int64(1), acc.ActivityCount, "its claim")
 	assert.True(t, acc.Live.Available)
 	six := 6
 	assert.Equal(t, []dto.Balance{

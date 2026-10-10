@@ -284,6 +284,7 @@ every later route follows:
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
+| `GET /api/v1/accounts/{address}/activity?category=&cursor&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list |
 | `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
@@ -597,11 +598,52 @@ Every signer of every transaction gets an `explorer.accounts` row:
 `last_seen_height` forward with `GREATEST`, and `tx_count` counts the
 transactions the write actually inserted (the keys the `transactions`
 insert returned), so writing a height again, or a reindex, never counts
-twice. `activity_count` stays 0 until the activity feed. Both writers merge
+twice. Addresses that only appear in activity rows get their row from
+those, and `activity_count` counts the activity rows the write inserted.
+Both writers merge
 the deltas of a write per address and apply them in address order
 (`mergeDeltas` in `internal/writer`, shared with the later per-token
 totals), so concurrent writes lock the rows in the same order; a write that
 still hits a deadlock (SQLSTATE 40P01) is retried once.
+
+### Account activity
+
+The transformer writes one `explorer.account_activity` row per address per
+transaction (`internal/transform/activity.go`), never per message:
+
+- **Addresses**: every `bze1…` value with a valid checksum in the
+  transaction's event attributes (typed-event values decoded) and message
+  bodies, plus the signers. Module accounts (the labels seed's list) and
+  the ICS-20 escrow accounts of the channels the events name never get
+  rows. A non-signer named only by relay messages (`MsgRecvPacket`,
+  `MsgAcknowledgement`, `MsgTimeout`, `MsgTimeoutOnClose`,
+  `MsgUpdateClient`) gets one only when its balance changed.
+- **Deltas**: Σ `coin_received` − Σ `coin_spent` per denom, zero entries
+  dropped; the fee is part of it.
+- **Kind and category**: from the classification of the first message
+  naming the address (the signer category for a signer, whose `msg_types`
+  are all the transaction's, the participant category otherwise). A
+  `MsgRecvPacket` receiver with a positive delta is `ibc_in`, a sender
+  refunded by an acknowledgement or a timeout `ibc_refund`. An address named
+  only by the ante handler's events (a fee granter) is `fee_only`. A failed
+  transaction gives one `fee_only` row (category `other`) to its fee payer.
+- **Counterparty**: the entry's `counterparty_attr` over the messages of the
+  first message's type, when it names exactly one account or validator
+  operator other than the address. When it names nobody else, a non-signer
+  of a non-relay message gets the one sender of those messages (the
+  recipient of a send gets the sender). A foreign address or a proposal id
+  is no counterparty.
+
+Block-level rows (`tx_index` -1, one per address per block) come from the
+stored block events whose classification lists `address_attrs`: kind and
+category of the first such event, `details` the events naming the address,
+`deltas` from the block's `coin_spent`/`coin_received` events.
+
+The insert returns the keys it wrote, so `activity_count` moves only for new
+rows, and the reindex overwrites rows like any other table.
+`explorer.reclassify_unknown()`, which `migrate up` runs, gives rows stored
+as `other` the kind and category of their first message type once the Go
+classification has an entry for it.
 
 ## Reindex
 
