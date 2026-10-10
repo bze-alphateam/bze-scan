@@ -73,6 +73,7 @@ func (e *syncEnv) syncState(t *testing.T) (int, string) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", e.url)
 	t.Setenv("NODE_GRPC_ADDR", e.grpc.Addr)
+	t.Setenv("NODE_RPC_URL", e.node.URL)
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
 	t.Setenv("AGGREGATOR_URL", e.agg.URL)

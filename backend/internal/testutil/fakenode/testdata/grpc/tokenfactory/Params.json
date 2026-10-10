@@ -1,0 +1,8 @@
+{
+  "params": {
+    "create_denom_fee": {
+      "denom": "ubze",
+      "amount": "25000000000"
+    }
+  }
+}

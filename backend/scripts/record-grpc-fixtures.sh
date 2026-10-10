@@ -44,6 +44,12 @@
 #     gov/Proposals.json (every proposal), gov/Proposals.PROPOSAL_STATUS_VOTING_PERIOD.json
 #     (the minute refresh's list), staking/Pool.json (bonded tokens for turnout)
 #     per id in PROPOSALS: gov/Proposal.<id>.json and gov/TallyResult.<id>.json
+#   chain (the chain_state and params syncs):
+#     staking/Pool.json, staking/Params.json, bank/SupplyOf.ubze.json,
+#     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
+#     and <module>/Params.json of every module the parameters page shows (staking,
+#     mint, distribution, slashing, gov, tradebin, tokenfactory, rewards, burner,
+#     cointrunk, txfeecollector)
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
@@ -62,7 +68,9 @@ HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin" "${OUT}/gov" "${OUT}/transfer"
+for d in staking slashing bank distribution tokenfactory tradebin gov transfer mint rewards burner cointrunk txfeecollector; do
+  mkdir -p "${OUT}/${d}"
+done
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -179,5 +187,21 @@ if has gov; then
   for id in ${PROPOSALS}; do
     fetch "cosmos/gov/v1/proposals/${id}" "gov/Proposal.${id}.json"
     fetch "cosmos/gov/v1/proposals/${id}/tally" "gov/TallyResult.${id}.json"
+  done
+fi
+
+if has chain; then
+  fetch "cosmos/staking/v1beta1/pool" staking/Pool.json
+  fetch "cosmos/bank/v1beta1/supply/by_denom?denom=ubze" bank/SupplyOf.ubze.json
+  fetch "cosmos/mint/v1beta1/inflation" mint/Inflation.json
+  fetch "cosmos/mint/v1beta1/annual_provisions" mint/AnnualProvisions.json
+  fetch "cosmos/distribution/v1beta1/community_pool" distribution/CommunityPool.json
+  fetch "cosmos/staking/v1beta1/params" staking/Params.json
+  fetch "cosmos/mint/v1beta1/params" mint/Params.json
+  fetch "cosmos/distribution/v1beta1/params" distribution/Params.json
+  fetch "cosmos/slashing/v1beta1/params" slashing/Params.json
+  fetch "cosmos/gov/v1/params/tallying" gov/Params.json
+  for m in tradebin tokenfactory rewards burner cointrunk txfeecollector; do
+    fetch "bze/${m}/params" "${m}/Params.json"
   done
 fi

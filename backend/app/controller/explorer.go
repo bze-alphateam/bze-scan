@@ -94,12 +94,14 @@ const (
 // ExplorerController serves the block, transaction and search routes under
 // /api/v1.
 type ExplorerController struct {
-	repo ExplorerReader
+	repo  ExplorerReader
+	stats StatsReader
 }
 
-// NewExplorerController returns a controller reading from repo.
-func NewExplorerController(repo ExplorerReader) *ExplorerController {
-	return &ExplorerController{repo: repo}
+// NewExplorerController returns a controller reading from repo; stats
+// reads the validators list's header, and nil answers it as null.
+func NewExplorerController(repo ExplorerReader, stats StatsReader) *ExplorerController {
+	return &ExplorerController{repo: repo, stats: stats}
 }
 
 // Blocks serves GET /api/v1/blocks?cursor&limit: blocks by height
@@ -303,11 +305,17 @@ func (h *ExplorerController) Validators(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "status must be bonded, unbonding, unbonded or all")
 	}
 
-	rows, err := h.repo.Validators(c.Request().Context(), status, after, limit+1)
+	ctx := c.Request().Context()
+	rows, err := h.repo.Validators(ctx, status, after, limit+1)
 	if err != nil {
 		return err
 	}
-	resp := dto.List[dto.Validator]{Items: make([]dto.Validator, 0, min(len(rows), limit))}
+	resp := dto.ValidatorList{List: dto.List[dto.Validator]{Items: make([]dto.Validator, 0, min(len(rows), limit))}}
+	if h.stats != nil {
+		if resp.Summary, err = validatorsSummary(ctx, h.stats); err != nil {
+			return err
+		}
+	}
 	for i, v := range rows {
 		if i == limit {
 			next := dto.EncodeCursor(rows[i-1].Position)

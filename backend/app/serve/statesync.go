@@ -7,7 +7,9 @@ import (
 	"time"
 
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
@@ -22,9 +24,13 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/paramsnap"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/prices"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/proposals"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/registry"
@@ -39,8 +45,11 @@ const outboundTimeout = 30 * time.Second
 // (NODE_GRPC_ADDR) with every registered set, on a pool of its own. Later
 // domains register their sets here, in the order the start resync runs
 // them: the chain registry before the denoms it names, the holders and the
-// prices after the denoms they fill. The chain registry runs only with both
-// its URLs, the prices only with AGGREGATOR_URL. Call closeFn when done.
+// prices after the denoms they fill, the parameters after the proposals
+// that explain their changes, the chain state last (it counts the
+// validators and copies the native price). The chain registry runs only
+// with both its URLs, the prices only with AGGREGATOR_URL. Call closeFn
+// when done.
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
 		return nil, nil, err
@@ -56,12 +65,14 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	}
 	outbound := &http.Client{Timeout: outboundTimeout}
 	bank := banktypes.NewQueryClient(conn)
+	staking := stakingtypes.NewQueryClient(conn)
+	localNode := node.New(cfg.NodeRPCURL)
 	denomStore := denoms.NewPGStore(pool)
 	misses := &statesync.Deferred{}
 
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
-			Staking:  stakingtypes.NewQueryClient(conn),
+			Staking:  staking,
 			Slashing: slashingtypes.NewQueryClient(conn),
 			Store:    validators.NewPGStore(pool),
 			Keys:     codec.InterfaceRegistry(),
@@ -86,9 +97,14 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		}, 0),
 		proposals.New(proposals.Deps{
 			Gov:     govv1.NewQueryClient(conn),
-			Staking: stakingtypes.NewQueryClient(conn),
+			Staking: staking,
 			JSON:    codec,
 			Store:   proposals.NewPGStore(pool),
+		}, 0),
+		paramsnap.New(paramsnap.Deps{
+			Params: params.NewGRPC(conn, codec),
+			Node:   localNode,
+			Store:  paramsnap.NewPGStore(pool),
 		}, 0),
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
 	)
@@ -101,6 +117,16 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			ChangeMarket: cfg.PriceChangeMarket,
 		}, 0))
 	}
+	sets = append(sets, chainstate.New(chainstate.Deps{
+		Node:         localNode,
+		Staking:      staking,
+		Bank:         bank,
+		Mint:         minttypes.NewQueryClient(conn),
+		Distribution: distrtypes.NewQueryClient(conn),
+		JSON:         codec,
+		Store:        chainstate.NewPGStore(pool),
+		Denom:        chain.BondDenom,
+	}, 0))
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
 	misses.Bind(syncer)
 	return syncer, func() {

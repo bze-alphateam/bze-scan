@@ -337,3 +337,34 @@ func TestProposalRoutes(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/proposals").Code,
 		"no proposal reader, no route")
 }
+
+type noStats struct{}
+
+func (noStats) BlockStats(context.Context) (*repository.BlockStats, error) {
+	return &repository.BlockStats{}, nil
+}
+
+func (noStats) ChainState(context.Context) (map[string]json.RawMessage, error) { return nil, nil }
+
+func (noStats) TopBondedTokens(context.Context, int) (string, error) { return "0", nil }
+
+func (noStats) ParamChanges(context.Context) (map[string]repository.ParamChange, error) {
+	return nil, nil
+}
+
+type oneModule struct{}
+
+func (oneModule) Params(context.Context) (map[string]json.RawMessage, error) {
+	return map[string]json.RawMessage{"burner": json.RawMessage(`{}`)}, nil
+}
+
+func TestStatsAndParamsRoutes(t *testing.T) {
+	e := server.New(server.Deps{Stats: noStats{}, Params: oneModule{}, ParamChanges: noStats{}})
+	for _, path := range []string{"/api/v1/stats", "/api/v1/params"} {
+		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)
+	}
+	bare := server.New(server.Deps{Params: oneModule{}})
+	for _, path := range []string{"/api/v1/stats", "/api/v1/params"} {
+		assert.Equal(t, http.StatusNotFound, serve(t, bare, http.MethodGet, path).Code, "no reader, no route: "+path)
+	}
+}

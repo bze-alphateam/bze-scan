@@ -208,7 +208,7 @@ func (f *fakeReader) ValidatorMoniker(_ context.Context, operator string) (strin
 func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	h := controller.NewExplorerController(r)
+	h := controller.NewExplorerController(r, nil)
 	e.GET("/blocks", h.Blocks)
 	e.GET("/blocks/:height", h.Block)
 	e.GET("/blocks/:height/events", h.BlockEvents)
