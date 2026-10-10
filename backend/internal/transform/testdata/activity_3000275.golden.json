@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1s7m86a4z8gqmlr4exmnlkdjz23vweet70u4g2p",
+    "height": 3000275,
+    "tx_index": 0,
+    "time": "2022-10-11T21:00:21.431427136Z",
+    "category": "staking",
+    "kind": "delegate",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "bzevaloper1s7m86a4z8gqmlr4exmnlkdjz23vweet7hc2r77",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-24828615"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.staking.v1beta1.MsgDelegate"
+    ],
+    "details": null
+  }
+]

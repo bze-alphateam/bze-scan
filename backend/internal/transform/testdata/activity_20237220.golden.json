@@ -1,0 +1,171 @@
+[
+  {
+    "address": "bze1dnl83rxxgg29d7zgwam9sldnr6chtftd94r6ef",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "1236"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-13157"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1hmvnht5pmajf8gv6v9lqxe3yptl6zhpgch3wa4",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "1"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1qly96sy3yklkwv6cf4he5ves4qu8yn588vltqp",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "28"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1r05pkm6e6pc39629dmkmravse8v9h3gvpg5rar",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "30"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1uvcwvurgfvhyhlgvg6py724vyvevxhke53kvps",
+    "height": 20237220,
+    "tx_index": 0,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "authz_exec",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1e762e7chsgz3aurtelcz948j8gscfr0qj2wuwk",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "9665"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.authz.v1beta1.MsgExec"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+    "height": 20237220,
+    "tx_index": 1,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-139094"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient",
+      "/ibc.core.channel.v1.MsgTimeout"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+    "height": 20237220,
+    "tx_index": 1,
+    "time": "2025-11-27T12:36:03.228371315Z",
+    "category": "cross_chain",
+    "kind": "ibc_refund",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "21830924671"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.channel.v1.MsgTimeout"
+    ],
+    "details": null
+  }
+]

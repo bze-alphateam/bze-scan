@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x",
+    "height": 20121960,
+    "tx_index": 0,
+    "time": "2025-11-19T21:51:15.317374005Z",
+    "category": "governance",
+    "kind": "proposal",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-400000"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.gov.v1beta1.MsgSubmitProposal"
+    ],
+    "details": null
+  }
+]

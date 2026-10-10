@@ -1,0 +1,65 @@
+[
+  {
+    "address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "height": 25000894,
+    "tx_index": 0,
+    "time": "2026-10-08T19:44:08.539680072Z",
+    "category": "sent",
+    "kind": "send",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "bze1xrw00qx3laxg7dkwx0aymxyqtwr9xsuf3k3pa7",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-333611764700"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.bank.v1beta1.MsgSend"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1xrw00qx3laxg7dkwx0aymxyqtwr9xsuf3k3pa7",
+    "height": 25000894,
+    "tx_index": 0,
+    "time": "2026-10-08T19:44:08.539680072Z",
+    "category": "received",
+    "kind": "send",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "333611762700"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.bank.v1beta1.MsgSend"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+    "height": 25000894,
+    "tx_index": 1,
+    "time": "2026-10-08T19:44:08.539680072Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-242241"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient"
+    ],
+    "details": null
+  }
+]

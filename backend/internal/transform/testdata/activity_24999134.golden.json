@@ -1,0 +1,253 @@
+[
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 24999134,
+    "tx_index": -1,
+    "time": "2026-10-08T16:53:06.854906881Z",
+    "category": "dex",
+    "kind": "dex_order_saved",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "647259",
+          "id": "000000000000000006704545",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "223"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "922130",
+          "id": "000000000000000006704546",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "226"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "591757",
+          "id": "000000000000000006704547",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "229"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "642051",
+          "id": "000000000000000006704548",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "232"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "196915",
+          "id": "000000000000000006704549",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "133"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "280085",
+          "id": "000000000000000006704550",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "130"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "345941",
+          "id": "000000000000000006704551",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "127"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "347240",
+          "id": "000000000000000006704552",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "124"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "205533",
+          "id": "000000000000000006704553",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "121"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "953785",
+          "id": "000000000000000006704554",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "118"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "229739",
+          "id": "000000000000000006704555",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "115"
+        }
+      }
+    ]
+  },
+  {
+    "address": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+    "height": 24999134,
+    "tx_index": -1,
+    "time": "2026-10-08T16:53:06.854906881Z",
+    "category": "dex",
+    "kind": "dex_fill",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "amount": "152732"
+      },
+      {
+        "denom": "ubze",
+        "amount": "763662113"
+      }
+    ],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "bze.tradebin.OrderExecutedEvent",
+        "attrs": {
+          "amount": "763662113",
+          "id": "000000000000000006704522",
+          "maker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+          "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "price": "0.0002",
+          "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9"
+        }
+      }
+    ]
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 24999134,
+    "tx_index": 0,
+    "time": "2026-10-08T16:53:06.854906881Z",
+    "category": "dex",
+    "kind": "dex_order",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+        "amount": "-2803197"
+      },
+      {
+        "denom": "ubze",
+        "amount": "-58669"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 24999134,
+    "tx_index": 1,
+    "time": "2026-10-08T16:53:06.854906881Z",
+    "category": "dex",
+    "kind": "dex_order",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-313528653"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+    "height": 24999134,
+    "tx_index": 2,
+    "time": "2026-10-08T16:53:06.854906881Z",
+    "category": "dex",
+    "kind": "dex_order",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-763777916"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  }
+]

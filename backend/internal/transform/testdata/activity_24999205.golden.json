@@ -1,0 +1,27 @@
+[
+  {
+    "address": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+    "height": 24999205,
+    "tx_index": 0,
+    "time": "2026-10-08T17:00:00.688597027Z",
+    "category": "cross_chain",
+    "kind": "ibc_out",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "amount": "-957617"
+      },
+      {
+        "denom": "ubze",
+        "amount": "-23629"
+      }
+    ],
+    "msg_types": [
+      "/ibc.applications.transfer.v1.MsgTransfer"
+    ],
+    "details": null
+  }
+]

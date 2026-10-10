@@ -1,0 +1,44 @@
+[
+  {
+    "address": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws",
+    "height": 20234864,
+    "tx_index": 0,
+    "time": "2025-11-27T08:50:33.977527033Z",
+    "category": "received",
+    "kind": "respect",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "10800000000"
+      }
+    ],
+    "msg_types": [
+      "/bze.cointrunk.MsgPayPublisherRespect"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1ucx0c63jut4x9ekstszed64hmcumaa62k84xex",
+    "height": 20234864,
+    "tx_index": 0,
+    "time": "2025-11-27T08:50:33.977527033Z",
+    "category": "other",
+    "kind": "respect",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-13500001724"
+      }
+    ],
+    "msg_types": [
+      "/bze.cointrunk.MsgPayPublisherRespect"
+    ],
+    "details": null
+  }
+]
