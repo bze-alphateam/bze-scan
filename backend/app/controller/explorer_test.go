@@ -89,6 +89,35 @@ type fakeReader struct {
 	events       []repository.BlockEvent
 	gotTransfers [][2]int64
 	transfersErr error
+
+	// The order book: outcomes by transaction hash, one order and its
+	// fills.
+	dex       map[string]*repository.TxDex
+	dexErr    error
+	order     *repository.Order
+	fillCount int64
+	fills     []repository.OrderFill
+	gotOrder  string
+}
+
+func (f *fakeReader) TxDex(_ context.Context, _, _ int64, hash string) (*repository.TxDex, error) {
+	if d, ok := f.dex[hash]; ok {
+		return d, f.dexErr
+	}
+	return &repository.TxDex{}, f.dexErr
+}
+
+func (f *fakeReader) Order(_ context.Context, id string) (*repository.Order, error) {
+	f.gotOrder = id
+	if f.order == nil || f.order.OrderID != id {
+		return nil, repository.ErrNotFound
+	}
+	return f.order, f.err
+}
+
+func (f *fakeReader) OrderFills(_ context.Context, _ string, limit int) (int64, []repository.OrderFill, error) {
+	f.gotLimit = limit
+	return f.fillCount, f.fills, f.err
 }
 
 func (f *fakeReader) Transfers(_ context.Context, height, txIndex int64) ([]repository.Transfer, error) {
@@ -214,6 +243,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/blocks/:height/events", h.BlockEvents)
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
+	e.GET("/orders/:id", h.Order)
 	e.GET("/validators", h.Validators)
 	e.GET("/validators/:operator", h.Validator)
 	e.GET("/validators/:operator/blocks", h.ValidatorBlocks)

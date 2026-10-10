@@ -34,6 +34,25 @@ type fakeAccounts struct {
 	gotCategory *string
 	gotBefore   *repository.ActivityKey
 	gotLimit    int
+	// orders and fills are what AccountOrders and AccountFills answer.
+	orders         []repository.Order
+	fills          []repository.OrderFill
+	dexErr         error
+	gotStatus      *string
+	gotOrderBefore *repository.OrderKey
+	gotFillBefore  *repository.FillKey
+}
+
+func (f *fakeAccounts) AccountOrders(_ context.Context, _ string, status *string, before *repository.OrderKey,
+	limit int) ([]repository.Order, error) {
+	f.gotStatus, f.gotOrderBefore, f.gotLimit = status, before, limit
+	return f.orders, f.dexErr
+}
+
+func (f *fakeAccounts) AccountFills(_ context.Context, _ string, before *repository.FillKey,
+	limit int) ([]repository.OrderFill, error) {
+	f.gotFillBefore, f.gotLimit = before, limit
+	return f.fills, f.dexErr
 }
 
 func (f *fakeAccounts) Activity(_ context.Context, _ string, category *string, before *repository.ActivityKey,

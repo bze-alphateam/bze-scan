@@ -48,7 +48,7 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	tx := dto.NewTx(&repository.Tx{
 		TxSummary: repository.TxSummary{Height: 7, Hash: "AB", Time: time.Unix(0, 0).In(time.FixedZone("x", 3600))},
 		Messages:  []repository.Message{{TypeURL: "/x.MsgY"}},
-	}, nil)
+	}, nil, &repository.TxDex{})
 	b, err := json.Marshal(tx)
 	require.NoError(t, err)
 
@@ -65,6 +65,8 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	assert.Contains(t, msg, "body")
 	assert.Equal(t, []any{}, msg["events"])
 	assert.Equal(t, []any{}, got["transfers"])
+	assert.Nil(t, got["dex"], "no order outcome and nothing pending")
+	assert.Contains(t, got, "dex")
 
 	block := dto.NewBlock(&repository.Block{BlockSummary: repository.BlockSummary{Height: 9},
 		Transactions: []repository.BlockTx{{TxIndex: 2, Hash: "CD"}}}, nil,
