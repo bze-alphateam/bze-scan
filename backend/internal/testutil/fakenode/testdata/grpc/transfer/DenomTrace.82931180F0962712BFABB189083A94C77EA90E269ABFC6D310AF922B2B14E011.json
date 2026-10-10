@@ -1,0 +1,6 @@
+{
+  "denom_trace": {
+    "path": "transfer/channel-6",
+    "base_denom": "uphoton"
+  }
+}

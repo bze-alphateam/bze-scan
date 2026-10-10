@@ -24,6 +24,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/serve"
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
+	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakeregistry"
 )
 
 // The recorded validator set: 57 validators, 22 bonded. ChainTools is ranked
@@ -44,13 +45,25 @@ type syncEnv struct {
 	db   *sql.DB
 	node *fakenode.Node
 	grpc *fakenode.GRPC
+	// reg and agg stand in for the chain registry and the aggregator, the
+	// ticker jobs' outbound HTTPS.
+	reg *fakeregistry.Registry
+	agg *fakeAggregator
 }
 
 func newSyncEnv(t *testing.T) *syncEnv {
 	t.Helper()
 	url := freshDatabase(t, true)
 	migrateUp(t, url)
-	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t)}
+	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t),
+		reg: fakeregistry.New(t), agg: newFakeAggregator(t)}
+}
+
+// tickers points cfg's ticker jobs at the fakes.
+func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
+	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL, cfg.AggregatorURL = e.reg.APIURL, e.reg.RawURL, e.agg.URL
+	cfg.PriceChangeMarket = config.DefaultPriceChangeMarket
+	return cfg
 }
 
 // syncState runs the sync-state command and returns its exit code and
@@ -60,6 +73,9 @@ func (e *syncEnv) syncState(t *testing.T) (int, string) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", e.url)
 	t.Setenv("NODE_GRPC_ADDR", e.grpc.Addr)
+	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
+	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
+	t.Setenv("AGGREGATOR_URL", e.agg.URL)
 	t.Setenv("LOG_LEVEL", "warn")
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{"sync-state"})
@@ -74,12 +90,12 @@ func (e *syncEnv) syncState(t *testing.T) (int, string) {
 func (e *syncEnv) serve(t *testing.T, tip int64) string {
 	t.Helper()
 	e.node.SetStatusHeight(tip)
-	cfg := &config.Config{
+	cfg := e.tickers(&config.Config{
 		HTTPAddr: "127.0.0.1:0", LogLevel: "info", LogFormat: config.LogFormatText,
 		DatabaseURL: e.url, NodeRPCURL: e.node.URL, ChainID: "beezee-1", IndexerEnabled: true,
 		NodeGRPCAddr: e.grpc.Addr, ArchiveRPCURL: e.node.URL,
 		StatusInterval: time.Minute, RawCacheMaxEntries: 10, RawCacheTTL: time.Minute,
-	}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	listening := make(chan net.Addr, 1)
 	done := make(chan error, 1)

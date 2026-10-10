@@ -29,6 +29,7 @@ type TokenReader interface {
 	Token(ctx context.Context, denom string) (*repository.Token, error)
 	TokenEvents(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.TokenEvent, error)
 	DenomTransfers(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.DenomTransfer, error)
+	TokenHolders(ctx context.Context, denom string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error)
 }
 
 // TokenController serves the /api/v1/tokens routes. A denom contains "/"
@@ -152,6 +153,46 @@ func (h *TokenController) TokenTransfers(c *echo.Context) error {
 			break
 		}
 		resp.Items = append(resp.Items, dto.NewTokenTransfer(x))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// TokenHolders serves GET /api/v1/tokens/{denom}/holders?cursor&limit and
+// /api/v1/token/holders?denom=: the last holders snapshot, largest balance
+// first, with each one's rank and share of the supply.
+func (h *TokenController) TokenHolders(c *echo.Context) error {
+	denom, err := denomParam(c)
+	if err != nil {
+		return err
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var after *repository.HolderKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if after, err = dto.DecodeHolderCursor(s); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+	ctx := c.Request().Context()
+	t, err := h.token(ctx, denom)
+	if err != nil {
+		return err
+	}
+	rows, err := h.repo.TokenHolders(ctx, denom, after, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.TokenHolder]{Items: make([]dto.TokenHolder, 0, min(len(rows), limit))}
+	for i, row := range rows {
+		if i == limit {
+			next := dto.EncodeHolderCursor(rows[i-1])
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewTokenHolder(row, t.Supply))
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)

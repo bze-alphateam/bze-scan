@@ -16,7 +16,8 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"NODE_GRPC_ADDR", "NODE_GRPC_TLS",
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
-	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT"}
+	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
+	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -40,7 +41,10 @@ func TestLoadDefaults(t *testing.T) {
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
-		BackfillRateLimit: 20}, cfg)
+		BackfillRateLimit:   20,
+		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
+		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
+		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -57,7 +61,10 @@ func TestLoadFromEnvironment(t *testing.T) {
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
-		BackfillRateLimit: 20}, cfg)
+		BackfillRateLimit:   20,
+		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
+		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
+		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -144,7 +151,10 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 		ArchiveRPCURL: "https://rpc.getbze.com", StatusInterval: time.Minute, StatusHeightTolerance: 5,
 		RawCacheMaxEntries: 300, RawCacheTTL: 20 * time.Minute,
 		BackfillFloorHeight: 1, BackfillWorkers: 10, BackfillBatch: 50, BackfillQuiet: 2 * time.Second,
-		BackfillRateLimit: 20}, cfg)
+		BackfillRateLimit:   20,
+		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
+		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
+		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -339,5 +349,39 @@ func TestLoadRejectsInvalidBackfillSettings(t *testing.T) {
 				assert.Contains(t, err.Error(), key)
 			})
 		}
+	}
+}
+
+func TestLoadTickerJobSettings(t *testing.T) {
+	isolate(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Empty(t, cfg.AggregatorURL, "no prices job by default")
+	assert.Equal(t, "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze", cfg.PriceChangeMarket,
+		"mainnet's BZE/USDC.n pool")
+	assert.Equal(t, "https://api.github.com/repos/cosmos/chain-registry/contents", cfg.ChainRegistryAPIURL)
+	assert.Equal(t, "https://raw.githubusercontent.com/cosmos/chain-registry/master", cfg.ChainRegistryRawURL)
+
+	t.Setenv("AGGREGATOR_URL", "https://getbze.com/")
+	t.Setenv("CHAIN_REGISTRY_API_URL", "http://127.0.0.1:9000/api/")
+	t.Setenv("CHAIN_REGISTRY_RAW_URL", "http://127.0.0.1:9000/raw")
+	t.Setenv("PRICE_CHANGE_MARKET", "ulp/0A1B")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://getbze.com", cfg.AggregatorURL)
+	assert.Equal(t, "http://127.0.0.1:9000/api", cfg.ChainRegistryAPIURL)
+	assert.Equal(t, "http://127.0.0.1:9000/raw", cfg.ChainRegistryRawURL)
+	assert.Equal(t, "ulp/0A1B", cfg.PriceChangeMarket)
+}
+
+func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {
+	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL"} {
+		t.Run(key, func(t *testing.T) {
+			isolate(t)
+			t.Setenv(key, "getbze.com")
+			_, err := config.Load()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), key)
+		})
 	}
 }

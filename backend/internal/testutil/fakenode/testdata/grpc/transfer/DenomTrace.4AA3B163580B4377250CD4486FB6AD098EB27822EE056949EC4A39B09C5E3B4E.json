@@ -1,0 +1,6 @@
+{
+  "denom_trace": {
+    "path": "transfer/channel-4",
+    "base_denom": "ujkl"
+  }
+}

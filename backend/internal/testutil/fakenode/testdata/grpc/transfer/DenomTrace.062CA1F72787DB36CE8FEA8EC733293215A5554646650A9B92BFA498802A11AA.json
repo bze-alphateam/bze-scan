@@ -1,0 +1,6 @@
+{
+  "denom_trace": {
+    "path": "transfer/channel-12",
+    "base_denom": "udgn"
+  }
+}

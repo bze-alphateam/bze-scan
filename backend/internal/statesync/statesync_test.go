@@ -410,3 +410,49 @@ func TestKeysPublishedBeforeTheStartAreFoldedAfterIt(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, []string{"v:*", "v:op1"}, rec.list())
 }
+
+func TestALoggedFailureIsRecordedButNotLoggedAgain(t *testing.T) {
+	lg, hook := logtest.NewNullLogger()
+	jobs := &fakeJobs{}
+	set := &fakeSet{name: "prices", interval: time.Hour, rec: &recorder{}, err: statesync.Logged(errors.New("aggregator down"))}
+	s := statesync.New(statesync.Config{Log: lg}, jobs, set)
+
+	err := s.RunOnce(context.Background())
+	require.EqualError(t, err, "prices: aggregator down")
+	require.Len(t, jobs.list(), 1)
+	assert.EqualError(t, jobs.list()[0].Err, "aggregator down", "sync_jobs.last_error")
+	for _, e := range hook.AllEntries() {
+		assert.Greater(t, e.Level, logrus.WarnLevel, "nothing at warn or above: %s", e.Message)
+	}
+
+	set.err = errors.New("node down")
+	require.Error(t, s.RunOnce(context.Background()))
+	require.NotNil(t, hook.LastEntry())
+	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level, "an ordinary failure is logged by the syncer")
+	assert.NoError(t, statesync.Logged(nil))
+}
+
+func TestDeferredPublishesOnceBound(t *testing.T) {
+	rec := &recorder{}
+	set := &fakeSet{name: statesync.ChainRegistry, interval: time.Hour, rec: rec}
+	s := statesync.New(statesync.Config{Log: quietLog(), Clock: newFakeClock()}, &fakeJobs{}, set)
+	var d statesync.Deferred
+	var dirty statesync.Dirty
+	dirty.Mark(statesync.ChainRegistry, statesync.RegistryNameKey("osmosis"))
+
+	d.Publish(dirty) // unbound: dropped
+	d.Bind(s)
+	start(t, s)
+	d.Publish(dirty)
+	eventually(t, func() bool { return rec.count("chain_registry:name:osmosis") == 1 }, "the published key")
+	assert.Equal(t, 1, rec.count("chain_registry:name:osmosis"), "the key published before Bind was dropped")
+}
+
+func TestRegistryNameKey(t *testing.T) {
+	name, ok := statesync.RegistryName(statesync.RegistryNameKey("cosmoshub"))
+	assert.True(t, ok)
+	assert.Equal(t, "cosmoshub", name)
+	_, ok = statesync.RegistryName("cosmoshub-4")
+	assert.False(t, ok, "a chain id")
+	assert.Empty(t, statesync.RegistryNameKey(""))
+}

@@ -1,0 +1,6 @@
+{
+  "denom_trace": {
+    "path": "transfer/channel-13",
+    "base_denom": "inj"
+  }
+}

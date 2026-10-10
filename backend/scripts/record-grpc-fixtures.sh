@@ -32,6 +32,14 @@
 #     from a gateway that serves them (chain v8.2.0 and later): an older node
 #     answers 501, and with no file the fake answers Unimplemented the same way.
 #   Denoms in file names are path-escaped (factory%2Fbze1…%2Fuvdl).
+#     per ibc denom: transfer/DenomTrace.<hash>.json (path and base denom)
+#   holders (the holders snapshot):
+#     bank/DenomOwners.json, the answer for a denom nobody holds (the fake's
+#     fallback for every other denom)
+#     per denom in HOLDERS, every page of HOLDERS_PAGE_LIMIT owners (default
+#     1000): bank/DenomOwners.<denom>.json, then
+#     bank/DenomOwners.<denom>.<page key>.json for each next_key (the key
+#     path-escaped as the fake does: "/" becomes %2F)
 #   gov (the proposals sync):
 #     gov/Proposals.json (every proposal), gov/Proposals.PROPOSAL_STATUS_VOTING_PERIOD.json
 #     (the minute refresh's list), staking/Pool.json (bonded tokens for turnout)
@@ -39,7 +47,7 @@
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
-#         [PROPOSALS="47 …"] [REST=…])
+#         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -49,10 +57,12 @@ VALIDATORS="${VALIDATORS:-}"
 ACCOUNTS="${ACCOUNTS:-}"
 DENOMS="${DENOMS:-}"
 PROPOSALS="${PROPOSALS:-}"
+HOLDERS="${HOLDERS:-}"
+HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin" "${OUT}/gov"
+mkdir -p "${OUT}/staking" "${OUT}/slashing" "${OUT}/bank" "${OUT}/distribution" "${OUT}/tokenfactory" "${OUT}/tradebin" "${OUT}/gov" "${OUT}/transfer"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
@@ -136,10 +146,28 @@ if has denoms; then
     fetch "bze/tokenfactory/denom_authority?denom=$(esc "${d}")" "tokenfactory/DenomAuthority.$(esc "${d}").json"
   done
 
+  for d in $( (jq -r '.supply[].denom' "${OUT}/bank/TotalSupply.json"; jq -r '.metadatas[].base' "${OUT}/bank/DenomsMetadata.json") \
+      | grep '^ibc/' | sort -u); do
+    fetch "ibc/apps/transfer/v1/denom_traces/${d#ibc/}" "transfer/DenomTrace.${d#ibc/}.json"
+  done
+
   for d in ${DENOMS}; do
     fetch "cosmos/bank/v1beta1/denoms_metadata_by_query_string?denom=$(esc "${d}")" \
       "bank/DenomMetadataByQueryString.$(esc "${d}").json" 404
     fetch "cosmos/bank/v1beta1/supply/by_denom?denom=$(esc "${d}")" "bank/SupplyOf.$(esc "${d}").json"
+  done
+fi
+
+if has holders; then
+  fetch "cosmos/bank/v1beta1/denom_owners_by_query?denom=nobody-holds-this" bank/DenomOwners.json
+  for d in ${HOLDERS}; do
+    key="" name="bank/DenomOwners.$(esc "${d}")"
+    while :; do
+      fetch "cosmos/bank/v1beta1/denom_owners_by_query?denom=$(esc "${d}")&pagination.limit=${HOLDERS_PAGE_LIMIT}${key:+&pagination.key=$(esc "${key}")}" \
+        "${name}${key:+.${key//\//%2F}}.json"
+      key="$(jq -r '.pagination.next_key // empty' "${OUT}/${name}${key:+.${key//\//%2F}}.json")"
+      [[ -n "${key}" ]] || break
+    done
   done
 fi
 

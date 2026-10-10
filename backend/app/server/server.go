@@ -93,9 +93,11 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)
 		api.GET("/tokens/:denom/transfers", tokens.TokenTransfers)
+		api.GET("/tokens/:denom/holders", tokens.TokenHolders)
 		api.GET("/token", tokens.Token)
 		api.GET("/token/events", tokens.TokenEvents)
 		api.GET("/token/transfers", tokens.TokenTransfers)
+		api.GET("/token/holders", tokens.TokenHolders)
 	}
 	if deps.Proposals != nil {
 		proposals := controller.NewProposalController(deps.Proposals)

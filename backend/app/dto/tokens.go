@@ -3,6 +3,7 @@ package dto
 import (
 	"encoding/base64"
 	"encoding/json"
+	"math/big"
 	"time"
 	"unicode/utf8"
 
@@ -10,19 +11,43 @@ import (
 )
 
 // TokenSummary is one row of the tokens list. The holders count and the
-// price fields are null until the holders and prices job fills them.
+// price fields are null until the holders and prices jobs fill them; the
+// 24-hour change is the native denom's only (from the BZE/USDC pool). The
+// origin chain is an IBC denom's, null for the others and until the IBC
+// channel is known.
 type TokenSummary struct {
-	Denom             string  `json:"denom"`
-	Symbol            *string `json:"symbol"`
-	Name              *string `json:"name"`
-	Kind              string  `json:"kind"`
-	Exponent          int     `json:"exponent"`
-	Supply            *string `json:"supply"`
-	HoldersCount      *int64  `json:"holders_count"`
-	PriceUSD          *string `json:"price_usd"`
-	PriceChange24hPct *string `json:"price_change_24h_pct"`
-	Halted            bool    `json:"halted"`
-	LogoURL           *string `json:"logo_url"`
+	Denom             string       `json:"denom"`
+	Symbol            *string      `json:"symbol"`
+	Name              *string      `json:"name"`
+	Kind              string       `json:"kind"`
+	Exponent          int          `json:"exponent"`
+	Supply            *string      `json:"supply"`
+	HoldersCount      *int64       `json:"holders_count"`
+	PriceUSD          *string      `json:"price_usd"`
+	PriceChange24hPct *string      `json:"price_change_24h_pct"`
+	Halted            bool         `json:"halted"`
+	LogoURL           *string      `json:"logo_url"`
+	OriginChain       *OriginChain `json:"origin_chain"`
+}
+
+// OriginChain is where an IBC denom comes from. Name and LogoURL are the
+// chain registry's, null for a chain the registry does not know (shown by
+// its chain id).
+type OriginChain struct {
+	ChainID string  `json:"chain_id"`
+	Name    *string `json:"name"`
+	LogoURL *string `json:"logo_url"`
+}
+
+// TokenHolder is one holder of a denom in the last snapshot. SharePct is
+// the balance over the supply in percent (five decimals), null when the
+// supply is unknown or zero.
+type TokenHolder struct {
+	Rank     int64   `json:"rank"`
+	Address  string  `json:"address"`
+	Label    *Label  `json:"label"`
+	Balance  string  `json:"balance"`
+	SharePct *string `json:"share_pct"`
 }
 
 // Token is the token page: the denom with its origin, first sight, admin,
@@ -76,11 +101,60 @@ type TokenTransfer struct {
 
 // NewTokenSummary maps a tokens list row.
 func NewTokenSummary(t repository.TokenSummary) TokenSummary {
-	return TokenSummary{
+	out := TokenSummary{
 		Denom: t.Denom, Symbol: t.Symbol, Name: t.Name, Kind: t.Kind, Exponent: t.Exponent, Supply: t.Supply,
 		HoldersCount: t.HoldersCount, PriceUSD: t.PriceUSD, PriceChange24hPct: t.PriceChange24hPct,
 		Halted: t.Halted, LogoURL: t.LogoURL,
 	}
+	if t.OriginChainID != nil {
+		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo}
+	}
+	return out
+}
+
+// NewTokenHolder maps a holders row of a denom whose supply is supply.
+func NewTokenHolder(h repository.TokenHolder, supply *string) TokenHolder {
+	out := TokenHolder{Rank: h.Rank, Address: h.Address, Label: newLabel(h.Label), Balance: h.Balance}
+	if supply == nil {
+		return out
+	}
+	whole, ok := new(big.Int).SetString(*supply, 10)
+	part, okPart := new(big.Int).SetString(h.Balance, 10)
+	if ok && okPart && whole.Sign() > 0 && part.Sign() >= 0 {
+		share := pct(part, whole)
+		out.SharePct = &share
+	}
+	return out
+}
+
+// holderCursor is the JSON of a holders list cursor.
+type holderCursor struct {
+	Balance string `json:"b"`
+	Address string `json:"a"`
+	Rank    int64  `json:"r"`
+}
+
+// EncodeHolderCursor is the cursor after a holders row: base64 (URL
+// alphabet, no padding) of its balance, address and rank.
+func EncodeHolderCursor(h repository.TokenHolder) string {
+	raw, _ := json.Marshal(holderCursor{Balance: h.Balance, Address: h.Address, Rank: h.Rank}) // strings and an int always marshal
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// DecodeHolderCursor reverses EncodeHolderCursor.
+func DecodeHolderCursor(cursor string) (*repository.HolderKey, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || !utf8.Valid(raw) {
+		return nil, ErrInvalidCursor
+	}
+	var c holderCursor
+	if err := json.Unmarshal(raw, &c); err != nil || c.Address == "" || c.Rank < 1 {
+		return nil, ErrInvalidCursor
+	}
+	if b, ok := new(big.Int).SetString(c.Balance, 10); !ok || b.Sign() < 0 {
+		return nil, ErrInvalidCursor
+	}
+	return &repository.HolderKey{Balance: c.Balance, Address: c.Address, Rank: c.Rank}, nil
 }
 
 // NewToken maps the token page.
