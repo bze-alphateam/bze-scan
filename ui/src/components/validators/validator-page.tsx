@@ -149,7 +149,7 @@ function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: Validators
 /** A label/value row of a details list; stacks on phones. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Grid templateColumns={{ base: "1fr", md: "180px minmax(0, 1fr)" }} gap={{ base: "0.5", md: "4" }} py="2">
+    <Grid templateColumns={{ base: "minmax(0, 1fr)", md: "180px minmax(0, 1fr)" }} gap={{ base: "0.5", md: "4" }} py="2">
       <Text fontSize="sm" color="fg.muted">
         {label}
       </Text>
@@ -366,7 +366,7 @@ export function ValidatorView({ v }: { v: ValidatorDetail }) {
       <Header v={v} activeCount={activeCount} />
       <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} />
       <About v={v} />
-      <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap="6" alignItems="start">
+      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" }} gap="6" alignItems="start">
         <RecentBlocks v={v} />
         <History v={v} />
       </Grid>

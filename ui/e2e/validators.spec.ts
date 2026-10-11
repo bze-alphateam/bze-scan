@@ -9,9 +9,24 @@ const OP = honeycomb.operator_address;
 
 const rows = (page: import("@playwright/test").Page) => page.getByTestId("validator-row");
 
+/** Fails naming the innermost elements that reach past the screen's right edge. */
 async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  const { overflow, culprits } = await page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    const wide = [...document.body.querySelectorAll<HTMLElement>("*")].filter(
+      (el) => el.getBoundingClientRect().right > width + 0.5,
+    );
+    const innermost = wide.filter((el) => !wide.some((other) => other !== el && el.contains(other)));
+    return {
+      overflow: document.documentElement.scrollWidth - width,
+      culprits: innermost.slice(0, 5).map((el) => {
+        const r = el.getBoundingClientRect();
+        const id = el.dataset.testid ? `[data-testid=${el.dataset.testid}]` : "";
+        return `${el.tagName.toLowerCase()}${id} right=${Math.round(r.right)} "${(el.textContent ?? "").trim().slice(0, 40)}"`;
+      }),
+    };
+  });
+  expect(overflow, `wider than the screen: ${culprits.join("; ")}`).toBeLessThanOrEqual(0);
 }
 
 test.describe("validators list", () => {
