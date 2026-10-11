@@ -19,14 +19,16 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
 | `src/components/tx` | the transaction page's sections, states and skeleton |
+| `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
+| `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
-| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links), `format.ts` (display helpers) |
+| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
 | `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
-| `e2e` | Playwright specs and the `mockApi` helper |
+| `e2e` | Playwright specs, the `mockApi` helper and `noHorizontalScroll` (`layout.ts`) |
 
 ## Scripts
 
@@ -90,6 +92,10 @@ is `immutable`.
 `useAllValidators` follows `next_cursor` to the last page (100 per page, all
 statuses) and keeps the first page's `summary`; the list and the validator
 page share it.
+
+`useDenoms` pages through the tokens list the same way and returns a
+`Map` by denom (`reference` policy); the account page joins balances to it
+for symbols, logos, origins and USD values.
 
 ## Messages in plain words
 

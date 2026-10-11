@@ -24,6 +24,7 @@ export const queryKeys = {
   tokens: (p: TokenListParams) => ["tokens", p] as const,
   validatorDirectory: () => ["validator-directory"] as const,
   tokenDirectory: () => ["token-directory"] as const,
+  denoms: () => ["tokens", "all-pages"] as const,
   search: (q: string) => ["search", q] as const,
   params: () => ["params"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
@@ -195,6 +196,29 @@ export function useTokenDirectory() {
     queryKey: queryKeys.tokenDirectory(),
     queryFn: ({ signal }) => api.tokens({ limit: 100 }, signal),
     select: byDenom,
+    ...reference,
+  });
+}
+
+/**
+ * Every denom the explorer knows, by denom: the tokens list's pages of 100
+ * followed to the last, for joining balances to symbols, logos and prices.
+ */
+export function useDenoms() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.denoms(),
+    queryFn: async ({ signal }): Promise<Map<string, TokenSummary>> => {
+      const denoms = new Map<string, TokenSummary>();
+      let cursor: string | undefined;
+      do {
+        const page = await api.tokens({ limit: 100, cursor }, signal);
+        for (const t of page.items) denoms.set(t.denom, t);
+        cursor = page.next_cursor ?? undefined;
+      } while (cursor);
+      return denoms;
+    },
+    // Fresh for a minute: prices move, but a balance's value need not be live.
     ...reference,
   });
 }

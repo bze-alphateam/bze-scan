@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { noHorizontalScroll } from "./layout";
+
 import honeycomb from "../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 
 // The mock API answers /validators from test/fixtures/api/v1/validators.json
@@ -8,26 +10,6 @@ import honeycomb from "../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n
 const OP = honeycomb.operator_address;
 
 const rows = (page: import("@playwright/test").Page) => page.getByTestId("validator-row");
-
-/** Fails naming the innermost elements that reach past the screen's right edge. */
-async function noHorizontalScroll(page: import("@playwright/test").Page) {
-  const { overflow, culprits } = await page.evaluate(() => {
-    const width = document.documentElement.clientWidth;
-    const wide = [...document.body.querySelectorAll<HTMLElement>("*")].filter(
-      (el) => el.getBoundingClientRect().right > width + 0.5,
-    );
-    const innermost = wide.filter((el) => !wide.some((other) => other !== el && el.contains(other)));
-    return {
-      overflow: document.documentElement.scrollWidth - width,
-      culprits: innermost.slice(0, 5).map((el) => {
-        const r = el.getBoundingClientRect();
-        const id = el.dataset.testid ? `[data-testid=${el.dataset.testid}]` : "";
-        return `${el.tagName.toLowerCase()}${id} right=${Math.round(r.right)} "${(el.textContent ?? "").trim().slice(0, 40)}"`;
-      }),
-    };
-  });
-  expect(overflow, `wider than the screen: ${culprits.join("; ")}`).toBeLessThanOrEqual(0);
-}
 
 test.describe("validators list", () => {
   test("renders the tabs, filters by name and links to a validator", async ({ page }) => {

@@ -1,0 +1,42 @@
+{
+  "address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+  "label": null,
+  "first_seen": { "height": 4120331, "time": "2022-04-18T09:12:44Z" },
+  "last_seen_height": 25120440,
+  "tx_count": 1204,
+  "activity_count": 1530,
+  "balances": [
+    { "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uempty", "amount": "0", "symbol": null, "exponent": null },
+    { "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney", "amount": "5000000000", "symbol": "HONEY", "exponent": 6 },
+    { "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4", "amount": "25500000", "symbol": "USDC", "exponent": 6 },
+    { "denom": "ubze", "amount": "1234500000", "symbol": "BZE", "exponent": 6 },
+    { "denom": "ulp_ubze_ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4", "amount": "3000000000000", "symbol": "BZE/USDC LP", "exponent": 12 },
+    { "denom": "uzzz", "amount": "42", "symbol": null, "exponent": null }
+  ],
+  "delegations": [
+    { "validator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c", "moniker": "Honeycomb", "amount": "600000000" },
+    { "validator": "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440", "moniker": "Deep Fields", "amount": "300000000" },
+    { "validator": "bzevaloper12ngv3tq3fqaevdlu5hznemz5m999l2t8zpggf8", "moniker": "Sleepy Node", "amount": "100000000" }
+  ],
+  "unbonding": [
+    {
+      "validator": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "moniker": "Thamar Node",
+      "amount": "250000000",
+      "completion_time": "2099-10-30T10:00:00Z"
+    },
+    {
+      "validator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "moniker": "Honeycomb",
+      "amount": "50000000",
+      "completion_time": "2099-10-20T10:00:00Z"
+    }
+  ],
+  "rewards": [
+    { "validator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c", "coins": [{ "denom": "ubze", "amount": "12500000" }] },
+    { "validator": "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440", "coins": [{ "denom": "ubze", "amount": "3250000" }] }
+  ],
+  "total_staked": "1000000000",
+  "total_rewards": [{ "denom": "ubze", "amount": "15750000" }],
+  "live": { "available": true }
+}

@@ -1,0 +1,15 @@
+{
+  "address": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "label": null,
+  "first_seen": { "height": 20110022, "time": "2025-06-02T12:00:00Z" },
+  "last_seen_height": 25120001,
+  "tx_count": 3,
+  "activity_count": 5,
+  "balances": [],
+  "delegations": [],
+  "unbonding": [],
+  "rewards": [],
+  "total_staked": null,
+  "total_rewards": [],
+  "live": { "available": false }
+}
