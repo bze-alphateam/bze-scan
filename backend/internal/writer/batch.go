@@ -154,6 +154,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Orders = append(all.Orders, e.Orders...)
 		all.OrderFills = append(all.OrderFills, e.OrderFills...)
 		all.OrderCancels = append(all.OrderCancels, e.OrderCancels...)
+		all.IBCTransfers = append(all.IBCTransfers, e.IBCTransfers...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil
