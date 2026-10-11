@@ -85,6 +85,7 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/blocks", explorer.Blocks)
 	api.GET("/blocks/:height", explorer.Block)
 	api.GET("/blocks/:height/events", explorer.BlockEvents)
+	api.GET("/block-events", explorer.ChainEvents)
 	api.GET("/txs", explorer.Txs)
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
