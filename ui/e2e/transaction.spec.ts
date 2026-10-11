@@ -49,7 +49,8 @@ test.describe("transaction page", () => {
     await page.goto(`/txs/${FAILED}`);
     await expect(page).toHaveTitle(/· Failed · BZE Explorer$/);
     await expect(page.getByText("Failed", { exact: true })).toBeVisible();
-    await expect(page.getByRole("alert")).toContainText("Not enough BZE for the amount plus the fee");
+    // Next.js adds its own role="alert" (the route announcer) to every page.
+    await expect(page.getByRole("alert").filter({ hasText: "Why it failed" })).toContainText("Not enough BZE for the amount plus the fee");
     await expect(page.getByTestId("action-card")).toContainText("not executed");
     await expect(page.getByTestId("flow-summary")).toHaveText("1 transfer · 0.002 BZE fee to Fee collector");
   });
