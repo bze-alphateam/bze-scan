@@ -1,0 +1,16 @@
+{
+  "type_url": "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "distribution",
+  "body": {
+    "validator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c"
+  },
+  "events": [
+    {
+      "type": "withdraw_commission",
+      "attrs": {
+        "amount": "7654321ubze"
+      }
+    }
+  ]
+}

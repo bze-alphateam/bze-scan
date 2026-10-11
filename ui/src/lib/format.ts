@@ -137,6 +137,22 @@ export function formatDateTime(time: string | Date): string {
   );
 }
 
+/** `Oct 6, 2026` (UTC). */
+export function formatDate(time: string | Date): string {
+  const d = new Date(time);
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+/** `1st`, `2nd`, `3rd`, `11th`, `22nd`. */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
 const BECH32 = /^[a-z]+1[02-9ac-hj-np-z]{6,}$/;
 
 /**

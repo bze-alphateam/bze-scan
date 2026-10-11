@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "rank": 1,
+      "moniker": "Honeycomb",
+      "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "tokens": "50000000000000",
+      "voting_power_pct": "12.34567",
+      "commission_rate": "0.05",
+      "uptime": "99.99000",
+      "jailed": false,
+      "status": "bonded"
+    }
+  ],
+  "next_cursor": null,
+  "summary": null
+}

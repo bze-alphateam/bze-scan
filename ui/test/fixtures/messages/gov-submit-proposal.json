@@ -1,0 +1,28 @@
+{
+  "type_url": "/cosmos.gov.v1.MsgSubmitProposal",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "governance",
+  "body": {
+    "messages": [],
+    "initial_deposit": [
+      {
+        "denom": "ubze",
+        "amount": "1000000000"
+      }
+    ],
+    "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "metadata": "",
+    "title": "Raise the block size",
+    "summary": "Doubles max_bytes.",
+    "expedited": false
+  },
+  "events": [
+    {
+      "type": "submit_proposal",
+      "attrs": {
+        "proposal_id": "14",
+        "proposal_messages": ","
+      }
+    }
+  ]
+}

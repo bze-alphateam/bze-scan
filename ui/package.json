@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "build:e2e": "NEXT_PUBLIC_API_URL=http://127.0.0.1:8089/api next build",
+    "build:e2e": "NEXT_PUBLIC_API_URL=http://127.0.0.1:8089/api NEXT_PUBLIC_TX_PENDING_WINDOW_MS=4000 next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

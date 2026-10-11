@@ -1,0 +1,13 @@
+{
+  "height": 25120440,
+  "index": 5,
+  "tx": "CpIB",
+  "tx_result": {
+    "code": 5,
+    "log": "spendable balance 10002000ubze is smaller than 999000000000ubze: insufficient funds",
+    "gas_wanted": "200000",
+    "gas_used": "61022",
+    "events": [],
+    "codespace": "sdk"
+  }
+}

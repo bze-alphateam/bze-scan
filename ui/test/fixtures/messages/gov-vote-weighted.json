@@ -1,0 +1,21 @@
+{
+  "type_url": "/cosmos.gov.v1.MsgVoteWeighted",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "governance",
+  "body": {
+    "proposal_id": "14",
+    "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "options": [
+      {
+        "option": "VOTE_OPTION_YES",
+        "weight": "0.700000000000000000"
+      },
+      {
+        "option": "VOTE_OPTION_NO",
+        "weight": "0.300000000000000000"
+      }
+    ],
+    "metadata": ""
+  },
+  "events": []
+}

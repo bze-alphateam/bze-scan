@@ -1,0 +1,31 @@
+{
+  "type_url": "/cosmos.staking.v1beta1.MsgCreateValidator",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "staking",
+  "body": {
+    "description": {
+      "moniker": "Honeycomb",
+      "identity": "",
+      "website": "https://honeycomb.example",
+      "security_contact": "",
+      "details": ""
+    },
+    "commission": {
+      "rate": "0.050000000000000000",
+      "max_rate": "0.200000000000000000",
+      "max_change_rate": "0.010000000000000000"
+    },
+    "min_self_delegation": "1",
+    "delegator_address": "",
+    "validator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    "pubkey": {
+      "@type": "/cosmos.crypto.ed25519.PubKey",
+      "key": "q83JQ0n2gOzYK8gq0h9sZ4D8rX1n2mGv7kz0Q0cL5Wk="
+    },
+    "value": {
+      "denom": "ubze",
+      "amount": "1000000000"
+    }
+  },
+  "events": []
+}

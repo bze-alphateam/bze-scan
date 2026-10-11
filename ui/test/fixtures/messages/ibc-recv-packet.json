@@ -1,0 +1,40 @@
+{
+  "type_url": "/ibc.core.channel.v1.MsgRecvPacket",
+  "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "module": "ibc_channel",
+  "body": {
+    "packet": {
+      "sequence": "812",
+      "source_port": "transfer",
+      "source_channel": "channel-1",
+      "destination_port": "transfer",
+      "destination_channel": "channel-0",
+      "data": "eyJhbW91bnQiOiIzMjAwMDAwMDAifQ==",
+      "timeout_height": {
+        "revision_number": "0",
+        "revision_height": "0"
+      },
+      "timeout_timestamp": "1760000000000000000"
+    },
+    "proof_commitment": "AA==",
+    "proof_height": {
+      "revision_number": "1",
+      "revision_height": "100"
+    },
+    "signer": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+  },
+  "events": [
+    {
+      "type": "fungible_token_packet",
+      "attrs": {
+        "module": "transfer",
+        "sender": "noble1x0d8qjxk3l4n7c5s6v2y9w4m8r0a3e5u7t6h2g",
+        "receiver": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "denom": "uusdc",
+        "amount": "320000000",
+        "memo": "",
+        "success": "true"
+      }
+    }
+  ]
+}

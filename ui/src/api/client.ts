@@ -12,6 +12,8 @@ import type {
   Status,
   Tx,
   TxListParams,
+  TokenListParams,
+  TokenSummary,
   TxSummary,
   ValidatorDetail,
   ValidatorList,
@@ -39,6 +41,8 @@ export interface ExplorerApi {
 
   account(address: string, signal?: AbortSignal): Promise<Account>;
 
+  tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
+
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -63,6 +67,11 @@ export class ApiError extends Error {
   get isClientError(): boolean {
     return this.status >= 400 && this.status < 500;
   }
+}
+
+/** True for the API's 404: on a transaction, "not indexed yet". */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
 }
 
 export interface HttpApiOptions {
@@ -113,6 +122,8 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     validatorBlocks: (operator, params, signal) => get(`/validators/${seg(operator)}/blocks`, page(params), signal),
 
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
+
+    tokens: (params, signal) => get("/tokens", { ...page(params), kind: params.kind }, signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 

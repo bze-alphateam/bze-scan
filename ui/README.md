@@ -16,10 +16,14 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/app` | routes; `layout.tsx` (header, footer), `providers.tsx` (the composition root), `not-found.tsx`, `error.tsx` |
 | `src/api` | `types.ts` (the API's shapes), `client.ts` (the `ExplorerApi` interface, `createHttpApi`, `ApiError`), `provider.tsx` (`ApiProvider`, `useApi`), `hooks.ts` (one React Query hook per route), `policy.ts` (the refetch policies) |
 | `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light |
-| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`) and the skeletons |
+| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`) and the skeletons |
+| `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
+| `src/components/tx` | the transaction page's sections, states and skeleton |
+| `src/render/messages` | the plain-word message registry (below) |
+| `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
 | `src/lib` | `env.ts` (settings), `links.ts` (nav and app links), `format.ts` (display helpers) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
-| `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers |
+| `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
 | `e2e` | Playwright specs and the `mockApi` helper |
 
 ## Scripts
@@ -55,6 +59,7 @@ tests only. The end-to-end tests run in CI, or on a developer machine with
 | `NEXT_PUBLIC_NETWORK_LABEL` | the header's network badge (`Mainnet`) |
 | `NEXT_PUBLIC_PINGPUB_URL` | the Ping.pub explorer link |
 | `NEXT_PUBLIC_SITE_URL` | the site's own URL, base of absolute links and previews |
+| `NEXT_PUBLIC_TX_PENDING_WINDOW_MS` | how long the transaction page looks for a hash the API does not know yet; empty means two minutes (`pnpm build:e2e` sets 4 s) |
 
 ## Data
 
@@ -70,9 +75,36 @@ numbers itself:
 | `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 7 s, refetched every 7 s, paused in background tabs |
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
 | `status` | the status light | refetched every 60 s |
+| `reference` | lookups a page decorates with: validator monikers, token symbols and prices | fresh for 60 s, never polled |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
 apply the policies: a list hook with a `cursor` is `immutable`.
+
+A transaction the API answers 404 for is pending, never failed:
+`useTransaction` asks again every 7 s for the pending window
+(`TX_PENDING_WINDOW_MS`, two minutes), then reports `not_found`; once found it
+is `immutable`.
+
+## Messages in plain words
+
+`src/render/messages/registry.ts` maps a type URL to a `MessageRenderer`:
+`category` (the action card's icon and label: `send`, `staking`,
+`governance`, `cross_chain`, `other`), `title(msg, ctx)` (the card's
+heading, also the page description), `summary(msg, ctx)` (one line for lists,
+the title by default), `Body` (the card's content) and an optional
+`reasonFor(transfer, msg, ctx)` (why one of its transfers happened, for the
+funds flow; the title otherwise). A type without a renderer goes through the
+fallback: its type in words and its body as a key/value table.
+
+Renderers read the API's proto JSON body (snake_case) and the message's
+events, and look everything else up in the `RenderContext` from
+`createRenderContext`: the transaction's transfers, denoms (symbol and
+exponent from the transfers, then the tokens list, with its USD price),
+validator monikers and the transfers' labels. They decode nothing
+themselves, and a missing field never throws. One file per module family
+(`bank`, `staking`, `distribution`, `gov`, `ibc`, `authz`); a new renderer
+adds a fixture in `test/fixtures/messages` and its expected title in
+`registry.test.tsx`.
 
 ## Loading states
 

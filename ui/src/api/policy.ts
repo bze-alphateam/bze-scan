@@ -30,6 +30,25 @@ export const status = {
   refetchIntervalInBackground: false,
 } as const;
 
+/**
+ * Lookup data a page decorates with (validator monikers, token prices):
+ * fresh for a minute, never polled.
+ */
+export const reference = {
+  staleTime: 60 * SECOND,
+  refetchInterval: false,
+} as const;
+
+/** How often a transaction the API does not know yet (404, "pending") is asked for again. */
+export const TX_PENDING_POLL_MS = 7 * SECOND;
+
+/**
+ * How long a pending transaction is looked for before the page says it is not
+ * found: two minutes, or `NEXT_PUBLIC_TX_PENDING_WINDOW_MS` (the e2e build
+ * shortens it).
+ */
+export const TX_PENDING_WINDOW_MS = Number(process.env.NEXT_PUBLIC_TX_PENDING_WINDOW_MS) || 2 * 60 * SECOND;
+
 /** Never retries a 4xx (the same request gets the same answer); twice otherwise. */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
   if (error instanceof ApiError && error.isClientError) {

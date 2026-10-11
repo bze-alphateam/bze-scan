@@ -1,0 +1,24 @@
+{
+  "type_url": "/cosmos.staking.v1beta1.MsgDelegate",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "staking",
+  "body": {
+    "delegator_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "validator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    "amount": {
+      "denom": "ubze",
+      "amount": "500000000"
+    }
+  },
+  "events": [
+    {
+      "type": "delegate",
+      "attrs": {
+        "validator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+        "delegator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "amount": "500000000ubze",
+        "new_shares": "500000000.000000000000000000"
+      }
+    }
+  ]
+}

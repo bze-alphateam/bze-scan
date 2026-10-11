@@ -1,0 +1,17 @@
+{
+  "type_url": "/cosmos.authz.v1beta1.MsgExec",
+  "sender": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+  "module": "authz",
+  "body": {
+    "grantee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "msgs": [
+      {
+        "@type": "/cosmos.gov.v1beta1.MsgVote",
+        "proposal_id": "14",
+        "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "option": "VOTE_OPTION_NO"
+      }
+    ]
+  },
+  "events": []
+}

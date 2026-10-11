@@ -1,0 +1,81 @@
+{
+  "height": 25120440,
+  "tx_index": 5,
+  "hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+  "time": "2026-10-11T09:15:02Z",
+  "success": false,
+  "msg_count": 1,
+  "msg_types": [
+    "/cosmos.bank.v1beta1.MsgSend"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/cosmos.bank.v1beta1.MsgSend",
+    "module": "bank",
+    "body": {
+      "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "999000000000"
+        }
+      ]
+    }
+  },
+  "code": 5,
+  "codespace": "sdk",
+  "error_log": "spendable balance 10002000ubze is smaller than 999000000000ubze: insufficient funds",
+  "gas_wanted": 200000,
+  "gas_used": 61022,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/cosmos.bank.v1beta1.MsgSend",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "bank",
+      "body": {
+        "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "999000000000"
+          }
+        ]
+      },
+      "events": null
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": null
+}

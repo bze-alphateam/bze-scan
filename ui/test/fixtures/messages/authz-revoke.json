@@ -1,0 +1,11 @@
+{
+  "type_url": "/cosmos.authz.v1beta1.MsgRevoke",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "authz",
+  "body": {
+    "granter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "grantee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "msg_type_url": "/cosmos.staking.v1beta1.MsgDelegate"
+  },
+  "events": []
+}

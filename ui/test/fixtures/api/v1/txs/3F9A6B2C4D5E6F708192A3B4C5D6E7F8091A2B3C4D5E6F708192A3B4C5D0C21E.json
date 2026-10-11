@@ -1,0 +1,111 @@
+{
+  "height": 25120440,
+  "tx_index": 2,
+  "hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/cosmos.bank.v1beta1.MsgSend"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/cosmos.bank.v1beta1.MsgSend",
+    "module": "bank",
+    "body": {
+      "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "10000000"
+        }
+      ]
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 200000,
+  "gas_used": 81234,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": "rent for October",
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/cosmos.bank.v1beta1.MsgSend",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "bank",
+      "body": {
+        "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "10000000"
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/cosmos.bank.v1beta1.MsgSend",
+            "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "module": "bank"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+            "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "amount": "10000000ubze"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "seq": 1,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "recipient_label": null,
+      "denom": "ubze",
+      "amount": "10000000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": null
+}
