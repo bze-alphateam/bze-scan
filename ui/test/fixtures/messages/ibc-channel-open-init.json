@@ -1,0 +1,22 @@
+{
+  "type_url": "/ibc.core.channel.v1.MsgChannelOpenInit",
+  "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "module": "ibc_channel",
+  "body": {
+    "port_id": "transfer",
+    "channel": {
+      "state": "STATE_INIT",
+      "ordering": "ORDER_UNORDERED",
+      "counterparty": {
+        "port_id": "transfer",
+        "channel_id": ""
+      },
+      "connection_hops": [
+        "connection-9"
+      ],
+      "version": "ics20-1"
+    },
+    "signer": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+  },
+  "events": []
+}

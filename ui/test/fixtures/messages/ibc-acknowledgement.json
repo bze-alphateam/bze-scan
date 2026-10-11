@@ -1,0 +1,17 @@
+{
+  "type_url": "/ibc.core.channel.v1.MsgAcknowledgement",
+  "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "module": "ibc_channel",
+  "body": {
+    "packet": {
+      "sequence": "77",
+      "source_port": "transfer",
+      "source_channel": "channel-3",
+      "destination_port": "transfer",
+      "destination_channel": "channel-141"
+    },
+    "acknowledgement": "eyJyZXN1bHQiOiJBUT09In0=",
+    "signer": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+  },
+  "events": []
+}

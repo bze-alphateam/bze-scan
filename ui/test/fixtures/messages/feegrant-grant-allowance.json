@@ -1,0 +1,20 @@
+{
+  "type_url": "/cosmos.feegrant.v1beta1.MsgGrantAllowance",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "feegrant",
+  "body": {
+    "granter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "grantee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "allowance": {
+      "@type": "/cosmos.feegrant.v1beta1.BasicAllowance",
+      "spend_limit": [
+        {
+          "denom": "ubze",
+          "amount": "5000000"
+        }
+      ],
+      "expiration": null
+    }
+  },
+  "events": []
+}

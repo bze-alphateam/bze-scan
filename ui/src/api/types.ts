@@ -55,6 +55,13 @@ export interface BlockSummary {
   proposer: Proposer | null;
 }
 
+/** A transaction's first message (`msg_index` 0), for one-line summaries in lists. */
+export interface FirstMessage {
+  type_url: string;
+  module: string | null;
+  body: Record<string, unknown> | null;
+}
+
 export interface BlockTx {
   height: number;
   tx_index: number;
@@ -63,6 +70,9 @@ export interface BlockTx {
   msg_types: string[];
   fee: Coin[];
   signer: string | null;
+  gas_wanted: number | null;
+  gas_used: number | null;
+  first_message: FirstMessage | null;
 }
 
 export interface Transfer {
@@ -92,7 +102,10 @@ export interface Block extends BlockSummary {
   signatures_count: number | null;
   signatures_power_pct: string | null;
   transactions: BlockTx[];
+  /** The block's own transfers (`msg_index` null). */
   transfers: Transfer[];
+  /** Every transfer at the height, the transactions' included. */
+  transfers_count: number;
   events: BlockEvent[];
   events_next_cursor: string | null;
 }
@@ -115,6 +128,13 @@ export interface TxSummary {
   msg_types: string[];
   fee: Coin[];
   signer: string | null;
+  first_message: FirstMessage | null;
+}
+
+/** An event of a message: SDK attribute values are strings, typed (`bze.*`) ones decoded JSON. */
+export interface MessageEvent {
+  type: string;
+  attrs: Record<string, unknown>;
 }
 
 export interface Message {
@@ -122,8 +142,10 @@ export interface Message {
   type_url: string;
   sender: string | null;
   module: string | null;
+  /** The message as proto JSON (snake_case fields); null for a type the backend cannot decode. */
   body: Record<string, unknown> | null;
-  events: unknown[] | null;
+  /** Null for a failed transaction's messages. */
+  events: MessageEvent[] | null;
 }
 
 export interface Order {
@@ -319,6 +341,35 @@ export interface Account {
   total_staked: string | null;
   total_rewards: Coin[];
   live: { available: boolean };
+}
+
+// Tokens
+
+export type TokenKind = "native" | "factory" | "ibc" | "lp" | "unknown";
+
+export interface TokenListParams extends PageParams {
+  kind?: TokenKind;
+}
+
+export interface OriginChain {
+  chain_id: string;
+  name: string | null;
+  logo_url: string | null;
+}
+
+export interface TokenSummary {
+  denom: string;
+  symbol: string | null;
+  name: string | null;
+  kind: TokenKind | (string & {});
+  exponent: number;
+  supply: string | null;
+  holders_count: number | null;
+  price_usd: string | null;
+  price_change_24h_pct: string | null;
+  halted: boolean;
+  logo_url: string | null;
+  origin_chain: OriginChain | null;
 }
 
 // Search

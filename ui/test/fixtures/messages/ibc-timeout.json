@@ -1,0 +1,17 @@
+{
+  "type_url": "/ibc.core.channel.v1.MsgTimeout",
+  "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "module": "ibc_channel",
+  "body": {
+    "packet": {
+      "sequence": "78",
+      "source_port": "transfer",
+      "source_channel": "channel-3",
+      "destination_port": "transfer",
+      "destination_channel": "channel-141"
+    },
+    "next_sequence_recv": "78",
+    "signer": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+  },
+  "events": []
+}

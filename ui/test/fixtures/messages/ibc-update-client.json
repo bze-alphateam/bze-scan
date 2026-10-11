@@ -1,0 +1,13 @@
+{
+  "type_url": "/ibc.core.client.v1.MsgUpdateClient",
+  "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+  "module": "ibc_client",
+  "body": {
+    "client_id": "07-tendermint-12",
+    "client_message": {
+      "@type": "/ibc.lightclients.tendermint.v1.Header"
+    },
+    "signer": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+  },
+  "events": []
+}

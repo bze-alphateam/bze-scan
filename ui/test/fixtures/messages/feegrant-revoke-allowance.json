@@ -1,0 +1,10 @@
+{
+  "type_url": "/cosmos.feegrant.v1beta1.MsgRevokeAllowance",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "feegrant",
+  "body": {
+    "granter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "grantee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4"
+  },
+  "events": []
+}

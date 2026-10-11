@@ -1,0 +1,24 @@
+{
+  "type_url": "/cosmos.gov.v1.MsgDeposit",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "governance",
+  "body": {
+    "proposal_id": "14",
+    "depositor": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "amount": [
+      {
+        "denom": "ubze",
+        "amount": "1000000000"
+      }
+    ]
+  },
+  "events": [
+    {
+      "type": "proposal_deposit",
+      "attrs": {
+        "amount": "1000000000ubze",
+        "proposal_id": "14"
+      }
+    }
+  ]
+}

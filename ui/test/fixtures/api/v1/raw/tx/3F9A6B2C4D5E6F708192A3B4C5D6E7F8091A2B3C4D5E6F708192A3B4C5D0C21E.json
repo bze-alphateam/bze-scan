@@ -1,0 +1,14 @@
+{
+  "height": 25120440,
+  "index": 2,
+  "tx": "CpIBCo8BChwvY29zbW9zLmJhbmsudjFiZXRhMS5Nc2dTZW5kEm8KK2J6ZTE4dWYwOW54NnRueWFhbHJydWVnbGpnd2dmejg4dnllcTVrOXpodw==",
+  "tx_result": {
+    "code": 0,
+    "data": "EiYKJC9jb3Ntb3MuYmFuay52MWJldGExLk1zZ1NlbmRSZXNwb25zZQ==",
+    "log": "",
+    "gas_wanted": "200000",
+    "gas_used": "81234",
+    "events": [],
+    "codespace": ""
+  }
+}

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "./client";
-import { createQueryClient, immutable, live, shouldRetry, status } from "./policy";
+import { createQueryClient, immutable, live, reference, shouldRetry, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 
 describe("policies", () => {
   it("holds the UI Design numbers", () => {
     expect(live).toMatchObject({ staleTime: 7000, refetchInterval: 7000, refetchIntervalInBackground: false });
+    expect(reference).toMatchObject({ staleTime: 60_000, refetchInterval: false });
+    expect(TX_PENDING_POLL_MS).toBe(7000);
+    expect(TX_PENDING_WINDOW_MS).toBe(120_000);
     expect(immutable).toMatchObject({
       staleTime: Infinity,
       gcTime: 3_600_000,

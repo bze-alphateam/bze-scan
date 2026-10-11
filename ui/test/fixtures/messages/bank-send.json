@@ -1,0 +1,33 @@
+{
+  "type_url": "/cosmos.bank.v1beta1.MsgSend",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "bank",
+  "body": {
+    "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "amount": [
+      {
+        "denom": "ubze",
+        "amount": "10000000"
+      }
+    ]
+  },
+  "events": [
+    {
+      "type": "message",
+      "attrs": {
+        "action": "/cosmos.bank.v1beta1.MsgSend",
+        "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "module": "bank"
+      }
+    },
+    {
+      "type": "transfer",
+      "attrs": {
+        "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "amount": "10000000ubze"
+      }
+    }
+  ]
+}

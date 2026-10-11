@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   avatarHue,
   formatAmount,
+  formatDate,
   formatCount,
   formatDateTime,
   formatPct,
   formatUsd,
   initials,
+  ordinal,
   relativeTime,
   shortAddress,
   shortHash,
@@ -117,5 +119,18 @@ describe("avatars", () => {
     expect(avatarHue("Thamar")).not.toBe(avatarHue("Thamaz"));
     expect(avatarHue("x")).toBeGreaterThanOrEqual(0);
     expect(avatarHue("a very long moniker that overflows")).toBeLessThan(360);
+  });
+});
+
+describe("formatDate and ordinal", () => {
+  it("formats a UTC date", () => {
+    expect(formatDate("2026-10-27T23:59:59Z")).toBe("Oct 27, 2026");
+    expect(formatDate("nope")).toBe("");
+  });
+
+  it("names positions", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 103, 111].map(ordinal)).toEqual([
+      "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "103rd", "111th",
+    ]);
   });
 });

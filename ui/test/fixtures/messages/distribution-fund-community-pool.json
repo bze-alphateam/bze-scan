@@ -1,0 +1,15 @@
+{
+  "type_url": "/cosmos.distribution.v1beta1.MsgFundCommunityPool",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "distribution",
+  "body": {
+    "amount": [
+      {
+        "denom": "ubze",
+        "amount": "100000000"
+      }
+    ],
+    "depositor": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  },
+  "events": []
+}

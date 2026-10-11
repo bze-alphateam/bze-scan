@@ -1,0 +1,17 @@
+{
+  "type_url": "/cosmos.authz.v1beta1.MsgGrant",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "authz",
+  "body": {
+    "granter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "grantee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "grant": {
+      "authorization": {
+        "@type": "/cosmos.authz.v1beta1.GenericAuthorization",
+        "msg": "/cosmos.gov.v1beta1.MsgVote"
+      },
+      "expiration": "2027-10-11T00:00:00Z"
+    }
+  },
+  "events": []
+}

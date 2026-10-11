@@ -1,0 +1,27 @@
+{
+  "type_url": "/cosmos.gov.v1beta1.MsgSubmitProposal",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "governance",
+  "body": {
+    "content": {
+      "@type": "/cosmos.gov.v1beta1.TextProposal",
+      "title": "Community call",
+      "description": "Monthly call."
+    },
+    "initial_deposit": [
+      {
+        "denom": "ubze",
+        "amount": "1000000000"
+      }
+    ],
+    "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  },
+  "events": [
+    {
+      "type": "submit_proposal",
+      "attrs": {
+        "proposal_id": "15"
+      }
+    }
+  ]
+}

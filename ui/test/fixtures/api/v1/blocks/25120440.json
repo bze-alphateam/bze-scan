@@ -1,0 +1,89 @@
+{
+  "height": 25120440,
+  "time": "2026-10-11T09:15:02Z",
+  "hash": "A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F90",
+  "tx_count": 7,
+  "tx_failed_count": 1,
+  "proposer_cons_address": "bzevalcons1q2w3e4r5t6y7u8x9a0p",
+  "block_time_ms": 5810,
+  "size_bytes": 4096,
+  "proposer": {
+    "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    "moniker": "Honeycomb"
+  },
+  "minted": null,
+  "inflation": null,
+  "fees_distributed": null,
+  "signatures_count": null,
+  "signatures_power_pct": null,
+  "transactions": [
+    {
+      "height": 25120440,
+      "tx_index": 2,
+      "hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "success": true,
+      "msg_types": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ],
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "gas_wanted": 200000,
+      "gas_used": 81234,
+      "first_message": {
+        "type_url": "/cosmos.bank.v1beta1.MsgSend",
+        "module": "bank",
+        "body": {
+          "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+          "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+          "amount": [
+            {
+              "denom": "ubze",
+              "amount": "10000000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "height": 25120440,
+      "tx_index": 5,
+      "hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "success": false,
+      "msg_types": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ],
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000"
+        }
+      ],
+      "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "gas_wanted": 200000,
+      "gas_used": 81234,
+      "first_message": {
+        "type_url": "/cosmos.bank.v1beta1.MsgSend",
+        "module": "bank",
+        "body": {
+          "from_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+          "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+          "amount": [
+            {
+              "denom": "ubze",
+              "amount": "10000000"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "transfers": [],
+  "transfers_count": 4,
+  "events": [],
+  "events_next_cursor": null
+}

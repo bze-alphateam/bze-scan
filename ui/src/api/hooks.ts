@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
-import { immutable, live, status } from "./policy";
+import { isNotFound } from "./client";
+import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 import { useApi } from "./provider";
-import type { PageParams, TxListParams, ValidatorListParams } from "./types";
+import type { Page, PageParams, TokenListParams, TokenSummary, TxListParams, ValidatorList, ValidatorListParams } from "./types";
 
 /** Query keys, one tuple per route and its arguments. */
 export const queryKeys = {
@@ -18,6 +20,9 @@ export const queryKeys = {
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
   account: (address: string) => ["account", address] as const,
+  tokens: (p: TokenListParams) => ["tokens", p] as const,
+  validatorDirectory: () => ["validator-directory"] as const,
+  tokenDirectory: () => ["token-directory"] as const,
   search: (q: string) => ["search", q] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -65,13 +70,37 @@ export function useTransactions(params: TxListParams = {}) {
   });
 }
 
+/**
+ * Where a transaction the API answers 404 for stands: `looking` while it is
+ * asked for again every 7 s, `not_found` once the pending window is over;
+ * null when it is not a 404.
+ */
+export type PendingState = "looking" | "not_found" | null;
+
+/**
+ * A transaction: immutable once found. A 404 means "not indexed yet": the
+ * query is polled every 7 s for the pending window, then given up on.
+ * Mount it under a `key` of the hash so the window restarts per hash.
+ */
 export function useTransaction(hash: string) {
   const api = useApi();
-  return useQuery({
+  const [expired, setExpired] = useState(false);
+  const query = useQuery({
     queryKey: queryKeys.transaction(hash),
-    queryFn: ({ signal }) => api.transaction(hash, signal),
+    queryFn: ({ signal }) => api.transaction(hash.toUpperCase(), signal),
     ...immutable,
+    refetchInterval: (q) => (isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false),
   });
+  const notFound = isNotFound(query.error);
+
+  useEffect(() => {
+    if (!notFound) return;
+    const id = setTimeout(() => setExpired(true), TX_PENDING_WINDOW_MS);
+    return () => clearTimeout(id);
+  }, [notFound]);
+
+  const pending: PendingState = notFound ? (expired ? "not_found" : "looking") : null;
+  return { ...query, pending };
 }
 
 export function useValidators(params: ValidatorListParams = {}) {
@@ -107,6 +136,41 @@ export function useAccount(address: string) {
     queryKey: queryKeys.account(address),
     queryFn: ({ signal }) => api.account(address, signal),
     ...live,
+  });
+}
+
+export function useTokens(params: TokenListParams = {}) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.tokens(params),
+    queryFn: ({ signal }) => api.tokens(params, signal),
+    ...listPolicy(params),
+  });
+}
+
+// Module-level selects keep their result stable between renders.
+const byOperator = (list: ValidatorList) => new Map(list.items.map((v) => [v.operator_address, v]));
+const byDenom = (page: Page<TokenSummary>) => new Map(page.items.map((t) => [t.denom, t]));
+
+/** Every validator's moniker by operator address (the first 100, all statuses), for naming them on pages. */
+export function useValidatorDirectory() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.validatorDirectory(),
+    queryFn: ({ signal }) => api.validators({ status: "all", limit: 100 }, signal),
+    select: byOperator,
+    ...reference,
+  });
+}
+
+/** The tokens list's first 100 denoms by denom, for symbols, exponents and USD prices. */
+export function useTokenDirectory() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.tokenDirectory(),
+    queryFn: ({ signal }) => api.tokens({ limit: 100 }, signal),
+    select: byDenom,
+    ...reference,
   });
 }
 

@@ -1,0 +1,21 @@
+{
+  "type_url": "/cosmos.gov.v1.MsgVote",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "governance",
+  "body": {
+    "proposal_id": "14",
+    "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "option": "VOTE_OPTION_YES",
+    "metadata": ""
+  },
+  "events": [
+    {
+      "type": "proposal_vote",
+      "attrs": {
+        "option": "[{\"option\":1,\"weight\":\"1.000000000000000000\"}]",
+        "proposal_id": "14",
+        "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+      }
+    }
+  ]
+}

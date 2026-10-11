@@ -1,0 +1,32 @@
+{
+  "type_url": "/bze.rewards.MsgCreateDenomReward",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "prize_amount": "1000000",
+    "prize_denom": "ubze",
+    "stake_denom": "ubze",
+    "duration": "30",
+    "min_stake": "0",
+    "lock": "7",
+    "coins": [
+      {
+        "denom": "ubze",
+        "amount": "30000000"
+      }
+    ],
+    "config": {
+      "nested": true
+    }
+  },
+  "events": [
+    {
+      "type": "bze.rewards.DenomRewardCreateEvent",
+      "attrs": {
+        "reward_id": "7",
+        "prize_denom": "ubze"
+      }
+    }
+  ]
+}
