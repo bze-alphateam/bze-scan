@@ -29,6 +29,9 @@ type TokenSummary struct {
 	OriginChainID   *string
 	OriginChainName *string
 	OriginChainLogo *string
+	// CreatedTime is the block time of the denom's first `created` event,
+	// nil for a denom created below the indexed range or not by a message.
+	CreatedTime *time.Time
 	// SortKey is the row's position within its kind (the lower-case symbol,
 	// else the denom), for the keyset cursor.
 	SortKey string
@@ -46,7 +49,6 @@ type Token struct {
 	Admin          *string
 	CreatedHeight  *int64
 	CreatedTxHash  *string
-	CreatedTime    *time.Time
 	Website        *string
 	Markets        []string
 	PriceUpdatedAt *time.Time
@@ -121,7 +123,7 @@ const sortKey = `lower(coalesce(d.symbol, d.denom))`
 
 const tokenSummaryCols = `d.denom, d.symbol, d.name, d.kind, d.exponent, d.supply::text, d.holders_count,
 		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
-		oc.logo_url, ` + sortKey + `, ` + kindRank
+		oc.logo_url, d.created_time, ` + sortKey + `, ` + kindRank
 
 // originJoin names the origin chain of the denoms row d.
 const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chain_id`
@@ -129,7 +131,7 @@ const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chai
 func tokenSummaryDest(t *TokenSummary) []any {
 	return []any{&t.Denom, &t.Symbol, &t.Name, &t.Kind, &t.Exponent, &t.Supply, &t.HoldersCount,
 		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
-		&t.OriginChainLogo, &t.SortKey, &t.KindRank}
+		&t.OriginChainLogo, &t.CreatedTime, &t.SortKey, &t.KindRank}
 }
 
 // Tokens returns up to limit denoms of kind (every kind when nil), by kind
@@ -162,9 +164,9 @@ func (r *Explorer) Token(ctx context.Context, denom string) (*Token, error) {
 	var t Token
 	var creatorName, creatorKind, adminName, adminKind *string
 	dest := append(tokenSummaryDest(&t.TokenSummary), &t.Description, &t.IBCBaseDenom, &t.IBCPath,
-		&t.Creator, &t.Admin, &t.CreatedHeight, &t.CreatedTxHash, &t.CreatedTime, &t.Website, &t.Markets,
+		&t.Creator, &t.Admin, &t.CreatedHeight, &t.CreatedTxHash, &t.Website, &t.Markets,
 		&t.PriceUpdatedAt, &t.Metadata, &t.UpdatedAt, &creatorName, &creatorKind, &adminName, &adminKind)
-	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.ibc_base_denom, d.ibc_path, d.creator, d.admin, d.created_height, d.created_tx_hash, d.created_time, d.website,
+	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.ibc_base_denom, d.ibc_path, d.creator, d.admin, d.created_height, d.created_tx_hash, d.website,
 			d.markets, d.price_updated_at, d.metadata, d.updated_at, lc.name, lc.kind, la.name, la.kind
 		FROM explorer.denoms d`+originJoin+`
 		LEFT JOIN explorer.labels lc ON lc.address = d.creator

@@ -13,8 +13,12 @@ import type {
   Status,
   Tx,
   TxListParams,
+  Token,
+  TokenEvent,
+  TokenHolder,
   TokenListParams,
   TokenSummary,
+  TokenTransfer,
   TxSummary,
   ValidatorDetail,
   ValidatorList,
@@ -43,6 +47,10 @@ export interface ExplorerApi {
   account(address: string, signal?: AbortSignal): Promise<Account>;
 
   tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
+  token(denom: string, signal?: AbortSignal): Promise<Token>;
+  tokenEvents(denom: string, params: PageParams, signal?: AbortSignal): Promise<Page<TokenEvent>>;
+  tokenHolders(denom: string, params: PageParams, signal?: AbortSignal): Promise<Page<TokenHolder>>;
+  tokenTransfers(denom: string, params: PageParams, signal?: AbortSignal): Promise<Page<TokenTransfer>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
@@ -110,6 +118,20 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
   const seg = encodeURIComponent;
   const page = (p: PageParams): Query => ({ cursor: p.cursor, limit: p.limit });
 
+  /**
+   * A denom route (`""`, `/events`, `/holders`, `/transfers`): the denom
+   * URL-encoded on the path, and for a denom with `/` the `?denom=` form when
+   * the path answers 404 (a proxy that decodes `%2F` breaks the path form).
+   */
+  async function byDenom<T>(denom: string, suffix: string, query: Query, signal?: AbortSignal): Promise<T> {
+    try {
+      return await get<T>(`/tokens/${seg(denom)}${suffix}`, query, signal);
+    } catch (err) {
+      if (!denom.includes("/") || !isNotFound(err)) throw err;
+      return get<T>(`/token${suffix}`, { denom, ...query }, signal);
+    }
+  }
+
   return {
     status: (signal) => get("/status", {}, signal),
 
@@ -127,6 +149,10 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
 
     tokens: (params, signal) => get("/tokens", { ...page(params), kind: params.kind }, signal),
+    token: (denom, signal) => byDenom(denom, "", {}, signal),
+    tokenEvents: (denom, params, signal) => byDenom(denom, "/events", page(params), signal),
+    tokenHolders: (denom, params, signal) => byDenom(denom, "/holders", page(params), signal),
+    tokenTransfers: (denom, params, signal) => byDenom(denom, "/transfers", page(params), signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 

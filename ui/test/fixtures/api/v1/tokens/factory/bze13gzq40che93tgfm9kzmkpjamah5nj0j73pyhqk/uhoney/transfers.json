@@ -1,0 +1,59 @@
+{
+  "items": [
+    {
+      "height": 24001000,
+      "tx_index": 2,
+      "tx_hash": "9E1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "time": "2099-10-10T10:00:00Z",
+      "seq": 0,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "sender_label": null,
+      "recipient": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "recipient_label": null,
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+      "amount": "25000000000",
+      "symbol": "HONEY",
+      "exponent": 6
+    },
+    {
+      "height": 24000950,
+      "tx_index": 0,
+      "tx_hash": "8D1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "time": "2099-10-09T09:00:00Z",
+      "seq": 1,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "sender_label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "recipient_label": null,
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+      "amount": "75000000000",
+      "symbol": "HONEY",
+      "exponent": 6
+    },
+    {
+      "height": 24000500,
+      "tx_index": 0,
+      "tx_hash": "6C1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "time": "2099-10-05T12:00:00Z",
+      "seq": 0,
+      "msg_index": 0,
+      "kind": "mint",
+      "sender": null,
+      "sender_label": null,
+      "recipient": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "recipient_label": null,
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+      "amount": "500000000",
+      "symbol": "HONEY",
+      "exponent": 6
+    }
+  ],
+  "next_cursor": null
+}

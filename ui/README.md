@@ -21,11 +21,13 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/tx` | the transaction page's sections, states and skeleton |
 | `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
+| `src/components/tokens` | the tokens list (tiles, kind chips, name filter) and the token page (supply box, about, top holders, recent activity, More details) |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
 | `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
+| `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
-| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use) |
+| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
 | `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
 | `e2e` | Playwright specs, the `mockApi` helper and `noHorizontalScroll` (`layout.ts`) |
@@ -95,7 +97,18 @@ page share it.
 
 `useDenoms` pages through the tokens list the same way and returns a
 `Map` by denom (`reference` policy); the account page joins balances to it
-for symbols, logos, origins and USD values.
+for symbols, logos, origins and USD values. `useAllTokens` reads the same
+pages with the `live` policy for the tokens page, which filters the kinds
+itself so the tiles always count every token.
+
+A token's routes take the denom URL-encoded on the path
+(`/tokens/factory%2Fbze1…%2Fuhoney`); the client retries a denom with `/` in
+the `?denom=` form when the path answers 404, in case a proxy decodes `%2F`.
+The page route is a catch-all, so `/tokens/factory/bze1…/uhoney` opens it
+too. `useTokenHolders` (the top 10, then 100 a page) and `useTokenTransfers`
+(20 a page) are infinite queries the page grows on request;
+`useTokenEventsAfter` reads every event older than the token's newest 20, so
+the mint and burn totals count them all.
 
 ## Messages in plain words
 

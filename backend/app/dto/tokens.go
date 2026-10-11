@@ -14,7 +14,8 @@ import (
 // price fields are null until the holders and prices jobs fill them; the
 // 24-hour change is the native denom's only (from the BZE/USDC pool). The
 // origin chain is an IBC denom's, null for the others and until the IBC
-// channel is known.
+// channel is known. CreatedTime is the denom's first sight (its `created`
+// token event), null when the explorer did not index one.
 type TokenSummary struct {
 	Denom             string       `json:"denom"`
 	Symbol            *string      `json:"symbol"`
@@ -28,6 +29,7 @@ type TokenSummary struct {
 	Halted            bool         `json:"halted"`
 	LogoURL           *string      `json:"logo_url"`
 	OriginChain       *OriginChain `json:"origin_chain"`
+	CreatedTime       *time.Time   `json:"created_time"`
 }
 
 // OriginChain is where an IBC denom comes from. Name and LogoURL are the
@@ -65,7 +67,6 @@ type Token struct {
 	AdminLabel       *Label          `json:"admin_label"`
 	CreatedHeight    *int64          `json:"created_height"`
 	CreatedTxHash    *string         `json:"created_tx_hash"`
-	CreatedTime      *time.Time      `json:"created_time"`
 	Website          *string         `json:"website"`
 	Markets          []string        `json:"markets"`
 	PriceUpdatedAt   *time.Time      `json:"price_updated_at"`
@@ -114,7 +115,7 @@ func NewTokenSummary(t repository.TokenSummary) TokenSummary {
 	out := TokenSummary{
 		Denom: t.Denom, Symbol: t.Symbol, Name: t.Name, Kind: t.Kind, Exponent: t.Exponent, Supply: t.Supply,
 		HoldersCount: t.HoldersCount, PriceUSD: t.PriceUSD, PriceChange24hPct: t.PriceChange24hPct,
-		Halted: t.Halted, LogoURL: t.LogoURL,
+		Halted: t.Halted, LogoURL: t.LogoURL, CreatedTime: utc(t.CreatedTime),
 	}
 	if t.OriginChainID != nil {
 		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo}
@@ -175,7 +176,7 @@ func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *s
 		TokenSummary: NewTokenSummary(t.TokenSummary),
 		Description:  t.Description, OriginChainID: t.OriginChainID, IBCBaseDenom: t.IBCBaseDenom, IBCPath: t.IBCPath,
 		Creator: t.Creator, CreatorLabel: newLabel(t.CreatorLabel), Admin: t.Admin, AdminLabel: newLabel(t.AdminLabel),
-		CreatedHeight: t.CreatedHeight, CreatedTxHash: t.CreatedTxHash, CreatedTime: utc(t.CreatedTime),
+		CreatedHeight: t.CreatedHeight, CreatedTxHash: t.CreatedTxHash,
 		Website: t.Website, Markets: nonNil(t.Markets), PriceUpdatedAt: utc(t.PriceUpdatedAt),
 		Metadata: jsonOrNull(t.Metadata), UpdatedAt: t.UpdatedAt.UTC(),
 		Events: make([]TokenEvent, 0, len(events)), EventsNextCursor: eventsNext,

@@ -1,0 +1,42 @@
+{
+  "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+  "symbol": "USDC",
+  "name": "USD Coin",
+  "kind": "ibc",
+  "exponent": 6,
+  "supply": "80000000000",
+  "holders_count": 95,
+  "price_usd": "1",
+  "price_change_24h_pct": null,
+  "halted": false,
+  "logo_url": null,
+  "origin_chain": {
+    "chain_id": "noble-1",
+    "name": "Noble",
+    "logo_url": null
+  },
+  "created_time": null,
+  "description": null,
+  "origin_chain_id": "noble-1",
+  "ibc_base_denom": "uusdc",
+  "ibc_path": "transfer/channel-1",
+  "creator": null,
+  "creator_label": null,
+  "admin": null,
+  "admin_label": null,
+  "created_height": null,
+  "created_tx_hash": null,
+  "website": null,
+  "markets": [
+    "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4/ubze"
+  ],
+  "price_updated_at": "2099-10-11T09:59:00Z",
+  "metadata": null,
+  "updated_at": "2099-10-11T09:59:00Z",
+  "events": [],
+  "events_next_cursor": null,
+  "transfers_24h": {
+    "count": 0,
+    "amount": "0"
+  }
+}

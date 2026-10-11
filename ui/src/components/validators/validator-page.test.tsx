@@ -4,13 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { ChainParams, ValidatorDetail, ValidatorList } from "@/api/types";
+import { websiteLink } from "@/lib/links";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
 import detail from "../../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 
-import { ValidatorPage, websiteLink } from "./validator-page";
+import { ValidatorPage } from "./validator-page";
 
 const OP = detail.operator_address;
 
