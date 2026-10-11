@@ -67,10 +67,22 @@ export function formatUsd(value: string | number): string {
   return `≈ ${v.isNegative() ? "-" : ""}$${text}`;
 }
 
-/** A percentage with one decimal: `formatPct("12.34567")` is `12.3%`. */
-export function formatPct(value: string | number): string {
+/**
+ * A percentage with one decimal: `formatPct("12.34567")` is `12.3%`. `trim`
+ * drops a trailing `.0` (`5%`, `100%`); `round` picks the rounding
+ * (half up by default; down where "100%" must mean all of it).
+ */
+export function formatPct(
+  value: string | number,
+  options: { trim?: boolean; round?: "half_up" | "down" } = {},
+): string {
   const v = new BigNumber(value);
-  return v.isFinite() ? `${v.toFormat(1, BigNumber.ROUND_HALF_UP, GROUPING)}%` : "";
+  if (!v.isFinite()) {
+    return "";
+  }
+  const mode = options.round === "down" ? BigNumber.ROUND_DOWN : BigNumber.ROUND_HALF_UP;
+  const text = v.toFormat(1, mode, GROUPING);
+  return `${options.trim ? text.replace(/\.0$/, "") : text}%`;
 }
 
 /** A count with thousands separators. */

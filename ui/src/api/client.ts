@@ -1,6 +1,7 @@
 import type {
   Account,
   Block,
+  ChainParams,
   BlockEvent,
   BlockSummary,
   ErrorBody,
@@ -44,6 +45,8 @@ export interface ExplorerApi {
   tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
+
+  params(signal?: AbortSignal): Promise<ChainParams>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
   rawBlockResults(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -126,6 +129,8 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     tokens: (params, signal) => get("/tokens", { ...page(params), kind: params.kind }, signal),
 
     search: (q, signal) => get("/search", { q }, signal),
+
+    params: (signal) => get("/params", {}, signal),
 
     rawBlock: (height, signal) => get(`/raw/block/${seg(String(height))}`, {}, signal),
     rawBlockResults: (height, signal) => get(`/raw/block_results/${seg(String(height))}`, {}, signal),

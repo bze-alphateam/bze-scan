@@ -16,11 +16,13 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/app` | routes; `layout.tsx` (header, footer), `providers.tsx` (the composition root), `not-found.tsx`, `error.tsx` |
 | `src/api` | `types.ts` (the API's shapes), `client.ts` (the `ExplorerApi` interface, `createHttpApi`, `ApiError`), `provider.tsx` (`ApiProvider`, `useApi`), `hooks.ts` (one React Query hook per route), `policy.ts` (the refetch policies) |
 | `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light |
-| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`) and the skeletons |
+| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
 | `src/components/tx` | the transaction page's sections, states and skeleton |
+| `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
+| `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
 | `src/lib` | `env.ts` (settings), `links.ts` (nav and app links), `format.ts` (display helpers) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
 | `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
@@ -75,7 +77,7 @@ numbers itself:
 | `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 7 s, refetched every 7 s, paused in background tabs |
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
 | `status` | the status light | refetched every 60 s |
-| `reference` | lookups a page decorates with: validator monikers, token symbols and prices | fresh for 60 s, never polled |
+| `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
 apply the policies: a list hook with a `cursor` is `immutable`.
@@ -84,6 +86,10 @@ A transaction the API answers 404 for is pending, never failed:
 `useTransaction` asks again every 7 s for the pending window
 (`TX_PENDING_WINDOW_MS`, two minutes), then reports `not_found`; once found it
 is `immutable`.
+
+`useAllValidators` follows `next_cursor` to the last page (100 per page, all
+statuses) and keeps the first page's `summary`; the list and the validator
+page share it.
 
 ## Messages in plain words
 

@@ -402,6 +402,17 @@ export interface Status {
   };
 }
 
+// Parameters
+
+/** A module's live parameters (proto JSON as the node answers) and its latest recorded change. */
+export interface ModuleParams {
+  params: Record<string, unknown>;
+  last_change: { height: number; time: string; proposal_id: number | null } | null;
+}
+
+/** `GET /params`: by module name; a module the node failed to answer is absent. */
+export type ChainParams = Partial<Record<string, ModuleParams>>;
+
 // Raw JSON proxied from archive nodes
 
 /** A node's JSON-RPC response body, verbatim. */

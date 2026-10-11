@@ -65,6 +65,14 @@ describe("formatPct and formatCount", () => {
     expect(formatPct("0.04")).toBe("0.0%");
   });
 
+  it("trims a trailing .0 and rounds down on request", () => {
+    expect(formatPct("5.00000", { trim: true })).toBe("5%");
+    expect(formatPct("4.25", { trim: true })).toBe("4.3%");
+    expect(formatPct("99.99", { trim: true })).toBe("100%");
+    expect(formatPct("99.99", { trim: true, round: "down" })).toBe("99.9%");
+    expect(formatPct("100.00000", { trim: true, round: "down" })).toBe("100%");
+  });
+
   it("groups counts", () => {
     expect(formatCount(1234567)).toBe("1,234,567");
   });
