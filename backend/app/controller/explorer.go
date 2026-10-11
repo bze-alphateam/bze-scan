@@ -49,6 +49,10 @@ type ExplorerReader interface {
 	// Transfers returns the transfers of the transaction at (height,
 	// txIndex), or of the block itself for repository.BlockTxIndex.
 	Transfers(ctx context.Context, height, txIndex int64) ([]repository.Transfer, error)
+	// BlockTransfers returns up to limit transfers of the block at height,
+	// the block's own first, then by transaction index and seq, after the
+	// key after (from the first when nil).
+	BlockTransfers(ctx context.Context, height int64, after *repository.TransferKey, limit int) ([]repository.BlockTransfer, error)
 	// BlockEvents returns up to limit stored events of the block at height
 	// after seq after (from the first when negative).
 	BlockEvents(ctx context.Context, height, after int64, limit int) ([]repository.BlockEvent, error)
@@ -230,6 +234,52 @@ func (h *ExplorerController) BlockEvents(c *echo.Context) error {
 			break
 		}
 		resp.Items = append(resp.Items, dto.NewBlockEvent(e))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// BlockTransfers serves GET /api/v1/blocks/{height}/transfers?cursor&limit:
+// every transfer of the block, its own (tx_index -1) first, then the
+// transactions' in index and seq order. An indexed block's transfers never
+// change.
+func (h *ExplorerController) BlockTransfers(c *echo.Context) error {
+	height, err := parseHeight(c.Param("height"))
+	if err != nil {
+		return err
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var after *repository.TransferKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if after, err = dto.DecodeTransferCursor(s); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+	ctx := c.Request().Context()
+	ok, err := h.repo.BlockExists(ctx, height)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("block %d is not indexed", height))
+	}
+
+	rows, err := h.repo.BlockTransfers(ctx, height, after, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.BlockTransfer]{Items: make([]dto.BlockTransfer, 0, min(len(rows), limit))}
+	for i, x := range rows {
+		if i == limit {
+			last := rows[i-1]
+			next := dto.EncodeTransferCursor(repository.TransferKey{TxIndex: last.TxIndex, Seq: last.Seq})
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewBlockTransfer(x))
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
 	return c.JSON(http.StatusOK, resp)

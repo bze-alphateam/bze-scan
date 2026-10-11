@@ -91,6 +91,9 @@ type Block struct {
 	// Transfers are the moves the chain made by itself in the block, the
 	// routine minting and fee distribution left out.
 	Transfers []Transfer `json:"transfers"`
+	// TransfersCount counts every transfer of the block, the transactions'
+	// and the block's own; /blocks/{height}/transfers lists them.
+	TransfersCount int64 `json:"transfers_count"`
 	// Events are the block's first classified finalize-block events;
 	// EventsNextCursor continues them on /blocks/{height}/events, null when
 	// they are all here.
@@ -127,26 +130,49 @@ type BlockEvent struct {
 
 // BlockTx is a transaction of the block page.
 type BlockTx struct {
-	Height   int64           `json:"height"`
-	TxIndex  int64           `json:"tx_index"`
-	Hash     string          `json:"hash"`
-	Success  bool            `json:"success"`
-	MsgTypes []string        `json:"msg_types"`
-	Fee      json.RawMessage `json:"fee"`
-	Signer   *string         `json:"signer"`
+	Height       int64           `json:"height"`
+	TxIndex      int64           `json:"tx_index"`
+	Hash         string          `json:"hash"`
+	Success      bool            `json:"success"`
+	MsgTypes     []string        `json:"msg_types"`
+	Fee          json.RawMessage `json:"fee"`
+	Signer       *string         `json:"signer"`
+	GasWanted    *int64          `json:"gas_wanted"`
+	GasUsed      *int64          `json:"gas_used"`
+	FirstMessage *FirstMessage   `json:"first_message"`
 }
 
-// TxSummary is an item of GET /api/v1/txs.
+// FirstMessage is the message at index 0 of a transaction, what a list
+// summarises the transaction by. Body is the decoded message as proto
+// JSON, null when it could not be decoded.
+type FirstMessage struct {
+	TypeURL string          `json:"type_url"`
+	Module  *string         `json:"module"`
+	Body    json.RawMessage `json:"body"`
+}
+
+// TxSummary is an item of GET /api/v1/txs. FirstMessage is null for a
+// transaction without messages.
 type TxSummary struct {
-	Height   int64           `json:"height"`
-	TxIndex  int64           `json:"tx_index"`
-	Hash     string          `json:"hash"`
-	Time     time.Time       `json:"time"`
-	Success  bool            `json:"success"`
-	MsgCount int64           `json:"msg_count"`
-	MsgTypes []string        `json:"msg_types"`
-	Fee      json.RawMessage `json:"fee"`
-	Signer   *string         `json:"signer"`
+	Height       int64           `json:"height"`
+	TxIndex      int64           `json:"tx_index"`
+	Hash         string          `json:"hash"`
+	Time         time.Time       `json:"time"`
+	Success      bool            `json:"success"`
+	MsgCount     int64           `json:"msg_count"`
+	MsgTypes     []string        `json:"msg_types"`
+	Fee          json.RawMessage `json:"fee"`
+	Signer       *string         `json:"signer"`
+	FirstMessage *FirstMessage   `json:"first_message"`
+}
+
+// BlockTransfer is an item of GET /api/v1/blocks/{height}/transfers: a
+// transfer with the index and hash of its transaction, -1 and null for the
+// block's own.
+type BlockTransfer struct {
+	TxIndex int64   `json:"tx_index"`
+	TxHash  *string `json:"tx_hash"`
+	Transfer
 }
 
 // Tx is GET /api/v1/txs/{hash}.
@@ -368,6 +394,7 @@ func NewBlock(b *repository.Block, transfers []repository.Transfer, events []rep
 		SignaturesCount: b.SignaturesCount, SignaturesPowerPct: b.SignaturesPowerPct,
 		Transactions:     make([]BlockTx, 0, len(b.Transactions)),
 		Transfers:        NewTransfers(transfers),
+		TransfersCount:   b.TransfersCount,
 		Events:           make([]BlockEvent, 0, len(events)),
 		EventsNextCursor: eventsNext,
 	}
@@ -378,6 +405,7 @@ func NewBlock(b *repository.Block, transfers []repository.Transfer, events []rep
 		out.Transactions = append(out.Transactions, BlockTx{
 			Height: b.Height, TxIndex: t.TxIndex, Hash: t.Hash, Success: t.Success,
 			MsgTypes: nonNil(t.MsgTypes), Fee: jsonOr(t.Fee, "[]"), Signer: t.Signer,
+			GasWanted: t.GasWanted, GasUsed: t.GasUsed, FirstMessage: newFirstMessage(t.FirstMessage),
 		})
 	}
 	return out
@@ -388,7 +416,36 @@ func NewTxSummary(t repository.TxSummary) TxSummary {
 	return TxSummary{
 		Height: t.Height, TxIndex: t.TxIndex, Hash: t.Hash, Time: t.Time.UTC(), Success: t.Success,
 		MsgCount: t.MsgCount, MsgTypes: nonNil(t.MsgTypes), Fee: jsonOr(t.Fee, "[]"), Signer: t.Signer,
+		FirstMessage: newFirstMessage(t.FirstMessage),
 	}
+}
+
+// NewBlockTransfer maps a transfers row of a block.
+func NewBlockTransfer(x repository.BlockTransfer) BlockTransfer {
+	return BlockTransfer{TxIndex: x.TxIndex, TxHash: x.TxHash, Transfer: NewTransfers([]repository.Transfer{x.Transfer})[0]}
+}
+
+// EncodeTransferCursor is the cursor after a block's transfers row. The
+// transaction index is shifted by one: a block-level row's is -1 and
+// cursor keys are non-negative.
+func EncodeTransferCursor(k repository.TransferKey) string {
+	return EncodeCursor(k.TxIndex+1, k.Seq)
+}
+
+// DecodeTransferCursor reverses EncodeTransferCursor.
+func DecodeTransferCursor(cursor string) (*repository.TransferKey, error) {
+	keys, err := DecodeCursor(cursor, 2)
+	if err != nil {
+		return nil, err
+	}
+	return &repository.TransferKey{TxIndex: keys[0] - 1, Seq: keys[1]}, nil
+}
+
+func newFirstMessage(m *repository.FirstMessage) *FirstMessage {
+	if m == nil {
+		return nil
+	}
+	return &FirstMessage{TypeURL: m.TypeURL, Module: m.Module, Body: jsonOrNull(m.Body)}
 }
 
 // NewTx maps a transaction with its messages, transfers, order book
@@ -402,6 +459,10 @@ func NewTx(t *repository.Tx, transfers []repository.Transfer, dex *repository.Tx
 		Transfers:    NewTransfers(transfers),
 		Dex:          NewTxDex(dex),
 		IBCTransfers: NewTxIBCTransfers(ibc),
+	}
+	if len(t.Messages) > 0 && t.Messages[0].MsgIndex == 0 && out.FirstMessage == nil {
+		m := t.Messages[0]
+		out.FirstMessage = newFirstMessage(&repository.FirstMessage{TypeURL: m.TypeURL, Module: m.Module, Body: m.Body})
 	}
 	for _, m := range t.Messages {
 		out.Messages = append(out.Messages, Message{

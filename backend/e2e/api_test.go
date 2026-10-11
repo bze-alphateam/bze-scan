@@ -76,6 +76,8 @@ func TestAPI(t *testing.T) {
 		"block detail":                  testBlockDetailMatchesTheIndex,
 		"tx detail":                     testTxDetailMatchesTheIndex,
 		"transfers and block events":    testTransfersOnTheDetailPages,
+		"block transfers route":         testBlockTransfersListEveryRow,
+		"list items summarise":          testListItemsCarryTheFirstMessageAndGas,
 		"errors":                        testErrors,
 		"search":                        testSearchResolvesEachKind,
 		"cors":                          testCORSHeadersWhenConfigured,
@@ -356,8 +358,104 @@ func testListQueriesPrunePartitions(t *testing.T, _ string, ix *indexer) {
 
 	_, err = repo.Txs(ctx, &repository.TxKey{Height: cursor, TxIndex: 0}, nil, 2)
 	require.NoError(t, err)
-	allowed = migrations.PartitionNames("transactions", 0, cursor)
-	for _, r := range scannedRelations(t, pool, rec.sql, rec.args) {
+	// The first message is a lookup in the messages partitions up to the
+	// cursor.
+	allowed = append(migrations.PartitionNames("transactions", 0, cursor), migrations.PartitionNames("messages", 0, cursor)...)
+	rels = scannedRelations(t, pool, rec.sql, rec.args)
+	assert.Contains(t, rels, migrations.PartitionName("messages", cursor))
+	for _, r := range rels {
 		assert.Contains(t, allowed, r)
 	}
+
+	// A block's transfers read the block's own partitions only.
+	_, err = repo.BlockTransfers(ctx, hOrders, &repository.TransferKey{TxIndex: -1, Seq: 0}, 2)
+	require.NoError(t, err)
+	allowed = []string{migrations.PartitionName("transfers", hOrders), migrations.PartitionName("transactions", hOrders),
+		"denoms", "labels"}
+	rels = scannedRelations(t, pool, rec.sql, rec.args)
+	assert.Contains(t, rels, migrations.PartitionName("transfers", hOrders))
+	for _, r := range rels {
+		assert.Contains(t, allowed, r)
+	}
+}
+
+func testBlockTransfersListEveryRow(t *testing.T, base string, ix *indexer) {
+	type key struct{ txIndex, seq int64 }
+	var got []key
+	var items []dto.BlockTransfer
+	url := fmt.Sprintf("%s/blocks/%d/transfers?limit=2", base, hOrders)
+	pages := 0
+	for {
+		r := fetch(t, url)
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+		page := into[dto.List[dto.BlockTransfer]](t, r)
+		pages++
+		for _, x := range page.Items {
+			got = append(got, key{x.TxIndex, x.Seq})
+			items = append(items, x)
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		url = fmt.Sprintf("%s/blocks/%d/transfers?limit=2&cursor=%s", base, hOrders, *page.NextCursor)
+	}
+	var want []key
+	rows, err := ix.db.Query(`SELECT tx_index, seq FROM explorer.transfers WHERE height = $1 ORDER BY tx_index, seq`, hOrders)
+	require.NoError(t, err)
+	for rows.Next() {
+		var k key
+		require.NoError(t, rows.Scan(&k.txIndex, &k.seq))
+		want = append(want, k)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	require.Greater(t, len(want), 3, "the block's own rows and its transactions'")
+	assert.Equal(t, want, got, "every row once, the block's own first, then by transaction and seq")
+	assert.Equal(t, (len(want)+1)/2, pages)
+	assert.Equal(t, int64(-1), items[0].TxIndex)
+	for _, x := range items {
+		if x.TxIndex == -1 {
+			assert.Nil(t, x.TxHash)
+			continue
+		}
+		require.NotNil(t, x.TxHash)
+		assert.Equal(t, ix.one(t, `SELECT hash FROM explorer.transactions WHERE height = $1 AND tx_index = $2`,
+			hOrders, x.TxIndex), *x.TxHash)
+	}
+
+	b := into[dto.Block](t, fetch(t, fmt.Sprintf("%s/blocks/%d", base, hOrders)))
+	assert.Equal(t, int64(len(want)), b.TransfersCount, "the block counts what the route lists")
+	assert.Len(t, b.Transfers, 3, "the block's own transfers stay as they were")
+
+	r := fetch(t, base+"/blocks/1/transfers")
+	assert.Equal(t, http.StatusNotFound, r.status)
+	assert.Equal(t, "no-store", r.header.Get("Cache-Control"))
+}
+
+func testListItemsCarryTheFirstMessageAndGas(t *testing.T, base string, ix *indexer) {
+	var send *dto.TxSummary
+	for _, tx := range into[dto.List[dto.TxSummary]](t, fetch(t, base+"/txs?limit=100")).Items {
+		if tx.Hash == sendHash {
+			send = &tx
+		}
+	}
+	require.NotNil(t, send, "the MsgSend fixture is listed")
+	require.NotNil(t, send.FirstMessage)
+	assert.Equal(t, "/cosmos.bank.v1beta1.MsgSend", send.FirstMessage.TypeURL)
+	assert.Equal(t, "bank", *send.FirstMessage.Module)
+	assert.JSONEq(t, ix.one(t, `SELECT body::text FROM explorer.messages WHERE height = $1 AND tx_index = 0 AND msg_index = 0`,
+		hSend), string(send.FirstMessage.Body))
+
+	b := into[dto.Block](t, fetch(t, fmt.Sprintf("%s/blocks/%d", base, hSend)))
+	require.NotEmpty(t, b.Transactions)
+	tx := b.Transactions[0]
+	require.NotNil(t, tx.GasUsed)
+	assert.Equal(t, ix.one(t, `SELECT gas_used::text FROM explorer.transactions WHERE height = $1 AND tx_index = 0`, hSend),
+		fmt.Sprint(*tx.GasUsed))
+	require.NotNil(t, tx.GasWanted)
+	require.NotNil(t, tx.FirstMessage)
+	assert.Equal(t, "/cosmos.bank.v1beta1.MsgSend", tx.FirstMessage.TypeURL)
+	assert.Equal(t, int64(len(queryStrings(t, ix.db, `SELECT seq::text FROM explorer.transfers WHERE height = $1`, hSend))),
+		b.TransfersCount)
 }

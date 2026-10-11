@@ -67,6 +67,8 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	assert.Equal(t, []any{}, got["transfers"])
 	assert.Nil(t, got["dex"], "no order outcome and nothing pending")
 	assert.Contains(t, got, "dex")
+	assert.Equal(t, map[string]any{"type_url": "/x.MsgY", "module": nil, "body": nil}, got["first_message"],
+		"the detail's first message is its message at index 0")
 
 	block := dto.NewBlock(&repository.Block{BlockSummary: repository.BlockSummary{Height: 9},
 		Transactions: []repository.BlockTx{{TxIndex: 2, Hash: "CD"}}}, nil,
@@ -120,3 +122,56 @@ func TestNewValidatorUptime(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestFirstMessageIsNullWithoutMessages(t *testing.T) {
+	module := "bank"
+	tx := dto.NewTxSummary(repository.TxSummary{Height: 7, Hash: "AB", FirstMessage: &repository.FirstMessage{
+		TypeURL: "/cosmos.bank.v1beta1.MsgSend", Module: &module, Body: json.RawMessage(`{"amount":[]}`)}})
+	b, err := json.Marshal(tx)
+	require.NoError(t, err)
+	assert.Contains(t, string(b),
+		`"first_message":{"type_url":"/cosmos.bank.v1beta1.MsgSend","module":"bank","body":{"amount":[]}}`)
+
+	b, err = json.Marshal(dto.NewTxSummary(repository.TxSummary{Height: 7, Hash: "CD"}))
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"first_message":null`, "a transaction without messages")
+
+	b, err = json.Marshal(dto.NewTx(&repository.Tx{TxSummary: repository.TxSummary{Hash: "EF"}}, nil, nil, nil))
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"first_message":null`)
+
+	// An undecodable first message keeps its type with a null body.
+	b, err = json.Marshal(dto.NewTxSummary(repository.TxSummary{Hash: "AB",
+		FirstMessage: &repository.FirstMessage{TypeURL: "/x.MsgY"}}))
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"first_message":{"type_url":"/x.MsgY","module":null,"body":null}`)
+}
+
+func TestBlockTxCarriesGasAndTheFirstMessage(t *testing.T) {
+	wanted, used := int64(200000), int64(81234)
+	block := dto.NewBlock(&repository.Block{BlockSummary: repository.BlockSummary{Height: 9}, TransfersCount: 4,
+		Transactions: []repository.BlockTx{{TxIndex: 0, Hash: "CD", GasWanted: &wanted, GasUsed: &used,
+			FirstMessage: &repository.FirstMessage{TypeURL: "/x.MsgY", Body: json.RawMessage(`{}`)}}}}, nil, nil, nil)
+	b, err := json.Marshal(block)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"transfers_count":4`)
+	assert.Contains(t, string(b), `"gas_wanted":200000,"gas_used":81234,`+
+		`"first_message":{"type_url":"/x.MsgY","module":null,"body":{}}`)
+}
+
+func TestBlockTransferShapeAndCursor(t *testing.T) {
+	hash := "AB"
+	b, err := json.Marshal(dto.NewBlockTransfer(repository.BlockTransfer{TxIndex: 2, TxHash: &hash,
+		Transfer: repository.Transfer{Seq: 3, Kind: "transfer", Denom: "ubze", Amount: "5"}}))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"tx_index":2,"tx_hash":"AB","seq":3,"msg_index":null,"kind":"transfer",
+		"sender":null,"sender_label":null,"recipient":null,"recipient_label":null,
+		"denom":"ubze","amount":"5","symbol":null,"exponent":null}`, string(b))
+
+	k := repository.TransferKey{TxIndex: repository.BlockTxIndex, Seq: 4}
+	got, err := dto.DecodeTransferCursor(dto.EncodeTransferCursor(k))
+	require.NoError(t, err)
+	assert.Equal(t, &k, got, "the block-level tx_index -1 survives the cursor")
+	_, err = dto.DecodeTransferCursor(dto.EncodeCursor(7))
+	assert.ErrorIs(t, err, dto.ErrInvalidCursor)
+}

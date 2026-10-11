@@ -73,6 +73,16 @@ type Token struct {
 	UpdatedAt        time.Time       `json:"updated_at"`
 	Events           []TokenEvent    `json:"events"`
 	EventsNextCursor *string         `json:"events_next_cursor"`
+	// Transfers24h is what moved in the 24 hours before the latest indexed
+	// block.
+	Transfers24h TransferVolume `json:"transfers_24h"`
+}
+
+// TransferVolume counts the transfers of a denom in a window; Amount is
+// their sum in base units.
+type TransferVolume struct {
+	Count  int64  `json:"count"`
+	Amount string `json:"amount"`
 }
 
 // TokenEvent is one event in a denom's history. TxHash is null for a
@@ -157,8 +167,10 @@ func DecodeHolderCursor(cursor string) (*repository.HolderKey, error) {
 	return &repository.HolderKey{Balance: c.Balance, Address: c.Address, Rank: c.Rank}, nil
 }
 
-// NewToken maps the token page.
-func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *string) Token {
+// NewToken maps the token page: the denom, the first page of its events
+// (eventsNext continues them, nil when complete) and its 24-hour volume.
+func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *string,
+	volume repository.TransferVolume) Token {
 	out := Token{
 		TokenSummary: NewTokenSummary(t.TokenSummary),
 		Description:  t.Description, OriginChainID: t.OriginChainID, IBCBaseDenom: t.IBCBaseDenom, IBCPath: t.IBCPath,
@@ -167,6 +179,7 @@ func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *s
 		Website: t.Website, Markets: nonNil(t.Markets), PriceUpdatedAt: utc(t.PriceUpdatedAt),
 		Metadata: jsonOrNull(t.Metadata), UpdatedAt: t.UpdatedAt.UTC(),
 		Events: make([]TokenEvent, 0, len(events)), EventsNextCursor: eventsNext,
+		Transfers24h: TransferVolume{Count: volume.Count, Amount: volume.Amount},
 	}
 	for _, e := range events {
 		out.Events = append(out.Events, NewTokenEvent(e))

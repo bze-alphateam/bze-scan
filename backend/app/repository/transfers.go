@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -25,6 +26,28 @@ type Transfer struct {
 	Exponent       *int
 	SenderLabel    *Label
 	RecipientLabel *Label
+}
+
+// BlockTransfer is a transfers row of a block with its transaction's
+// index and hash (nil for the block's own rows).
+type BlockTransfer struct {
+	Transfer
+	TxIndex int64
+	TxHash  *string
+}
+
+// TransferKey is the keyset position of a block's transfers: by
+// transaction index (the block's own rows, BlockTxIndex, first), then seq.
+type TransferKey struct {
+	TxIndex int64
+	Seq     int64
+}
+
+// TransferVolume is how many transfers rows moved a denom in a window and
+// their base-unit sum as decimal text.
+type TransferVolume struct {
+	Count  int64
+	Amount string
 }
 
 // BlockEvent is a block_events row.
@@ -60,6 +83,64 @@ func (r *Explorer) Transfers(ctx context.Context, height, txIndex int64) ([]Tran
 		return nil, fmt.Errorf("transfers %d/%d: %w", height, txIndex, err)
 	}
 	return out, nil
+}
+
+// BlockTransfers returns up to limit transfers rows of the block at height,
+// the transactions' and the block's own, by transaction index (the block's
+// own first) then seq, after the key after (from the first when nil).
+func (r *Explorer) BlockTransfers(ctx context.Context, height int64, after *TransferKey, limit int) ([]BlockTransfer, error) {
+	args := []any{height, limit}
+	keyset := ""
+	if after != nil {
+		args = append(args, after.TxIndex, after.Seq)
+		keyset = ` AND (x.tx_index, x.seq) > ($3, $4)`
+	}
+	rows, err := r.db.Query(ctx, `SELECT x.tx_index, tx.hash, x.seq, x.msg_index, x.kind, x.sender, x.recipient,
+			x.denom, x.amount::text, d.symbol, d.exponent, ls.name, ls.kind, lr.name, lr.kind
+		FROM explorer.transfers x
+		LEFT JOIN explorer.transactions tx ON tx.height = $1 AND tx.tx_index = x.tx_index
+		LEFT JOIN explorer.denoms d ON d.denom = x.denom
+		LEFT JOIN explorer.labels ls ON ls.address = x.sender
+		LEFT JOIN explorer.labels lr ON lr.address = x.recipient
+		WHERE x.height = $1`+keyset+`
+		ORDER BY x.tx_index, x.seq LIMIT $2`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("block transfers %d: %w", height, err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (BlockTransfer, error) {
+		var x BlockTransfer
+		var senderName, senderKind, recipientName, recipientKind *string
+		err := row.Scan(&x.TxIndex, &x.TxHash, &x.Seq, &x.MsgIndex, &x.Kind, &x.Sender, &x.Recipient,
+			&x.Denom, &x.Amount, &x.Symbol, &x.Exponent, &senderName, &senderKind, &recipientName, &recipientKind)
+		x.SenderLabel = label(x.Sender, senderName, senderKind)
+		x.RecipientLabel = label(x.Recipient, recipientName, recipientKind)
+		return x, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("block transfers %d: %w", height, err)
+	}
+	return out, nil
+}
+
+// denomVolumeSQL counts and sums the transfers rows of a denom in the
+// blocks newer than the window before the latest indexed block (not the
+// wall clock, like the home tiles). The lowest height of the window is an
+// init plan, so the (denom, height) index and run-time partition pruning
+// serve the scan.
+const denomVolumeSQL = `SELECT count(*), coalesce(sum(x.amount), 0)::text
+	FROM explorer.transfers x
+	WHERE x.denom = $1 AND x.height >= (
+		SELECT min(b.height) FROM explorer.blocks b
+		 WHERE b.time > (SELECT max(time) FROM explorer.blocks) - $2 * interval '1 second')`
+
+// DenomVolume returns the transfers of denom in the window before the
+// latest indexed block; none before the first block.
+func (r *Explorer) DenomVolume(ctx context.Context, denom string, window time.Duration) (*TransferVolume, error) {
+	var v TransferVolume
+	if err := r.db.QueryRow(ctx, denomVolumeSQL, denom, window.Seconds()).Scan(&v.Count, &v.Amount); err != nil {
+		return nil, fmt.Errorf("denom volume %s: %w", denom, err)
+	}
+	return &v, nil
 }
 
 // BlockEvents returns up to limit block_events rows of height in seq order,

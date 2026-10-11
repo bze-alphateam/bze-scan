@@ -68,6 +68,19 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	}
 	factories := tokenPages(t, base, "&kind=factory")
 	assert.Len(t, factories, 6)
+	// Every item carries the base denom, the exponent, the logo and the
+	// origin chain, null or not.
+	var raw struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(fetch(t, base+"/api/v1/tokens?limit=100").body, &raw))
+	require.Len(t, raw.Items, recordedDenoms)
+	for _, item := range raw.Items {
+		for _, key := range []string{"denom", "exponent", "logo_url", "origin_chain"} {
+			assert.Contains(t, item, key)
+		}
+		assert.NotEqual(t, `""`, string(item["denom"]))
+	}
 
 	// A factory denom, URL-encoded on the path or as ?denom=.
 	for _, path := range []string{"/api/v1/tokens/" + url.PathEscape(vdlDenom), "/api/v1/token?denom=" + url.QueryEscape(vdlDenom)} {
@@ -205,4 +218,39 @@ func TestTokenHistoryAndTransfers(t *testing.T) {
 			assert.Nil(t, x.TxHash, "a block-level settlement")
 		}
 	}
+
+	// transfers_24h: the only block is the latest, so all of its moves.
+	volume := func() dto.TransferVolume {
+		t.Helper()
+		r := fetch(t, base+"/api/v1/tokens/"+url.PathEscape(usdcDenom))
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		return into[dto.Token](t, r).Transfers24h
+	}
+	sum := queryStrings(t, e.db, `SELECT sum(amount)::text FROM explorer.transfers WHERE denom = $1`, usdcDenom)[0]
+	assert.Equal(t, dto.TransferVolume{Count: int64(want), Amount: sum}, volume())
+
+	// A newer latest block 25 hours later moves the window past the
+	// recorded block. A move 2 hours after it is inside the window, one
+	// exactly 24 hours before the latest block is not.
+	inside, edge, latest := hOrders+500, hOrders+300, hOrders+1000
+	_, err = e.db.Exec(`INSERT INTO explorer.blocks (height, time, hash)
+		SELECT v.height, b.time + v.later, 'SEEDED' FROM explorer.blocks b,
+		       (VALUES ($2::bigint, interval '2 hours'), ($3::bigint, interval '1 hour'), ($4::bigint, interval '25 hours')) v(height, later)
+		 WHERE b.height = $1`, hOrders, inside, edge, latest)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, kind, sender, recipient, denom, amount)
+		VALUES ($1, -1, 0, 'transfer', 'bze1a', 'bze1b', $3, 7), ($2, -1, 0, 'transfer', 'bze1a', 'bze1b', $3, 100)`,
+		inside, edge, usdcDenom)
+	require.NoError(t, err)
+	assert.Equal(t, dto.TransferVolume{Count: 1, Amount: "7"}, volume())
+
+	// A denom that never moved counts nothing.
+	still := queryStrings(t, e.db, `SELECT denom FROM explorer.denoms d
+		WHERE NOT EXISTS (SELECT 1 FROM explorer.transfers x WHERE x.denom = d.denom)`)
+	require.NotEmpty(t, still)
+	assert.Equal(t, dto.TransferVolume{Count: 0, Amount: "0"}, func() dto.TransferVolume {
+		r := fetch(t, base+"/api/v1/tokens/"+url.PathEscape(still[0]))
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		return into[dto.Token](t, r).Transfers24h
+	}())
 }

@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -54,4 +55,32 @@ func TestDenomHistoryPagesNewestFirst(t *testing.T) {
 	assert.NotContains(t, db.sql[1], "$3", "the first page has no keyset")
 	assert.Contains(t, db.sql[1], "WHERE x.denom = $1")
 	assert.Contains(t, db.sql[1], "ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC")
+}
+
+func TestBlockTransfersPageByIndexThenSeq(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	r := repository.NewExplorer(db)
+	ctx := context.Background()
+
+	_, err := r.BlockTransfers(ctx, 9, nil, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[0], "WHERE x.height = $1\n")
+	assert.NotContains(t, db.sql[0], "$3", "the first page has no keyset")
+	assert.Contains(t, db.sql[0], "ORDER BY x.tx_index, x.seq LIMIT $2")
+	assert.Contains(t, db.sql[0], "LEFT JOIN explorer.transactions tx ON tx.height = $1 AND tx.tx_index = x.tx_index")
+	assert.Equal(t, []any{int64(9), 26}, db.args[0])
+
+	_, err = r.BlockTransfers(ctx, 9, &repository.TransferKey{TxIndex: repository.BlockTxIndex, Seq: 4}, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[1], "AND (x.tx_index, x.seq) > ($3, $4)")
+	assert.Equal(t, []any{int64(9), 26, int64(-1), int64(4)}, db.args[1])
+}
+
+func TestDenomVolumeWindowEndsAtTheLatestBlock(t *testing.T) {
+	db := &fakeDB{rowErr: errDB}
+	_, err := repository.NewExplorer(db).DenomVolume(context.Background(), "ubze", 24*time.Hour)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[0], "x.denom = $1 AND x.height >= (")
+	assert.Contains(t, db.sql[0], "b.time > (SELECT max(time) FROM explorer.blocks) - $2 * interval '1 second'")
+	assert.Equal(t, []any{"ubze", float64(86400)}, db.args[0])
 }

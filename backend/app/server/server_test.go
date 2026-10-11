@@ -310,6 +310,10 @@ func (noTokens) TokenHolders(context.Context, string, *repository.HolderKey, int
 	return nil, nil
 }
 
+func (noTokens) DenomVolume(context.Context, string, time.Duration) (*repository.TransferVolume, error) {
+	return &repository.TransferVolume{Amount: "0"}, nil
+}
+
 // A URL-encoded denom stays one path segment, on the detail route and on the
 // routes below it.
 func TestTokenRoutes(t *testing.T) {

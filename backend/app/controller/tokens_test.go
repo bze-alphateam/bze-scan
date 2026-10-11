@@ -31,7 +31,9 @@ type fakeTokens struct {
 	events    []repository.TokenEvent
 	transfers []repository.DenomTransfer
 	holders   []repository.TokenHolder
+	volume    repository.TransferVolume
 	err       error
+	gotWindow time.Duration
 
 	gotKind   *string
 	gotAfter  *repository.TokenKey
@@ -70,6 +72,11 @@ func (f *fakeTokens) DenomTransfers(_ context.Context, _ string, before *reposit
 func (f *fakeTokens) TokenHolders(_ context.Context, _ string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error) {
 	f.gotHolder, f.gotLimit = after, limit
 	return f.holders[:min(limit, len(f.holders))], nil
+}
+
+func (f *fakeTokens) DenomVolume(_ context.Context, _ string, window time.Duration) (*repository.TransferVolume, error) {
+	f.gotWindow = window
+	return &f.volume, nil
 }
 
 func tokenServer(f *fakeTokens) *echo.Echo {
@@ -139,7 +146,7 @@ func TestTokensListsByKindAndPages(t *testing.T) {
 }
 
 func TestTokenResolvesAnEncodedOrAQueryDenom(t *testing.T) {
-	f := &fakeTokens{token: honeyToken(), events: tokenEvents(3)}
+	f := &fakeTokens{token: honeyToken(), events: tokenEvents(3), volume: repository.TransferVolume{Count: 3, Amount: "1200"}}
 	e := tokenServer(f)
 	for _, path := range []string{
 		"/api/v1/tokens/" + url.PathEscape(honeyDenom),
@@ -157,6 +164,8 @@ func TestTokenResolvesAnEncodedOrAQueryDenom(t *testing.T) {
 		assert.Nil(t, tok.EventsNextCursor)
 		assert.Nil(t, tok.Events[0].TxHash, "a block-level event")
 		assert.JSONEq(t, `null`, string(tok.Events[0].Details))
+		assert.Equal(t, dto.TransferVolume{Count: 3, Amount: "1200"}, tok.Transfers24h)
+		assert.Equal(t, 24*time.Hour, f.gotWindow, "the last 24 hours")
 	}
 
 	rec := get(t, e, "/api/v1/tokens/"+url.PathEscape("factory/nobody/uzz"))

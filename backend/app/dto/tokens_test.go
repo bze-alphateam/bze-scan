@@ -38,8 +38,9 @@ func TestNewTokenDefaults(t *testing.T) {
 	tok := dto.NewToken(&repository.Token{
 		TokenSummary: repository.TokenSummary{Denom: "ibc/X", Kind: "ibc"},
 		UpdatedAt:    time.Date(2026, 10, 9, 12, 0, 0, 0, time.FixedZone("x", 3600)),
-	}, nil, nil)
+	}, nil, nil, repository.TransferVolume{Count: 2, Amount: "15"})
 	assert.Equal(t, []string{}, tok.Markets, "an empty list, never null")
+	assert.Equal(t, dto.TransferVolume{Count: 2, Amount: "15"}, tok.Transfers24h)
 	assert.Equal(t, []dto.TokenEvent{}, tok.Events)
 	assert.JSONEq(t, `null`, string(tok.Metadata))
 	assert.Equal(t, time.UTC, tok.UpdatedAt.Location())
