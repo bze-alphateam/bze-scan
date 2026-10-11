@@ -197,6 +197,9 @@ internal/statesync/
 internal/statesync/validators/
                    the validators set (explorer.validators and the
                    validator_owner labels)
+internal/statesync/channels/
+                   the IBC channels set (explorer.ibc_channels, ibc_escrow
+                   labels, the counterparty of earlier transfers)
 internal/statesync/denoms/
                    the denoms set (explorer.denoms, IBC denom resolution)
 internal/statesync/registry/
@@ -279,7 +282,8 @@ every later route follows:
 | `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer), `transfers` (the block's own moves, as on the transaction page, `msg_index` null) and `events` (its first 100 stored block events: seq, type, attrs) with `events_next_cursor` (null when they are all there); 400 unless a positive integer, 404 when not indexed |
 | `GET /api/v1/blocks/{height}/events?cursor&limit` | the block's stored events in order (seq, type, attrs); immutable once the block is indexed; 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
-| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled) and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, never immutable) |
+| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled) and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, never immutable). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
+| `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
 | `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
@@ -287,6 +291,7 @@ every later route follows:
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
 | `GET /api/v1/accounts/{address}/activity?category=&cursor&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list |
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
+| `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
 | `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
@@ -351,8 +356,9 @@ bze-scan migrate version    # print the current version (0 when none)
   embedded in the binary and applied with golang-migrate: the schema, the
   notification trigger, the history tables, the state tables, the
   operational tables, the functions (`ensure_partitions`,
-  `reclassify_unknown`), and the DEX lookups (fills by maker, the outcome of
-  a transaction, an order's cancel).
+  `reclassify_unknown`), the DEX lookups (fills by maker, the outcome of
+  a transaction, an order's cancel) and the IBC lookups (the transfers a
+  transaction settled).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -683,6 +689,33 @@ order still open. A fill message whose orders were gone is refunded by the
 chain without any event, so it stays pending until the later-block
 attribution decides.
 
+### Cross-chain transfers
+
+A transfer's status comes from BZE's own events: the relayer that carries a
+packet brings the other chain's acknowledgement, or the timeout, back to BZE
+as a transaction. No other chain is ever queried. `explorer.ibc_transfers`
+holds one row per BZE-side channel, packet sequence and direction (ICS-20
+packets on port `transfer` only):
+
+| Step | Events | Row |
+| --- | --- | --- |
+| `MsgTransfer` | `send_packet` (packet data from `packet_data_hex`) | `out`, `pending`; the denom is the BZE denom the packet's trace names |
+| `MsgAcknowledgement` | `acknowledge_packet` + `fungible_token_packet` with `success` (the ack result, any value) | `delivered` |
+| `MsgAcknowledgement` | `acknowledge_packet` + `fungible_token_packet` with `error` | `refunded_rejected`, `ack_error` |
+| `MsgTimeout`, `MsgTimeoutOnClose` | `timeout_packet` | `refunded_timeout` |
+| `MsgRecvPacket` | `recv_packet` + `fungible_token_packet` with `success = "true"` | `in`, `received` |
+| `MsgRecvPacket` | `recv_packet` + `bze.txfeecollector.BlockedIbcInboundEvent` (chain v8.2.0) | `in`, `rejected`, `ack_error` "blocked inbound denom" (another error ack: its error) |
+
+`timeout_height` `0-0` and `timeout_timestamp` 0 mean none (NULL). Every
+final status sets `result_*`. The backfill walks down, so an
+acknowledgement or a timeout can be written before its transfer: it carries
+the whole packet in its message body and inserts a complete row (its own
+transaction as `created_*`); the transfer's write then replaces `created_*`
+and the timeouts and never touches the status or `result_*`. The settling
+write changes only a `pending` row, so replays and backfill overlap are
+idempotent, and both orders end with the same row. A transfer no relayer
+ever settles stays `pending`, shown as `expired` past its timeout time.
+
 ## Reindex
 
 `bze-scan reindex` runs chosen heights through the backfill pipeline again
@@ -756,7 +789,8 @@ indexer) the state sync:
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
-   proposals, prices, chain state: one minute; denoms, holders: one hour;
+   proposals, prices, chain state: one minute; denoms, holders, IBC
+   channels: one hour;
    chain registry, params: one day), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
@@ -828,6 +862,21 @@ becomes the origin; when that fails the first hop's chain and the raw base
 denom stay. A chain or an asset the registry cache misses is published to
 the chain_registry set (by chain id, or `name:<registry name>` for a trace's
 chain).
+
+**IBC channels.** Registered first, since the chain registry names their
+counterparties and the denoms take their origin from them. A full resync
+reads the channel `Channels` query (200 per page) and, per channel on port
+`transfer`, `ChannelClientState`: the Tendermint light client's `chain_id`
+is the counterparty chain (another client type names none). It upserts
+`explorer.ibc_channels` (a counterparty the node did not answer keeps the
+stored one), one `ibc_escrow` label per channel (`source = sync`, module
+`transfer`, the address `transfertypes.GetEscrowAddress` derives, named
+"Cross-chain escrow (<pretty name, else chain id>)"), and fills
+`ibc_transfers.counterparty_chain_id` where the transfer was stored before
+its channel was known. A counterparty absent from `explorer.chains` goes to
+the chain registry set at once. Channel open and close events mark the set;
+the chain registry marks it after a run that saved a chain, so the escrow
+names follow the registry.
 
 **Chain registry.** `explorer.chains` and `explorer.registry_assets` cache
 the Cosmos chain registry: the GitHub contents API lists its directories
@@ -986,8 +1035,9 @@ backfill tests walk that whole range (24998316, 24998321 and 24998326 carry
 tradebin transactions). Heights with
 transactions: 24999004 (multi-message `MsgCancelOrder` transactions and an
 out-of-gas `MsgCreateOrder`), 24999134 (multi-message `MsgCreateOrder`),
-24999205 (IBC `MsgTransfer`), 24999209 (relayer `MsgUpdateClient` with
-`MsgRecvPacket` / `MsgAcknowledgement`), 25000439 (`MsgWithdrawDelegatorReward`
+24999205 (IBC `MsgTransfer` over channel-3, sequence 5437), 24999209
+(relayer `MsgUpdateClient` with `MsgRecvPacket` / `MsgAcknowledgement`, the
+latter acknowledging 24999205's packet), 25000439 (`MsgWithdrawDelegatorReward`
 + `MsgWithdrawValidatorCommission`), 25000440 (authz `MsgExec`) and 25000894
 (`MsgSend`). Validator events: 22933748 (`MsgEditValidator` raising a
 commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
@@ -996,7 +1046,12 @@ commission), 24113494 (`MsgCreateValidator`), 24129272 (`MsgUnjail`),
 active set). Transfers and block events come from the same heights: the fills
 of 24999134 (settlements at block level, `OrderExecutedEvent`), the failed
 transaction of 24999004 (its fee row only), the slash of 24160001 (a burn) and
-the empty 24998317. Governance: 23745024 (`MsgSubmitProposal` of proposal 47
+the empty 24998317. Cross-chain transfers: those two, and from the old
+generations a send and its acknowledgement (4002550, 4002556), an inbound
+transfer (10002143), a send nothing settles (20235036) and two timeouts
+(20237220). No recorded height has a rejected acknowledgement or a blocked
+inbound transfer (the block arrived with chain v8.2.0, mainnet runs v8.1.1):
+the unit tests build them from 24999209's recorded relay. Governance: 23745024 (`MsgSubmitProposal` of proposal 47
 with its whole deposit), 23745061 (a validator owner's vote), 23745456 (a
 delegator's vote) and 23821225 (`active_proposal`, passed); 20121960 carries
 the legacy (v1beta1) submission of proposal 44. No recorded height has a
@@ -1050,7 +1105,7 @@ methods. Denoms in file names are path-escaped
 make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
 
-`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`, `holders`, `chain`;
+`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`, `holders`, `channels`, `chain`;
 the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
@@ -1079,6 +1134,9 @@ and the `Params` of slashing, gov (recorded from `/params/tallying`, whose
 cointrunk and txfeecollector (recorded 2026-10-10; the committed `Pool` and
 `SupplyOf` ubze stay those of 2026-10-09, which the e2e numbers are computed
 from).
+`make grpc-fixtures SETS=channels` records the channels set: channel
+`Channels` (mainnet's fourteen transfer channels, one page) and each one's
+`ChannelClientState.transfer.<channel>.json` (recorded 2026-10-11).
 
 records `staking/Validators.json`, `slashing/SigningInfos.json`,
 `slashing/Params.json`, every validator's self-delegation and delegator
