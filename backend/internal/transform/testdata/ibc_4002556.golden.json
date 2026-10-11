@@ -1,0 +1,24 @@
+[
+  {
+    "channel_id": "channel-0",
+    "sequence": 106,
+    "direction": "out",
+    "status": "delivered",
+    "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e",
+    "receiver": "osmo19l9wsymdh3mp7munzrlk8rs03ttnu2uaujyktu",
+    "denom": "ubze",
+    "amount": "5000000",
+    "memo": "",
+    "created_height": 4002556,
+    "created_tx_index": 0,
+    "created_tx_hash": "4D4FF8256180FAC50EA2169368510FA6F4B262F1E52D101DD62A24EF58F7CB0D",
+    "created_time": "2022-12-21T18:05:20.490765551Z",
+    "timeout_height": "1-7438201",
+    "timeout_time": null,
+    "result_height": 4002556,
+    "result_tx_hash": "4D4FF8256180FAC50EA2169368510FA6F4B262F1E52D101DD62A24EF58F7CB0D",
+    "result_time": "2022-12-21T18:05:20.490765551Z",
+    "ack_error": "",
+    "resolves": true
+  }
+]

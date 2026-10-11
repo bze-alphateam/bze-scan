@@ -1,0 +1,24 @@
+[
+  {
+    "channel_id": "channel-3",
+    "sequence": 5437,
+    "direction": "out",
+    "status": "pending",
+    "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+    "receiver": "noble1mjpllwcpca0t2dmnr3wez2ugkr5l07lf0dyjqa",
+    "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+    "amount": "957617",
+    "memo": "{\"forward\":{\"channel\":\"channel-1\",\"next\":{\"wasm\":{\"contract\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"msg\":{\"swap_and_action\":{\"affiliates\":[],\"min_asset\":{\"native\":{\"amount\":\"5043987638\",\"denom\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\"}},\"post_swap_action\":{\"ibc_transfer\":{\"ibc_info\":{\"memo\":\"\",\"receiver\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\",\"recover_address\":\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\",\"source_channel\":\"channel-340\"}}},\"timeout_timestamp\":1791479095283102700,\"user_swap\":{\"swap_exact_asset_in\":{\"operations\":[{\"denom_in\":\"ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4\",\"denom_out\":\"uosmo\",\"pool\":\"1464\"},{\"denom_in\":\"uosmo\",\"denom_out\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\",\"pool\":\"856\"}],\"swap_venue_name\":\"osmosis-poolmanager\"}}}}}},\"port\":\"transfer\",\"receiver\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"retries\":2,\"timeout\":1791479095283082641}}",
+    "created_height": 24999205,
+    "created_tx_index": 0,
+    "created_tx_hash": "8F67A7463FA352ED10958716837119DA98A0274D2E93E30A55B16D0764C11F8B",
+    "created_time": "2026-10-08T17:00:00.688597027Z",
+    "timeout_height": "",
+    "timeout_time": "2026-10-08T17:04:55.2830797Z",
+    "result_height": null,
+    "result_tx_hash": "",
+    "result_time": null,
+    "ack_error": "",
+    "resolves": false
+  }
+]

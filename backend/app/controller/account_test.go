@@ -41,6 +41,17 @@ type fakeAccounts struct {
 	gotStatus      *string
 	gotOrderBefore *repository.OrderKey
 	gotFillBefore  *repository.FillKey
+	// ibc is what AccountIBCTransfers answers.
+	ibc          []repository.IBCTransfer
+	ibcErr       error
+	gotDirection string
+	gotIBCBefore *repository.IBCKey
+}
+
+func (f *fakeAccounts) AccountIBCTransfers(_ context.Context, _, direction string, before *repository.IBCKey,
+	limit int) ([]repository.IBCTransfer, error) {
+	f.gotDirection, f.gotIBCBefore, f.gotLimit = direction, before, limit
+	return f.ibc, f.ibcErr
 }
 
 func (f *fakeAccounts) AccountOrders(_ context.Context, _ string, status *string, before *repository.OrderKey,

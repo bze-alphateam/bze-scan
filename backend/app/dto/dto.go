@@ -167,6 +167,10 @@ type Tx struct {
 	// Dex is the order book outcome of the transaction's order messages;
 	// null when it has none.
 	Dex *TxDex `json:"dex"`
+	// IBCTransfers are the cross-chain transfers the transaction created or
+	// settled (a relayer's transaction may settle several); null when it has
+	// none.
+	IBCTransfers []IBCTransfer `json:"ibc_transfers"`
 }
 
 // Message is a message of the transaction page. Body is the decoded message
@@ -387,16 +391,17 @@ func NewTxSummary(t repository.TxSummary) TxSummary {
 	}
 }
 
-// NewTx maps a transaction with its messages, transfers and order book
-// outcome.
-func NewTx(t *repository.Tx, transfers []repository.Transfer, dex *repository.TxDex) Tx {
+// NewTx maps a transaction with its messages, transfers, order book
+// outcome and cross-chain transfers.
+func NewTx(t *repository.Tx, transfers []repository.Transfer, dex *repository.TxDex, ibc []repository.IBCTransfer) Tx {
 	out := Tx{
 		TxSummary: NewTxSummary(t.TxSummary),
 		Code:      t.Code, Codespace: t.Codespace, ErrorLog: t.ErrorLog, GasWanted: t.GasWanted, GasUsed: t.GasUsed,
 		FeePayer: t.FeePayer, Signers: nonNil(t.Signers), Memo: t.Memo,
-		Messages:  make([]Message, 0, len(t.Messages)),
-		Transfers: NewTransfers(transfers),
-		Dex:       NewTxDex(dex),
+		Messages:     make([]Message, 0, len(t.Messages)),
+		Transfers:    NewTransfers(transfers),
+		Dex:          NewTxDex(dex),
+		IBCTransfers: NewTxIBCTransfers(ibc),
 	}
 	for _, m := range t.Messages {
 		out.Messages = append(out.Messages, Message{

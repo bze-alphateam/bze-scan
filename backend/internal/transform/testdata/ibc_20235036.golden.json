@@ -1,0 +1,24 @@
+[
+  {
+    "channel_id": "channel-0",
+    "sequence": 10637,
+    "direction": "out",
+    "status": "pending",
+    "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
+    "receiver": "osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u",
+    "denom": "ubze",
+    "amount": "63581699",
+    "memo": "{\"wasm\":{\"contract\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"msg\":{\"swap_and_action\":{\"user_swap\":{\"swap_exact_asset_in\":{\"swap_venue_name\":\"osmosis-poolmanager\",\"operations\":[{\"pool\":\"856\",\"denom_in\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\",\"denom_out\":\"uosmo\"}]}},\"min_asset\":{\"native\":{\"denom\":\"uosmo\",\"amount\":\"1358221\"}},\"timeout_timestamp\":1764234714418923604,\"post_swap_action\":{\"ibc_transfer\":{\"ibc_info\":{\"source_channel\":\"channel-340\",\"receiver\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\",\"memo\":\"\",\"recover_address\":\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\"}}},\"affiliates\":[]}}}}",
+    "created_height": 20235036,
+    "created_tx_index": 0,
+    "created_tx_hash": "1197642FC6D65A085D9E064FBD4CD67DC99459F439EE5D2E4285E326D02090B8",
+    "created_time": "2025-11-27T09:06:58.642324363Z",
+    "timeout_height": "",
+    "timeout_time": "2025-11-27T09:11:54.4188997Z",
+    "result_height": null,
+    "result_tx_hash": "",
+    "result_time": null,
+    "ack_error": "",
+    "resolves": false
+  }
+]

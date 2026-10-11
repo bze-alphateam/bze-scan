@@ -13,6 +13,7 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/channels"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/paramsnap"
@@ -44,7 +46,9 @@ const outboundTimeout = 30 * time.Second
 // NewStateSync builds the state sync over the local node's gRPC
 // (NODE_GRPC_ADDR) with every registered set, on a pool of its own. Later
 // domains register their sets here, in the order the start resync runs
-// them: the chain registry before the denoms it names, the holders and the
+// them: the IBC channels before the chain registry that names their
+// counterparties and the denoms whose origin they give, the chain registry
+// before the denoms it names, the holders and the
 // prices after the denoms they fill, the parameters after the proposals
 // that explain their changes, the chain state last (it counts the
 // validators and copies the native price). The chain registry runs only
@@ -68,7 +72,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	staking := stakingtypes.NewQueryClient(conn)
 	localNode := node.New(cfg.NodeRPCURL)
 	denomStore := denoms.NewPGStore(pool)
-	misses := &statesync.Deferred{}
+	resyncs := &statesync.Deferred{}
 
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
@@ -77,12 +81,18 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Store:    validators.NewPGStore(pool),
 			Keys:     codec.InterfaceRegistry(),
 		}, 0),
+		channels.New(channels.Deps{
+			Channel: channeltypes.NewQueryClient(conn),
+			Store:   channels.NewPGStore(pool),
+			Misses:  resyncs,
+		}, 0),
 	}
 	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {
 		sets = append(sets, registry.New(registry.Deps{
 			Registry: chainregistry.New(outbound, cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL),
 			Store:    registry.NewPGStore(pool),
 			ChainID:  cfg.ChainID,
+			Saved:    resyncs,
 		}, 0))
 	}
 	sets = append(sets,
@@ -93,7 +103,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Store:        denomStore,
 			Transfer:     ibctransfertypes.NewQueryClient(conn),
 			Lookup:       denomStore,
-			Misses:       misses,
+			Misses:       resyncs,
 		}, 0),
 		proposals.New(proposals.Deps{
 			Gov:     govv1.NewQueryClient(conn),
@@ -128,7 +138,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		Denom:        chain.BondDenom,
 	}, 0))
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
-	misses.Bind(syncer)
+	resyncs.Bind(syncer)
 	return syncer, func() {
 		pool.Close()
 		_ = conn.Close()

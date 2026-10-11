@@ -225,3 +225,29 @@ func TestAFailedListingFailsTheFetch(t *testing.T) {
 type failingList struct{ registry.Registry }
 
 func (failingList) Dirs(context.Context) ([]string, error) { return nil, errors.New("HTTP 403") }
+
+type publisher struct{ got []statesync.Dirty }
+
+func (p *publisher) Publish(d statesync.Dirty) { p.got = append(p.got, d) }
+
+// The channels' escrow labels carry their chain's name: a run that saved a
+// chain asks the channels set to resync, once; a run that saved none does
+// not.
+func TestSavedChainsResyncTheChannels(t *testing.T) {
+	reg, store := newRegistry(), &fakeStore{wanted: []string{"noble-1", "cosmoshub-4"}}
+	c := &clock{now: time.Unix(1000, 0)}
+	pub := &publisher{}
+	s := registry.New(registry.Deps{Registry: reg, Store: store, ChainID: "beezee-1", Clock: c, Saved: pub}, 0)
+
+	require.NoError(t, s.FullResync(context.Background()))
+	require.Len(t, pub.got, 1)
+	assert.Equal(t, []string{statesync.All}, pub.got[0].Keys(statesync.Channels))
+
+	require.NoError(t, s.ResyncOne(context.Background(), "unknown-7"))
+	assert.Len(t, pub.got, 1, "a chain the registry does not know names nothing")
+	assert.Equal(t, []string{"unknown-7"}, store.unknown)
+
+	c.now = c.now.Add(registry.CoolDown)
+	require.NoError(t, s.ResyncOne(context.Background(), "noble-1"))
+	assert.Len(t, pub.got, 2)
+}

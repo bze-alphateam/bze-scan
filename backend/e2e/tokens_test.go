@@ -86,7 +86,8 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	}
 	ibc := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(usdcDenom)))
 	assert.Equal(t, "ibc", ibc.Kind)
-	assert.Nil(t, ibc.OriginChainID, "the IBC origin is the next story's")
+	require.NotNil(t, ibc.OriginChainID, "the IBC origin through its channel")
+	assert.Equal(t, "noble-1", *ibc.OriginChainID)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/api/v1/tokens/"+url.PathEscape("factory/bze1nobody/uzz")).status)
 }
 
@@ -137,7 +138,7 @@ func TestADenomFirstSeenInABlockIsSyncedAfterIt(t *testing.T) {
 		Amount struct{ Amount string } `json:"amount"`
 	}
 	require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, "bank", "SupplyOf", url.PathEscape(usdcDenom)), &supply))
-	assert.Equal(t, []string{"ibc UUSDC " + supply.Amount.Amount}, queryStrings(t, e.db,
+	assert.Equal(t, []string{"ibc USDC.n " + supply.Amount.Amount}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', kind, symbol, supply) FROM explorer.denoms WHERE denom = $1`, usdcDenom))
 	time.Sleep(300 * time.Millisecond)
 	assert.Equal(t, 1, e.grpc.Requests("bank", "SupplyOf")-e.grpc.RequestsFor("bank", "SupplyOf", "ubze"),

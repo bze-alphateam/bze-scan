@@ -44,6 +44,10 @@
 #     gov/Proposals.json (every proposal), gov/Proposals.PROPOSAL_STATUS_VOTING_PERIOD.json
 #     (the minute refresh's list), staking/Pool.json (bonded tokens for turnout)
 #     per id in PROPOSALS: gov/Proposal.<id>.json and gov/TallyResult.<id>.json
+#   channels (the IBC channels sync):
+#     channel/Channels.json (every channel, one page), and per transfer channel
+#     channel/ChannelClientState.transfer.<channel>.json (the light client
+#     naming the counterparty chain)
 #   chain (the chain_state and params syncs):
 #     staking/Pool.json, staking/Params.json, bank/SupplyOf.ubze.json,
 #     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
@@ -68,7 +72,7 @@ HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-for d in staking slashing bank distribution tokenfactory tradebin gov transfer mint rewards burner cointrunk txfeecollector; do
+for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel mint rewards burner cointrunk txfeecollector; do
   mkdir -p "${OUT}/${d}"
 done
 
@@ -187,6 +191,13 @@ if has gov; then
   for id in ${PROPOSALS}; do
     fetch "cosmos/gov/v1/proposals/${id}" "gov/Proposal.${id}.json"
     fetch "cosmos/gov/v1/proposals/${id}/tally" "gov/TallyResult.${id}.json"
+  done
+fi
+
+if has channels; then
+  fetch "ibc/core/channel/v1/channels?pagination.limit=200" channel/Channels.json
+  for ch in $(jq -r '.channels[] | select(.port_id == "transfer") | .channel_id' "${OUT}/channel/Channels.json"); do
+    fetch "ibc/core/channel/v1/channels/${ch}/ports/transfer/client_state" "channel/ChannelClientState.transfer.${ch}.json"
   done
 fi
 

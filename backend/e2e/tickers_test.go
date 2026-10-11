@@ -101,26 +101,31 @@ func (e *syncEnv) tickerState(t *testing.T) []string {
 
 func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	e := newSyncEnv(t)
-	// The IBC story fills the channels; here three of BZE's: Noble's,
-	// the Hub's, and one to a chain the registry does not know.
-	_, err := e.db.Exec(`INSERT INTO explorer.ibc_channels (channel_id, counterparty_chain_id, state, updated_at) VALUES
-		('channel-3', 'noble-1', 'STATE_OPEN', now()), ('channel-11', 'cosmoshub-4', 'STATE_OPEN', now()),
-		('channel-5', 'flixnet-4', 'STATE_OPEN', now())`)
-	require.NoError(t, err)
-
+	// The channels set runs first and fills mainnet's fourteen channels:
+	// Noble's (channel-3) and the Hub's (channel-11) are in the registry
+	// fixtures, OmniFlix's (channel-5) and the others are not.
 	code, out := e.syncState(t)
 	require.Equal(t, 0, code, out)
 
-	// The registry cache: BZE and the chains met, the unknown one by its id.
+	// The registry cache: BZE and the chains met, the unknown ones by their
+	// id.
 	assert.Equal(t, []string{
+		"archway-1 f",
+		"atomone-1 f",
 		"beezee-1 beezee BeeZee t",
 		"cosmoshub-4 cosmoshub Cosmos Hub t",
-		"flixnet-4 f",
+		"dungeon-1 f",
+		"injective-1 f",
+		"jackal-1 f",
+		"lumen f",
 		"noble-1 noble Noble t",
+		"omniflixhub-1 f",
+		"osmosis-1 f",
+		"vidulum-1 f",
 	}, queryStrings(t, e.db, `SELECT concat_ws(' ', chain_id, registry_name, pretty_name, registry_fetched_at IS NOT NULL)
 		FROM explorer.chains ORDER BY chain_id`))
 	assert.Positive(t, e.count(t, `SELECT count(*) FROM explorer.registry_assets WHERE chain_id = 'beezee-1'`))
-	assert.Zero(t, e.count(t, `SELECT count(*) FROM explorer.registry_assets WHERE chain_id = 'flixnet-4'`))
+	assert.Zero(t, e.count(t, `SELECT count(*) FROM explorer.registry_assets WHERE chain_id = 'omniflixhub-1'`))
 	assert.Equal(t, 1, e.reg.Requests("/api/"), "one listing per run")
 
 	// The IBC denoms through their channel: the registry's symbol and
@@ -129,7 +134,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, ibc_path, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, atomDenom))
 	assert.Equal(t, []string{"noble-1 uusdc USDC.n 6"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, usdcDenom))
-	assert.Equal(t, []string{"flixnet-4 uflix UFLIX 0"}, queryStrings(t, e.db,
+	assert.Equal(t, []string{"omniflixhub-1 uflix UFLIX 0"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, flixDenom),
 		"an origin the registry does not know keeps the bank's metadata")
 
@@ -167,7 +172,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, "cosmoshub-4", tokens[atomDenom].OriginChain.ChainID)
 	assert.Equal(t, "Cosmos Hub", *tokens[atomDenom].OriginChain.Name)
 	assert.NotNil(t, tokens[atomDenom].OriginChain.LogoURL)
-	assert.Equal(t, &dto.OriginChain{ChainID: "flixnet-4"}, tokens[flixDenom].OriginChain)
+	assert.Equal(t, &dto.OriginChain{ChainID: "omniflixhub-1"}, tokens[flixDenom].OriginChain)
 	assert.Nil(t, tokens[ggeDenom].OriginChain)
 
 	r := fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")

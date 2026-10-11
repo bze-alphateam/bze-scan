@@ -16,3 +16,10 @@ func TestModuleAddress(t *testing.T) {
 	assert.Equal(t, "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy", chain.ModuleAddress(chain.Gov), "the authority of every proposal")
 	assert.Equal(t, "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h", chain.ModuleAddress(chain.Mint))
 }
+
+// Mainnet's transfer module reports bze1a53u… as the escrow account of
+// channel-0 (ibc/apps/transfer/v1/channels/channel-0/ports/transfer/escrow_address),
+// the sender of the unescrow in fixture 24999209.
+func TestEscrowAddress(t *testing.T) {
+	assert.Equal(t, "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee", chain.EscrowAddress(chain.TransferPort, "channel-0"))
+}
