@@ -279,12 +279,15 @@ every later route follows:
 | `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer), `transfers` (the block's own moves, as on the transaction page, `msg_index` null) and `events` (its first 100 stored block events: seq, type, attrs) with `events_next_cursor` (null when they are all there); 400 unless a positive integer, 404 when not indexed |
 | `GET /api/v1/blocks/{height}/events?cursor&limit` | the block's stored events in order (seq, type, attrs); immutable once the block is indexed; 404 when not indexed |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
-| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending |
+| `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled) and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, never immutable) |
+| `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
 | `GET /api/v1/accounts/{address}/activity?category=&cursor&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list |
+| `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
+| `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
 | `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first) and `events_next_cursor`; the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
@@ -347,8 +350,9 @@ bze-scan migrate version    # print the current version (0 when none)
 - The migrations are `migrations/NNNNNN_<name>.up.sql` and `.down.sql`,
   embedded in the binary and applied with golang-migrate: the schema, the
   notification trigger, the history tables, the state tables, the
-  operational tables, and the functions (`ensure_partitions`,
-  `reclassify_unknown`).
+  operational tables, the functions (`ensure_partitions`,
+  `reclassify_unknown`), and the DEX lookups (fills by maker, the outcome of
+  a transaction, an order's cancel).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -644,6 +648,40 @@ rows, and the reindex overwrites rows like any other table.
 `explorer.reclassify_unknown()`, which `migrate up` runs, gives rows stored
 as `other` the kind and category of their first message type once the Go
 classification has an entry for it.
+
+### DEX orders and fills
+
+The order book works in two steps: a transaction only queues a message
+(`OrderCreateMessageEvent`, `OrderCancelMessageEvent`; a `MsgFillOrders`
+emits one create event per queued fill), and the engine processes the queue
+at EndBlock, normally of the same block, emitting `OrderExecutedEvent` per
+fill, `OrderSavedEvent` when a remainder rests on the book and
+`OrderCanceledEvent`. Since chain v8.2.0 every one of these events carries
+the queue message id (24 zero-filled digits, unique within a block).
+
+- `explorer.order_messages`: one row per transaction-time event with a
+  message id, kind `create`, `cancel` or `fill` (a create event under a
+  `MsgFillOrders`).
+- `explorer.orders`: one row per `OrderSavedEvent`. Its insert reads the
+  fills and the cancel already stored, so an order written after them (the
+  backfill walks down) starts with the right `filled_amount`, status and
+  `closed_*`. A cancel sets `cancelled` and `closed_*`.
+- `explorer.order_fills`: one row per `OrderExecutedEvent`, `seq` its
+  block-event position. Only the fills the insert returned add to their
+  order's `filled_amount` (merged per order, applied in id order); an order
+  whose fills reach its amount is `filled`, closed at its last fill.
+- Attribution: the transformer holds a block's transactions and its EndBlock
+  events together, so an outcome whose message id matches a message of the
+  same height gets `orders.created_tx_hash` / `order_fills.taker_tx_hash`.
+  Outcomes of messages processed in a later block, heights before chain
+  v8.2.0 and the reconciliation of orders the chain removes silently are the
+  next DEX story's.
+
+A transaction's `dex.pending` is true while one of its create or fill
+messages has no attributed fill or order, or one of its cancels names an
+order still open. A fill message whose orders were gone is refunded by the
+chain without any event, so it stays pending until the later-block
+attribution decides.
 
 ## Reindex
 
@@ -967,7 +1005,12 @@ encode the messages with the chain codec. No recorded height carries tokenfactor
 token activity (branding and halts exist only from chain v8.2.0, which
 mainnet does not run yet): the token-event tests encode real messages with
 the chain codec and give them the events the chain emits, and the cases are
-checked live during the mainnet soak. Recording a new height leaves `status.json` and `above_tip.json`
+checked live during the mainnet soak. The order book rows of the recorded
+heights carry no message id (mainnet runs v8.1.1, and the testnet had no
+order activity after its v8.2.0 upgrade at 3,626,000), so the attribution,
+the pending flag and fills written before their order are tested on
+synthetic blocks: `internal/transform/dex_test.go` encodes the messages with
+the chain codec, `e2e/dex_test.go` writes hand-built heights. Recording a new height leaves `status.json` and `above_tip.json`
 as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten

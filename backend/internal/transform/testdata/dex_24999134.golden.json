@@ -1,0 +1,154 @@
+{
+  "order_messages": null,
+  "orders": [
+    {
+      "order_id": "000000000000000006704545",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "sell",
+      "price": "223",
+      "amount": "647259",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704546",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "sell",
+      "price": "226",
+      "amount": "922130",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704547",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "sell",
+      "price": "229",
+      "amount": "591757",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704548",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "sell",
+      "price": "232",
+      "amount": "642051",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704549",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "133",
+      "amount": "196915",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704550",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "130",
+      "amount": "280085",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704551",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "127",
+      "amount": "345941",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704552",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "124",
+      "amount": "347240",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704553",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "121",
+      "amount": "205533",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704554",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "118",
+      "amount": "953785",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    },
+    {
+      "order_id": "000000000000000006704555",
+      "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+      "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "side": "buy",
+      "price": "115",
+      "amount": "229739",
+      "height": 24999134,
+      "time": "2026-10-08T16:53:06.854906881Z",
+      "message_id": "",
+      "created_tx_hash": ""
+    }
+  ],
+  "order_fills": [
+    {
+      "height": 24999134,
+      "seq": 74,
+      "order_id": "000000000000000006704522",
+      "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "side": "buy",
+      "price": "0.0002",
+      "amount": "763662113",
+      "maker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2026-10-08T16:53:06.854906881Z"
+    }
+  ],
+  "order_cancels": null
+}

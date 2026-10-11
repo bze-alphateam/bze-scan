@@ -144,6 +144,20 @@ func accountStatements(top int64, ents *transform.Entities, inserted Inserted) (
 	return stmts, nil
 }
 
+// insertedStatements returns the writes of a flush that depend on the rows
+// it inserted: the accounts, then the orders' filled amounts.
+func insertedStatements(top int64, ents *transform.Entities, inserted Inserted) ([]statement, error) {
+	accounts, err := accountStatements(top, ents, inserted)
+	if err != nil {
+		return nil, err
+	}
+	fills, err := fillStatements(top, ents, inserted)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(accounts, fills), nil
+}
+
 // execAll runs statements in order inside tx.
 func execAll(ctx context.Context, tx interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)

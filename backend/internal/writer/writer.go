@@ -81,8 +81,9 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 
 // WriteBlock writes the entities of one or more heights in one transaction:
 // the transactions, messages, validator_events, transfers, block_events, token_events,
-// account_activity and governance rows, the accounts of their signers and
-// activity rows (counters moved for the rows inserted), the blocks rows
+// account_activity, governance and order book rows, the accounts of their
+// signers and activity rows (counters moved for the rows inserted), the
+// orders' filled amounts (fills inserted), the blocks rows
 // (block_time_ms from the previous row when it exists), the live floor at the
 // first write ever, and the cursor moved to the highest height. Partitions
 // are topped up first when a height enters the last one. A blocks row
@@ -134,7 +135,7 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 			return fmt.Errorf("write %d: %s: %w", top, st.table, err)
 		}
 	}
-	accounts, err := accountStatements(top, ents, inserted)
+	accounts, err := insertedStatements(top, ents, inserted)
 	if err != nil {
 		return err
 	}
@@ -351,7 +352,8 @@ type statement struct {
 // rowStatements returns the bulk writes of the transactions, messages,
 // validator_events, transfers, block_events, token_events and
 // account_activity of ents, then
-// its governance writes (govStatements), in chunks of ChunkRows rows. top
+// its governance writes (govStatements) and its order book writes
+// (dexStatements), in chunks of ChunkRows rows. top
 // names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
@@ -466,7 +468,11 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov), nil
+	dex, err := dexStatements(top, ents, mode)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

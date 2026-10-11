@@ -87,6 +87,14 @@ func (noAccounts) Activity(context.Context, string, *string, *repository.Activit
 	return nil, nil
 }
 
+func (noAccounts) AccountOrders(context.Context, string, *string, *repository.OrderKey, int) ([]repository.Order, error) {
+	return nil, nil
+}
+
+func (noAccounts) AccountFills(context.Context, string, *repository.FillKey, int) ([]repository.OrderFill, error) {
+	return nil, nil
+}
+
 func (noAccounts) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
 	return nil, nil
 }
@@ -104,6 +112,12 @@ func TestAccountRoute(t *testing.T) {
 	rec = serve(t, server.New(server.Deps{Accounts: noAccounts{}}), http.MethodGet, "/api/v1/accounts/"+addr+"/activity")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String())
+
+	for _, list := range []string{"orders", "fills"} {
+		rec = serve(t, server.New(server.Deps{Accounts: noAccounts{}}), http.MethodGet, "/api/v1/accounts/"+addr+"/"+list)
+		assert.Equal(t, http.StatusOK, rec.Code, list)
+		assert.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String(), list)
+	}
 
 	rec = serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/accounts/"+addr)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no account reader, no route")

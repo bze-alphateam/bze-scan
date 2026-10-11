@@ -22,6 +22,13 @@ type AccountReader interface {
 	// of category when not nil, after before when not nil.
 	Activity(ctx context.Context, address string, category *string, before *repository.ActivityKey,
 		limit int) ([]repository.Activity, error)
+	// AccountOrders returns up to limit orders owned by owner, newest
+	// first, of status when not nil, after before when not nil.
+	AccountOrders(ctx context.Context, owner string, status *string, before *repository.OrderKey,
+		limit int) ([]repository.Order, error)
+	// AccountFills returns up to limit fills where address is the maker or
+	// the taker, newest first, after before when not nil.
+	AccountFills(ctx context.Context, address string, before *repository.FillKey, limit int) ([]repository.OrderFill, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 	Monikers(ctx context.Context, operators []string) (map[string]string, error)
 }

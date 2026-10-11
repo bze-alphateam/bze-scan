@@ -164,6 +164,9 @@ type Tx struct {
 	// Transfers are the coins the transaction moved, the fee first; a failed
 	// transaction has its fee only.
 	Transfers []Transfer `json:"transfers"`
+	// Dex is the order book outcome of the transaction's order messages;
+	// null when it has none.
+	Dex *TxDex `json:"dex"`
 }
 
 // Message is a message of the transaction page. Body is the decoded message
@@ -384,14 +387,16 @@ func NewTxSummary(t repository.TxSummary) TxSummary {
 	}
 }
 
-// NewTx maps a transaction with its messages and transfers.
-func NewTx(t *repository.Tx, transfers []repository.Transfer) Tx {
+// NewTx maps a transaction with its messages, transfers and order book
+// outcome.
+func NewTx(t *repository.Tx, transfers []repository.Transfer, dex *repository.TxDex) Tx {
 	out := Tx{
 		TxSummary: NewTxSummary(t.TxSummary),
 		Code:      t.Code, Codespace: t.Codespace, ErrorLog: t.ErrorLog, GasWanted: t.GasWanted, GasUsed: t.GasUsed,
 		FeePayer: t.FeePayer, Signers: nonNil(t.Signers), Memo: t.Memo,
 		Messages:  make([]Message, 0, len(t.Messages)),
 		Transfers: NewTransfers(transfers),
+		Dex:       NewTxDex(dex),
 	}
 	for _, m := range t.Messages {
 		out.Messages = append(out.Messages, Message{

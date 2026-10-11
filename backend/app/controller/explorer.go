@@ -50,6 +50,13 @@ type ExplorerReader interface {
 	// BlockEvents returns up to limit stored events of the block at height
 	// after seq after (from the first when negative).
 	BlockEvents(ctx context.Context, height, after int64, limit int) ([]repository.BlockEvent, error)
+	// TxDex returns the order book outcome of the transaction with hash at
+	// (height, txIndex).
+	TxDex(ctx context.Context, height, txIndex int64, hash string) (*repository.TxDex, error)
+	// Order returns an order by its 24-digit id; OrderFills its number of
+	// fills and the newest limit of them.
+	Order(ctx context.Context, id string) (*repository.Order, error)
+	OrderFills(ctx context.Context, id string, limit int) (int64, []repository.OrderFill, error)
 	// TxPosition returns the height and the index in the block of a
 	// transaction.
 	TxPosition(ctx context.Context, hash string) (height, index int64, err error)
@@ -258,8 +265,10 @@ func (h *ExplorerController) Txs(c *echo.Context) error {
 }
 
 // Tx serves GET /api/v1/txs/{hash}: every column of the transaction, its
-// messages and its transfers. A well-formed hash that is not indexed is a 404, which the UI
-// shows as pending.
+// messages, its transfers and the order book outcome of its order
+// messages. A well-formed hash that is not indexed is a 404, which the UI
+// shows as pending. The answer is immutable unless an order outcome is
+// still pending.
 func (h *ExplorerController) Tx(c *echo.Context) error {
 	hash, ok := normaliseHash(c.Param("hash"))
 	if !ok {
@@ -277,8 +286,16 @@ func (h *ExplorerController) Tx(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
-	return c.JSON(http.StatusOK, dto.NewTx(t, transfers))
+	dex, err := h.repo.TxDex(ctx, t.Height, t.TxIndex, t.Hash)
+	if err != nil {
+		return err
+	}
+	cache := CacheImmutable
+	if dex != nil && dex.Pending {
+		cache = CacheNoStore
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, cache)
+	return c.JSON(http.StatusOK, dto.NewTx(t, transfers, dex))
 }
 
 // Validators serves GET

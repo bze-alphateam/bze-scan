@@ -59,6 +59,14 @@ type Entities struct {
 	// Activity are the account_activity rows of the heights' transactions
 	// and block events.
 	Activity []Activity
+	// OrderMessages are the order_messages rows of the heights' order
+	// messages; Orders, OrderFills and OrderCancels the order book outcomes
+	// of their finalize events, attributed to the same height's transactions
+	// by message id.
+	OrderMessages []OrderMessage
+	Orders        []Order
+	OrderFills    []OrderFill
+	OrderCancels  []OrderCancel
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -236,6 +244,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
+	blockOrders(ents, b, in.Results.FinalizeBlockEvents)
 	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
@@ -246,6 +255,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
 		}
 	}
+	attributeOrders(ents)
 	markSeenDenoms(ents)
 	return ents, nil
 }
@@ -336,6 +346,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 			return err
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

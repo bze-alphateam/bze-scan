@@ -30,7 +30,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 6
+const latestVersion = 7
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -310,6 +310,6 @@ func TestMigrateCommand(t *testing.T) {
 	assert.Contains(t, first, `"applied":true`)
 	assert.Contains(t, run("up"), `"applied":false`)
 	assert.Equal(t, strconv.Itoa(latestVersion), strings.TrimSpace(run("version")))
-	assert.Contains(t, run("down", "2"), `"version":4`)
-	assert.Equal(t, "4", strings.TrimSpace(run("version")))
+	assert.Contains(t, run("down", "2"), `"version":`+strconv.Itoa(latestVersion-2))
+	assert.Equal(t, strconv.Itoa(latestVersion-2), strings.TrimSpace(run("version")))
 }
