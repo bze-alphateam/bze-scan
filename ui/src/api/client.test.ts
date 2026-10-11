@@ -45,6 +45,10 @@ describe("createHttpApi", () => {
     await api.validatorBlocks("bzevaloper1x", { limit: 5 });
     await api.search("thamar node");
     await api.tokens({ kind: "ibc", limit: 100 });
+    await api.token("factory/bze1x/uhoney");
+    await api.tokenEvents("ubze", { cursor: "c" });
+    await api.tokenHolders("ubze", { limit: 10 });
+    await api.tokenTransfers("ubze", {});
     await api.params();
     await api.rawBlock(7);
     await api.rawBlockResults(7);
@@ -61,12 +65,35 @@ describe("createHttpApi", () => {
       "/v1/validators/bzevaloper1x/blocks?limit=5",
       "/v1/search?q=thamar+node",
       "/v1/tokens?limit=100&kind=ibc",
+      "/v1/tokens/factory%2Fbze1x%2Fuhoney",
+      "/v1/tokens/ubze/events?cursor=c",
+      "/v1/tokens/ubze/holders?limit=10",
+      "/v1/tokens/ubze/transfers",
       "/v1/params",
       "/v1/raw/block/7",
       "/v1/raw/block_results/7",
       "/v1/raw/commit/7",
       "/v1/raw/tx/ABCD",
     ]);
+  });
+
+  it("asks for a denom with a slash by ?denom= when the path form answers 404", async () => {
+    const urls: string[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>(async (url) => {
+      urls.push(String(url).replace("http://h/api", ""));
+      return String(url).includes("/tokens/")
+        ? json(404, { error: { code: "not_found", message: "no route" } })
+        : json(200, { items: [], next_cursor: null });
+    });
+    const api = createHttpApi({ baseUrl: "http://h/api", fetch });
+    await api.tokenHolders("factory/bze1x/uhoney", { limit: 10 });
+    expect(urls).toEqual([
+      "/v1/tokens/factory%2Fbze1x%2Fuhoney/holders?limit=10",
+      "/v1/token/holders?denom=factory%2Fbze1x%2Fuhoney&limit=10",
+    ]);
+    // A denom without a slash has no other form: its 404 stands.
+    await expect(api.token("uzzz")).rejects.toMatchObject({ status: 404 });
+    expect(urls).toHaveLength(3);
   });
 
   it("turns the error envelope into an ApiError", async () => {

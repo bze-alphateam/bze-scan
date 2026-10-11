@@ -370,6 +370,81 @@ export interface TokenSummary {
   halted: boolean;
   logo_url: string | null;
   origin_chain: OriginChain | null;
+  /** The block time of the denom's `created` token event; null without one. */
+  created_time: string | null;
+}
+
+/** What moved of a denom in a window: `amount` summed in base units. */
+export interface TransferVolume {
+  count: number;
+  amount: string;
+}
+
+/** One event in a denom's history; `tx_hash` is null for a block-level halt. */
+export interface TokenEvent {
+  height: number;
+  tx_index: number;
+  seq: number;
+  tx_hash: string | null;
+  kind:
+    | "created"
+    | "minted"
+    | "burned"
+    | "admin_changed"
+    | "metadata_changed"
+    | "branding_changed"
+    | "market_created"
+    | "pool_created"
+    | "halted"
+    | "unhalted"
+    | (string & {});
+  actor: string | null;
+  actor_label: Label | null;
+  amount: string | null;
+  details: Record<string, unknown> | null;
+  time: string;
+}
+
+/** The token page: the list item plus its origin, first sight, admin, markets, metadata and newest events. */
+export interface Token extends TokenSummary {
+  description: string | null;
+  origin_chain_id: string | null;
+  ibc_base_denom: string | null;
+  ibc_path: string | null;
+  creator: string | null;
+  creator_label: Label | null;
+  /** Null once renounced (and for every denom that is not a factory one). */
+  admin: string | null;
+  admin_label: Label | null;
+  created_height: number | null;
+  created_tx_hash: string | null;
+  website: string | null;
+  /** Tradebin market ids, `base/quote`. */
+  markets: string[];
+  price_updated_at: string | null;
+  metadata: unknown;
+  updated_at: string;
+  /** The newest 20 events, newest first. */
+  events: TokenEvent[];
+  events_next_cursor: string | null;
+  transfers_24h: TransferVolume;
+}
+
+/** A holder in the last snapshot; `share_pct` of the supply, null without one. */
+export interface TokenHolder {
+  rank: number;
+  address: string;
+  label: Label | null;
+  balance: string;
+  share_pct: string | null;
+}
+
+/** One move of a denom, with where it happened. */
+export interface TokenTransfer extends Transfer {
+  height: number;
+  tx_index: number;
+  tx_hash: string | null;
+  time: string;
 }
 
 // Search

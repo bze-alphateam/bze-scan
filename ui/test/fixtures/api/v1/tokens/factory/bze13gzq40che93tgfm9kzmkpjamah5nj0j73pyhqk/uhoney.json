@@ -1,0 +1,125 @@
+{
+  "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+  "symbol": "HONEY",
+  "name": "Honey",
+  "kind": "factory",
+  "exponent": 6,
+  "supply": "500000000000",
+  "holders_count": 310,
+  "price_usd": "0.002",
+  "price_change_24h_pct": null,
+  "halted": false,
+  "logo_url": null,
+  "origin_chain": null,
+  "created_time": "2099-10-02T09:15:00Z",
+  "description": "The sweetest token on BZE.",
+  "origin_chain_id": null,
+  "ibc_base_denom": null,
+  "ibc_path": null,
+  "creator": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+  "creator_label": null,
+  "admin": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+  "admin_label": null,
+  "created_height": 24000100,
+  "created_tx_hash": "5A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+  "website": "https://honey.example",
+  "markets": [
+    "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/ubze"
+  ],
+  "price_updated_at": "2099-10-11T09:59:00Z",
+  "metadata": {
+    "description": "The sweetest token on BZE.",
+    "denom_units": [
+      {
+        "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+        "exponent": 0
+      },
+      {
+        "denom": "HONEY",
+        "exponent": 6
+      }
+    ],
+    "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+    "display": "HONEY",
+    "name": "Honey",
+    "symbol": "HONEY"
+  },
+  "updated_at": "2099-10-11T09:59:00Z",
+  "events": [
+    {
+      "height": 24000900,
+      "tx_index": 0,
+      "seq": 0,
+      "tx_hash": null,
+      "kind": "market_created",
+      "actor": null,
+      "actor_label": null,
+      "amount": null,
+      "details": {
+        "market_id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/ubze",
+        "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+        "quote": "ubze"
+      },
+      "time": "2099-10-09T08:00:00Z"
+    },
+    {
+      "height": 24000700,
+      "tx_index": 1,
+      "seq": 0,
+      "tx_hash": "7B1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "kind": "burned",
+      "actor": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "actor_label": null,
+      "amount": "200000000",
+      "details": null,
+      "time": "2099-10-07T12:00:00Z"
+    },
+    {
+      "height": 24000500,
+      "tx_index": 0,
+      "seq": 0,
+      "tx_hash": "6C1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "kind": "minted",
+      "actor": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "actor_label": null,
+      "amount": "500000000",
+      "details": {
+        "recipient": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
+      },
+      "time": "2099-10-05T12:00:00Z"
+    },
+    {
+      "height": 24000100,
+      "tx_index": 0,
+      "seq": 1,
+      "tx_hash": "5A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "kind": "minted",
+      "actor": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "actor_label": null,
+      "amount": "1000000000000",
+      "details": {
+        "recipient": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
+      },
+      "time": "2099-10-02T09:15:00Z"
+    },
+    {
+      "height": 24000100,
+      "tx_index": 0,
+      "seq": 0,
+      "tx_hash": "5A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+      "kind": "created",
+      "actor": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "actor_label": null,
+      "amount": null,
+      "details": {
+        "subdenom": "uhoney"
+      },
+      "time": "2099-10-02T09:15:00Z"
+    }
+  ],
+  "events_next_cursor": null,
+  "transfers_24h": {
+    "count": 14,
+    "amount": "125000000000"
+  }
+}

@@ -18,7 +18,7 @@ import { CardSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate } from "@/lib/format";
-import { externalLinks } from "@/lib/links";
+import { externalLinks, websiteLink } from "@/lib/links";
 import {
   bondCompact,
   bondFull,
@@ -39,20 +39,6 @@ import {
 
 export function pingPubValidatorUrl(operator: string): string {
   return `${externalLinks.pingPub}/staking/${operator}`;
-}
-
-/** `linktr.ee/jasonsopko` from `https://linktr.ee/jasonsopko`; null for anything that is not an http(s) URL. */
-export function websiteLink(website: string | null): { href: string; text: string } | null {
-  if (!website) return null;
-  const raw = /^https?:\/\//i.test(website) ? website : `https://${website}`;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    const text = (url.host + url.pathname).replace(/^www\./, "").replace(/\/$/, "");
-    return { href: url.toString(), text };
-  } catch {
-    return null;
-  }
 }
 
 function Breadcrumb({ name }: { name: string }) {

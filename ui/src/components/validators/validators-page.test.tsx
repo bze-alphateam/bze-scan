@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -66,7 +66,8 @@ describe("ValidatorsPage", () => {
   it("switches to the inactive tab, which shows the status instead of a rank", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     await userEvent.click(await screen.findByRole("tab", { name: "Inactive · 2" }));
-    expect(monikers()).toEqual(["Sleepy Node", "Old Timer"]);
+    // The Active panel unmounts once its exit animation ends, and until then it keeps its own rows.
+    await waitFor(() => expect(monikers()).toEqual(["Sleepy Node", "Old Timer"]));
     const [sleepy, old] = screen.getAllByTestId("validator-row");
     expect(sleepy).toHaveTextContent("Unbonding");
     expect(within(sleepy).getByText("Jailed")).toBeInTheDocument();

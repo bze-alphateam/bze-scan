@@ -250,7 +250,9 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
   const seats = list.summary?.max_validators ?? null;
   const window = signedBlocksWindow(params.data) ?? 10_000;
-  const rows = filterByMoniker(tab === "active" ? active : inactive, query);
+  // Each panel filters its own list: the panel leaving keeps its rows while its exit animation runs.
+  const activeRows = filterByMoniker(active, query);
+  const inactiveRows = filterByMoniker(inactive, query);
 
   return (
     <Stack gap={{ base: "6", md: "8" }}>
@@ -293,11 +295,11 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
             </HStack>
           </HStack>
           <Tabs.Content value="active" pt="3">
-            <ValidatorTable items={rows} empty={query ? "No active validator has that name." : "No active validators."} />
+            <ValidatorTable items={activeRows} empty={query ? "No active validator has that name." : "No active validators."} />
           </Tabs.Content>
           <Tabs.Content value="inactive" pt="3">
             <ValidatorTable
-              items={rows}
+              items={inactiveRows}
               empty={query ? "No inactive validator has that name." : "Every validator is active."}
             />
           </Tabs.Content>

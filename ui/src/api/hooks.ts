@@ -1,12 +1,22 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { isNotFound } from "./client";
 import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 import { useApi } from "./provider";
-import type { Page, PageParams, TokenListParams, TokenSummary, TxListParams, ValidatorList, ValidatorListParams } from "./types";
+import type { ExplorerApi } from "./client";
+import type {
+  Page,
+  PageParams,
+  TokenEvent,
+  TokenListParams,
+  TokenSummary,
+  TxListParams,
+  ValidatorList,
+  ValidatorListParams,
+} from "./types";
 
 /** Query keys, one tuple per route and its arguments. */
 export const queryKeys = {
@@ -25,6 +35,11 @@ export const queryKeys = {
   validatorDirectory: () => ["validator-directory"] as const,
   tokenDirectory: () => ["token-directory"] as const,
   denoms: () => ["tokens", "all-pages"] as const,
+  allTokens: () => ["tokens", "all-pages", "live"] as const,
+  token: (denom: string) => ["token", denom] as const,
+  tokenEventsAfter: (denom: string, cursor: string) => ["token-events", denom, cursor] as const,
+  tokenHolders: (denom: string) => ["token-holders", denom] as const,
+  tokenTransfers: (denom: string) => ["token-transfers", denom] as const,
   search: (q: string) => ["search", q] as const,
   params: () => ["params"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
@@ -200,6 +215,18 @@ export function useTokenDirectory() {
   });
 }
 
+/** Every page of the tokens list, pages of 100 followed to the last. */
+async function allTokenPages(api: ExplorerApi, signal: AbortSignal): Promise<TokenSummary[]> {
+  const items: TokenSummary[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await api.tokens({ limit: 100, cursor }, signal);
+    items.push(...page.items);
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor);
+  return items;
+}
+
 /**
  * Every denom the explorer knows, by denom: the tokens list's pages of 100
  * followed to the last, for joining balances to symbols, logos and prices.
@@ -208,18 +235,79 @@ export function useDenoms() {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.denoms(),
-    queryFn: async ({ signal }): Promise<Map<string, TokenSummary>> => {
-      const denoms = new Map<string, TokenSummary>();
-      let cursor: string | undefined;
-      do {
-        const page = await api.tokens({ limit: 100, cursor }, signal);
-        for (const t of page.items) denoms.set(t.denom, t);
-        cursor = page.next_cursor ?? undefined;
-      } while (cursor);
-      return denoms;
-    },
+    queryFn: async ({ signal }) => new Map((await allTokenPages(api, signal)).map((t) => [t.denom, t])),
     // Fresh for a minute: prices move, but a balance's value need not be live.
     ...reference,
+  });
+}
+
+/** The tokens page: every token, polled (the kinds are filtered on the page, so the tiles count them all). */
+export function useAllTokens() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.allTokens(),
+    queryFn: ({ signal }) => allTokenPages(api, signal),
+    ...live,
+  });
+}
+
+export function useToken(denom: string) {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.token(denom), queryFn: ({ signal }) => api.token(denom, signal), ...live });
+}
+
+/**
+ * A token's events older than the token page's 20, every page from `cursor`
+ * on (a denom's history is short: mints, burns, admin changes); disabled
+ * without a cursor. Older events never change.
+ */
+export function useTokenEventsAfter(denom: string, cursor: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.tokenEventsAfter(denom, cursor ?? ""),
+    queryFn: async ({ signal }) => {
+      const items: TokenEvent[] = [];
+      let next: string | null = cursor;
+      while (next) {
+        const page: Page<TokenEvent> = await api.tokenEvents(denom, { limit: 100, cursor: next }, signal);
+        items.push(...page.items);
+        next = page.next_cursor;
+      }
+      return items;
+    },
+    enabled: cursor != null,
+    ...immutable,
+  });
+}
+
+/** The page sizes of a list the page grows on request: a short first page, then larger ones. */
+const firstPage = (limit: number): PageParams => ({ limit });
+const nextPage =
+  (limit: number) =>
+  (last: Page<unknown>): PageParams | undefined =>
+    last.next_cursor ? { cursor: last.next_cursor, limit } : undefined;
+
+/** A token's holders, largest first: the top 10, then 100 a page on request. The snapshot is hourly. */
+export function useTokenHolders(denom: string) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.tokenHolders(denom),
+    queryFn: ({ pageParam, signal }) => api.tokenHolders(denom, pageParam, signal),
+    initialPageParam: firstPage(10),
+    getNextPageParam: nextPage(100),
+    ...reference,
+  });
+}
+
+/** A token's transfers, newest first: 20 a page, polled. */
+export function useTokenTransfers(denom: string) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.tokenTransfers(denom),
+    queryFn: ({ pageParam, signal }) => api.tokenTransfers(denom, pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...live,
   });
 }
 

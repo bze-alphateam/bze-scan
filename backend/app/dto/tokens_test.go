@@ -46,3 +46,13 @@ func TestNewTokenDefaults(t *testing.T) {
 	assert.Equal(t, time.UTC, tok.UpdatedAt.Location())
 	assert.Nil(t, tok.CreatorLabel)
 }
+
+func TestNewTokenSummaryCarriesTheFirstSightInUTC(t *testing.T) {
+	created := time.Date(2026, 10, 9, 14, 0, 0, 0, time.FixedZone("x", 3600))
+	tok := dto.NewToken(&repository.Token{
+		TokenSummary: repository.TokenSummary{Denom: "factory/bze1x/uhoney", Kind: "factory", CreatedTime: &created},
+	}, nil, nil, repository.TransferVolume{Amount: "0"})
+	require.NotNil(t, tok.CreatedTime)
+	assert.Equal(t, time.Date(2026, 10, 9, 13, 0, 0, 0, time.UTC), *tok.CreatedTime)
+	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "ubze", Kind: "native"}).CreatedTime)
+}

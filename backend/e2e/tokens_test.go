@@ -68,15 +68,15 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	}
 	factories := tokenPages(t, base, "&kind=factory")
 	assert.Len(t, factories, 6)
-	// Every item carries the base denom, the exponent, the logo and the
-	// origin chain, null or not.
+	// Every item carries the base denom, the exponent, the logo, the origin
+	// chain and the first sight, null or not.
 	var raw struct {
 		Items []map[string]json.RawMessage `json:"items"`
 	}
 	require.NoError(t, json.Unmarshal(fetch(t, base+"/api/v1/tokens?limit=100").body, &raw))
 	require.Len(t, raw.Items, recordedDenoms)
 	for _, item := range raw.Items {
-		for _, key := range []string{"denom", "exponent", "logo_url", "origin_chain"} {
+		for _, key := range []string{"denom", "exponent", "logo_url", "origin_chain", "created_time"} {
 			assert.Contains(t, item, key)
 		}
 		assert.NotEqual(t, `""`, string(item["denom"]))
