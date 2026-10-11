@@ -11,7 +11,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "128C0787D55D013822D61B53C29E753E2891399EDFB3BB5E127D767B5F9A0835"
     },
     {
       "order_id": "000000000000000006704546",
@@ -23,7 +23,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "128C0787D55D013822D61B53C29E753E2891399EDFB3BB5E127D767B5F9A0835"
     },
     {
       "order_id": "000000000000000006704547",
@@ -35,7 +35,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "128C0787D55D013822D61B53C29E753E2891399EDFB3BB5E127D767B5F9A0835"
     },
     {
       "order_id": "000000000000000006704548",
@@ -47,7 +47,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "128C0787D55D013822D61B53C29E753E2891399EDFB3BB5E127D767B5F9A0835"
     },
     {
       "order_id": "000000000000000006704549",
@@ -59,7 +59,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704550",
@@ -71,7 +71,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704551",
@@ -83,7 +83,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704552",
@@ -95,7 +95,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704553",
@@ -107,7 +107,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704554",
@@ -119,7 +119,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     },
     {
       "order_id": "000000000000000006704555",
@@ -131,7 +131,7 @@
       "height": 24999134,
       "time": "2026-10-08T16:53:06.854906881Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "F58390D4621D6A8FE87014CF0950FC58EECE3BFBA278E0F9CFC17B925038ADE1"
     }
   ],
   "order_fills": [
@@ -146,7 +146,7 @@
       "maker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
       "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
       "taker_message_id": "",
-      "taker_tx_hash": "",
+      "taker_tx_hash": "998891CBA95B076B4F212037FFC7AE4590E301054C70277BB3D59F4840BBBC37",
       "time": "2026-10-08T16:53:06.854906881Z"
     }
   ],

@@ -23,7 +23,7 @@ One binary, `bze-scan`, with subcommands:
   from the local node while it still has them and from archive nodes otherwise.
 - `sync-state` — one full refresh of validators, proposals, denominations,
   holders, labels, the Cosmos chain registry cache, token prices, the
-  parameter snapshots and the chain state, for operations (it reads the
+  parameter snapshots, the open orders' reconciliation and the chain state, for operations (it reads the
   node's gRPC and its `/status`).
 - `version` — prints the commit the binary was built from (`dev` for a plain
   `go build`; the image sets it with `-ldflags "-X main.version=<sha>"`).
@@ -206,6 +206,9 @@ internal/statesync/registry/
                    the chain_registry set (explorer.chains, registry_assets)
 internal/statesync/holders/
                    the holders set (token_holders, denoms.holders_count)
+internal/statesync/orders/
+                   the orders set (open orders closed when the node's
+                   order book no longer lists them)
 internal/statesync/prices/
                    the prices set (denoms.price_usd)
 internal/chainregistry/
@@ -691,18 +694,48 @@ the queue message id (24 zero-filled digits, unique within a block).
   block-event position. Only the fills the insert returned add to their
   order's `filled_amount` (merged per order, applied in id order); an order
   whose fills reach its amount is `filled`, closed at its last fill.
-- Attribution: the transformer holds a block's transactions and its EndBlock
-  events together, so an outcome whose message id matches a message of the
-  same height gets `orders.created_tx_hash` / `order_fills.taker_tx_hash`.
-  Outcomes of messages processed in a later block, heights before chain
-  v8.2.0 and the reconciliation of orders the chain removes silently are the
-  next DEX story's.
+- Same-block attribution: the transformer holds a block's transactions and
+  its EndBlock events together, so an outcome whose message id matches a
+  message of the same height gets `orders.created_tx_hash` /
+  `order_fills.taker_tx_hash`.
+- Cross-block attribution: the engine processes at most 500 messages per
+  block and keeps a message whose processing failed for a later block, so
+  an outcome can land after its transaction. Both writers run the
+  `writer.AttributeOrders` PostFlush hook: an unattributed outcome with a
+  message id gets the transaction of the `order_messages` row with that id
+  at the highest height at or below its own (a newer message cannot carry
+  the id while the older one is queued, and the outcome block's own
+  transactions carry higher ids). The counter restarts whenever the queue
+  empties, almost every block, so the rule is only exact once every height
+  from the message to the outcome is indexed: the hook links an outcome
+  only then, and its candidates are every unattributed outcome at or above
+  the flush's lowest height, so the flush that writes the message, the
+  outcome or the last missing height in between makes the link, in either
+  walking direction and whatever order the backfill's flushes land in.
+  Both statements only fill NULL columns; a reindex keeps a link.
+- Before chain v8.2.0 no event carries a message id. The transformer then
+  matches each market's EndBlock outcomes to the same block's
+  `OrderCreateMessageEvent`s and `MsgFillOrders` bodies in queue order (the
+  order the transactions enqueued them; v8.0 runs the whole queue in that
+  order, v8.1 market by market, the same within a market): a message claims
+  the first run, at or after the previous match, of fills of the other side
+  at its price taken by its owner (adding up to at most its amount), then
+  for a create the order saved with the rest. It applies only to outcomes
+  without a message id, so it needs no upgrade height (and works on the
+  testnet too). It is approximate: a look-alike outcome of a message queued
+  in an earlier block can be claimed, a message only refunded claims
+  nothing, chain v7.0 events name no owner or taker (market, side, price
+  and amount only); an outcome without a match stays unattributed and
+  `message_id` stays null.
+- Reconciliation: the chain removes a remainder below the market minimum
+  without an event; the hourly `orders` set (see the state sync) closes it.
 
 A transaction's `dex.pending` is true while one of its create or fill
-messages has no attributed fill or order, or one of its cancels names an
-order still open. A fill message whose orders were gone is refunded by the
-chain without any event, so it stays pending until the later-block
-attribution decides.
+messages (chain v8.2.0 and later) has no attributed fill or order, or one of
+its cancels names an order still open. It resolves when the cross-block
+attribution links the outcome. A fill message whose orders were gone is
+refunded by the chain without any event, so it stays pending (BZE-161 makes
+the chain emit an event for it).
 
 ### Cross-chain transfers
 
@@ -805,7 +838,7 @@ indexer) the state sync:
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
    proposals, prices, chain state: one minute; denoms, holders, IBC
-   channels: one hour;
+   channels, orders: one hour;
    chain registry, params: one day), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
@@ -919,6 +952,19 @@ run did not stamp are deleted and `holders_count` is recomputed (owners of at
 least `10^exponent` base units) in one transaction. The job's cursor in
 `sync_jobs` is the denom, page key and stamp being worked on, so a restart
 resumes at the failed page; `{}` once a run finished.
+
+**Orders.** At start and hourly the open orders are reconciled with the
+node's order book, a safety net for the remainders the chain removes without
+an event. The tradebin queries list an owner's orders, not a market's book,
+so a run reads tradebin `UserMarketOrders` of every owner with open rows
+(every market at once, 1,000 references a page), every read pinned to one
+height: the live cursor, or the node's latest height when lower or when the
+live indexer has not written. An open row created at or below that height
+that the node no longer lists is closed as `filled` with `closed_height` /
+`closed_time` that height and its block time (locked in order id order like
+the writers). It never reopens a row and never touches a row the node still
+lists; a later fill or cancel event still applies to a row it closed. An
+owner whose read fails keeps its rows and fails the run.
 
 **Prices.** With `AGGREGATOR_URL` set, every minute `GET /api/prices` of the
 BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A
@@ -1088,10 +1134,16 @@ mainnet does not run yet): the token-event tests encode real messages with
 the chain codec and give them the events the chain emits, and the cases are
 checked live during the mainnet soak. The order book rows of the recorded
 heights carry no message id (mainnet runs v8.1.1, and the testnet had no
-order activity after its v8.2.0 upgrade at 3,626,000), so the attribution,
-the pending flag and fills written before their order are tested on
-synthetic blocks: `internal/transform/dex_test.go` encodes the messages with
-the chain codec, `e2e/dex_test.go` writes hand-built heights. Recording a new height leaves `status.json` and `above_tip.json`
+order activity after its v8.2.0 upgrade at 3,626,000), so the attribution
+by message id, the pending flag and fills written before their order are
+tested on synthetic blocks: `internal/transform/dex_test.go` encodes the
+messages with the chain codec, `e2e/dex_test.go` and `e2e/attribution_test.go`
+write hand-built heights. The recorded heights carry the pre-v8.2.0 queue
+order heuristic (`internal/transform/dexqueue_test.go`): 20300028 (v8.0.x,
+one owner's buy rests and their sell of the same transaction fills an older
+order and that buy), 24998316 (eleven orders of one owner in two
+transactions, a third out of gas), 20234375 (a `MsgFillOrders` of five
+fills) and 20230045 (v7.2). Recording a new height leaves `status.json` and `above_tip.json`
 as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten
@@ -1146,8 +1198,8 @@ an answer (`SetResponse`) and stop the server to play a node that is down.
 So far the staking and slashing methods of the validators set, the account
 page's bank, staking and distribution reads, the denoms set's bank,
 tokenfactory, tradebin and IBC transfer methods, the holders set's
-`DenomOwners`, the proposals set's gov and staking `Pool` methods and the
-chain_state and params sets' pool, supply, mint, community pool and module
+`DenomOwners`, the proposals set's gov and staking `Pool` methods, the
+orders set's tradebin `UserMarketOrders` and the chain_state and params sets' pool, supply, mint, community pool and module
 `Params` methods are recorded; each later story adds its
 methods. Denoms in file names are path-escaped
 (`DenomAuthority.factory%2Fbze1…%2Fuvdl.json`).
@@ -1156,7 +1208,7 @@ methods. Denoms in file names are path-escaped
 make grpc-fixtures VALIDATORS="bzevaloper1prm55vzlp5u6excqdunwlm4tw254cq943m6e6m" ACCOUNTS="bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls" REST=https://rest.getbze.com
 ```
 
-`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`, `holders`, `channels`, `chain`;
+`SETS` limits the run to some sets (`validators`, `accounts`, `denoms`, `gov`, `holders`, `orders`, `channels`, `chain`;
 the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
@@ -1172,6 +1224,9 @@ so they are absent and answer Unimplemented like the node.
 records the holders set: `bank/DenomOwners.json`, the answer for a denom
 nobody holds (the fallback for every other denom), and every page of each
 listed denom (GGE: five owners on three pages of two, recorded 2026-10-09).
+`make grpc-fixtures SETS=orders OWNERS="bze1…"` records the orders set: each
+owner's `UserMarketOrders` (every market, one page of 1,000; the market
+maker `bze10kw8…` recorded 2026-10-11 with 41 orders).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
 gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47

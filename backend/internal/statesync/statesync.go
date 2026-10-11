@@ -38,6 +38,9 @@ const (
 	Prices        = "prices"
 	// ChainState is the chain-wide numbers of the home page.
 	ChainState = "chain_state"
+	// Orders is the hourly reconciliation of the open orders with the
+	// node's order book.
+	Orders = "orders"
 )
 
 // registryNamePrefix starts the chain_registry keys that name a chain by its
