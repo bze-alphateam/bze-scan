@@ -67,6 +67,9 @@ type Entities struct {
 	Orders        []Order
 	OrderFills    []OrderFill
 	OrderCancels  []OrderCancel
+	// IBCTransfers are the ibc_transfers rows of the heights' cross-chain
+	// transfers: sent, received, acknowledged or timed out.
+	IBCTransfers []IBCTransfer
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -347,6 +350,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

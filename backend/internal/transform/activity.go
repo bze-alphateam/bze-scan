@@ -12,7 +12,6 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
@@ -49,9 +48,6 @@ type Activity struct {
 
 // Address prefixes the activity rules recognise.
 const valoperPrefix = chain.Bech32Prefix + "valoper"
-
-// ibcTransferPort is the port of the ICS-20 escrow accounts.
-const ibcTransferPort = "transfer"
 
 // moduleAccounts are the module accounts the labels seed names; they never
 // get activity rows (the fee collector would get one per block).
@@ -217,10 +213,7 @@ func escrowAccounts(events []node.Event) map[string]bool {
 	for _, ev := range events {
 		for _, a := range ev.Attributes {
 			if (a.Key == "packet_src_channel" || a.Key == "packet_dst_channel") && a.Value != "" {
-				addr, err := bech32.ConvertAndEncode(chain.Bech32Prefix, ibctransfertypes.GetEscrowAddress(ibcTransferPort, a.Value))
-				if err == nil {
-					out[addr] = true
-				}
+				out[chain.EscrowAddress(chain.TransferPort, a.Value)] = true
 			}
 		}
 	}
