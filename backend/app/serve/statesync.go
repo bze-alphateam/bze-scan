@@ -30,6 +30,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/channels"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/orders"
@@ -52,8 +53,9 @@ const outboundTimeout = 30 * time.Second
 // before the denoms it names, the holders and the prices after the denoms
 // they fill, the parameters after the proposals that explain their changes,
 // the open orders' reconciliation with the node's order book anywhere (it
-// reads nothing the others write), the chain state last (it counts the
-// validators and copies the native price). The chain registry runs only
+// reads nothing the others write), the chain state after them (it counts
+// the validators and copies the native price), the daily statistics last
+// (they read only the indexed tables). The chain registry runs only
 // with both its URLs, the prices only with AGGREGATOR_URL. Call closeFn
 // when done.
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
@@ -140,11 +142,25 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		JSON:         codec,
 		Store:        chainstate.NewPGStore(pool),
 		Denom:        chain.BondDenom,
-	}, 0))
+	}, 0), dailystats.New(dailystats.Deps{Store: dailystats.NewPGStore(pool)}))
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
 	resyncs.Bind(syncer)
 	return syncer, func() {
 		pool.Close()
 		_ = conn.Close()
 	}, nil
+}
+
+// NewDailyStats builds the daily statistics set alone, over the database
+// only (sync-state --from --to recomputes a range of days with it). Call
+// closeFn when done.
+func NewDailyStats(ctx context.Context, cfg *config.Config) (set *dailystats.Set, closeFn func(), err error) {
+	if err := cfg.RequireDatabase(); err != nil {
+		return nil, nil, err
+	}
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("daily stats pool: %w", err)
+	}
+	return dailystats.New(dailystats.Deps{Store: dailystats.NewPGStore(pool)}), pool.Close, nil
 }

@@ -41,6 +41,8 @@ const (
 	// Orders is the hourly reconciliation of the open orders with the
 	// node's order book.
 	Orders = "orders"
+	// DailyStats is the nightly aggregation of the home charts' days.
+	DailyStats = "daily_stats"
 )
 
 // registryNamePrefix starts the chain_registry keys that name a chain by its
@@ -389,6 +391,18 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// RunSet resyncs the set named name in full once (sync-state --job).
+func (s *Syncer) RunSet(ctx context.Context, name string) error {
+	if _, ok := s.byID[name]; !ok {
+		names := make([]string, 0, len(s.sets))
+		for _, set := range s.sets {
+			names = append(names, set.Name())
+		}
+		return fmt.Errorf("no set %q; the registered sets are %s", name, strings.Join(names, ", "))
+	}
+	return s.run(ctx, job{set: name, key: All})
 }
 
 func (s *Syncer) work(ctx context.Context) {

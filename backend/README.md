@@ -23,8 +23,10 @@ One binary, `bze-scan`, with subcommands:
   from the local node while it still has them and from archive nodes otherwise.
 - `sync-state` — one full refresh of validators, proposals, denominations,
   holders, labels, the Cosmos chain registry cache, token prices, the
-  parameter snapshots, the open orders' reconciliation and the chain state, for operations (it reads the
-  node's gRPC and its `/status`).
+  parameter snapshots, the open orders' reconciliation, the chain state and
+  the daily statistics, for operations (it reads the node's gRPC and its
+  `/status`); `--job <set>` runs one set, `--job daily_stats --from
+  YYYY-MM-DD --to YYYY-MM-DD` recomputes those days from the database alone.
 - `version` — prints the commit the binary was built from (`dev` for a plain
   `go build`; the image sets it with `-ldflags "-X main.version=<sha>"`).
 
@@ -114,7 +116,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
 | `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
-| `bze-scan sync-state` | one full resync of every state-sync set (see State sync below); exit 0 when every set succeeded, 1 when any failed |
+| `bze-scan sync-state [--job <set>] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
 | `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
@@ -211,6 +213,9 @@ internal/statesync/orders/
                    order book no longer lists them)
 internal/statesync/prices/
                    the prices set (denoms.price_usd)
+internal/statesync/dailystats/
+                   the daily_stats set (the home charts' days, nightly)
+                   and the aggregation the stats' live "today" shares
 internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
@@ -308,7 +313,7 @@ every later route follows:
 | `GET /api/v1/proposals/{id}/votes?option=yes\|no\|abstain\|no_with_veto\|weighted&cursor&limit` | every vote the explorer indexed (the chain deletes them once tallied), newest first, one per voter (the latest): voter (and `voter_label`), option (null for a split vote; `weighted` lists those), options (the weights as SDK v0.50 encodes them), height, tx_index, tx_hash, time, and for a validator owner `validator` (moniker), `validator_operator` and `voting_power_pct` (its current share), null for other voters |
 | `GET /api/v1/proposals/{id}/deposits?cursor&limit` | every deposit, the initial one included, newest first: depositor (and `depositor_label`), amount (coins), height, tx_index, tx_hash, time |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
-| `GET /api/v1/stats` | the home tiles, from the indexed blocks and transactions and the `chain_state` rows (no node call): `latest_height`, `latest_time`, `avg_block_time_ms` (the average `block_time_ms` of the last hour) and `txs_24h` (transactions of the last 24 hours), both windows measured back from the latest indexed block; `bonded_tokens`, `supply` and `community_pool` (whole base units of `ubze`), `staked_share` (bonded over supply), `inflation`, `reward_rate` (inflation × (1 − community tax) ÷ staked share: the yearly staking reward before commission), all three percentages with five decimals; `validators` (`{active, total}`), `max_validators`, `unbonding_period` (seconds), `price_usd` and `price_change_24h_pct` of `ubze` (null until the prices job), and `daily: []` (reserved for the daily series). Every chain-state field is null until its row exists |
+| `GET /api/v1/stats` | the home tiles, from the indexed blocks and transactions and the `chain_state` rows (no node call): `latest_height`, `latest_time`, `avg_block_time_ms` (the average `block_time_ms` of the last hour) and `txs_24h` (transactions of the last 24 hours), both windows measured back from the latest indexed block; `bonded_tokens`, `supply` and `community_pool` (whole base units of `ubze`), `staked_share` (bonded over supply), `inflation`, `reward_rate` (inflation × (1 − community tax) ÷ staked share: the yearly staking reward before commission), all three percentages with five decimals; `validators` (`{active, total}`), `max_validators`, `unbonding_period` (seconds), `price_usd` and `price_change_24h_pct` of `ubze` (null until the prices job); `daily`, the stored days of the last 30 closed UTC days (`?days=` from 1 to 365, otherwise a 400), oldest first, a day without indexed blocks absent; and `today`, the current UTC day so far computed live with the same query (null while it has no indexed block). Each day is `{day, blocks, txs, txs_failed, active_addresses, new_addresses, transfers, fees, avg_block_time_ms}` (see Daily statistics under State sync). Every chain-state field is null until its row exists |
 | `GET /api/v1/params` | the live parameters of every module the parameters page shows (txfeecollector, staking, mint, distribution, slashing, gov, tradebin, tokenfactory, rewards, burner, cointrunk), keyed by module: `{"<module>": {"params": <proto JSON as the node answers>, "last_change": {"height", "time", "proposal_id"} \| null}}`. Values are read from the local node's gRPC through a 30 s in-process cache, so the page never disagrees with the chain; `last_change` is the module's latest recorded change (null before one), its `proposal_id` null for a change no proposal explains. A module the node fails to answer is left out; none answering is a 502 |
 | `GET /api/v1/status` | `{"live_fill": {"healthy", "checked_at", "db_height", "node_height", "archive_height"}, "back_fill": {"status", "oldest_height"}}`, always 200 and `no-store`; before the first check `healthy` is false and `checked_at` null; a height that could not be read is null |
 
@@ -361,8 +366,10 @@ bze-scan migrate version    # print the current version (0 when none)
   notification trigger, the history tables, the state tables, the
   operational tables, the functions (`ensure_partitions`,
   `reclassify_unknown`), the DEX lookups (fills by maker, the outcome of
-  a transaction, an order's cancel) and the IBC lookups (the transfers a
-  transaction settled).
+  a transaction, an order's cancel), the IBC lookups (the transfers a
+  transaction settled), the order attribution lookups (unattributed
+  outcomes, open orders per owner) and the daily statistics lookups
+  (addresses active at a height range, accounts first seen in a window).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -839,7 +846,8 @@ indexer) the state sync:
 3. resyncs a set in full when none ran for its interval (validators,
    proposals, prices, chain state: one minute; denoms, holders, IBC
    channels, orders: one hour;
-   chain registry, params: one day), the safety net for what no event announces. A full resync, from
+   chain registry, params: one day; daily statistics: every night at
+   00:10 UTC), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
@@ -848,7 +856,7 @@ run: it is logged and recorded (the prices set logs a failing aggregator once
 per change of state, not every minute), the rows stay as they were, and the next
 trigger retries. Nothing here is on the user's critical path. `bze-scan
 sync-state` runs the full resync of every set once and exits 1 when any
-failed.
+failed; `--job <set>` runs one set only.
 
 **Validators.** A full resync reads staking `Validators` (every status, 200
 per page), slashing `SigningInfos` and `Params`, and per validator staking
@@ -1038,6 +1046,28 @@ previous row; a node whose `/status` fails writes nothing. It runs last at
 start, after the validators and prices it copies. `/api/v1/stats` and the
 validators header read these rows, never the node.
 
+**Daily statistics.** `explorer.daily_stats` holds one row per closed UTC
+day, aggregated from the indexed tables; the indexer never touches it (one
+hot row per day would serialise every flush and break idempotency). Day
+boundaries are `blocks.time` in UTC: the day's blocks are found on their
+time, every other table is read on the height range they span. A row holds
+`blocks`, `txs` (the blocks' `tx_count`, failed included), `txs_failed`,
+`active_addresses` (distinct `account_activity.address`), `new_addresses`
+(`accounts.first_seen_time` that day), `transfers` (rows, block-level
+included), `fees` (the transactions' fees summed per denom, sorted by denom)
+and `avg_block_time_ms` (null when no block of the day has one). At start
+and every night at 00:10 UTC the set recomputes every closed day since the
+oldest indexed block's day that has no row, the last three closed days
+(late live corrections), and the days of the heights the backfill wrote
+since the previous run: the job's `cursor` keeps the main job's
+`lowest_dispatched` the last successful run saw, and the days from the
+lowest indexed block at or above the new value to the highest at or below
+the old one are recomputed, plus the day above for the heights still in
+flight. Each day is an `INSERT … ON CONFLICT (day) DO UPDATE` of the whole
+row, so any run can be repeated; a day with no indexed block gets no row
+(the series shows a gap, never a zero). `sync-state --job daily_stats --from
+YYYY-MM-DD --to YYYY-MM-DD` recomputes a range of closed days on demand.
+
 **Validator events** (`explorer.validator_events`, kept forever) come from
 two writers:
 
@@ -1120,7 +1150,9 @@ fills), all four with the doubled events of v8.0.x; 24844265
 (`complete_redelegation`), 24871232 (`complete_unbonding`), 25006237 (the
 four-weekly burn: `CoinsBurnedEvent`, two burn rows, day/hour/week epochs),
 25035768 (`StakingRewardDistributionEvent` on the day epoch) and 25041911 (an
-hour epoch alone). Mainnet never had a trading reward and runs no denom
+hour epoch alone). Daily statistics: 25003529 and 25003530, the last block of
+2026-10-08 and the first of 2026-10-09 UTC (found by binary search on the
+`/block` header times), the second a relayer's `MsgUpdateClient`. Mainnet never had a trading reward and runs no denom
 rewards yet (v8.2.0): `TradingRewardDistributionEvent`,
 `TradingRewardExpireEvent` and `DenomRewardScheduleFinishEvent` are synthetic.
 Governance: 23745024 (`MsgSubmitProposal` of proposal 47

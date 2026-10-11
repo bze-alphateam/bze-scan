@@ -1,0 +1,23 @@
+[
+  {
+    "address": "bze17fgrnpg48c6tkhmp72zmjt93g67y6wu96gj787",
+    "height": 25003530,
+    "tx_index": 0,
+    "time": "2026-10-09T00:00:02.829047339Z",
+    "category": "other",
+    "kind": "relay",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-237736"
+      }
+    ],
+    "msg_types": [
+      "/ibc.core.client.v1.MsgUpdateClient"
+    ],
+    "details": null
+  }
+]

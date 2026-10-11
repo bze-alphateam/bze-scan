@@ -44,6 +44,8 @@ type Deps struct {
 	// Stats reads the home tiles and the validators header; nil leaves
 	// /api/v1/stats out and answers the header as null.
 	Stats controller.StatsReader
+	// Daily reads the daily series of /api/v1/stats; nil answers it empty.
+	Daily controller.DailyStatsReader
 	// Params reads the live module parameters and ParamChanges their
 	// recorded changes; /api/v1/params needs both.
 	Params       controller.LiveParams
@@ -122,7 +124,7 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
 	}
 	if deps.Stats != nil {
-		api.GET("/stats", controller.NewStatsController(deps.Stats).Stats)
+		api.GET("/stats", controller.NewStatsController(deps.Stats, deps.Daily).Stats)
 	}
 	if deps.Params != nil && deps.ParamChanges != nil {
 		api.GET("/params", controller.NewParamsController(deps.Params, deps.ParamChanges).Params)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
 // Stats is GET /api/v1/stats: the home page's tiles. Ratios (staked_share,
@@ -35,8 +36,40 @@ type Stats struct {
 	// CommunityPool is the pool's bond-denom amount, whole base units.
 	CommunityPool *string `json:"community_pool"`
 	Supply        *string `json:"supply"`
-	// Daily is reserved for the daily series; always empty for now.
-	Daily []json.RawMessage `json:"daily"`
+	// Daily are the closed days of the home charts, oldest first; a day
+	// with no indexed block is absent.
+	Daily []DayStats `json:"daily"`
+	// Today is the current UTC day so far, computed live; null while it has
+	// no indexed block.
+	Today *DayStats `json:"today"`
+}
+
+// DayStats are one UTC day's numbers. Fees sums the transactions' fees per
+// denom; avg_block_time_ms is null when no block of the day has a block
+// time.
+type DayStats struct {
+	Day             string `json:"day"`
+	Blocks          int64  `json:"blocks"`
+	Txs             int64  `json:"txs"`
+	TxsFailed       int64  `json:"txs_failed"`
+	ActiveAddresses int64  `json:"active_addresses"`
+	NewAddresses    int64  `json:"new_addresses"`
+	Transfers       int64  `json:"transfers"`
+	Fees            []Coin `json:"fees"`
+	AvgBlockTimeMs  *int64 `json:"avg_block_time_ms"`
+}
+
+// NewDayStats maps one day's numbers.
+func NewDayStats(s dailystats.Stats) DayStats {
+	fees := make([]Coin, 0, len(s.Fees))
+	for _, c := range s.Fees {
+		fees = append(fees, Coin{Denom: c.Denom, Amount: c.Amount})
+	}
+	return DayStats{
+		Day: s.Day.UTC().Format(time.DateOnly), Blocks: s.Blocks, Txs: s.Txs, TxsFailed: s.TxsFailed,
+		ActiveAddresses: s.ActiveAddresses, NewAddresses: s.NewAddresses, Transfers: s.Transfers,
+		Fees: fees, AvgBlockTimeMs: s.AvgBlockTimeMs,
+	}
 }
 
 // ValidatorCounts are the validators in the active set and every known one.
@@ -188,7 +221,7 @@ func NewStats(b *repository.BlockStats, state map[string]json.RawMessage, denom 
 		LatestHeight: b.LatestHeight, LatestTime: utc(b.LatestTime), AvgBlockTimeMs: b.AvgBlockTimeMs, Txs24h: b.Txs24h,
 		StakedShare: n.stakedShare(), Inflation: n.inflation(), RewardRate: n.rewardRate(),
 		MaxValidators: n.maxValidators(), UnbondingPeriod: n.unbonding(), CommunityPool: n.communityPool(denom),
-		Daily: []json.RawMessage{},
+		Daily: []DayStats{},
 	}
 	if n.pool != nil {
 		out.BondedTokens = &n.pool.BondedTokens

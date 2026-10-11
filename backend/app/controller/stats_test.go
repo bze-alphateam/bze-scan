@@ -15,6 +15,8 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	"github.com/bze-alphateam/bze-scan/backend/app/middleware"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
 type fakeStats struct {
@@ -53,7 +55,7 @@ func TestStatsRoute(t *testing.T) {
 	f := &fakeStats{blocks: &repository.BlockStats{LatestHeight: &h, Txs24h: 3}, state: chainState()}
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	e.GET("/stats", controller.NewStatsController(f).Stats)
+	e.GET("/stats", controller.NewStatsController(f, nil).Stats)
 
 	rec := get(t, e, "/stats")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -65,8 +67,66 @@ func TestStatsRoute(t *testing.T) {
 	assert.JSONEq(t, `{"active":22,"total":30}`, string(body["validators"]))
 	assert.JSONEq(t, `40`, string(body["max_validators"]))
 	assert.JSONEq(t, `null`, string(body["price_usd"]))
+	assert.JSONEq(t, `[]`, string(body["daily"]), "no daily reader")
+	assert.JSONEq(t, `null`, string(body["today"]))
 
 	f.err = errors.New("db down")
+	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/stats").Code)
+}
+
+type fakeDaily struct {
+	series  []dailystats.Stats
+	today   *dailystats.Stats
+	gotDays int
+	err     error
+}
+
+func (f *fakeDaily) DailyStats(_ context.Context, days int) ([]dailystats.Stats, error) {
+	f.gotDays = days
+	return f.series, f.err
+}
+
+func (f *fakeDaily) TodayStats(context.Context) (*dailystats.Stats, error) { return f.today, f.err }
+
+func TestStatsCarryTheDailySeriesAndToday(t *testing.T) {
+	avg := int64(5012)
+	day := func(s string, blocks int64) dailystats.Stats {
+		d, err := dailystats.ParseDay(s)
+		require.NoError(t, err)
+		return dailystats.Stats{Day: d, Blocks: blocks, Txs: 4, TxsFailed: 1, ActiveAddresses: 3, NewAddresses: 1,
+			Transfers: 9, Fees: []chain.Coin{{Denom: "ubze", Amount: "1500"}}, AvgBlockTimeMs: &avg}
+	}
+	today := day("2026-10-11", 12)
+	today.AvgBlockTimeMs = nil
+	today.Fees = nil
+	daily := &fakeDaily{series: []dailystats.Stats{day("2026-10-08", 17000), day("2026-10-10", 17100)}, today: &today}
+	e := echo.New()
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	e.GET("/stats", controller.NewStatsController(&fakeStats{blocks: &repository.BlockStats{}}, daily).Stats)
+
+	rec := get(t, e, "/stats")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.DefaultDays, daily.gotDays)
+	body := decodeRaw(t, rec)
+	assert.JSONEq(t, `[
+		{"day":"2026-10-08","blocks":17000,"txs":4,"txs_failed":1,"active_addresses":3,"new_addresses":1,"transfers":9,
+		 "fees":[{"denom":"ubze","amount":"1500"}],"avg_block_time_ms":5012},
+		{"day":"2026-10-10","blocks":17100,"txs":4,"txs_failed":1,"active_addresses":3,"new_addresses":1,"transfers":9,
+		 "fees":[{"denom":"ubze","amount":"1500"}],"avg_block_time_ms":5012}]`, string(body["daily"]),
+		"a day without rows is a gap")
+	assert.JSONEq(t, `{"day":"2026-10-11","blocks":12,"txs":4,"txs_failed":1,"active_addresses":3,"new_addresses":1,
+		"transfers":9,"fees":[],"avg_block_time_ms":null}`, string(body["today"]))
+
+	require.Equal(t, http.StatusOK, get(t, e, "/stats?days=365").Code)
+	assert.Equal(t, 365, daily.gotDays)
+	for _, bad := range []string{"0", "366", "week", "-1"} {
+		rec := get(t, e, "/stats?days="+bad)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, bad)
+	}
+
+	daily.today = nil
+	assert.JSONEq(t, `null`, string(decodeRaw(t, get(t, e, "/stats"))["today"]))
+	daily.err = errors.New("db down")
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/stats").Code)
 }
 

@@ -91,6 +91,30 @@ func TestDatabaseCommandsRequireDatabaseURL(t *testing.T) {
 	}
 }
 
+func TestSyncStateRejectsABadDayRange(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--from", "2026-10-01", "--to", "2026-10-02"}, "--from and --to need --job daily_stats"},
+		{[]string{"--job", "validators", "--from", "2026-10-01", "--to", "2026-10-02"}, "--from and --to need --job daily_stats"},
+		{[]string{"--job", "daily_stats", "--from", "2026-10-01"}, "--from and --to go together"},
+		{[]string{"--job", "daily_stats", "--from", "2026-10-01", "--to", "yesterday"}, `--to: "yesterday": not a day`},
+		{[]string{"--job", "daily_stats", "--from", "1.10.2026", "--to", "2026-10-02"}, "--from:"},
+		{[]string{"--job", "daily_stats", "--from", "2026-10-01", "--to", "2026-10-02"}, "DATABASE_URL is required"},
+	} {
+		root := cli.NewRootCmd()
+		root.SetArgs(append([]string{"sync-state"}, c.args...))
+		root.SetOut(&bytes.Buffer{})
+		root.SetErr(&bytes.Buffer{})
+		err := root.Execute()
+		require.Error(t, err, c.args)
+		assert.Contains(t, err.Error(), c.want, c.args)
+	}
+}
+
 func TestMigrateDownRejectsInvalidCount(t *testing.T) {
 	for _, n := range []string{"0", "1.5", "all"} {
 		root := cli.NewRootCmd()
