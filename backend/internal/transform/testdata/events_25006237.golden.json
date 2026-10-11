@@ -1,0 +1,199 @@
+{
+  "transfers": [
+    {
+      "Height": 25006237,
+      "TxIndex": -1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "burn",
+      "Sender": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "Recipient": "",
+      "Denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "Amount": "1903489326"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": -1,
+      "Seq": 1,
+      "MsgIndex": null,
+      "Kind": "burn",
+      "Sender": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "Recipient": "",
+      "Denom": "ubze",
+      "Amount": "3565085014"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": -1,
+      "Seq": 2,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ubze",
+      "Amount": "69006440"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": -1,
+      "Seq": 3,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "Amount": "322460"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": -1,
+      "Seq": 4,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+      "Recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "Denom": "ubze",
+      "Amount": "100000"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "Denom": "ubze",
+      "Amount": "15664"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "Seq": 1,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Denom": "ubze",
+      "Amount": "100000"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "Seq": 2,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+      "Denom": "ubze",
+      "Amount": "100000"
+    },
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "Seq": 3,
+      "MsgIndex": 0,
+      "Kind": "transfer",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "Denom": "ubze",
+      "Amount": "69006440"
+    }
+  ],
+  "block_events": [
+    {
+      "Height": 25006237,
+      "Seq": 56,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "812",
+        "identifier": "day",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 57,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "813",
+        "identifier": "day",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 58,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "19488",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 59,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "19489",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 60,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "116",
+        "identifier": "week",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 61,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "117",
+        "identifier": "week",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 64,
+      "Type": "bze.burner.CoinsBurnedEvent",
+      "Attrs": {
+        "burned": "1903489326factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl,3565085014ubze",
+        "mode": "EndBlock"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 65,
+      "Type": "bze.rewards.StakingRewardDistributionEvent",
+      "Attrs": {
+        "amount": "10000000",
+        "mode": "EndBlock",
+        "reward_id": "000000000000"
+      }
+    },
+    {
+      "Height": 25006237,
+      "Seq": 74,
+      "Type": "bze.tradebin.OrderExecutedEvent",
+      "Attrs": {
+        "amount": "322460",
+        "id": "000000000000000006710095",
+        "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "mode": "EndBlock",
+        "order_type": "sell",
+        "price": "214",
+        "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      }
+    }
+  ]
+}

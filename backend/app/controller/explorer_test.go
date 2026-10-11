@@ -103,6 +103,29 @@ type fakeReader struct {
 	ibc      map[string][]repository.IBCTransfer
 	channels []repository.IBCChannel
 	ibcErr   error
+
+	// Stored block events of every block, newest first.
+	chainEvents   []repository.ChainEvent
+	gotType       string
+	gotChainEvent *repository.ChainEventKey
+}
+
+func (f *fakeReader) ChainEvents(_ context.Context, typ string, before *repository.ChainEventKey,
+	limit int) ([]repository.ChainEvent, error) {
+	f.gotType, f.gotChainEvent, f.gotLimit = typ, before, limit
+	var out []repository.ChainEvent
+	for _, e := range f.chainEvents {
+		if typ != "" && e.Type != typ {
+			continue
+		}
+		if before != nil && (e.Height > before.Height || e.Height == before.Height && e.Seq >= before.Seq) {
+			continue
+		}
+		if len(out) < limit {
+			out = append(out, e)
+		}
+	}
+	return out, f.err
 }
 
 func (f *fakeReader) TxIBCTransfers(_ context.Context, hash string) ([]repository.IBCTransfer, error) {
@@ -254,6 +277,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/blocks", h.Blocks)
 	e.GET("/blocks/:height", h.Block)
 	e.GET("/blocks/:height/events", h.BlockEvents)
+	e.GET("/block-events", h.ChainEvents)
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
 	e.GET("/orders/:id", h.Order)
@@ -442,6 +466,53 @@ func TestBlockEventsPaginates(t *testing.T) {
 
 	f.err = errors.New("boom")
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/blocks/50/events").Code)
+}
+
+func TestChainEventsFilterByTypeAndPaginate(t *testing.T) {
+	at := time.Date(2026, 10, 9, 4, 27, 10, 0, time.UTC)
+	burn := func(h, seq int64) repository.ChainEvent {
+		return repository.ChainEvent{Height: h, Seq: seq, Time: at, Type: "bze.burner.CoinsBurnedEvent",
+			Kind: "burned", Category: "burner", Attrs: json.RawMessage(`{"burned":"5ubze"}`)}
+	}
+	epoch := repository.ChainEvent{Height: 30, Seq: 1, Time: at, Type: "bze.epochs.EpochEndEvent",
+		Kind: "epoch", Category: "other", Attrs: json.RawMessage(`{"identifier":"hour"}`)}
+	f := &fakeReader{chainEvents: []repository.ChainEvent{burn(30, 7), burn(30, 3), epoch, burn(20, 9)}}
+	e := newAPI(f)
+
+	rec := get(t, e, "/block-events?type=bze.burner.CoinsBurnedEvent&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl), "a new block adds events")
+	assert.Equal(t, "bze.burner.CoinsBurnedEvent", f.gotType)
+	assert.Equal(t, 3, f.gotLimit, "one more than the page to know whether another follows")
+	page := decode[dto.List[dto.ChainEvent]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, dto.ChainEvent{Height: 30, Seq: 7, Time: at, Type: "bze.burner.CoinsBurnedEvent",
+		Kind: "burned", Category: "burner", Attrs: json.RawMessage(`{"burned":"5ubze"}`)}, page.Items[0])
+	assert.Equal(t, int64(3), page.Items[1].Seq)
+	require.NotNil(t, page.NextCursor)
+
+	page = decode[dto.List[dto.ChainEvent]](t,
+		get(t, e, "/block-events?type=bze.burner.CoinsBurnedEvent&limit=2&cursor="+*page.NextCursor))
+	assert.Equal(t, &repository.ChainEventKey{Height: 30, Seq: 3}, f.gotChainEvent)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, int64(20), page.Items[0].Height)
+	assert.Nil(t, page.NextCursor)
+
+	page = decode[dto.List[dto.ChainEvent]](t, get(t, e, "/block-events"))
+	assert.Empty(t, f.gotType, "no type: every stored event")
+	assert.Len(t, page.Items, 4)
+
+	for _, q := range []string{
+		"/block-events?type=transfer", "/block-events?type=bze.burner.FundBurnerEvent",
+		"/block-events?limit=0", "/block-events?cursor=x", "/block-events?cursor=" + dto.EncodeCursor(5),
+	} {
+		rec := get(t, e, q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, q)
+		assert.Equal(t, "bad_request", errorCode(t, rec), q)
+	}
+
+	f.err = errors.New("boom")
+	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/block-events").Code)
 }
 
 func TestBlockValidation(t *testing.T) {

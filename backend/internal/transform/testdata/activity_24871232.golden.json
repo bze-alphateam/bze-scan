@@ -1,0 +1,31 @@
+[
+  {
+    "address": "bze1k4flz542uu5qlw7t069lqn7enylku4ge65fd5z",
+    "height": 24871232,
+    "tx_index": -1,
+    "time": "2026-09-30T01:39:18.952066515Z",
+    "category": "staking",
+    "kind": "unbonding_completed",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "10000000"
+      }
+    ],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "complete_unbonding",
+        "attrs": {
+          "amount": "10000000ubze",
+          "delegator": "bze1k4flz542uu5qlw7t069lqn7enylku4ge65fd5z",
+          "mode": "EndBlock",
+          "validator": "bzevaloper1k27v68x9gtppsgt9scr3649tpjfxnqljh3qa3e"
+        }
+      }
+    ]
+  }
+]

@@ -62,6 +62,8 @@ func TestGenerationAt(t *testing.T) {
 		{12_723_000, "v7.0.0", archive.FormatLegacy},
 		{20_237_799, "v7.2.0", archive.FormatLegacy},
 		{20_237_800, "v8.0.0", archive.FormatCurrent},
+		{22_551_809, "v8.0.0", archive.FormatCurrent},
+		{22_551_810, "v8.1.0", archive.FormatCurrent},
 		{23_855_000, "v8.1.1", archive.FormatCurrent},
 		{30_000_000, "v8.1.1", archive.FormatCurrent},
 	}
@@ -153,7 +155,7 @@ func TestCurrentGenerationIsIdentity(t *testing.T) {
 	a := realAdapter(t)
 	checked := 0
 	for _, h := range n.FixtureHeights() {
-		if archive.GenerationAt(h).Format != archive.FormatCurrent {
+		if g := archive.GenerationAt(h); g.Format != archive.FormatCurrent || g.DoubledEvents {
 			continue
 		}
 		in := fetchInput(t, n, h)
@@ -166,4 +168,69 @@ func TestCurrentGenerationIsIdentity(t *testing.T) {
 		checked++
 	}
 	assert.Positive(t, checked)
+}
+
+// Only v8.0.x doubles its block events.
+func TestOnlyV800DoublesItsEvents(t *testing.T) {
+	var doubled []string
+	for _, g := range archive.Generations {
+		if g.DoubledEvents {
+			doubled = append(doubled, g.Release)
+		}
+	}
+	assert.Equal(t, []string{"v8.0.0"}, doubled)
+}
+
+// The recorded v8.0.x blocks: every wrapped run of finalize-block events
+// appears twice, and the adapter keeps one copy.
+func TestV800DoubledRunsAreDropped(t *testing.T) {
+	n := fakenode.New(t)
+	a := realAdapter(t)
+	types := func(h int64) (before, after []string) {
+		in := fetchInput(t, n, h)
+		for _, ev := range in.Results.FinalizeBlockEvents {
+			before = append(before, ev.Type)
+		}
+		require.NoError(t, a.Adapt(h, &in))
+		for _, ev := range in.Results.FinalizeBlockEvents {
+			after = append(after, ev.Type)
+		}
+		return before, after
+	}
+	count := func(types []string, typ string) int {
+		c := 0
+		for _, x := range types {
+			if x == typ {
+				c++
+			}
+		}
+		return c
+	}
+
+	t.Run("raffle win: the prize transfer and the event once", func(t *testing.T) {
+		before, after := types(20267245)
+		assert.Equal(t, 2, count(before, "bze.burner.RaffleWinnerEvent"))
+		assert.Equal(t, 1, count(after, "bze.burner.RaffleWinnerEvent"))
+		assert.Equal(t, count(before, "transfer")-1, count(after, "transfer"), "the begin-block transfers are not doubled")
+		assert.Equal(t, len(before)-5, len(after), "coin_spent, coin_received, transfer, message and the event")
+	})
+	t.Run("raffle loss", func(t *testing.T) {
+		before, after := types(20329219)
+		assert.Equal(t, 2, count(before, "bze.burner.RaffleLostEvent"))
+		assert.Equal(t, 1, count(after, "bze.burner.RaffleLostEvent"))
+	})
+	t.Run("raffle clean-up in an epoch hook", func(t *testing.T) {
+		before, after := types(20342600)
+		assert.Equal(t, 2, count(before, "bze.burner.RaffleFinishedEvent"))
+		assert.Equal(t, 1, count(after, "bze.burner.RaffleFinishedEvent"))
+		assert.Equal(t, count(before, "bze.epochs.EpochEndEvent"), count(after, "bze.epochs.EpochEndEvent"),
+			"the epochs module's own events are not wrapped")
+	})
+	t.Run("DEX queue: one order saved, two fills", func(t *testing.T) {
+		before, after := types(20300028)
+		assert.Equal(t, 2, count(before, "bze.tradebin.OrderSavedEvent"))
+		assert.Equal(t, 4, count(before, "bze.tradebin.OrderExecutedEvent"))
+		assert.Equal(t, 1, count(after, "bze.tradebin.OrderSavedEvent"))
+		assert.Equal(t, 2, count(after, "bze.tradebin.OrderExecutedEvent"))
+	})
 }

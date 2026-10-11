@@ -253,3 +253,36 @@ func TestTransactionsWithoutResults(t *testing.T) {
 	in.Results.TxsResults = nil
 	assert.Error(t, adapt(&chain.Tx{}, in))
 }
+
+func TestUndoubleKeepsOneCopyOfEachRepeatedRun(t *testing.T) {
+	const h = 21_000_000 // v8.0.x
+	undoubled := func(evs ...node.Event) []string {
+		in := input(0)
+		in.Results.TxsResults = nil
+		in.Block.Txs = nil
+		in.Results.FinalizeBlockEvents = evs
+		require.NoError(t, archive.New(mockDecoder{}).Adapt(h, in))
+		var out []string
+		for _, ev := range in.Results.FinalizeBlockEvents {
+			v, _ := ev.Get("v")
+			out = append(out, ev.Type+v)
+		}
+		return out
+	}
+	e := func(typ, v string) node.Event { return ev(typ, "v", v, "mode", "EndBlock") }
+	u, v, w := e("lost", "u"), e("lost", "v"), e("won", "w")
+
+	assert.Equal(t, []string{"lostu", "lostv"}, undoubled(u, u, v, v), "two calls, each doubled")
+	assert.Equal(t, []string{"lostu", "lostu", "lostv"}, undoubled(u, u, v, u, u, v),
+		"one call losing u twice then v: the longest run wins")
+	assert.Equal(t, []string{"lostu", "lostu"}, undoubled(u, u, u, u), "two identical calls stay two")
+	assert.Equal(t, []string{"wonw", "lostu", "lostv"}, undoubled(w, u, v, u, v), "an unrepeated event before a run")
+	assert.Equal(t, []string{"lostu"}, undoubled(u))
+	assert.Empty(t, undoubled())
+
+	in := input(0)
+	in.Results.TxsResults, in.Block.Txs = nil, nil
+	in.Results.FinalizeBlockEvents = []node.Event{u, u}
+	require.NoError(t, archive.New(mockDecoder{}).Adapt(22_551_810, in))
+	assert.Len(t, in.Results.FinalizeBlockEvents, 2, "v8.1.0 reports each event once: nothing dropped")
+}

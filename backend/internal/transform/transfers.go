@@ -2,7 +2,11 @@ package transform
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
@@ -156,10 +160,17 @@ func (t *Transformer) blockTransfers(ents *Entities, height int64, events []node
 }
 
 // blockEvents appends the block_events rows: the finalize events whose type
-// the block-event classification lists.
-func blockEvents(ents *Entities, height int64, events []node.Event) {
+// the block-event classification lists. A BZE module's typed event missing
+// from it is a classification gap, logged once per type and height.
+func (t *Transformer) blockEvents(ents *Entities, height int64, events []node.Event) {
+	var warned []string
 	for i, ev := range events {
 		if _, ok := classify.LookupBlockEvent(ev.Type); !ok {
+			if strings.HasPrefix(ev.Type, "bze.") && !slices.Contains(warned, ev.Type) {
+				warned = append(warned, ev.Type)
+				t.log.WithFields(logrus.Fields{"height": height, "event_type": ev.Type}).
+					Warn("transform: block event of a BZE module is not classified, not stored")
+			}
 			continue
 		}
 		ents.BlockEvents = append(ents.BlockEvents, BlockEvent{

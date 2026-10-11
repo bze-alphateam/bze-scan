@@ -93,11 +93,10 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	cm, _, err := c.Commit(ctx, h)
 	require.NoError(t, err)
 	in := transform.Input{Block: b, Results: r, Commit: cm}
-	// Heights of an older generation reach the transformer through the
-	// archive adapter, as on the backfill path.
-	if archive.GenerationAt(h).Format != archive.FormatCurrent {
-		require.NoError(t, archive.New(chainCodec(t)).Adapt(h, &in))
-	}
+	// Every height reaches the transformer through the archive adapter, as on
+	// the backfill path: it normalises the legacy format and v8.0.x's doubled
+	// block events, and leaves the later heights untouched.
+	require.NoError(t, archive.New(chainCodec(t)).Adapt(h, &in))
 	return in
 }
 

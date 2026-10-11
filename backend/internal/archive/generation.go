@@ -82,6 +82,22 @@
 // Facts a legacy height never recorded stay absent, never guessed. A height
 // whose shape does not match its generation fails with ErrUnknownGeneration
 // instead of being misparsed.
+//
+// # v8.0.x: block events emitted twice
+//
+// v8.0.x has the current format but reports some block-level events twice.
+// The chain wraps its EndBlock and epoch-hook work in a helper that runs it
+// on a cache context and, on success, writes the cache back. Before v8
+// (SDK 0.45) the cache context's events had to be re-emitted by hand; SDK
+// 0.50's write already re-emits them, and the helper kept its own
+// re-emission until v8.1.0 removed it. So from 20,237,800 to 22,551,809
+// every wrapped call (the burner's raffle draws, each epoch hook — burns,
+// reward distributions, raffle clean-ups — and each executed DEX queue
+// message) has its whole run of finalize-block events repeated right after
+// itself, coin_spent, coin_received and transfer included, although the
+// coins moved once. Wrapped calls nested in those emit no events, so a run
+// is doubled once, never more. Normalise drops the second copy of every
+// such run (undouble); the transactions' own events are not affected.
 package archive
 
 import "sort"
@@ -118,6 +134,9 @@ type Generation struct {
 	Consensus string
 	IBC       string
 	Format    Format
+	// DoubledEvents marks the generation that repeats the finalize-block
+	// events of its wrapped EndBlock and epoch-hook calls (v8.0.x).
+	DoubledEvents bool
 }
 
 // Generations lists the releases of mainnet beezee-1 by height, oldest
@@ -131,7 +150,7 @@ var Generations = []Generation{
 	{Release: "v7.1.0", From: 13_710_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
 	{Release: "v7.1.1", From: 14_182_500, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
 	{Release: "v7.2.0", From: 15_951_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
-	{Release: "v8.0.0", From: 20_237_800, SDK: "0.50.14", Consensus: "CometBFT 0.38.17", IBC: "8.7.0", Format: FormatCurrent},
+	{Release: "v8.0.0", From: 20_237_800, SDK: "0.50.14", Consensus: "CometBFT 0.38.17", IBC: "8.7.0", Format: FormatCurrent, DoubledEvents: true},
 	{Release: "v8.1.0", From: 22_551_810, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
 	{Release: "v8.1.1", From: 23_855_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
 }

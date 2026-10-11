@@ -1,0 +1,16 @@
+{
+  "transfers": null,
+  "block_events": [
+    {
+      "Height": 24871232,
+      "Seq": 57,
+      "Type": "complete_unbonding",
+      "Attrs": {
+        "amount": "10000000ubze",
+        "delegator": "bze1k4flz542uu5qlw7t069lqn7enylku4ge65fd5z",
+        "mode": "EndBlock",
+        "validator": "bzevaloper1k27v68x9gtppsgt9scr3649tpjfxnqljh3qa3e"
+      }
+    }
+  ]
+}

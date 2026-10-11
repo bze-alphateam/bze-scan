@@ -1,0 +1,15 @@
+{
+  "transfers": null,
+  "block_events": [
+    {
+      "Height": 20329219,
+      "Seq": 71,
+      "Type": "bze.burner.RaffleLostEvent",
+      "Attrs": {
+        "denom": "ubze",
+        "mode": "EndBlock",
+        "participant": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "order_messages": null,
+  "orders": null,
+  "order_fills": [
+    {
+      "height": 20342600,
+      "seq": 84,
+      "order_id": "000000000000000002164462",
+      "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "side": "sell",
+      "price": "0.00177",
+      "amount": "920191924",
+      "maker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
+      "taker_message_id": "",
+      "taker_tx_hash": "",
+      "time": "2025-12-04T13:27:10.923407958Z"
+    }
+  ],
+  "order_cancels": null
+}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
+	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
 )
 
 // Page sizes of the list routes.
@@ -51,6 +52,10 @@ type ExplorerReader interface {
 	// BlockEvents returns up to limit stored events of the block at height
 	// after seq after (from the first when negative).
 	BlockEvents(ctx context.Context, height, after int64, limit int) ([]repository.BlockEvent, error)
+	// ChainEvents returns up to limit stored block events of every block,
+	// newest first, of type typ when it is not empty, after before when it
+	// is not nil.
+	ChainEvents(ctx context.Context, typ string, before *repository.ChainEventKey, limit int) ([]repository.ChainEvent, error)
 	// TxDex returns the order book outcome of the transaction with hash at
 	// (height, txIndex).
 	TxDex(ctx context.Context, height, txIndex int64, hash string) (*repository.TxDex, error)
@@ -227,6 +232,43 @@ func (h *ExplorerController) BlockEvents(c *echo.Context) error {
 		resp.Items = append(resp.Items, dto.NewBlockEvent(e))
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// ChainEvents serves GET /api/v1/block-events?type&cursor&limit: the stored
+// block events of every block, newest first (height, then position,
+// descending), of one classified type when type is given (burns, raffle
+// results, reward distributions…).
+func (h *ExplorerController) ChainEvents(c *echo.Context) error {
+	typ := c.QueryParam("type")
+	if _, ok := classify.LookupBlockEvent(typ); typ != "" && !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("type %q is not a stored block event type", typ))
+	}
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	var before *repository.ChainEventKey
+	if keys, err := parseCursor(c, 2); err != nil {
+		return err
+	} else if keys != nil {
+		before = &repository.ChainEventKey{Height: keys[0], Seq: keys[1]}
+	}
+
+	rows, err := h.repo.ChainEvents(c.Request().Context(), typ, before, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.ChainEvent]{Items: make([]dto.ChainEvent, 0, min(len(rows), limit))}
+	for i, e := range rows {
+		if i == limit {
+			next := dto.EncodeCursor(rows[i-1].Height, rows[i-1].Seq)
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewChainEvent(e))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
 }
 

@@ -1,0 +1,55 @@
+{
+  "transfers": null,
+  "block_events": [
+    {
+      "Height": 25035768,
+      "Seq": 56,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "814",
+        "identifier": "day",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25035768,
+      "Seq": 57,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "815",
+        "identifier": "day",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25035768,
+      "Seq": 58,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "19536",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25035768,
+      "Seq": 59,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "19537",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25035768,
+      "Seq": 60,
+      "Type": "bze.rewards.StakingRewardDistributionEvent",
+      "Attrs": {
+        "amount": "10000000",
+        "mode": "EndBlock",
+        "reward_id": "000000000000"
+      }
+    }
+  ]
+}

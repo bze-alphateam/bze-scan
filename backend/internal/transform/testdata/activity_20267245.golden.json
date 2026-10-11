@@ -1,0 +1,31 @@
+[
+  {
+    "address": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+    "height": 20267245,
+    "tx_index": -1,
+    "time": "2025-11-29T14:16:20.748667099Z",
+    "category": "burner",
+    "kind": "raffle_won",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "13100000000"
+      }
+    ],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "bze.burner.RaffleWinnerEvent",
+        "attrs": {
+          "amount": "13100000000",
+          "denom": "ubze",
+          "mode": "EndBlock",
+          "winner": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf"
+        }
+      }
+    ]
+  }
+]
