@@ -26,6 +26,12 @@ export function MoreDetails({ hint, children }: MoreDetailsProps) {
         variant="ghost"
         size="sm"
         minH="44px"
+        // A long hint wraps on phones instead of widening the page.
+        h="auto"
+        py="2"
+        maxW="full"
+        whiteSpace="normal"
+        textAlign="start"
         aria-expanded={open}
         aria-controls={id}
         onClick={() => {
