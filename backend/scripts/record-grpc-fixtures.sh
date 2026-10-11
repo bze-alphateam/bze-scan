@@ -48,6 +48,9 @@
 #     channel/Channels.json (every channel, one page), and per transfer channel
 #     channel/ChannelClientState.transfer.<channel>.json (the light client
 #     naming the counterparty chain)
+#   orders (the open orders' reconciliation), per address in OWNERS:
+#     tradebin/UserMarketOrders.<address>.json, the owner's order references
+#     in every market (one page of 1000)
 #   chain (the chain_state and params syncs):
 #     staking/Pool.json, staking/Params.json, bank/SupplyOf.ubze.json,
 #     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
@@ -57,7 +60,7 @@
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
-#         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [REST=…])
+#         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -69,6 +72,7 @@ DENOMS="${DENOMS:-}"
 PROPOSALS="${PROPOSALS:-}"
 HOLDERS="${HOLDERS:-}"
 HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
+OWNERS="${OWNERS:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
@@ -198,6 +202,12 @@ if has channels; then
   fetch "ibc/core/channel/v1/channels?pagination.limit=200" channel/Channels.json
   for ch in $(jq -r '.channels[] | select(.port_id == "transfer") | .channel_id' "${OUT}/channel/Channels.json"); do
     fetch "ibc/core/channel/v1/channels/${ch}/ports/transfer/client_state" "channel/ChannelClientState.transfer.${ch}.json"
+  done
+fi
+
+if has orders; then
+  for a in ${OWNERS}; do
+    fetch "bze/tradebin/user_market_orders/${a}?pagination.limit=1000" "tradebin/UserMarketOrders.${a}.json"
   done
 fi
 

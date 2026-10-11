@@ -32,6 +32,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/channels"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/orders"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/paramsnap"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/prices"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/proposals"
@@ -48,9 +49,10 @@ const outboundTimeout = 30 * time.Second
 // domains register their sets here, in the order the start resync runs
 // them: the IBC channels before the chain registry that names their
 // counterparties and the denoms whose origin they give, the chain registry
-// before the denoms it names, the holders and the
-// prices after the denoms they fill, the parameters after the proposals
-// that explain their changes, the chain state last (it counts the
+// before the denoms it names, the holders and the prices after the denoms
+// they fill, the parameters after the proposals that explain their changes,
+// the open orders' reconciliation with the node's order book anywhere (it
+// reads nothing the others write), the chain state last (it counts the
 // validators and copies the native price). The chain registry runs only
 // with both its URLs, the prices only with AGGREGATOR_URL. Call closeFn
 // when done.
@@ -72,6 +74,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	staking := stakingtypes.NewQueryClient(conn)
 	localNode := node.New(cfg.NodeRPCURL)
 	denomStore := denoms.NewPGStore(pool)
+	tradebin := tradebintypes.NewQueryClient(conn)
 	resyncs := &statesync.Deferred{}
 
 	sets := []statesync.Set{
@@ -99,7 +102,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		denoms.New(denoms.Deps{
 			Bank:         bank,
 			TokenFactory: tokenfactorytypes.NewQueryClient(conn),
-			Tradebin:     tradebintypes.NewQueryClient(conn),
+			Tradebin:     tradebin,
 			Store:        denomStore,
 			Transfer:     ibctransfertypes.NewQueryClient(conn),
 			Lookup:       denomStore,
@@ -117,6 +120,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Store:  paramsnap.NewPGStore(pool),
 		}, 0),
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
+		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
 	if cfg.AggregatorURL != "" {
 		sets = append(sets, prices.New(prices.Deps{

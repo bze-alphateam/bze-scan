@@ -59,8 +59,8 @@ fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [ARCHIV
 	HEIGHTS="$(HEIGHTS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
 
 .PHONY: grpc-fixtures
-grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [DENOMS="ubze …"] [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2] [REST=...]
-	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" DENOMS="$(DENOMS)" PROPOSALS="$(PROPOSALS)" HOLDERS="$(HOLDERS)" HOLDERS_PAGE_LIMIT="$(or $(HOLDERS_PAGE_LIMIT),1000)" REST="$(REST)" scripts/record-grpc-fixtures.sh
+grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [DENOMS="ubze …"] [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [REST=...]
+	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" DENOMS="$(DENOMS)" PROPOSALS="$(PROPOSALS)" HOLDERS="$(HOLDERS)" HOLDERS_PAGE_LIMIT="$(or $(HOLDERS_PAGE_LIMIT),1000)" OWNERS="$(OWNERS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
 
 .PHONY: registry-fixtures
 registry-fixtures: ## Record fake chain-registry fixtures: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [RAW=...]
