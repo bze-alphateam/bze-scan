@@ -37,7 +37,8 @@ func New(decoder Decoder) *Adapter {
 }
 
 // Adapt normalises in, the archive's answers for height, in place. A height
-// of the current generation is left untouched.
+// of the current format is left untouched, but for the repeated runs of
+// v8.0.x's finalize-block events.
 func (a *Adapter) Adapt(height int64, in *transform.Input) error {
 	if in.Block == nil || in.Results == nil {
 		return fmt.Errorf("adapt %d: incomplete input", height)
@@ -48,6 +49,9 @@ func (a *Adapter) Adapt(height int64, in *transform.Input) error {
 	}
 	switch g := GenerationAt(height); g.Format {
 	case FormatCurrent:
+		if g.DoubledEvents {
+			in.Results.FinalizeBlockEvents = undouble(in.Results.FinalizeBlockEvents)
+		}
 		return nil
 	case FormatLegacy:
 		if err := a.legacy(in); err != nil {
