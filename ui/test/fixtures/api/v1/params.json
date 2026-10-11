@@ -1,0 +1,27 @@
+{
+  "slashing": {
+    "params": {
+      "signed_blocks_window": "10000",
+      "min_signed_per_window": "0.050000000000000000",
+      "downtime_jail_duration": "600s",
+      "slash_fraction_double_sign": "0.050000000000000000",
+      "slash_fraction_downtime": "0.000100000000000000"
+    },
+    "last_change": null
+  },
+  "staking": {
+    "params": {
+      "unbonding_time": "1814400s",
+      "max_validators": 40,
+      "max_entries": 7,
+      "historical_entries": 10000,
+      "bond_denom": "ubze",
+      "min_commission_rate": "0.050000000000000000"
+    },
+    "last_change": {
+      "height": 21000000,
+      "time": "2025-03-12T10:00:00Z",
+      "proposal_id": 11
+    }
+  }
+}

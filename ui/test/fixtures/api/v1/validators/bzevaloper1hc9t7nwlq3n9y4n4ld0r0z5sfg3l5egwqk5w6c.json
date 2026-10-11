@@ -1,0 +1,144 @@
+{
+  "rank": 1,
+  "moniker": "Honeycomb",
+  "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+  "tokens": "50000000000000",
+  "voting_power_pct": "12.34567",
+  "commission_rate": "0.05",
+  "uptime": "99.99000",
+  "jailed": false,
+  "status": "bonded",
+  "account_address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "consensus_address": "4F1A9B3C2D5E6F708192A3B4C5D6E7F8091A2B3C",
+  "consensus_pubkey": "RQzL8AijestH86OmhuuzMn/L7HNNARaDoONs2H+Wo+c=",
+  "identity": null,
+  "website": "https://honeycomb.example.org/",
+  "security_contact": "ops@honeycomb.example.org",
+  "details": "Community validator on bare-metal servers in two countries.",
+  "tombstoned": false,
+  "jailed_until": null,
+  "delegator_shares": "50000000000000.000000000000000000",
+  "commission_max_rate": "0.30",
+  "commission_max_change_rate": "0.05",
+  "commission_update_time": "2025-03-12T10:00:00Z",
+  "min_self_delegation": "1",
+  "self_delegation": "120000000000",
+  "delegator_count": 1204,
+  "missed_blocks": 1,
+  "signed_blocks_window": 10000,
+  "first_seen_height": 1000,
+  "first_seen_time": "2022-04-17T09:00:00Z",
+  "updated_at": "2026-10-11T12:00:00Z",
+  "recent_blocks": [
+    {
+      "height": 25120440,
+      "time": "2026-10-11T11:59:50Z",
+      "hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "tx_count": 7,
+      "tx_failed_count": 0,
+      "proposer_cons_address": "4F1A9B3C2D5E6F708192A3B4C5D6E7F8091A2B3C",
+      "block_time_ms": 5800,
+      "size_bytes": 4200,
+      "proposer": {
+        "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+        "moniker": "Honeycomb"
+      }
+    },
+    {
+      "height": 25120431,
+      "time": "2026-10-11T11:59:00Z",
+      "hash": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "tx_count": 1,
+      "tx_failed_count": 0,
+      "proposer_cons_address": "4F1A9B3C2D5E6F708192A3B4C5D6E7F8091A2B3C",
+      "block_time_ms": 5900,
+      "size_bytes": 1200,
+      "proposer": {
+        "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+        "moniker": "Honeycomb"
+      }
+    },
+    {
+      "height": 25120422,
+      "time": "2026-10-11T11:58:05Z",
+      "hash": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "tx_count": 0,
+      "tx_failed_count": 0,
+      "proposer_cons_address": "4F1A9B3C2D5E6F708192A3B4C5D6E7F8091A2B3C",
+      "block_time_ms": 6000,
+      "size_bytes": 800,
+      "proposer": {
+        "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+        "moniker": "Honeycomb"
+      }
+    }
+  ],
+  "events": [
+    {
+      "height": 21000000,
+      "tx_index": 3,
+      "tx_hash": "9C1E000000000000000000000000000000000000000000000000000000007A2B",
+      "kind": "commission_changed",
+      "details": {
+        "from": "0.04",
+        "to": "0.05"
+      },
+      "time": "2025-03-12T10:00:00Z"
+    },
+    {
+      "height": 1200,
+      "tx_index": -1,
+      "tx_hash": null,
+      "kind": "bonded",
+      "details": {
+        "from": "unbonded",
+        "to": "bonded"
+      },
+      "time": "2022-04-17T09:10:00Z"
+    },
+    {
+      "height": 1000,
+      "tx_index": 0,
+      "tx_hash": "5D2F0000000000000000000000000000000000000000000000000000000011C3",
+      "kind": "created",
+      "details": {
+        "moniker": "Honeycomb",
+        "commission_rate": "0.04",
+        "self_bond": "120000000000ubze"
+      },
+      "time": "2022-04-17T09:00:00Z"
+    }
+  ],
+  "votes": [
+    {
+      "proposal_id": 14,
+      "title": "Raise the block size",
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 25000000,
+      "time": "2026-10-01T10:00:00Z"
+    },
+    {
+      "proposal_id": 12,
+      "title": "Community call",
+      "option": null,
+      "options": [
+        {
+          "option": 1,
+          "weight": "0.7"
+        },
+        {
+          "option": 3,
+          "weight": "0.3"
+        }
+      ],
+      "height": 24000000,
+      "time": "2026-08-01T10:00:00Z"
+    }
+  ]
+}

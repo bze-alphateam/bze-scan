@@ -10,8 +10,59 @@
       "uptime": "99.99000",
       "jailed": false,
       "status": "bonded"
+    },
+    {
+      "rank": 2,
+      "moniker": "Thamar Node",
+      "operator_address": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "tokens": "42100000000000",
+      "voting_power_pct": "10.39506",
+      "commission_rate": "0.045",
+      "uptime": "100.00000",
+      "jailed": false,
+      "status": "bonded"
+    },
+    {
+      "rank": 3,
+      "moniker": "Deep Fields",
+      "operator_address": "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440",
+      "tokens": "7900000000000",
+      "voting_power_pct": "1.95062",
+      "commission_rate": "0.10",
+      "uptime": "98.40000",
+      "jailed": false,
+      "status": "bonded"
+    },
+    {
+      "rank": null,
+      "moniker": "Sleepy Node",
+      "operator_address": "bzevaloper12ngv3tq3fqaevdlu5hznemz5m999l2t8zpggf8",
+      "tokens": "1200000000000",
+      "voting_power_pct": null,
+      "commission_rate": "0.05",
+      "uptime": "61.20000",
+      "jailed": true,
+      "status": "unbonding"
+    },
+    {
+      "rank": null,
+      "moniker": "Old Timer",
+      "operator_address": "bzevaloper1jr90yqzvqr5g894qxqly4vaae3u032wlljd0ev",
+      "tokens": "300000000",
+      "voting_power_pct": null,
+      "commission_rate": "0.20",
+      "uptime": null,
+      "jailed": false,
+      "status": "unbonded"
     }
   ],
   "next_cursor": null,
-  "summary": null
+  "summary": {
+    "bonded_tokens": "405000000000000",
+    "staked_share": "61.23456",
+    "reward_rate": "8.91234",
+    "unbonding_period": 1814400,
+    "top5_share": "40.21000",
+    "max_validators": 40
+  }
 }

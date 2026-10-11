@@ -45,6 +45,7 @@ describe("createHttpApi", () => {
     await api.validatorBlocks("bzevaloper1x", { limit: 5 });
     await api.search("thamar node");
     await api.tokens({ kind: "ibc", limit: 100 });
+    await api.params();
     await api.rawBlock(7);
     await api.rawBlockResults(7);
     await api.rawCommit(7);
@@ -60,6 +61,7 @@ describe("createHttpApi", () => {
       "/v1/validators/bzevaloper1x/blocks?limit=5",
       "/v1/search?q=thamar+node",
       "/v1/tokens?limit=100&kind=ibc",
+      "/v1/params",
       "/v1/raw/block/7",
       "/v1/raw/block_results/7",
       "/v1/raw/commit/7",

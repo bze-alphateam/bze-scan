@@ -17,6 +17,7 @@ export const queryKeys = {
   transactions: (p: TxListParams) => ["txs", p] as const,
   transaction: (hash: string) => ["tx", hash.toUpperCase()] as const,
   validators: (p: ValidatorListParams) => ["validators", p] as const,
+  allValidators: () => ["validators", "all-pages"] as const,
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
   account: (address: string) => ["account", address] as const,
@@ -24,6 +25,7 @@ export const queryKeys = {
   validatorDirectory: () => ["validator-directory"] as const,
   tokenDirectory: () => ["token-directory"] as const,
   search: (q: string) => ["search", q] as const,
+  params: () => ["params"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
   rawCommit: (height: number) => ["raw", "commit", height] as const,
@@ -112,6 +114,29 @@ export function useValidators(params: ValidatorListParams = {}) {
   });
 }
 
+/**
+ * Every validator, all statuses, with the list's summary: pages of 100
+ * followed to the last (the chain has a few dozen, so one page in practice).
+ */
+export function useAllValidators() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.allValidators(),
+    queryFn: async ({ signal }): Promise<ValidatorList> => {
+      const first = await api.validators({ status: "all", limit: 100 }, signal);
+      const items = [...first.items];
+      let cursor = first.next_cursor;
+      while (cursor) {
+        const next = await api.validators({ status: "all", limit: 100, cursor }, signal);
+        items.push(...next.items);
+        cursor = next.next_cursor;
+      }
+      return { items, next_cursor: null, summary: first.summary };
+    },
+    ...live,
+  });
+}
+
 export function useValidator(operator: string) {
   const api = useApi();
   return useQuery({
@@ -172,6 +197,12 @@ export function useTokenDirectory() {
     select: byDenom,
     ...reference,
   });
+}
+
+/** Every module's live parameters: they change only through governance. */
+export function useParams() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.params(), queryFn: ({ signal }) => api.params(signal), ...reference });
 }
 
 /** Runs only for a non-empty query. */
