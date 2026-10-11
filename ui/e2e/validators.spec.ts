@@ -37,7 +37,8 @@ test.describe("validators list", () => {
     await expect(rows(page).first()).toContainText("Thamar Node");
 
     await page.getByRole("textbox", { name: "Find a validator" }).fill("honey");
-    await rows(page).first().getByRole("link", { name: "Honeycomb" }).click();
+    // Exact: the row's "Stake with Honeycomb" button is a link too.
+    await rows(page).first().getByRole("link", { name: "Honeycomb", exact: true }).click();
     await expect(page).toHaveURL(`/validators/${OP}`);
     await expect(page.getByRole("heading", { level: 1, name: "Honeycomb" })).toBeVisible();
     await noHorizontalScroll(page);
@@ -63,7 +64,8 @@ test.describe("validator page", () => {
     await expect(page.getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
 
     await page.getByRole("button", { name: /More details/ }).click();
-    await expect(page.getByText("RQzL8AijestH86OmhuuzMn/L7HNNARaDoONs2H+Wo+c=")).toBeVisible();
+    // Exact: the raw JSON below holds the key too.
+    await expect(page.getByText("RQzL8AijestH86OmhuuzMn/L7HNNARaDoONs2H+Wo+c=", { exact: true })).toBeVisible();
     await expect(page.getByText(/"delegator_count": 1204/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute(
       "href",
@@ -85,7 +87,7 @@ test.describe("validators on a phone", () => {
     await page.goto("/validators");
     const row = rows(page).first();
     const [name, staked] = await Promise.all([
-      row.getByRole("link", { name: "Honeycomb" }).boundingBox(),
+      row.getByRole("link", { name: "Honeycomb", exact: true }).boundingBox(),
       row.getByText("50M BZE").boundingBox(),
     ]);
     expect(name && staked && staked.y > name.y).toBe(true);
