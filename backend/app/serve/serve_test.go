@@ -2,7 +2,11 @@ package serve_test
 
 import (
 	"context"
+	"io"
+	"net"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,5 +57,42 @@ func TestServeRequiresDatabaseURL(t *testing.T) {
 
 		err := serve.Run(context.Background(), cfg, serve.Options{})
 		assert.ErrorIs(t, err, config.ErrDatabaseURLRequired, "indexer %v", indexer)
+	}
+}
+
+// DEBUG_ADDR serves the pprof profiles next to the API, and stops with it.
+func TestServeExposesPprofOnDebugAddr(t *testing.T) {
+	cfg := indexerConfig("http://127.0.0.1:1", "beezee-1")
+	cfg.IndexerEnabled = false
+	cfg.StatusInterval = time.Hour
+	cfg.DebugAddr = "127.0.0.1:0"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	debug := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- serve.Run(ctx, cfg, serve.Options{OnDebugListen: func(a net.Addr) { debug <- a }})
+	}()
+
+	var addr net.Addr
+	select {
+	case addr = <-debug:
+	case err := <-done:
+		t.Fatalf("serve stopped: %v", err)
+	}
+	res, err := http.Get("http://" + addr.String() + "/debug/pprof/goroutine?debug=1")
+	require.NoError(t, err)
+	body, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, string(body), "goroutine profile: total")
+
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("serve did not stop")
 	}
 }

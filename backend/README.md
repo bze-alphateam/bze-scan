@@ -102,6 +102,7 @@ documented template with the defaults:
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.n pool, `ibc/6490…8AF4_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves (the USDC.n → USDC.inj migration); empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
+| `DEBUG_ADDR` | empty | `host:port` on which `serve` exposes `net/http/pprof` under `/debug/pprof/`, on a server of its own; keep it on localhost (`127.0.0.1:6060`). Empty exposes nothing |
 
 Invalid values stop the process at startup with every problem listed.
 
@@ -129,7 +130,13 @@ Invalid values stop the process at startup with every problem listed.
 | `make fixtures HEIGHTS="..."` | records node fixtures for the fake node (see below) |
 | `make grpc-fixtures VALIDATORS="..." ACCOUNTS="..."` | records the fake gRPC server's fixtures (see below) |
 | `make registry-fixtures [CHAINS="..."]` | records the fake chain registry's files (see below) |
+| `make soak-db-up` / `make soak-db-down` | starts / stops the soak's PostgreSQL (`../docker/compose.soak.yml`: a named volume instead of tmpfs, project `bze-scan-soak`) |
+| `make node-build` / `make node-init` | builds `bzed` from source at the tag mainnet runs into `.local/bin` / writes the state-synced mainnet home `.local/bzed-home` with the `psql` sink into `DATABASE_URL` (localhost only) |
+| `SOAK=1 make node-start` / `make node-reset` | runs that node in the foreground (refuses without `SOAK=1`) / deletes its home |
 | `make clean` | removes `build/` |
+
+The `node-*` and `soak-db-*` targets exist for the mainnet soak only; the
+runbook is [docs/soak.md](docs/soak.md).
 
 The acceptance tests read `E2E_DATABASE_URL`, defaulting to the compose
 database `postgres://bze:bze@127.0.0.1:15432/bze_index?sslmode=disable`.

@@ -6,6 +6,8 @@
 backend/**/.env
 backend/**/.env.*
 backend/build/
+backend/.local/
+backend/docs/
 backend/graphify-out/
 backend/**/testdata/
 backend/e2e/

@@ -1,0 +1,19 @@
+# The mainnet soak's database (backend/docs/soak.md): the postgres service of
+# compose.yml on a named volume instead of tmpfs, so it survives restarts, in
+# a project of its own, so `make e2e` (which removes its containers and
+# volumes) never touches it. Both use host port 15432: never run them at the
+# same time.
+#
+#   docker compose -f docker/compose.yml -f docker/compose.soak.yml up -d --wait postgres
+#   docker compose -f docker/compose.yml -f docker/compose.soak.yml down          # keeps the data
+#   docker compose -f docker/compose.yml -f docker/compose.soak.yml down -v       # deletes it
+name: bze-scan-soak
+
+services:
+  postgres:
+    tmpfs: !reset []
+    volumes:
+      - soak-postgres:/var/lib/postgresql/data
+
+volumes:
+  soak-postgres:

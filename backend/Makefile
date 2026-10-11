@@ -66,6 +66,30 @@ grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validator
 registry-fixtures: ## Record fake chain-registry fixtures: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [RAW=...]
 	CHAINS="$(CHAINS)" RAW="$(RAW)" scripts/record-registry-fixtures.sh
 
+.PHONY: node-build
+node-build: ## Soak: build bzed from source at mainnet's tag into .local/bin [BZED_VERSION=v8.1.1]
+	scripts/mainnet-node.sh build
+
+.PHONY: node-init
+node-init: ## Soak: create the state-synced mainnet home .local/bzed-home (psql sink into DATABASE_URL)
+	DATABASE_URL="$(DATABASE_URL)" scripts/mainnet-node.sh init
+
+.PHONY: node-start
+node-start: ## Soak: run the mainnet node in the foreground; refuses unless SOAK=1
+	SOAK="$(SOAK)" scripts/mainnet-node.sh start
+
+.PHONY: node-reset
+node-reset: ## Soak: delete .local/bzed-home (the database is untouched)
+	scripts/mainnet-node.sh reset
+
+.PHONY: soak-db-up
+soak-db-up: ## Soak: start the compose PostgreSQL on a persistent volume
+	$(COMPOSE) -f ../docker/compose.soak.yml up -d --wait postgres
+
+.PHONY: soak-db-down
+soak-db-down: ## Soak: stop that PostgreSQL, keeping its volume
+	$(COMPOSE) -f ../docker/compose.soak.yml down
+
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR)

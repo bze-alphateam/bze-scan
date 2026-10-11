@@ -59,6 +59,18 @@ Every other subcommand (`backfill`, `reindex ...`, `version`) runs as a
 one-shot the same way: the image's entrypoint is the `bze-scan` binary and
 `serve` is only its default command.
 
+## compose.soak.yml
+
+An override for the mainnet soak (`backend/docs/soak.md`): the same
+`postgres` service on a named volume instead of tmpfs, so the data survives
+restarts, under the project name `bze-scan-soak`, so `make e2e` never removes
+it. It uses the same host port 15432: run one or the other.
+
+```
+docker compose -f docker/compose.yml -f docker/compose.soak.yml up -d --wait postgres
+docker compose -f docker/compose.yml -f docker/compose.soak.yml down        # keeps the volume
+```
+
 ## Images
 
 `backend.Dockerfile` builds `ghcr.io/bze-alphateam/bze-scan-backend`. The

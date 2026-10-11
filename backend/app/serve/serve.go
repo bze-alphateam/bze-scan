@@ -21,6 +21,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/debugserver"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -34,6 +35,8 @@ import (
 type Options struct {
 	// OnListen receives the HTTP server's bound address.
 	OnListen func(net.Addr)
+	// OnDebugListen receives the debug server's bound address (DEBUG_ADDR).
+	OnDebugListen func(net.Addr)
 	// Live overrides the live indexer's tuning (retries, backoff, clock).
 	Live live.Config
 	// BackfillRetryDelays overrides the backfill's waits between retries.
@@ -57,6 +60,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		"indexer_enabled":  cfg.IndexerEnabled,
 		"node_grpc_addr":   cfg.NodeGRPCAddr,
 		"backfill_enabled": cfg.BackfillEnabled,
+		"debug_addr":       cfg.DebugAddr,
 	}).Info("starting bze-scan")
 
 	if err := cfg.RequireDatabase(); err != nil {
@@ -151,6 +155,11 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			return server.Run(ctx, e, cfg.HTTPAddr, opts.OnListen)
 		}},
 		{name: "status checker", run: checker.Run},
+	}
+	if cfg.DebugAddr != "" {
+		components = append(components, component{name: "debug server", run: func(ctx context.Context) error {
+			return debugserver.Run(ctx, cfg.DebugAddr, opts.OnDebugListen)
+		}})
 	}
 
 	// The live indexer's catch-up and the backfill share the history side:
