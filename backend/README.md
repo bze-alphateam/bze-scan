@@ -281,6 +281,7 @@ every later route follows:
 | `GET /api/v1/blocks?cursor&limit` | blocks, height descending: height, time, hash, tx_count, tx_failed_count, proposer_cons_address, block_time_ms, size_bytes, `proposer` (`{operator_address, moniker}` of the validator with that consensus address, null while none is synced) |
 | `GET /api/v1/blocks/{height}` | every column of the block plus `transactions` (height, tx_index, hash, success, msg_types, fee, first signer), `transfers` (the block's own moves, as on the transaction page, `msg_index` null) and `events` (its first 100 stored block events: seq, type, attrs) with `events_next_cursor` (null when they are all there); 400 unless a positive integer, 404 when not indexed |
 | `GET /api/v1/blocks/{height}/events?cursor&limit` | the block's stored events in order (seq, type, attrs); immutable once the block is indexed; 404 when not indexed |
+| `GET /api/v1/block-events?type&cursor&limit` | the stored block events of every block, newest first (height, then seq, descending): `height`, `seq`, `time` (the block's), `type`, `kind`, `category`, `attrs`; `type` (a classified event type such as `bze.burner.CoinsBurnedEvent`, else 400) keeps one type and reads the `(type, height)` index; `no-store` |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer |
 | `GET /api/v1/txs/{hash}` | every column of the transaction plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled) and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, never immutable). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
 | `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
@@ -490,6 +491,15 @@ verified and every difference are in the package documentation
 it converts the legacy ABCI responses itself, and an older node's answer is
 rejected rather than guessed at.
 
+v8.0.x (heights 20,237,800 to 22,551,809) has the current format but reports
+part of its finalize-block events twice: the chain ran its EndBlock and
+epoch-hook work (raffle draws, burns, reward distributions, the DEX queue)
+through a helper that re-emitted the events SDK 0.50 already re-emits, until
+v8.1.0 dropped it. The coins moved once. On the same path the adapter drops
+the second copy of every run of finalize-block events immediately repeated,
+so those heights store each transfer, fill and event once; at each position
+the longest repeated run wins. Transactions' own events are not affected.
+
 ### Transactions and messages
 
 Transactions are decoded with the chain's own Go types: the backend imports
@@ -540,8 +550,13 @@ classification (`internal/classify`) lists, `seq` being the event's position
 in the list and `attrs` its attributes (typed values decoded). Routine events
 (`mint`, `commission`, `rewards`, `proposer_reward`, `coin_spent`,
 `coin_received`, `coinbase`, `transfer`, `message`, `liveness`) are never
-stored. A type added to the classification later needs a reindex of the
-range. The wording a page shows ("transaction fee", "paid to the seller") is
+stored. The classification lists every typed event the BZE modules emit
+outside a transaction (checked against the chain's keepers; events of
+message handlers only, such as `DenomRewardDistributionEvent`, never reach
+the finalize-block events), and the transformer logs a warning for a
+`bze.*` block event it does not list, which is then neither stored nor
+turned into activity. A type added to the classification later needs a
+reindex of the range. The wording a page shows ("transaction fee", "paid to the seller") is
 derived at read time; the tables hold facts only.
 
 ### Token events
@@ -1051,7 +1066,18 @@ generations a send and its acknowledgement (4002550, 4002556), an inbound
 transfer (10002143), a send nothing settles (20235036) and two timeouts
 (20237220). No recorded height has a rejected acknowledgement or a blocked
 inbound transfer (the block arrived with chain v8.2.0, mainnet runs v8.1.1):
-the unit tests build them from 24999209's recorded relay. Governance: 23745024 (`MsgSubmitProposal` of proposal 47
+the unit tests build them from 24999209's recorded relay. Block-level
+activity: 20267245 (a raffle win), 20329219 (a raffle loss), 20342600 (a
+raffle's end: `RaffleFinishedEvent` and the burn of the rest of its pot; also
+a v8.0.x DEX fill), 20300028 (v8.0.x DEX queue: an order saved and two
+fills), all four with the doubled events of v8.0.x; 24844265
+(`complete_redelegation`), 24871232 (`complete_unbonding`), 25006237 (the
+four-weekly burn: `CoinsBurnedEvent`, two burn rows, day/hour/week epochs),
+25035768 (`StakingRewardDistributionEvent` on the day epoch) and 25041911 (an
+hour epoch alone). Mainnet never had a trading reward and runs no denom
+rewards yet (v8.2.0): `TradingRewardDistributionEvent`,
+`TradingRewardExpireEvent` and `DenomRewardScheduleFinishEvent` are synthetic.
+Governance: 23745024 (`MsgSubmitProposal` of proposal 47
 with its whole deposit), 23745061 (a validator owner's vote), 23745456 (a
 delegator's vote) and 23821225 (`active_proposal`, passed); 20121960 carries
 the legacy (v1beta1) submission of proposal 44. No recorded height has a
@@ -1070,6 +1096,31 @@ as committed (restore them with git) so the tests' tip stays put.
 
 The transformer's golden files (`internal/transform/testdata`) are rewritten
 with `go test ./internal/transform -golden`.
+
+### Finding block-level heights
+
+Block-level events have no transaction to search for, so their heights are
+derived (one-off discovery, any route; the recording itself stays by height):
+
+- **Epochs, burns, reward distributions**: mainnet REST
+  `/bze/epochs/epochs` gives each epoch's `current_epoch_start_height`; that
+  block carries the `EpochEndEvent`/`EpochStartEvent` pair. Staking rewards
+  are distributed on the `day` epoch, the periodic burn runs on the `week`
+  epoch whose ending number is a multiple of the burner's
+  `periodic_burning_weeks` (4), trading rewards on the `hour` epoch. Earlier
+  boundaries: subtract the epoch duration and binary search `/header` times,
+  then scan a few `/block_results` around it.
+- **Raffle results**: a `MsgJoinRaffle` (REST `/cosmos/tx/v1beta1/txs?query=
+  message.action='/bze.burner.MsgJoinRaffle'`) at height H with N tickets
+  draws at H+2 … H+N+1, one ticket per block; scan those `/block_results` for
+  `RaffleWinnerEvent`/`RaffleLostEvent`. The raffle ends `duration` × 24 hour
+  epochs after its `MsgStartRaffle`: binary search that time, then scan
+  forward for `RaffleFinishedEvent`.
+- **Unbonding and redelegation completions**: a `MsgUndelegate` or
+  `MsgBeginRedelegate` older than the unbonding period (21 days) carries its
+  `completion_time` in its `unbond`/`redelegate` event; the first block whose
+  header time reaches it (binary search `/header`) ends with
+  `complete_unbonding`/`complete_redelegation`, or the next one.
 
 The script fetches `/block`, `/block_results` and `/commit` once per height,
 plus `/status` and one above-tip answer. It never calls `/tx`, `/tx_search` or
