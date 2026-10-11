@@ -1,0 +1,17 @@
+{
+  "transfers": null,
+  "block_events": [
+    {
+      "Height": 24844265,
+      "Seq": 55,
+      "Type": "complete_redelegation",
+      "Attrs": {
+        "amount": "1000000ubze",
+        "delegator": "bze12wp3kzu0w0z3zt2n2a4vvhaaset2ytx9xuh9ju",
+        "destination_validator": "bzevaloper13snue6qplvfgk40gps54v84wgthj8ekfg5sl6q",
+        "mode": "EndBlock",
+        "source_validator": "bzevaloper10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7qx0nyg"
+      }
+    }
+  ]
+}

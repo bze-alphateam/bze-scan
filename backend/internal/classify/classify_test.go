@@ -151,3 +151,39 @@ func TestMirrorStopsAtTheFirstError(t *testing.T) {
 	assert.Contains(t, err.Error(), "boom")
 	assert.Len(t, db.calls, 3)
 }
+
+// The bze.* block events are exactly the typed events the chain's keepers
+// emit outside a message handler: EndBlock, BeginBlock and epoch hooks.
+func TestBZEBlockEventsAreTheChainsBlockLevelEmitters(t *testing.T) {
+	var got []string
+	for _, e := range classify.BlockEvents() {
+		if strings.HasPrefix(e.EventType, "bze.") {
+			got = append(got, e.EventType)
+		}
+	}
+	assert.Equal(t, []string{
+		"bze.burner.CoinsBurnedEvent",                // periodic burn, raffle clean-up
+		"bze.burner.RaffleFinishedEvent",             // raffle clean-up hook
+		"bze.burner.RaffleLostEvent",                 // EndBlock draw
+		"bze.burner.RaffleWinnerEvent",               // EndBlock draw
+		"bze.epochs.EpochEndEvent",                   // BeginBlock
+		"bze.epochs.EpochStartEvent",                 // BeginBlock
+		"bze.rewards.DenomRewardScheduleFinishEvent", // daily distribution queue
+		"bze.rewards.StakingRewardDistributionEvent", // daily distribution queue
+		"bze.rewards.TradingRewardDistributionEvent", // hourly hook
+		"bze.rewards.TradingRewardExpireEvent",       // hourly hook
+		"bze.tradebin.LiquidityAddedEvent",           // periodic burn: locked coins into BZE liquidity
+		"bze.tradebin.OrderCanceledEvent",            // EndBlock queue
+		"bze.tradebin.OrderExecutedEvent",            // EndBlock queue
+		"bze.tradebin.OrderSavedEvent",               // EndBlock queue
+		"bze.tradebin.SwapEvent",                     // fee collector's conversion to BZE
+	}, got)
+
+	for _, txOnly := range []string{
+		"bze.rewards.DenomRewardDistributionEvent", "bze.rewards.DenomRewardPrizeCreateEvent",
+		"bze.rewards.StakingRewardFinishEvent", "bze.burner.FundBurnerEvent",
+	} {
+		_, ok := classify.LookupBlockEvent(txOnly)
+		assert.False(t, ok, "%s is emitted by message handlers only", txOnly)
+	}
+}

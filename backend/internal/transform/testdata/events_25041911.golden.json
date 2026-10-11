@@ -1,0 +1,25 @@
+{
+  "transfers": null,
+  "block_events": [
+    {
+      "Height": 25041911,
+      "Seq": 55,
+      "Type": "bze.epochs.EpochEndEvent",
+      "Attrs": {
+        "epoch": "19546",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    },
+    {
+      "Height": 25041911,
+      "Seq": 56,
+      "Type": "bze.epochs.EpochStartEvent",
+      "Attrs": {
+        "epoch": "19547",
+        "identifier": "hour",
+        "mode": "BeginBlock"
+      }
+    }
+  ]
+}

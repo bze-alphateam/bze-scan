@@ -1,0 +1,152 @@
+{
+  "transactions": [
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "Hash": "DCAEEF214FD782B245B7C238320922E951855A711FCBF46F0BE4CDB641758D66",
+      "Time": "2026-10-09T04:27:10.561921198Z",
+      "Success": true,
+      "Code": 0,
+      "Codespace": "",
+      "ErrorLog": "",
+      "GasWanted": 234967,
+      "GasUsed": 179889,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "15664"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 1,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCreateOrder"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 25006237,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCreateOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "tradebin",
+      "Events": [
+        {
+          "type": "message",
+          "attrs": {
+            "action": "/bze.tradebin.MsgCreateOrder",
+            "module": "tradebin",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "100000ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "100000ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "100000ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "100000ubze",
+            "spender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "100000ubze",
+            "receiver": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "100000ubze",
+            "recipient": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "coin_spent",
+          "attrs": {
+            "amount": "69006440ubze",
+            "spender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "coin_received",
+          "attrs": {
+            "amount": "69006440ubze",
+            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
+          }
+        },
+        {
+          "type": "transfer",
+          "attrs": {
+            "amount": "69006440ubze",
+            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "message",
+          "attrs": {
+            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "amount": "322460",
+            "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+            "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+            "order_type": "buy",
+            "price": "214"
+          }
+        }
+      ],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "order_type": "buy",
+        "amount": "322460",
+        "price": "214",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze"
+      }
+    }
+  ]
+}

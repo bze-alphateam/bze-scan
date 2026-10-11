@@ -246,7 +246,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	if err := t.blockTransfers(ents, h, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
-	blockEvents(ents, h, in.Results.FinalizeBlockEvents)
+	t.blockEvents(ents, h, in.Results.FinalizeBlockEvents)
 	blockOrders(ents, b, in.Results.FinalizeBlockEvents)
 	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)

@@ -283,18 +283,28 @@ func event(eventType, kind, category string, addressAttrs ...string) BlockEventK
 // blockEvents is the block-level event classification. Routine events (mint,
 // commission, rewards, proposer_reward, coin_spent, coin_received, coinbase,
 // transfer, message, liveness) are absent on purpose: they are not stored.
+//
+// The bze.* entries are every typed event the chain emits outside a
+// transaction (EndBlock, BeginBlock, epoch hooks), checked against the
+// chain's keepers. Events emitted only by message handlers (the denom
+// rewards' DenomRewardDistributionEvent and DenomRewardPrizeCreateEvent,
+// FundBurnerEvent…) never reach the finalize-block events and have no
+// entry; the transformer warns about a bze.* block event missing here.
 var blockEvents = []BlockEventKind{
+	// DEX: the queue executes orders in EndBlock; the fee collector's and
+	// the burner's conversions to BZE swap and add liquidity from module
+	// accounts, so those two name no account.
 	event("bze.tradebin.OrderExecutedEvent", "dex_fill", DEX, "maker", "taker"),
 	event("bze.tradebin.OrderSavedEvent", "dex_order_saved", DEX, "owner"),
 	event("bze.tradebin.OrderCanceledEvent", "dex_cancel", DEX, "owner"),
+	event("bze.tradebin.SwapEvent", "dex_swap", DEX),
+	event("bze.tradebin.LiquidityAddedEvent", "liquidity", DEX),
 	event("complete_unbonding", "unbonding_completed", Staking, "delegator"),
 	event("complete_redelegation", "redelegation_completed", Staking, "delegator"),
 	event("bze.rewards.TradingRewardDistributionEvent", "reward_won", Rewards, "winners"),
 	event("bze.rewards.StakingRewardDistributionEvent", "reward_program", Rewards),
-	event("bze.rewards.DenomRewardDistributionEvent", "reward_program", Rewards),
 	event("bze.rewards.DenomRewardScheduleFinishEvent", "reward_program", Rewards),
 	event("bze.rewards.TradingRewardExpireEvent", "reward_program", Rewards),
-	event("bze.rewards.DenomRewardPrizeCreateEvent", "reward_program", Rewards),
 	event("bze.burner.RaffleWinnerEvent", "raffle_won", Burner, "winner"),
 	event("bze.burner.RaffleLostEvent", "raffle_lost", Burner, "participant"),
 	event("bze.burner.RaffleFinishedEvent", "raffle_finished", Burner),

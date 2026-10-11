@@ -1,0 +1,28 @@
+{
+  "transfers": [
+    {
+      "Height": 20267245,
+      "TxIndex": -1,
+      "Seq": 0,
+      "MsgIndex": null,
+      "Kind": "transfer",
+      "Sender": "bze18hsqalgwlzqavrrkfnxmrjmygwyjy8senx5tgs",
+      "Recipient": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf",
+      "Denom": "ubze",
+      "Amount": "13100000000"
+    }
+  ],
+  "block_events": [
+    {
+      "Height": 20267245,
+      "Seq": 69,
+      "Type": "bze.burner.RaffleWinnerEvent",
+      "Attrs": {
+        "amount": "13100000000",
+        "denom": "ubze",
+        "mode": "EndBlock",
+        "winner": "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf"
+      }
+    }
+  ]
+}

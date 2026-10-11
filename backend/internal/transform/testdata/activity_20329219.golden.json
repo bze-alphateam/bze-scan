@@ -1,0 +1,25 @@
+[
+  {
+    "address": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+    "height": 20329219,
+    "tx_index": -1,
+    "time": "2025-12-03T16:07:17.243167301Z",
+    "category": "burner",
+    "kind": "raffle_lost",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "bze.burner.RaffleLostEvent",
+        "attrs": {
+          "denom": "ubze",
+          "mode": "EndBlock",
+          "participant": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+        }
+      }
+    ]
+  }
+]
