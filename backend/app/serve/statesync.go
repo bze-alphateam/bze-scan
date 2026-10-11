@@ -72,7 +72,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	staking := stakingtypes.NewQueryClient(conn)
 	localNode := node.New(cfg.NodeRPCURL)
 	denomStore := denoms.NewPGStore(pool)
-	misses := &statesync.Deferred{}
+	resyncs := &statesync.Deferred{}
 
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
@@ -84,7 +84,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		channels.New(channels.Deps{
 			Channel: channeltypes.NewQueryClient(conn),
 			Store:   channels.NewPGStore(pool),
-			Misses:  misses,
+			Misses:  resyncs,
 		}, 0),
 	}
 	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {
@@ -92,6 +92,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Registry: chainregistry.New(outbound, cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL),
 			Store:    registry.NewPGStore(pool),
 			ChainID:  cfg.ChainID,
+			Saved:    resyncs,
 		}, 0))
 	}
 	sets = append(sets,
@@ -102,7 +103,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Store:        denomStore,
 			Transfer:     ibctransfertypes.NewQueryClient(conn),
 			Lookup:       denomStore,
-			Misses:       misses,
+			Misses:       resyncs,
 		}, 0),
 		proposals.New(proposals.Deps{
 			Gov:     govv1.NewQueryClient(conn),
@@ -137,7 +138,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		Denom:        chain.BondDenom,
 	}, 0))
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
-	misses.Bind(syncer)
+	resyncs.Bind(syncer)
 	return syncer, func() {
 		pool.Close()
 		_ = conn.Close()

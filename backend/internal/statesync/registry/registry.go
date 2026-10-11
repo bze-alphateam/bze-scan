@@ -74,6 +74,9 @@ type Deps struct {
 	ChainID string
 	// Clock defaults to the wall clock.
 	Clock Clock
+	// Saved, when set, is asked to resync the channels after a run that
+	// saved a chain: the channels' escrow labels carry the chain's name.
+	Saved statesync.Publisher
 }
 
 // Set is the chain_registry set.
@@ -125,15 +128,29 @@ func (s *Set) FullResync(ctx context.Context) error {
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
 	var errs []error
+	saved := false
 	for _, id := range ids {
 		if id == "" {
 			continue
 		}
-		if err := s.fetch(ctx, id); err != nil {
+		ok, err := s.fetch(ctx, id)
+		if err != nil {
 			errs = append(errs, err)
 		}
+		saved = saved || ok
 	}
+	s.announce(saved)
 	return errors.Join(errs...)
+}
+
+// announce asks the channels set to resync after a run that saved a chain.
+func (s *Set) announce(saved bool) {
+	if !saved || s.deps.Saved == nil {
+		return
+	}
+	var d statesync.Dirty
+	d.Mark(statesync.Channels, statesync.All)
+	s.deps.Saved.Publish(d)
 }
 
 // ResyncOne fetches the chain key names (a chain id or a RegistryNameKey),
@@ -147,11 +164,14 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if last, ok := s.attempts[key]; ok && s.deps.Clock.Now().Sub(last) < CoolDown {
 		return nil
 	}
-	return s.fetch(ctx, key)
+	saved, err := s.fetch(ctx, key)
+	s.announce(saved)
+	return err
 }
 
-// fetch fetches the chain key names and records the attempt.
-func (s *Set) fetch(ctx context.Context, key string) error {
+// fetch fetches the chain key names and records the attempt; saved is
+// whether the registry knew the chain and it was written.
+func (s *Set) fetch(ctx context.Context, key string) (saved bool, err error) {
 	s.attempts[key] = s.deps.Clock.Now()
 	if name, ok := statesync.RegistryName(key); ok {
 		return s.fetchByName(ctx, name)
@@ -159,13 +179,13 @@ func (s *Set) fetch(ctx context.Context, key string) error {
 	return s.fetchByID(ctx, key)
 }
 
-func (s *Set) fetchByID(ctx context.Context, chainID string) error {
+func (s *Set) fetchByID(ctx context.Context, chainID string) (bool, error) {
 	dir, chain, err := s.find(ctx, chainID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if chain == nil {
-		return s.deps.Store.SaveUnknown(ctx, chainID)
+		return false, s.deps.Store.SaveUnknown(ctx, chainID)
 	}
 	return s.save(ctx, dir, chain)
 }
@@ -173,9 +193,9 @@ func (s *Set) fetchByID(ctx context.Context, chainID string) error {
 // fetchByName fetches the chain in directory name (or testnets/name). A name
 // the registry does not list is left alone: there is no chain id to record
 // it under.
-func (s *Set) fetchByName(ctx context.Context, name string) error {
+func (s *Set) fetchByName(ctx context.Context, name string) (bool, error) {
 	if err := s.list(ctx); err != nil {
-		return err
+		return false, err
 	}
 	for _, dir := range []string{name, chainregistry.TestnetsDir + "/" + name} {
 		if !slices.Contains(s.dirs, dir) {
@@ -183,21 +203,24 @@ func (s *Set) fetchByName(ctx context.Context, name string) error {
 		}
 		chain, err := s.readChain(ctx, dir)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if chain != nil {
 			return s.save(ctx, dir, chain)
 		}
 	}
-	return nil
+	return false, nil
 }
 
-func (s *Set) save(ctx context.Context, dir string, chain *chainregistry.Chain) error {
+func (s *Set) save(ctx context.Context, dir string, chain *chainregistry.Chain) (bool, error) {
 	assets, err := s.deps.Registry.Assets(ctx, dir)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return s.deps.Store.Save(ctx, *chain, assets, s.deps.Clock.Now())
+	if err := s.deps.Store.Save(ctx, *chain, assets, s.deps.Clock.Now()); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // find returns the directory and chain.json of chainID; a nil chain when no
