@@ -61,14 +61,38 @@ func TestTxsBindsCursorAndStatus(t *testing.T) {
 
 	_, err := r.Txs(context.Background(), &repository.TxKey{Height: 24999004, TxIndex: 2}, &failed, 11)
 	assert.ErrorIs(t, err, errDB)
-	assert.Contains(t, db.sql[0], "height <= $1 AND (height, tx_index) < ($1, $2) AND success = $3")
-	assert.Contains(t, db.sql[0], "ORDER BY height DESC, tx_index DESC LIMIT $4")
+	assert.Contains(t, db.sql[0], "t.height <= $1 AND (t.height, t.tx_index) < ($1, $2) AND t.success = $3")
+	assert.Contains(t, db.sql[0], "ORDER BY t.height DESC, t.tx_index DESC LIMIT $4")
 	assert.Equal(t, []any{int64(24999004), int64(2), false, 11}, db.args[0])
 
 	_, err = r.Txs(context.Background(), nil, nil, 5)
 	assert.ErrorIs(t, err, errDB)
 	assert.NotContains(t, db.sql[1], "$2")
 	assert.Equal(t, []any{5}, db.args[1])
+}
+
+func TestTxListsJoinTheFirstMessageWithinTheHeightBound(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	r := repository.NewExplorer(db)
+	ctx := context.Background()
+
+	_, err := r.Txs(ctx, &repository.TxKey{Height: 24999004, TxIndex: 2}, nil, 11)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[0], "m.height = t.height AND m.tx_index = t.tx_index AND m.msg_index = 0 AND m.height <= $1")
+
+	_, err = r.Txs(ctx, nil, nil, 5)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[1], "m.msg_index = 0) fm ON true", "no bound without a cursor")
+
+	// The block page's transactions: the block's QueryRow succeeds, the
+	// transactions query fails.
+	db = &fakeDB{queryErr: errDB}
+	_, err = repository.NewExplorer(db).Block(ctx, 7)
+	assert.ErrorIs(t, err, errDB)
+	require.Len(t, db.sql, 2)
+	assert.Contains(t, db.sql[0], "(SELECT count(*) FROM explorer.transfers x WHERE x.height = $1)")
+	assert.Contains(t, db.sql[1], "t.gas_wanted, t.gas_used, fm.type_url")
+	assert.Contains(t, db.sql[1], "m.msg_index = 0 AND m.height = $1) fm ON true")
 }
 
 func TestMissingRowsAreNotFound(t *testing.T) {

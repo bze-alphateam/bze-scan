@@ -85,10 +85,13 @@ type fakeReader struct {
 	searchErrs map[string]error
 
 	// transfers by (height, tx_index); events of f.block.
-	transfers    map[[2]int64][]repository.Transfer
-	events       []repository.BlockEvent
-	gotTransfers [][2]int64
-	transfersErr error
+	transfers map[[2]int64][]repository.Transfer
+	// blockTransfers are every transfer of f.block in route order.
+	blockTransfers []repository.BlockTransfer
+	gotTransferKey *repository.TransferKey
+	events         []repository.BlockEvent
+	gotTransfers   [][2]int64
+	transfersErr   error
 
 	// The order book: outcomes by transaction hash, one order and its
 	// fills.
@@ -159,6 +162,19 @@ func (f *fakeReader) OrderFills(_ context.Context, _ string, limit int) (int64, 
 func (f *fakeReader) Transfers(_ context.Context, height, txIndex int64) ([]repository.Transfer, error) {
 	f.gotTransfers = append(f.gotTransfers, [2]int64{height, txIndex})
 	return f.transfers[[2]int64{height, txIndex}], f.transfersErr
+}
+
+func (f *fakeReader) BlockTransfers(_ context.Context, _ int64, after *repository.TransferKey,
+	limit int) ([]repository.BlockTransfer, error) {
+	f.gotTransferKey, f.gotLimit = after, limit
+	var out []repository.BlockTransfer
+	for _, x := range f.blockTransfers {
+		past := after == nil || x.TxIndex > after.TxIndex || (x.TxIndex == after.TxIndex && x.Seq > after.Seq)
+		if past && len(out) < limit {
+			out = append(out, x)
+		}
+	}
+	return out, f.transfersErr
 }
 
 func (f *fakeReader) BlockEvents(_ context.Context, _, after int64, limit int) ([]repository.BlockEvent, error) {
@@ -277,6 +293,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/blocks", h.Blocks)
 	e.GET("/blocks/:height", h.Block)
 	e.GET("/blocks/:height/events", h.BlockEvents)
+	e.GET("/blocks/:height/transfers", h.BlockTransfers)
 	e.GET("/block-events", h.ChainEvents)
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
@@ -382,11 +399,15 @@ func TestMalformedCursorIsBadRequest(t *testing.T) {
 }
 
 func TestBlockByHeight(t *testing.T) {
-	signer, pool := account, "bze1pool"
+	signer, pool, bank := account, "bze1pool", "bank"
+	wanted, used := int64(200000), int64(81234)
 	f := &fakeReader{block: &repository.Block{
-		BlockSummary: repository.BlockSummary{Height: 25000894, Time: time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC), Hash: "BH", TxCount: 1},
+		BlockSummary:   repository.BlockSummary{Height: 25000894, Time: time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC), Hash: "BH", TxCount: 1},
+		TransfersCount: 3,
 		Transactions: []repository.BlockTx{{TxIndex: 0, Hash: hashUpper, Success: true,
-			MsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"}, Fee: json.RawMessage(`[{"denom":"ubze","amount":"2000"}]`), Signer: &signer}},
+			MsgTypes: []string{"/cosmos.bank.v1beta1.MsgSend"}, Fee: json.RawMessage(`[{"denom":"ubze","amount":"2000"}]`), Signer: &signer,
+			GasWanted: &wanted, GasUsed: &used, FirstMessage: &repository.FirstMessage{
+				TypeURL: "/cosmos.bank.v1beta1.MsgSend", Module: &bank, Body: json.RawMessage(`{"amount":[]}`)}}},
 	},
 		transfers: map[[2]int64][]repository.Transfer{{25000894, repository.BlockTxIndex}: {
 			{Seq: 0, Kind: "transfer", Sender: &pool, Recipient: &signer, Denom: "ubze", Amount: "9",
@@ -402,16 +423,57 @@ func TestBlockByHeight(t *testing.T) {
 		"proposer_cons_address": null, "block_time_ms": null, "size_bytes": null, "proposer": null,
 		"minted": null, "inflation": null, "fees_distributed": null, "signatures_count": null, "signatures_power_pct": null,
 		"transactions": [{"height": 25000894, "tx_index": 0, "hash": "`+hashUpper+`", "success": true,
-			"msg_types": ["/cosmos.bank.v1beta1.MsgSend"], "fee": [{"denom":"ubze","amount":"2000"}], "signer": "`+account+`"}],
+			"msg_types": ["/cosmos.bank.v1beta1.MsgSend"], "fee": [{"denom":"ubze","amount":"2000"}], "signer": "`+account+`",
+			"gas_wanted": 200000, "gas_used": 81234,
+			"first_message": {"type_url": "/cosmos.bank.v1beta1.MsgSend", "module": "bank", "body": {"amount": []}}}],
 		"transfers": [{"seq": 0, "msg_index": null, "kind": "transfer", "sender": "bze1pool",
 			"sender_label": {"name": "DEX", "kind": "module"}, "recipient": "`+account+`", "recipient_label": null,
 			"denom": "ubze", "amount": "9", "symbol": null, "exponent": null}],
+		"transfers_count": 3,
 		"events": [{"seq": 7, "type": "bze.tradebin.OrderExecutedEvent", "attrs": {"id": "1"}}],
 		"events_next_cursor": null
 	}`, rec.Body.String())
 	assert.Equal(t, [][2]int64{{25000894, -1}}, f.gotTransfers, "the block's own transfers")
 	assert.Equal(t, int64(-1), f.gotAfter)
 	assert.Equal(t, controller.BlockEventsInline+1, f.gotLimit)
+}
+
+func TestBlockTransfersPageOwnRowsFirst(t *testing.T) {
+	hash := hashUpper
+	f := &fakeReader{block: &repository.Block{BlockSummary: repository.BlockSummary{Height: 50}},
+		blockTransfers: []repository.BlockTransfer{
+			{TxIndex: repository.BlockTxIndex, Transfer: repository.Transfer{Seq: 0, Kind: "transfer", Denom: "ubze", Amount: "1"}},
+			{TxIndex: repository.BlockTxIndex, Transfer: repository.Transfer{Seq: 1, Kind: "burn", Denom: "ubze", Amount: "2"}},
+			{TxIndex: 0, TxHash: &hash, Transfer: repository.Transfer{Seq: 0, Kind: "transfer", Denom: "ubze", Amount: "3"}},
+		}}
+	e := newAPI(f)
+
+	rec := get(t, e, "/blocks/50/transfers?limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Nil(t, f.gotTransferKey)
+	assert.Equal(t, 3, f.gotLimit, "one more than the page, to know whether another follows")
+	page := decode[dto.List[dto.BlockTransfer]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, int64(-1), page.Items[0].TxIndex)
+	assert.Nil(t, page.Items[0].TxHash, "the block's own row has no transaction")
+	require.NotNil(t, page.NextCursor)
+
+	rec = get(t, e, "/blocks/50/transfers?limit=2&cursor="+*page.NextCursor)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, &repository.TransferKey{TxIndex: -1, Seq: 1}, f.gotTransferKey)
+	page = decode[dto.List[dto.BlockTransfer]](t, rec)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, hashUpper, *page.Items[0].TxHash)
+	assert.Equal(t, "3", page.Items[0].Amount)
+	assert.Nil(t, page.NextCursor)
+
+	rec = get(t, e, "/blocks/51/transfers")
+	assert.Equal(t, http.StatusNotFound, rec.Code, "a block that is not indexed")
+	assert.Equal(t, "no-store", rec.Header().Get(echo.HeaderCacheControl))
+	for _, path := range []string{"/blocks/50/transfers?cursor=x", "/blocks/50/transfers?limit=101", "/blocks/0/transfers"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
+	}
 }
 
 func blockWithEvents(n int) *fakeReader {

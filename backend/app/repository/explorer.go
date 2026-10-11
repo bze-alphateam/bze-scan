@@ -65,17 +65,31 @@ type Block struct {
 	FeesDistributed    json.RawMessage
 	SignaturesCount    *int64
 	SignaturesPowerPct *string
-	Transactions       []BlockTx
+	// TransfersCount counts every transfers row at the height, the
+	// transactions' and the block's own.
+	TransfersCount int64
+	Transactions   []BlockTx
 }
 
 // BlockTx is a transaction as the block page lists it.
 type BlockTx struct {
-	TxIndex  int64
-	Hash     string
-	Success  bool
-	MsgTypes []string
-	Fee      json.RawMessage
-	Signer   *string // first signer
+	TxIndex      int64
+	Hash         string
+	Success      bool
+	MsgTypes     []string
+	Fee          json.RawMessage
+	Signer       *string // first signer
+	GasWanted    *int64
+	GasUsed      *int64
+	FirstMessage *FirstMessage
+}
+
+// FirstMessage is the message at index 0 of a transaction, what a list
+// summarises it by. Body is nil when the message could not be decoded.
+type FirstMessage struct {
+	TypeURL string
+	Module  *string
+	Body    json.RawMessage
 }
 
 // TxSummary is a row of the transaction list.
@@ -89,6 +103,8 @@ type TxSummary struct {
 	MsgTypes []string
 	Fee      json.RawMessage
 	Signer   *string // first signer
+	// FirstMessage is nil for a transaction without messages.
+	FirstMessage *FirstMessage
 }
 
 // Tx is every column of a transactions row plus its messages.
@@ -119,6 +135,39 @@ type Message struct {
 type TxKey struct {
 	Height  int64
 	TxIndex int64
+}
+
+// firstMessageCols are the columns of firstMessageJoin, scanned by
+// firstMessageDest.
+const firstMessageCols = `fm.type_url, fm.module, fm.body`
+
+// firstMessageJoin joins the message at index 0 of the transactions row t
+// as fm. heightBound is a plain predicate on m.height ("= $1", "<= $1"):
+// the join's own m.height = t.height prunes only at run time, which a plain
+// EXPLAIN does not show, so the bound keeps the pruning visible in the plan.
+func firstMessageJoin(heightBound string) string {
+	q := ` LEFT JOIN LATERAL (
+		SELECT m.type_url, m.module, m.body FROM explorer.messages m
+		 WHERE m.height = t.height AND m.tx_index = t.tx_index AND m.msg_index = 0`
+	if heightBound != "" {
+		q += ` AND m.height ` + heightBound
+	}
+	return q + `) fm ON true`
+}
+
+// firstMessageDest is what firstMessageCols scan into; finish sets *dst
+// when the transaction has a first message.
+func firstMessageDest(dst **FirstMessage) (dest []any, finish func()) {
+	var m FirstMessage
+	var typeURL *string
+	dest = []any{&typeURL, &m.Module, &m.Body}
+	finish = func() {
+		if typeURL != nil {
+			m.TypeURL = *typeURL
+			*dst = &m
+		}
+	}
+	return dest, finish
 }
 
 // blockSummaryCols are the block list columns of explorer.blocks b, the
@@ -176,9 +225,11 @@ func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 	var b Block
 	dest, finish := blockSummaryDest(&b.BlockSummary)
 	err := r.db.QueryRow(ctx, `SELECT `+blockSummaryCols+`, b.minted::text, b.inflation::text, b.fees_distributed,
-		b.signatures_count, b.signatures_power_pct::text
+		b.signatures_count, b.signatures_power_pct::text,
+		(SELECT count(*) FROM explorer.transfers x WHERE x.height = $1)
 		FROM `+blockSummaryFrom+` WHERE b.height = $1`, height).Scan(
-		append(dest, &b.Minted, &b.Inflation, &b.FeesDistributed, &b.SignaturesCount, &b.SignaturesPowerPct)...)
+		append(dest, &b.Minted, &b.Inflation, &b.FeesDistributed, &b.SignaturesCount, &b.SignaturesPowerPct,
+			&b.TransfersCount)...)
 	finish()
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -187,14 +238,19 @@ func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 		return nil, fmt.Errorf("block %d: %w", height, err)
 	}
 
-	rows, err := r.db.Query(ctx, `SELECT tx_index, hash, success, msg_types, fee, signers[1]
-		FROM explorer.transactions WHERE height = $1 ORDER BY tx_index`, height)
+	rows, err := r.db.Query(ctx, `SELECT t.tx_index, t.hash, t.success, t.msg_types, t.fee, t.signers[1],
+			t.gas_wanted, t.gas_used, `+firstMessageCols+`
+		FROM explorer.transactions t`+firstMessageJoin("= $1")+`
+		WHERE t.height = $1 ORDER BY t.tx_index`, height)
 	if err != nil {
 		return nil, fmt.Errorf("block %d transactions: %w", height, err)
 	}
 	b.Transactions, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BlockTx, error) {
 		var t BlockTx
-		err := row.Scan(&t.TxIndex, &t.Hash, &t.Success, &t.MsgTypes, &t.Fee, &t.Signer)
+		fm, finish := firstMessageDest(&t.FirstMessage)
+		err := row.Scan(append([]any{&t.TxIndex, &t.Hash, &t.Success, &t.MsgTypes, &t.Fee, &t.Signer,
+			&t.GasWanted, &t.GasUsed}, fm...)...)
+		finish()
 		return t, err
 	})
 	if err != nil {
@@ -207,23 +263,26 @@ func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 // before when it is set, only the successful (or only the failed) ones when
 // success is set.
 func (r *Explorer) Txs(ctx context.Context, before *TxKey, success *bool, limit int) ([]TxSummary, error) {
-	q := `SELECT height, tx_index, hash, time, success, msg_count, msg_types, fee, signers[1]
-		FROM explorer.transactions WHERE true`
 	var args []any
 	arg := func(v any) string {
 		args = append(args, v)
 		return fmt.Sprintf("$%d", len(args))
 	}
+	where, bound := "", ""
 	if before != nil {
 		// The plain height predicate is what prunes the partitions; the row
 		// comparison alone does not.
 		h, i := arg(before.Height), arg(before.TxIndex)
-		q += ` AND height <= ` + h + ` AND (height, tx_index) < (` + h + `, ` + i + `)`
+		where = ` AND t.height <= ` + h + ` AND (t.height, t.tx_index) < (` + h + `, ` + i + `)`
+		bound = "<= " + h
 	}
+	q := `SELECT t.height, t.tx_index, t.hash, t.time, t.success, t.msg_count, t.msg_types, t.fee, t.signers[1],
+		` + firstMessageCols + `
+		FROM explorer.transactions t` + firstMessageJoin(bound) + ` WHERE true` + where
 	if success != nil {
-		q += ` AND success = ` + arg(*success)
+		q += ` AND t.success = ` + arg(*success)
 	}
-	q += ` ORDER BY height DESC, tx_index DESC LIMIT ` + arg(limit)
+	q += ` ORDER BY t.height DESC, t.tx_index DESC LIMIT ` + arg(limit)
 
 	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
@@ -231,7 +290,10 @@ func (r *Explorer) Txs(ctx context.Context, before *TxKey, success *bool, limit 
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (TxSummary, error) {
 		var t TxSummary
-		err := row.Scan(&t.Height, &t.TxIndex, &t.Hash, &t.Time, &t.Success, &t.MsgCount, &t.MsgTypes, &t.Fee, &t.Signer)
+		fm, finish := firstMessageDest(&t.FirstMessage)
+		err := row.Scan(append([]any{&t.Height, &t.TxIndex, &t.Hash, &t.Time, &t.Success, &t.MsgCount, &t.MsgTypes,
+			&t.Fee, &t.Signer}, fm...)...)
+		finish()
 		return t, err
 	})
 }

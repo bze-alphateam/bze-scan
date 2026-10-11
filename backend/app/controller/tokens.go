@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
@@ -18,6 +19,9 @@ import (
 // TokenEventsInline is how many of a denom's newest events the token page
 // carries; the events route pages through the rest.
 const TokenEventsInline = 20
+
+// TokenVolumeWindow is the window of the token page's transfers_24h.
+const TokenVolumeWindow = 24 * time.Hour
 
 // tokenKinds are the values of the kind filter.
 var tokenKinds = []string{"native", "factory", "ibc", "lp", "unknown"}
@@ -30,6 +34,9 @@ type TokenReader interface {
 	TokenEvents(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.TokenEvent, error)
 	DenomTransfers(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.DenomTransfer, error)
 	TokenHolders(ctx context.Context, denom string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error)
+	// DenomVolume counts and sums the transfers of denom in the window
+	// before the latest indexed block.
+	DenomVolume(ctx context.Context, denom string, window time.Duration) (*repository.TransferVolume, error)
 }
 
 // TokenController serves the /api/v1/tokens routes. A denom contains "/"
@@ -83,7 +90,7 @@ func (h *TokenController) Tokens(c *echo.Context) error {
 }
 
 // Token serves GET /api/v1/tokens/{denom} and /api/v1/token?denom=: the
-// denom with its newest events. Supply and admin change, so it is never
+// denom with its newest events and what moved in the last 24 hours. Supply and admin change, so it is never
 // cached.
 func (h *TokenController) Token(c *echo.Context) error {
 	denom, err := denomParam(c)
@@ -105,8 +112,12 @@ func (h *TokenController) Token(c *echo.Context) error {
 		n := dto.EncodeEventCursor(eventKey(events[TokenEventsInline-1]))
 		next = &n
 	}
+	volume, err := h.repo.DenomVolume(ctx, denom, TokenVolumeWindow)
+	if err != nil {
+		return err
+	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewToken(t, events, next))
+	return c.JSON(http.StatusOK, dto.NewToken(t, events, next, *volume))
 }
 
 // TokenEvents serves GET /api/v1/tokens/{denom}/events?cursor&limit and
