@@ -114,6 +114,10 @@ type Config struct {
 	// files' base; the chain_registry job runs only with both.
 	ChainRegistryAPIURL string
 	ChainRegistryRawURL string
+
+	// DebugAddr, when set, makes serve expose net/http/pprof on this
+	// host:port. Empty (the default) exposes nothing.
+	DebugAddr string
 }
 
 // DefaultPriceChangeMarket is mainnet's BZE/USDC.n liquidity pool as the
@@ -149,6 +153,7 @@ func Load() (*Config, error) {
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
+		DebugAddr:           envString("DEBUG_ADDR", ""),
 	}
 
 	for _, o := range strings.Split(envString("CORS_ALLOWED_ORIGINS", ""), ",") {
@@ -178,6 +183,12 @@ func Load() (*Config, error) {
 		fail("NODE_GRPC_TLS must be true or false (got %q)", grpcTLS)
 	} else {
 		cfg.NodeGRPCTLS = v
+	}
+
+	if cfg.DebugAddr != "" {
+		if _, port, err := net.SplitHostPort(cfg.DebugAddr); err != nil || port == "" {
+			fail("DEBUG_ADDR must be host:port like 127.0.0.1:6060 (got %q)", cfg.DebugAddr)
+		}
 	}
 
 	if u, err := url.Parse(cfg.NodeRPCURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

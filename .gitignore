@@ -26,3 +26,6 @@ docker/.data/
 .vscode/
 .DS_Store
 .claude/
+
+# The mainnet soak node (scripts/mainnet-node.sh)
+backend/.local/

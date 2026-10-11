@@ -17,7 +17,7 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
-	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL"}
+	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -375,13 +375,35 @@ func TestLoadTickerJobSettings(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {
-	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL"} {
+	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR"} {
 		t.Run(key, func(t *testing.T) {
 			isolate(t)
 			t.Setenv(key, "getbze.com")
 			_, err := config.Load()
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), key)
+		})
+	}
+}
+
+func TestLoadDebugAddr(t *testing.T) {
+	isolate(t)
+	t.Setenv("DEBUG_ADDR", "127.0.0.1:6060")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "127.0.0.1:6060", cfg.DebugAddr)
+}
+
+func TestLoadRejectsInvalidDebugAddr(t *testing.T) {
+	for _, value := range []string{"6060", "127.0.0.1", "localhost:"} {
+		t.Run(value, func(t *testing.T) {
+			isolate(t)
+			t.Setenv("DEBUG_ADDR", value)
+
+			_, err := config.Load()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "DEBUG_ADDR")
 		})
 	}
 }
