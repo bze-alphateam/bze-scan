@@ -124,7 +124,8 @@ func TestDexOrdersFromTheRecordedHeights(t *testing.T) {
 	assert.Equal(t, int64(24999134), open.Items[0].CreatedHeight, "newest first")
 	assert.Equal(t, int64(24998326), open.Items[21].CreatedHeight)
 	for _, o := range open.Items {
-		assert.Nil(t, o.CreatedTxHash, "no message ids before chain v8.2.0")
+		assert.NotNil(t, o.CreatedTxHash, "attributed by queue order before chain v8.2.0")
+		assert.Nil(t, o.MessageID)
 	}
 	r := fetch(t, base+"/orders/2157016")
 	require.Equal(t, http.StatusOK, r.status, string(r.body))

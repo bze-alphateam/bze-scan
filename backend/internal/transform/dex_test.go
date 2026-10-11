@@ -28,8 +28,8 @@ type goldenDex struct {
 }
 
 // The recorded heights predate chain v8.2.0, so their order book rows carry
-// no message id and stay unattributed. Heights without order book rows have
-// no golden file.
+// no message id and are attributed by queue order. Heights without order
+// book rows have no golden file.
 func TestDexGolden(t *testing.T) {
 	n := fakenode.New(t)
 	tr := realTransformer(t)
@@ -48,7 +48,7 @@ func TestDexGolden(t *testing.T) {
 			withRows++
 			assert.Empty(t, g.OrderMessages, "no message ids before chain v8.2.0")
 			for _, o := range g.Orders {
-				assert.Empty(t, o.CreatedTxHash)
+				assert.Empty(t, o.MessageID)
 			}
 			got, err := json.MarshalIndent(g, "", "  ")
 			require.NoError(t, err)

@@ -247,25 +247,28 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	t.blockEvents(ents, h, in.Results.FinalizeBlockEvents)
-	blockOrders(ents, b, in.Results.FinalizeBlockEvents)
+	outcomes := blockOrders(ents, b, in.Results.FinalizeBlockEvents)
 	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
+	var queue []queued
 	for i, raw := range in.Block.Txs {
-		if err := t.transaction(ents, b, i, raw, in.Results.TxsResults[i]); err != nil {
+		if err := t.transaction(ents, &queue, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
 		}
 	}
 	attributeOrders(ents)
+	attributeByQueue(ents, queue, outcomes)
 	markSeenDenoms(ents)
 	return ents, nil
 }
 
 // transaction appends the transactions row and the messages rows of the
-// transaction at index i.
-func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string, res node.TxResult) error {
+// transaction at index i, and to queue the order messages it enqueued
+// without a message id.
+func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i int, rawB64 string, res node.TxResult) error {
 	raw, err := base64.StdEncoding.DecodeString(rawB64)
 	if err != nil {
 		return fmt.Errorf("raw bytes: %w", err)
@@ -350,6 +353,7 @@ func (t *Transformer) transaction(ents *Entities, b Block, i int, rawB64 string,
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		*queue = txQueued(*queue, tx.Hash, decoded.Msgs, byIndex)
 		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
 	}
 	for j, m := range decoded.Msgs {

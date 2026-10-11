@@ -11,7 +11,7 @@
       "height": 20230045,
       "time": "2025-11-27T01:13:21.762496537Z",
       "message_id": "",
-      "created_tx_hash": ""
+      "created_tx_hash": "49B1C592FA7862FBD94D00B0B5FCCD02F4D0DE6306889028B57DEBAB9968D63B"
     }
   ],
   "order_fills": [
@@ -26,7 +26,7 @@
       "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "taker_message_id": "",
-      "taker_tx_hash": "",
+      "taker_tx_hash": "49B1C592FA7862FBD94D00B0B5FCCD02F4D0DE6306889028B57DEBAB9968D63B",
       "time": "2025-11-27T01:13:21.762496537Z"
     },
     {
@@ -40,7 +40,7 @@
       "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "taker_message_id": "",
-      "taker_tx_hash": "",
+      "taker_tx_hash": "49B1C592FA7862FBD94D00B0B5FCCD02F4D0DE6306889028B57DEBAB9968D63B",
       "time": "2025-11-27T01:13:21.762496537Z"
     }
   ],
