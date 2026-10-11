@@ -45,11 +45,13 @@ type DB interface {
 type LiveWriter struct {
 	db    DB
 	parts *partitions
+	hooks []PostFlush
 }
 
-// NewLiveWriter returns a live writer over db.
-func NewLiveWriter(db DB) *LiveWriter {
-	return &LiveWriter{db: db, parts: newPartitions(db)}
+// NewLiveWriter returns a live writer over db that runs hooks, in order, at
+// the end of every write.
+func NewLiveWriter(db DB, hooks ...PostFlush) *LiveWriter {
+	return &LiveWriter{db: db, parts: newPartitions(db), hooks: hooks}
 }
 
 // Cursor returns indexer_state.last_indexed_height, and false when the live
@@ -84,8 +86,9 @@ func (w *LiveWriter) stateHeight(ctx context.Context, key string) (int64, bool, 
 // account_activity, governance and order book rows, the accounts of their
 // signers and activity rows (counters moved for the rows inserted), the
 // orders' filled amounts (fills inserted), the blocks rows
-// (block_time_ms from the previous row when it exists), the live floor at the
-// first write ever, and the cursor moved to the highest height. Partitions
+// (block_time_ms from the previous row when it exists), the PostFlush hooks,
+// the live floor at the first write ever, and the cursor moved to the
+// highest height. Partitions
 // are topped up first when a height enters the last one. A blocks row
 // therefore proves its height is complete. A deadlock retries the write once.
 func (w *LiveWriter) WriteBlock(ctx context.Context, ents *transform.Entities) error {
@@ -145,6 +148,12 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 	for i := range ents.Blocks {
 		if err := insertBlock(ctx, tx, &ents.Blocks[i]); err != nil {
 			return err
+		}
+	}
+	flushed := &Flush{Entities: ents, Mode: ModeInsert, Inserted: inserted}
+	for _, hook := range w.hooks {
+		if err := hook(ctx, tx, flushed); err != nil {
+			return fmt.Errorf("write %d: post-flush: %w", top, err)
 		}
 	}
 	first := ents.Blocks[0].Height

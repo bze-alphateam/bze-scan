@@ -2,10 +2,12 @@ package writer_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -156,4 +158,54 @@ func TestCancelsAreMergedPerOrder(t *testing.T) {
 	require.Len(t, rows, 2)
 	assert.Equal(t, "A", rows[0]["order_id"])
 	assert.Equal(t, "B", rows[1]["order_id"])
+}
+
+// The live writer runs its hooks in the block's transaction, after the
+// blocks row and before the cursor; a failing hook rolls the block back.
+func TestWriteBlockRunsThePostFlushHooksInTheTransaction(t *testing.T) {
+	db := newMockDB(49)
+	var order []string
+	hook := func(_ context.Context, tx pgx.Tx, f *writer.Flush) error {
+		assert.Same(t, db.txs[0], tx)
+		assert.Equal(t, writer.ModeInsert, f.Mode)
+		assert.True(t, f.Inserted.OrderFills[writer.FillKey{Height: 100, Seq: 3}], "the hook sees the inserted rows")
+		order = sqlOf(db.txs[0])
+		return nil
+	}
+	db.returning = map[string][][]any{"INSERT INTO explorer.order_fills": {{100, 3}}}
+	require.NoError(t, writer.NewLiveWriter(db, hook).WriteBlock(context.Background(), dexBlock(100, fill(100, 3, "A", "5"))))
+	assert.Equal(t, "block", order[len(order)-1], "after the blocks row")
+	assert.Equal(t, "cursor", sqlOf(db.txs[0])[len(sqlOf(db.txs[0]))-1])
+
+	failing := func(context.Context, pgx.Tx, *writer.Flush) error { return errors.New("attribution failed") }
+	err := writer.NewLiveWriter(db, failing).WriteBlock(context.Background(), block(101))
+	require.ErrorContains(t, err, "attribution failed")
+	assert.False(t, db.txs[1].committed)
+	assert.True(t, db.txs[1].rolledBack)
+}
+
+// AttributeOrders links the orders, then the fills, at or above the
+// flush's lowest height; a flush without blocks sends nothing.
+func TestAttributeOrdersFromTheFlushLowestHeight(t *testing.T) {
+	db := newMockDB(49)
+	require.NoError(t, writer.NewBatchWriter(db, writer.AttributeOrders).Write(context.Background(),
+		[]*transform.Entities{block(12), block(10), block(11)}, writer.ModeInsert))
+	orders := statementsOf(db.txs[0], "UPDATE explorer.orders o SET created_tx_hash")
+	fills := statementsOf(db.txs[0], "UPDATE explorer.order_fills f SET taker_tx_hash")
+	require.Len(t, orders, 1)
+	require.Len(t, fills, 1)
+	assert.Equal(t, []any{int64(10)}, orders[0].args)
+	assert.Equal(t, []any{int64(10)}, fills[0].args)
+	stmts := db.txs[0].stmts
+	assert.Contains(t, stmts[len(stmts)-1].sql, "UPDATE explorer.order_fills f SET taker_tx_hash", "fills last")
+
+	tx := &mockTx{db: db}
+	require.NoError(t, writer.AttributeOrders(context.Background(), tx, &writer.Flush{Entities: &transform.Entities{}}))
+	require.NoError(t, writer.AttributeOrders(context.Background(), tx, nil))
+	assert.Empty(t, tx.stmts)
+
+	db.execErr, db.execErrOn = errors.New("deadlock"), "SET taker_tx_hash"
+	err := writer.NewBatchWriter(db, writer.AttributeOrders).Write(context.Background(),
+		[]*transform.Entities{block(13)}, writer.ModeInsert)
+	require.ErrorContains(t, err, "attribute fills")
 }

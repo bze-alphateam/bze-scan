@@ -185,7 +185,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
 				Node:        nodeClient,
-				Store:       writer.NewLiveWriter(pool),
+				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders),
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),

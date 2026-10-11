@@ -40,7 +40,7 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 	if cfg.ArchiveRPCRetryURL != "" {
 		retry = node.New(cfg.ArchiveRPCRetryURL)
 	}
-	w := writer.NewBatchWriter(pool)
+	w := writer.NewBatchWriter(pool, writer.AttributeOrders)
 	limit := rate.Limit(cfg.BackfillRateLimit)
 	if limit <= 0 {
 		limit = rate.Inf // config.Load never yields 0; a hand-built config means no limit
