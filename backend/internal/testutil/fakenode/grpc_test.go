@@ -77,10 +77,25 @@ func TestGRPCErrors(t *testing.T) {
 	_, err = staking.HistoricalInfo(ctx, &stakingtypes.QueryHistoricalInfoRequest{Height: 5})
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
 	assert.Equal(t, 1, g.Requests("staking", "HistoricalInfo"))
-	_, err = channeltypes.NewQueryClient(conn).Channels(ctx, &channeltypes.QueryChannelsRequest{})
-	assert.Equal(t, codes.Unimplemented, status.Code(err), "a registered service without fixtures yet")
+	_, err = channeltypes.NewQueryClient(conn).PacketCommitments(ctx, &channeltypes.QueryPacketCommitmentsRequest{})
+	assert.Equal(t, codes.Unimplemented, status.Code(err), "a registered method without a fixture")
 	err = conn.Invoke(ctx, "/cosmos.auth.v1beta1.Query/Params", &stakingtypes.QueryPoolRequest{}, &stakingtypes.QueryPoolResponse{})
 	assert.Equal(t, codes.Unimplemented, status.Code(err), "a service the fake does not serve")
+}
+
+// A channel's client state is an Any the chain codec resolves: the
+// Tendermint client naming the counterparty chain.
+func TestGRPCChannelClientState(t *testing.T) {
+	g := fakenode.NewGRPC(t)
+	ch := channeltypes.NewQueryClient(dial(t, g))
+	ctx := context.Background()
+	list, err := ch.Channels(ctx, &channeltypes.QueryChannelsRequest{})
+	require.NoError(t, err)
+	assert.Len(t, list.Channels, 14)
+	res, err := ch.ChannelClientState(ctx, &channeltypes.QueryChannelClientStateRequest{PortId: "transfer", ChannelId: "channel-3"})
+	require.NoError(t, err)
+	assert.Equal(t, "/ibc.lightclients.tendermint.v1.ClientState", res.IdentifiedClientState.ClientState.TypeUrl)
+	assert.Equal(t, 1, g.RequestsFor("channel", "ChannelClientState", "transfer.channel-3"))
 }
 
 // Integer and enum fields key a request too: a proposal by its id, the
