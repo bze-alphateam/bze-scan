@@ -316,6 +316,21 @@ func TestRunOnceRunsEverySetAndJoinsTheFailures(t *testing.T) {
 	require.NoError(t, s.RunOnce(context.Background()))
 }
 
+func TestRunSetRunsOneSet(t *testing.T) {
+	rec := &recorder{}
+	jobs := &fakeJobs{}
+	a := &fakeSet{name: "a", interval: time.Hour, rec: rec}
+	b := &fakeSet{name: "b", interval: time.Hour, rec: rec, err: errors.New("node down")}
+	s := statesync.New(statesync.Config{Log: quietLog()}, jobs, a, b)
+
+	require.NoError(t, s.RunSet(context.Background(), "a"))
+	require.EqualError(t, s.RunSet(context.Background(), "b"), "node down")
+	assert.Equal(t, []string{"a:*", "b:*"}, rec.list())
+	require.Len(t, jobs.list(), 2, "each run recorded")
+	require.EqualError(t, s.RunSet(context.Background(), "c"), `no set "c"; the registered sets are a, b`)
+	assert.Len(t, rec.list(), 2)
+}
+
 // canonicalSet folds the keys of aliases into their canonical one.
 type canonicalSet struct {
 	*fakeSet

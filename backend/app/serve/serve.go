@@ -137,6 +137,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Tokens:             explorerRepo,
 		Proposals:          explorerRepo,
 		Stats:              explorerRepo,
+		Daily:              explorerRepo,
 		Params:             liveParams,
 		ParamChanges:       explorerRepo,
 		AccountState:       accountState,

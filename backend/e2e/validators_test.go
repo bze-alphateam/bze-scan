@@ -66,9 +66,9 @@ func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
 	return cfg
 }
 
-// syncState runs the sync-state command and returns its exit code and
-// standard output.
-func (e *syncEnv) syncState(t *testing.T) (int, string) {
+// syncState runs the sync-state command with args and returns its exit
+// code and standard output.
+func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Helper()
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", e.url)
@@ -79,7 +79,7 @@ func (e *syncEnv) syncState(t *testing.T) (int, string) {
 	t.Setenv("AGGREGATOR_URL", e.agg.URL)
 	t.Setenv("LOG_LEVEL", "warn")
 	root := cli.NewRootCmd()
-	root.SetArgs([]string{"sync-state"})
+	root.SetArgs(append([]string{"sync-state"}, args...))
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})

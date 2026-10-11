@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
 // BlockStats are the home tiles read from the indexed blocks and
@@ -43,6 +45,53 @@ func (r *Explorer) BlockStats(ctx context.Context) (*BlockStats, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("block stats: %w", err)
+	}
+	return &s, nil
+}
+
+// DailyStats reads the daily_stats rows of the last days closed UTC days,
+// oldest first.
+func (r *Explorer) DailyStats(ctx context.Context, days int) ([]dailystats.Stats, error) {
+	today := dailystats.Day(time.Now())
+	rows, err := r.db.Query(ctx, `SELECT day, blocks, txs, txs_failed, active_addresses, new_addresses, transfers,
+			fees, avg_block_time_ms
+		FROM explorer.daily_stats WHERE day >= $1::date AND day < $2::date ORDER BY day`,
+		today.AddDate(0, 0, -days), today)
+	if err != nil {
+		return nil, fmt.Errorf("daily stats: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (dailystats.Stats, error) {
+		var s dailystats.Stats
+		var blocks, txs, failed, active, created, transfers int32
+		var avg *int32
+		var fees []byte
+		if err := row.Scan(&s.Day, &blocks, &txs, &failed, &active, &created, &transfers, &fees, &avg); err != nil {
+			return s, err
+		}
+		s.Blocks, s.Txs, s.TxsFailed = int64(blocks), int64(txs), int64(failed)
+		s.ActiveAddresses, s.NewAddresses, s.Transfers = int64(active), int64(created), int64(transfers)
+		if avg != nil {
+			v := int64(*avg)
+			s.AvgBlockTimeMs = &v
+		}
+		return s, json.Unmarshal(fees, &s.Fees)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("daily stats: %w", err)
+	}
+	return out, nil
+}
+
+// TodayStats computes the current UTC day so far with the nightly
+// aggregation's query; nil while the day has no indexed block.
+func (r *Explorer) TodayStats(ctx context.Context) (*dailystats.Stats, error) {
+	today := dailystats.Day(time.Now())
+	s, err := dailystats.Aggregate(ctx, r.db, today, today.AddDate(0, 0, 1))
+	if err != nil {
+		return nil, err
+	}
+	if s.Blocks == 0 {
+		return nil, nil
 	}
 	return &s, nil
 }

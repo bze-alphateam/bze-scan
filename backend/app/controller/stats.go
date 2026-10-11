@@ -3,13 +3,16 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v5"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
 // BondDenom is the denom whose price, supply and community pool the stats
@@ -28,20 +31,48 @@ type StatsReader interface {
 	TopBondedTokens(ctx context.Context, n int) (string, error)
 }
 
+// DefaultDays and MaxDays bound the closed days of the stats' daily
+// series (?days=).
+const (
+	DefaultDays = 30
+	MaxDays     = 365
+)
+
+// DailyStatsReader reads the home charts' days. Implemented by
+// repository.Explorer.
+type DailyStatsReader interface {
+	// DailyStats returns the stored rows of the last days closed UTC days,
+	// oldest first.
+	DailyStats(ctx context.Context, days int) ([]dailystats.Stats, error)
+	// TodayStats computes the current UTC day so far; nil while it has no
+	// indexed block.
+	TodayStats(ctx context.Context) (*dailystats.Stats, error)
+}
+
 // StatsController serves GET /api/v1/stats.
 type StatsController struct {
-	repo StatsReader
+	repo  StatsReader
+	daily DailyStatsReader
 }
 
-// NewStatsController returns a controller over repo.
-func NewStatsController(repo StatsReader) *StatsController {
-	return &StatsController{repo: repo}
+// NewStatsController returns a controller over repo; a nil daily answers
+// an empty series and no today.
+func NewStatsController(repo StatsReader, daily DailyStatsReader) *StatsController {
+	return &StatsController{repo: repo, daily: daily}
 }
 
-// Stats serves the home tiles: indexed columns and the chain_state rows,
-// no node call.
+// Stats serves the home tiles and the daily series: indexed columns, the
+// chain_state rows and daily_stats, no node call.
 func (h *StatsController) Stats(c *echo.Context) error {
 	ctx := c.Request().Context()
+	days := DefaultDays
+	if s := c.QueryParam("days"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > MaxDays {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("days must be an integer from 1 to %d", MaxDays))
+		}
+		days = n
+	}
 	blocks, err := h.repo.BlockStats(ctx)
 	if err != nil {
 		return err
@@ -50,8 +81,26 @@ func (h *StatsController) Stats(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	out := dto.NewStats(blocks, state, BondDenom)
+	if h.daily != nil {
+		series, err := h.daily.DailyStats(ctx, days)
+		if err != nil {
+			return err
+		}
+		for _, d := range series {
+			out.Daily = append(out.Daily, dto.NewDayStats(d))
+		}
+		today, err := h.daily.TodayStats(ctx)
+		if err != nil {
+			return err
+		}
+		if today != nil {
+			t := dto.NewDayStats(*today)
+			out.Today = &t
+		}
+	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewStats(blocks, state, BondDenom))
+	return c.JSON(http.StatusOK, out)
 }
 
 // validatorsSummary reads the validators header.
