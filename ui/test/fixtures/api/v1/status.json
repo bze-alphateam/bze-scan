@@ -1,0 +1,13 @@
+{
+  "live_fill": {
+    "healthy": true,
+    "checked_at": "2026-10-11T12:00:00Z",
+    "db_height": 25120450,
+    "node_height": 25120451,
+    "archive_height": 25120451
+  },
+  "back_fill": {
+    "status": "in_progress",
+    "oldest_height": 24998316
+  }
+}

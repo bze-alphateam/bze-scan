@@ -6,10 +6,10 @@ generic Cosmos SDK view, so it can explain every transaction in plain words and
 show activity that happens without a transaction (order fills, reward
 distributions, raffles).
 
-Status: backend foundation in place (the `serve` command with a health
-endpoint, the `migrate` command with the explorer schema, the test harness and
-CI) and the live indexer writing blocks; transactions and the read API come
-next. No UI yet.
+Status: the backend indexes the chain live and from the archive, keeps the
+chain state in sync and serves the read API (`backend/README.md`). The UI has
+its shell (header, search box, footer with the status light), the API client
+and the test harness (`ui/README.md`); its pages come next.
 
 ## Layout
 

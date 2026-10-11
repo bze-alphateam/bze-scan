@@ -1,0 +1,7 @@
+# A single-package workspace: this file only holds pnpm's settings.
+
+# Native/postinstall build scripts trusted to run.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

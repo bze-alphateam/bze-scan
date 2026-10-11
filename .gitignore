@@ -6,9 +6,14 @@ backend/*.test
 
 # Node
 node_modules/
+ui/node_modules/
 ui/dist/
 ui/.next/
 ui/out/
+ui/playwright-report/
+ui/test-results/
+ui/.env
+ui/next-env.d.ts
 *.tsbuildinfo
 coverage/
 *.log
