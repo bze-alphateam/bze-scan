@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -57,6 +58,11 @@ type ExplorerReader interface {
 	// fills and the newest limit of them.
 	Order(ctx context.Context, id string) (*repository.Order, error)
 	OrderFills(ctx context.Context, id string, limit int) (int64, []repository.OrderFill, error)
+	// TxIBCTransfers returns the cross-chain transfers the transaction
+	// with hash created or settled.
+	TxIBCTransfers(ctx context.Context, hash string) ([]repository.IBCTransfer, error)
+	// IBCChannels returns every IBC channel with its counterparty chain.
+	IBCChannels(ctx context.Context) ([]repository.IBCChannel, error)
 	// TxPosition returns the height and the index in the block of a
 	// transaction.
 	TxPosition(ctx context.Context, hash string) (height, index int64, err error)
@@ -290,12 +296,17 @@ func (h *ExplorerController) Tx(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	ibc, err := h.repo.TxIBCTransfers(ctx, t.Hash)
+	if err != nil {
+		return err
+	}
+	// The outcome of a pending order or cross-chain transfer lands later.
 	cache := CacheImmutable
-	if dex != nil && dex.Pending {
+	if dex != nil && dex.Pending || slices.ContainsFunc(ibc, func(r repository.IBCTransfer) bool { return r.Status == "pending" }) {
 		cache = CacheNoStore
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, cache)
-	return c.JSON(http.StatusOK, dto.NewTx(t, transfers, dex))
+	return c.JSON(http.StatusOK, dto.NewTx(t, transfers, dex, ibc))
 }
 
 // Validators serves GET

@@ -29,6 +29,11 @@ type AccountReader interface {
 	// AccountFills returns up to limit fills where address is the maker or
 	// the taker, newest first, after before when not nil.
 	AccountFills(ctx context.Context, address string, before *repository.FillKey, limit int) ([]repository.OrderFill, error)
+	// AccountIBCTransfers returns up to limit cross-chain transfers address
+	// sent (direction out), received (in) or both (empty), newest first,
+	// after before when not nil.
+	AccountIBCTransfers(ctx context.Context, address, direction string, before *repository.IBCKey,
+		limit int) ([]repository.IBCTransfer, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 	Monikers(ctx context.Context, operators []string) (map[string]string, error)
 }

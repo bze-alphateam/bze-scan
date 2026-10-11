@@ -95,6 +95,10 @@ func (noAccounts) AccountFills(context.Context, string, *repository.FillKey, int
 	return nil, nil
 }
 
+func (noAccounts) AccountIBCTransfers(context.Context, string, string, *repository.IBCKey, int) ([]repository.IBCTransfer, error) {
+	return nil, nil
+}
+
 func (noAccounts) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
 	return nil, nil
 }

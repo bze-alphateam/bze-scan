@@ -98,6 +98,19 @@ type fakeReader struct {
 	fillCount int64
 	fills     []repository.OrderFill
 	gotOrder  string
+
+	// Cross-chain transfers by transaction hash, and the channels.
+	ibc      map[string][]repository.IBCTransfer
+	channels []repository.IBCChannel
+	ibcErr   error
+}
+
+func (f *fakeReader) TxIBCTransfers(_ context.Context, hash string) ([]repository.IBCTransfer, error) {
+	return f.ibc[hash], f.ibcErr
+}
+
+func (f *fakeReader) IBCChannels(context.Context) ([]repository.IBCChannel, error) {
+	return f.channels, f.ibcErr
 }
 
 func (f *fakeReader) TxDex(_ context.Context, _, _ int64, hash string) (*repository.TxDex, error) {
@@ -244,6 +257,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/txs", h.Txs)
 	e.GET("/txs/:hash", h.Tx)
 	e.GET("/orders/:id", h.Order)
+	e.GET("/ibc/channels", h.IBCChannels)
 	e.GET("/validators", h.Validators)
 	e.GET("/validators/:operator", h.Validator)
 	e.GET("/validators/:operator/blocks", h.ValidatorBlocks)

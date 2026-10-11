@@ -48,7 +48,7 @@ func TestNullColumnsBecomeEmptyOrNull(t *testing.T) {
 	tx := dto.NewTx(&repository.Tx{
 		TxSummary: repository.TxSummary{Height: 7, Hash: "AB", Time: time.Unix(0, 0).In(time.FixedZone("x", 3600))},
 		Messages:  []repository.Message{{TypeURL: "/x.MsgY"}},
-	}, nil, &repository.TxDex{})
+	}, nil, &repository.TxDex{}, nil)
 	b, err := json.Marshal(tx)
 	require.NoError(t, err)
 

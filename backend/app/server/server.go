@@ -88,6 +88,7 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs", explorer.Txs)
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
+	api.GET("/ibc/channels", explorer.IBCChannels)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/:operator", explorer.Validator)
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
@@ -98,6 +99,7 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/accounts/:address/activity", accounts.Activity)
 		api.GET("/accounts/:address/orders", accounts.Orders)
 		api.GET("/accounts/:address/fills", accounts.Fills)
+		api.GET("/accounts/:address/ibc", accounts.IBCTransfers)
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)
