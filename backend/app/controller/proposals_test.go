@@ -115,7 +115,7 @@ func TestProposalPage(t *testing.T) {
 	p := &repository.Proposal{ProposalSummary: summary(47), Proposer: strp("bze1p"),
 		MessageTypes: []string{"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"},
 		Messages:     json.RawMessage(`[{"@type":"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"}]`),
-		TotalDeposit: json.RawMessage(`[{"denom":"ubze","amount":"100"}]`), ValidatorsVoted: 7, ValidatorsTotal: 30, VotesCount: 842,
+		TotalDeposit: json.RawMessage(`[{"denom":"ubze","amount":"100"}]`), ValidatorsVoted: 7, ValidatorsTotal: intp(30), VotesCount: 842,
 		ProposerLabel: &repository.Label{Address: "bze1p", Name: "Alpha", Kind: "known"}, UpdatedAt: time.Unix(5, 0)}
 	e := proposalServer(&fakeProposals{proposal: p})
 
@@ -123,7 +123,7 @@ func TestProposalPage(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
 	got := decode[dto.Proposal](t, rec)
-	assert.Equal(t, dto.ValidatorsVoted{Voted: 7, Total: 30}, got.ValidatorsVoted)
+	assert.Equal(t, dto.ValidatorsVoted{Voted: 7, Total: intp(30)}, got.ValidatorsVoted)
 	assert.Equal(t, 842, got.VotesCount)
 	assert.Equal(t, "Alpha", got.ProposerLabel.Name)
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100"}]`, string(got.TotalDeposit))

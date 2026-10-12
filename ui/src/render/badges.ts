@@ -8,14 +8,14 @@ import { hopsExplainer, isObsolete, OBSOLETE_EXPLAINER, tokenSymbol } from "./to
 // through), the hops, and the warnings (stranded, obsolete). Pure, so they
 // are tested without rendering.
 
-export type BadgeKind = "kind" | "direct" | "home" | "hops" | "stranded" | "obsolete" | "dex";
+export type BadgeKind = "kind" | "direct" | "home" | "hops" | "stranded" | "obsolete" | "dex" | "fame";
 
 export interface ExplainedBadge {
   kind: BadgeKind;
   text: string;
   /** What the badge means, shown on hover and on tap. */
   explainer: string;
-  tone: "blue" | "purple" | "cyan" | "orange" | "red" | "green";
+  tone: "blue" | "purple" | "cyan" | "orange" | "red" | "green" | "yellow";
   variant: "subtle" | "outline" | "solid";
   logoUrl?: string | null;
 }

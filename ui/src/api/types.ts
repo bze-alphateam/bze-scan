@@ -608,7 +608,8 @@ export interface Proposal extends ProposalSummary {
   submit_tx_hash: string | null;
   resolved_height: number | null;
   /** Bonded validators whose owner voted, of all bonded validators. */
-  validators_voted: { voted: number; total: number };
+  /** Validators whose owner voted, whatever their status today; `total` is the active set while voting, null once voting ended. */
+  validators_voted: { voted: number; total: number | null };
   /** The accounts that voted (one vote each, the latest). */
   votes_count: number;
   updated_at: string;

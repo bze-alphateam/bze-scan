@@ -19,21 +19,24 @@ test.describe("validators list", () => {
     await expect(page.getByTestId("tile")).toHaveCount(4);
     await expect(page.getByTestId("tile").first()).toContainText("405M BZE");
 
-    await expect(page.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
-    await expect(rows(page)).toHaveCount(3);
-    await expect(rows(page).first()).toContainText("Honeycomb");
-
-    await page.getByRole("tab", { name: "Inactive · 2" }).click();
-    await expect(rows(page)).toHaveCount(2);
-    await expect(rows(page).first()).toContainText("Sleepy Node");
-    await expect(rows(page).first()).toContainText("Jailed");
-
-    await page.getByRole("tab", { name: "Hall of Fame · 2" }).click();
+    // The Hall of Fame opens first, smallest first, and ends with a way to every active validator.
+    await expect(page.getByRole("tab", { name: "Hall of Fame · 2" })).toHaveAttribute("aria-selected", "true");
     const fame = page.getByTestId("hall-of-fame-row");
     await expect(fame).toHaveCount(2);
     await expect(fame.first()).toContainText("Thamar Node");
     await expect(fame.first()).toContainText("Didn't miss a block in the last 10,000 blocks");
     await noHorizontalScroll(page);
+    await page.getByRole("button", { name: "See all active validators" }).click();
+
+    await expect(page.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
+    await expect(rows(page)).toHaveCount(3);
+    await expect(rows(page).first()).toContainText("Honeycomb");
+    await expect(rows(page).first().getByTestId("fame-tag")).toBeVisible();
+
+    await page.getByRole("tab", { name: "Inactive · 2" }).click();
+    await expect(rows(page)).toHaveCount(2);
+    await expect(rows(page).first()).toContainText("Sleepy Node");
+    await expect(rows(page).first()).toContainText("Jailed");
 
     await page.getByRole("tab", { name: "Active · 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");
@@ -89,7 +92,10 @@ test.describe("validators on a phone", () => {
 
   test("stacks each validator into a card and keeps the pages within the screen", async ({ page }) => {
     await page.goto("/validators");
+    await noHorizontalScroll(page); // the Hall of Fame, open first
+    await page.getByRole("tab", { name: "Active · 3" }).click();
     const row = rows(page).first();
+    await expect(row).toBeVisible();
     const [name, staked] = await Promise.all([
       row.getByRole("link", { name: "Honeycomb", exact: true }).boundingBox(),
       row.getByText("50M BZE").boundingBox(),

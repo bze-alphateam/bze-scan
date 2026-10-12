@@ -19,6 +19,12 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   });
 }
 
+/** The Hall of Fame opens first: switch to the Active tab and wait for its rows. */
+async function openActive() {
+  await userEvent.click(await screen.findByRole("tab", { name: "Active · 3" }));
+  await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(3));
+}
+
 const monikers = () =>
   screen.getAllByTestId("validator-row").map((r) => within(r).getAllByRole("link")[0].textContent);
 
@@ -42,9 +48,18 @@ describe("ValidatorsPage", () => {
       "Top 5 validators hold40.2%a healthier network keeps this low",
     ]);
 
-    expect(screen.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Inactive · 2" })).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Hall of Fame · 2", "Active · 3", "Inactive · 2"]);
+    expect(screen.getByRole("tab", { name: "Hall of Fame · 2" })).toHaveAttribute("aria-selected", "true");
+    await openActive();
     expect(monikers()).toEqual(["Honeycomb", "Thamar Node", "Deep Fields"]);
+    // The Hall of Fame validators are marked in the active list too, explained.
+    const marked = screen.getAllByTestId("validator-row").map((r) => within(r).queryByTestId("fame-tag") !== null);
+    expect(marked).toEqual([true, true, false]);
+    expect(within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-tag")).toHaveAttribute(
+      "title",
+      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 10 of the last 10,000 blocks.",
+    );
 
     const honeycomb = screen.getAllByTestId("validator-row")[0];
     expect(within(honeycomb).getByRole("link", { name: "Honeycomb" })).toHaveAttribute(
@@ -77,8 +92,7 @@ describe("ValidatorsPage", () => {
 
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
-    await userEvent.click(await screen.findByRole("tab", { name: /Hall of Fame · 2/ }));
-    expect(screen.getByTestId("hall-of-fame-intro")).toHaveTextContent(
+    expect(await screen.findByTestId("hall-of-fame-intro")).toHaveTextContent(
       "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 10 of the last 10,000 blocks",
     );
     const rows = screen.getAllByTestId("hall-of-fame-row");
@@ -89,14 +103,20 @@ describe("ValidatorsPage", () => {
     expect(within(rows[1]).getByTestId("hall-of-fame-votes")).toHaveTextContent("Voted on all of the last 10 proposals");
     expect(rows[1]).toHaveTextContent("50M BZE · 12.3% of the voting power");
 
+    // The list ends with a way to every active validator.
+    await userEvent.click(screen.getByRole("button", { name: "See all active validators" }));
+    expect(screen.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(monikers()).toEqual(["Honeycomb", "Thamar Node", "Deep Fields"]));
+
+    await userEvent.click(screen.getByRole("tab", { name: "Hall of Fame · 2" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Find a validator" }), "zzz");
-    expect(screen.getByText("No Hall of Fame validator has that name.")).toBeInTheDocument();
+    expect(await screen.findByText("No Hall of Fame validator has that name.")).toBeInTheDocument();
   });
 
   it("shows each validator's picture, else its initials", async () => {
     const withLogo = { ...list, items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/v.jpg" } : v)) };
     renderWithProviders(<ValidatorsPage />, { api: api({ validators: () => Promise.resolve(withLogo as ValidatorList) }) });
-    await screen.findAllByTestId("validator-row");
+    await openActive();
     const [first, second] = screen.getAllByTestId("validator-row");
     expect(within(first).getByTestId("avatar-image")).toHaveAttribute("src", "https://pictures.example/v.jpg");
     expect(within(second).queryByTestId("avatar-image")).not.toBeInTheDocument();
@@ -104,6 +124,7 @@ describe("ValidatorsPage", () => {
 
   it("narrows the rows by moniker", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
+    await openActive();
     const input = await screen.findByRole("textbox", { name: "Find a validator" });
     await userEvent.type(input, "thamar");
     expect(monikers()).toEqual(["Thamar Node"]);

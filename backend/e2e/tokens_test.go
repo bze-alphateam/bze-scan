@@ -135,6 +135,7 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	require.NotNil(t, lp.Symbol)
 	assert.Equal(t, "VDL/BZE LP", *lp.Symbol)
 	assert.Equal(t, "VDL/BZE LP Shares", *lp.Name)
+	assert.Equal(t, 12, lp.Exponent, "as the BZE apps show pool shares")
 	assert.Nil(t, lp.IBCHops)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/api/v1/tokens/"+url.PathEscape("factory/bze1nobody/uzz")).status)
 }

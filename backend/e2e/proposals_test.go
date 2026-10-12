@@ -96,9 +96,16 @@ func TestProposalsVotesAndTheFrozenTally(t *testing.T) {
 	assert.Equal(t, []string{"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"}, p.MessageTypes)
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100000000000"}]`, string(p.TotalDeposit))
 	assert.Equal(t, 1, p.ValidatorsVoted.Voted, "one of the two voters owns a bonded validator")
-	assert.Positive(t, p.ValidatorsVoted.Total)
+	require.NotNil(t, p.ValidatorsVoted.Total, "the active set, while voting")
+	assert.Positive(t, *p.ValidatorsVoted.Total)
 	assert.Equal(t, 2, p.VotesCount)
 	assert.Nil(t, p.ResolvedHeight)
+
+	// Once voting ended today's active set is not the one that could vote:
+	// no total, and every validator whose owner voted counts, active or not.
+	closed := into[dto.Proposal](t, fetch(t, base+"/proposals/46"))
+	assert.NotEqual(t, "voting_period", closed.Status)
+	assert.Nil(t, closed.ValidatorsVoted.Total)
 
 	votes := into[dto.List[dto.ProposalVote]](t, fetch(t, base+"/proposals/47/votes"))
 	require.Len(t, votes.Items, 2)

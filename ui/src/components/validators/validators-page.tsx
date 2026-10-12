@@ -9,6 +9,7 @@ import { useAllValidators, useParams } from "@/api/hooks";
 import type { Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
+import { ExplainedBadge } from "@/components/ui/explained-badge";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
@@ -18,6 +19,7 @@ import {
   filterByMoniker,
   HALL_OF_FAME_MAX_MISSED,
   hallOfFame,
+  hallOfFameExplainer,
   inactiveLabel,
   pctText,
   rateText,
@@ -90,7 +92,7 @@ function PhoneLabel({ children }: { children: string }) {
   );
 }
 
-function ValidatorRow({ v }: { v: Validator }) {
+function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: number; window: number } }) {
   const href = `/validators/${encodeURIComponent(v.operator_address)}`;
   return (
     <Grid
@@ -119,6 +121,17 @@ function ValidatorRow({ v }: { v: Validator }) {
               <Badge colorPalette="red" variant="subtle" size="sm">
                 Jailed
               </Badge>
+            )}
+            {fame && (
+              <ExplainedBadge
+                badge={{
+                  kind: "fame",
+                  text: "Hall of Fame",
+                  tone: "yellow",
+                  variant: "subtle",
+                  explainer: hallOfFameExplainer(fame.recentProposals, fame.window),
+                }}
+              />
             )}
           </HStack>
           <Text hideFrom="md" fontSize="xs" color="fg.muted">
@@ -154,7 +167,14 @@ function ValidatorRow({ v }: { v: Validator }) {
   );
 }
 
-function ValidatorTable({ items, empty }: { items: Validator[]; empty: string }) {
+interface FameMarks {
+  /** The operator addresses in the Hall of Fame. */
+  operators: Set<string>;
+  recentProposals: number;
+  window: number;
+}
+
+function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame?: FameMarks }) {
   return (
     <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
       <Grid
@@ -179,7 +199,7 @@ function ValidatorTable({ items, empty }: { items: Validator[]; empty: string })
       </Grid>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame?.operators.has(v.operator_address) ? fame : undefined} />
         ))}
       </Box>
       {items.length === 0 && (
@@ -285,7 +305,7 @@ function HallOfFameRow({ v, place, window }: { v: Validator; place: number; wind
   );
 }
 
-function HallOfFame({ items, window, query }: { items: Validator[]; window: number; query: string }) {
+function HallOfFame({ items, window, query, onSeeAll }: { items: Validator[]; window: number; query: string; onSeeAll: () => void }) {
   const rows = filterByMoniker(items, query);
   return (
     <Stack gap="3">
@@ -307,21 +327,28 @@ function HallOfFame({ items, window, query }: { items: Validator[]; window: numb
           </Box>
         )}
       </Card>
+      <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={onSeeAll}>
+        See all active validators
+      </Button>
     </Stack>
   );
 }
 
-type Tab = "active" | "inactive" | "fame";
+type Tab = "fame" | "active" | "inactive";
 
 /** The list once loaded: intro, tiles, tabs with the filter, the table and the footnotes. */
 export function ValidatorsView({ list }: { list: ValidatorList }) {
-  const [tab, setTab] = useState<Tab>("active");
+  const [tab, setTab] = useState<Tab>("fame");
   const [query, setQuery] = useState("");
   const params = useParams();
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
   const fame = useMemo(() => hallOfFame(list.items), [list.items]);
   const seats = list.summary?.max_validators ?? null;
   const window = signedBlocksWindow(params.data) ?? 10_000;
+  const fameMarks = useMemo(
+    () => ({ operators: new Set(fame.map((v) => v.operator_address)), recentProposals: fame[0]?.recent_votes.of ?? 10, window }),
+    [fame, window],
+  );
   // Each panel filters its own list: the panel leaving keeps its rows while its exit animation runs.
   const activeRows = filterByMoniker(active, query);
   const inactiveRows = filterByMoniker(inactive, query);
@@ -338,14 +365,14 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
         <Tabs.Root value={tab} onValueChange={(e) => setTab(e.value as Tab)} variant="line" lazyMount unmountOnExit>
           <HStack justify="space-between" wrap="wrap" gap="3">
             <Tabs.List>
+              <Tabs.Trigger value="fame" minH="44px">
+                Hall of Fame · {formatCount(fame.length)}
+              </Tabs.Trigger>
               <Tabs.Trigger value="active" minH="44px">
                 Active · {formatCount(active.length)}
               </Tabs.Trigger>
               <Tabs.Trigger value="inactive" minH="44px">
                 Inactive · {formatCount(inactive.length)}
-              </Tabs.Trigger>
-              <Tabs.Trigger value="fame" minH="44px">
-                Hall of Fame · {formatCount(fame.length)}
               </Tabs.Trigger>
             </Tabs.List>
             <HStack
@@ -369,17 +396,21 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
               />
             </HStack>
           </HStack>
+          <Tabs.Content value="fame" pt="3">
+            <HallOfFame items={fame} window={window} query={query} onSeeAll={() => setTab("active")} />
+          </Tabs.Content>
           <Tabs.Content value="active" pt="3">
-            <ValidatorTable items={activeRows} empty={query ? "No active validator has that name." : "No active validators."} />
+            <ValidatorTable
+              items={activeRows}
+              empty={query ? "No active validator has that name." : "No active validators."}
+              fame={fameMarks}
+            />
           </Tabs.Content>
           <Tabs.Content value="inactive" pt="3">
             <ValidatorTable
               items={inactiveRows}
               empty={query ? "No inactive validator has that name." : "Every validator is active."}
             />
-          </Tabs.Content>
-          <Tabs.Content value="fame" pt="3">
-            <HallOfFame items={fame} window={window} query={query} />
           </Tabs.Content>
         </Tabs.Root>
         <Text fontSize="sm" color="fg.muted">

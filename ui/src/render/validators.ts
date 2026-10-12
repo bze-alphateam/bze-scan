@@ -49,6 +49,14 @@ export function hallOfFame<T extends Pick<Validator, "status" | "jailed" | "rece
     .sort((a, b) => compareDecimals(a.tokens, b.tokens));
 }
 
+/** What earns a validator its place in the Hall of Fame, in one sentence. */
+export function hallOfFameExplainer(recentProposals: number, window: number): string {
+  return (
+    `In the Hall of Fame: it voted on every one of the last ${formatCount(recentProposals)} proposals and missed no more than ` +
+    `${formatCount(HALL_OF_FAME_MAX_MISSED)} of the last ${formatCount(window)} blocks.`
+  );
+}
+
 /** "Didn't miss a block in the last 10,000 blocks", or how many it missed. */
 export function signingText(v: Pick<Validator, "missed_blocks" | "signed_blocks_window">, fallbackWindow: number): string {
   const window = formatCount(v.signed_blocks_window ?? fallbackWindow);

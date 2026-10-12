@@ -953,7 +953,9 @@ the denom's shape: `native` for `ubze`, `factory` for `factory/…`, `ibc` for
 metadata and `exponent` is its display unit's (0 when the display unit is not
 listed, as in the placeholder metadata ibc-go writes for every IBC voucher);
 `ubze` has
-no bank metadata and takes the chain's constants (BZE, exponent 6). A factory
+no bank metadata and takes the chain's constants (BZE, exponent 6), and a
+pool share's exponent is 12 whatever its metadata says (6), as the BZE apps
+show pool shares (`LP_ASSETS_DECIMALS`). A factory
 denom's `creator` is the address in it and `admin` the tokenfactory admin
 (NULL once renounced). `markets` are the tradebin market ids (`base/quote`)
 the denom trades in; `halted` is the tradebin halt (a node before v8.2.0

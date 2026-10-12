@@ -332,9 +332,10 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
   const validators = useAllValidators();
   const [all, setAll] = useState(false);
   if (!votes) return <ListSkeleton rows={5} />;
-  const missing = validators.data ? notVoted(validators.data.items, votes) : [];
-  const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
   const voting = p.status === "voting_period";
+  // Today's active set is the one that can vote only while voting is open.
+  const missing = voting && validators.data ? notVoted(validators.data.items, votes) : [];
+  const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
   return (
     <Stack gap="3">
       {votes.length === 0 ? (
@@ -432,7 +433,8 @@ function WhoVoted({ p }: { p: Proposal }) {
   const validatorVotes = useValidatorVotes(p.id, open);
   const validators = useAllValidators();
   const [expanded, setExpanded] = useState(open);
-  const missing = validatorVotes.data && validators.data ? notVoted(validators.data.items, validatorVotes.data).length : null;
+  // Who did not vote is measured against today's active set: only right while voting is open.
+  const missing = open ? (validatorVotes.data && validators.data ? notVoted(validators.data.items, validatorVotes.data).length : null) : 0;
   return (
     <Card title="Who voted" data-testid="who-voted">
       <Stack gap="3">
@@ -449,7 +451,8 @@ function WhoVoted({ p }: { p: Proposal }) {
           <Tabs.Root defaultValue="validators" variant="line" lazyMount>
             <Tabs.List>
               <Tabs.Trigger value="validators" minH="44px">
-                Validators · {p.validators_voted.voted} of {p.validators_voted.total}
+                Validators ·{" "}
+                {p.validators_voted.total != null ? `${p.validators_voted.voted} of ${p.validators_voted.total}` : p.validators_voted.voted}
               </Tabs.Trigger>
               <Tabs.Trigger value="everyone" minH="44px">
                 Everyone · {formatCount(p.votes_count)}

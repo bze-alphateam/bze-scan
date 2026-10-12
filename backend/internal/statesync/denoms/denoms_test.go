@@ -265,7 +265,7 @@ func TestFullResyncMapsTheRecordedDenoms(t *testing.T) {
 	assert.Equal(t, "ubze", lp.LPQuote)
 	assert.Equal(t, "VDL/BZE LP", lp.Symbol, "named after the assets' symbols, as the dapps do")
 	assert.Equal(t, "VDL/BZE LP Shares", lp.Name)
-	assert.Equal(t, 6, lp.Exponent)
+	assert.Equal(t, denoms.LPExponent, lp.Exponent, "12 as the BZE apps show it, not the metadata's 6")
 	assert.Equal(t, "UUSDC/BZE LP", rows[usdcLP].Symbol, "the IBC asset's placeholder symbol without a lookup")
 	assert.Equal(t, photon, rows[photonLP].LPBase, "not in the pool list: the legacy denom is split")
 	assert.Equal(t, "ubze", rows[photonLP].LPQuote)
