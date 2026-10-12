@@ -18,6 +18,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light |
 | `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
+| `src/components/blocks` | the blocks list (live until an older page is loaded, then a snapshot) and the block page (header, overview, transactions in one line each, the block's funds flow by group, More details with the raw JSON tabs, the not-found explanations) |
 | `src/components/tx` | the transaction page's sections, states and skeleton |
 | `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
@@ -26,6 +27,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/proposals` | the proposals list (voting cards, status chips, title filter) and the proposal page (what it does, votes and checks, where to vote, who voted, timeline, More details) |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
+| `src/render/blocks.ts`, `src/render/block-flow.ts` | the blocks pages' words and numbers: why a height is not found, fee and gas sums, a transaction in one line; the block's transfers grouped by the label names the backend seeds (Fees, DEX, Staking, Rewards programs, Burner, Cross-chain, Governance, Payments, Other) with each group's line |
 | `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
 | `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
 | `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
@@ -89,7 +91,12 @@ numbers itself:
 | `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
-apply the policies: a list hook with a `cursor` is `immutable`.
+apply the policies: a list hook with a `cursor` is `immutable`. `useBlock` does the same for a height above the explorer's
+latest block (`waitForIt`), with `expired` once the window is over.
+
+`useBlocks` is an infinite query: its first page is `live`; once an older page
+is loaded the list is a snapshot, never refetched, until `latest()` drops the
+older pages. `useBlockTransfers` follows every page of a block's transfers.
 
 A transaction the API answers 404 for is pending, never failed:
 `useTransaction` asks again every 7 s for the pending window

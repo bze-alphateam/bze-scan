@@ -1,0 +1,332 @@
+{
+  "items": [
+    {
+      "tx_index": -1,
+      "tx_hash": null,
+      "seq": 0,
+      "msg_index": null,
+      "kind": "mint",
+      "sender": null,
+      "sender_label": null,
+      "recipient": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum8al86ug",
+      "recipient_label": {
+        "name": "Mint",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "48200000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": -1,
+      "tx_hash": null,
+      "seq": 1,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum8al86ug",
+      "sender_label": {
+        "name": "Mint",
+        "kind": "module"
+      },
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l8s9l0g",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "48200000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": -1,
+      "tx_hash": null,
+      "seq": 2,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze17xpfvakm2amg962yls6f84z3kell8c5l8s9l0g",
+      "sender_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "recipient": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd8lu8mr8",
+      "recipient_label": {
+        "name": "Distribution",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "48200000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": -1,
+      "tx_hash": null,
+      "seq": 3,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze1vkpx0wc8n7m3ws4jgh2wfm0u2ahfxsrw2g8f0k",
+      "sender_label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "recipient_label": null,
+      "denom": "ibc/USDC0000000000000000000000000000000000000000000000000000000000",
+      "amount": "7500000",
+      "symbol": "USDC",
+      "exponent": 6
+    },
+    {
+      "tx_index": -1,
+      "tx_hash": null,
+      "seq": 4,
+      "msg_index": null,
+      "kind": "burn",
+      "sender": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "sender_label": {
+        "name": "Burner",
+        "kind": "module"
+      },
+      "recipient": null,
+      "recipient_label": null,
+      "denom": "ubze",
+      "amount": "5000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 2,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l8s9l0g",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 2,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "seq": 1,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "recipient_label": null,
+      "denom": "ubze",
+      "amount": "10000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l8s9l0g",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "17000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 1,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1x4ehm5akl2s0n0v8gk3xy7m4fz60xf0rmq7a2w",
+      "recipient_label": {
+        "name": "Burner fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "1000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 2,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3hnm5e0",
+      "recipient_label": {
+        "name": "Bonded tokens pool",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "500000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 3,
+      "msg_index": 1,
+      "kind": "transfer",
+      "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd8lu8mr8",
+      "sender_label": {
+        "name": "Distribution",
+        "kind": "module"
+      },
+      "recipient": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "recipient_label": null,
+      "denom": "ubze",
+      "amount": "12400000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 4,
+      "msg_index": 2,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1vkpx0wc8n7m3ws4jgh2wfm0u2ahfxsrw2g8f0k",
+      "recipient_label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "600000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 5,
+      "msg_index": 3,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1ffxw9a5kc0z2dyy0q0dgr7ezjq9ft3s5lq0dr6",
+      "recipient_label": {
+        "name": "Rewards",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "100000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 6,
+      "msg_index": 4,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
+      "recipient_label": {
+        "name": "Burner",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "250000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 7,
+      "msg_index": 5,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze1a53udazy8ayufvy0s434pfwjcedzqv34yk3ptm",
+      "recipient_label": {
+        "name": "Cross-chain escrow",
+        "kind": "ibc_escrow"
+      },
+      "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+      "amount": "2000000",
+      "symbol": "ATOM",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 8,
+      "msg_index": 6,
+      "kind": "transfer",
+      "sender": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "sender_label": null,
+      "recipient": "bze10d07y265gmmuvt4z0w9aw880jnsr700jqvcm7n",
+      "recipient_label": {
+        "name": "Governance",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "1000000000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "tx_index": 3,
+      "tx_hash": "5C11D2E3F405162738495A6B7C8D9EAFB0C1D2E3F405162738495A6B7C8D9E01",
+      "seq": 9,
+      "msg_index": 7,
+      "kind": "mint",
+      "sender": null,
+      "sender_label": null,
+      "recipient": "bze19ejy8n9qsectrf4semdp9cpknflld0j6uz5w4n",
+      "recipient_label": {
+        "name": "Factory",
+        "kind": "module"
+      },
+      "denom": "factory/bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq/uhoney",
+      "amount": "1000000",
+      "symbol": "HONEY",
+      "exponent": 6
+    },
+    {
+      "tx_index": 5,
+      "tx_hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l8s9l0g",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "next_cursor": null
+}

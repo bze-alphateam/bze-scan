@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, Button, Circle, Grid, HStack, Stack, Text } from "@chakra-ui/react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { LuArrowDown, LuArrowRight, LuChevronDown } from "react-icons/lu";
 
 import type { Transfer } from "@/api/types";
@@ -49,7 +49,7 @@ function Party({ address, label, none }: { address: string | null; label: Transf
   return <AccountChip address={address} label={label} />;
 }
 
-function Step({ index, transfer, reason }: { index: number; transfer: Transfer; reason: string }) {
+function Step({ index, transfer, reason }: { index: number; transfer: Transfer; reason: ReactNode }) {
   return (
     <Grid
       as="li"
@@ -88,9 +88,9 @@ function Step({ index, transfer, reason }: { index: number; transfer: Transfer; 
       <Box minW="0">
         <Party address={transfer.recipient} label={transfer.recipient_label} none="burned" />
       </Box>
-      <Text fontSize="xs" color="fg.muted" gridColumn={{ base: "2", md: "2 / -1" }}>
+      <Box fontSize="xs" color="fg.muted" gridColumn={{ base: "2", md: "2 / -1" }}>
         {reason}
-      </Text>
+      </Box>
     </Grid>
   );
 }
@@ -120,20 +120,35 @@ function NetBox({ signer, transfers }: { signer: string; transfers: Transfer[] }
   );
 }
 
-interface StepListProps {
-  transfers: Transfer[];
+interface StepListProps<T extends Transfer> {
+  transfers: T[];
   /** Why a transfer of an action happened. */
-  reasonOf: (t: Transfer) => string;
+  reasonOf?: (t: T) => string;
+  /** The line under a step, in place of its reason (the block page's "in 3F9A…C21E"). */
+  describe?: (t: T) => ReactNode;
   /** Start collapsed to the one-line summary. */
   collapsed: boolean;
   /** Whose net to show; no box when null. */
   netOf?: string | null;
+  /** A step's key: its `seq` by default, unique within one transaction. */
+  keyOf?: (t: T) => string | number;
+  /** Keep the given order instead of sorting by `seq` (steps of several transactions). */
+  inOrder?: boolean;
 }
 
-/** "Where the funds went": one step per transfer in `seq` order. */
-export function StepList({ transfers, reasonOf, collapsed, netOf }: StepListProps) {
+/** "Where the funds went": one step per transfer, in `seq` order unless `inOrder`. */
+export function StepList<T extends Transfer>({
+  transfers,
+  reasonOf,
+  describe,
+  collapsed,
+  netOf,
+  keyOf = (t) => t.seq,
+  inOrder = false,
+}: StepListProps<T>) {
   const [open, setOpen] = useState(!collapsed);
-  const steps = [...transfers].sort((a, b) => a.seq - b.seq);
+  const steps = inOrder ? transfers : [...transfers].sort((a, b) => a.seq - b.seq);
+  const lineOf = (t: T): ReactNode => (describe ? describe(t) : stepReason(t, (x) => reasonOf?.(x as T) ?? ""));
 
   if (steps.length === 0) {
     return (
@@ -161,7 +176,7 @@ export function StepList({ transfers, reasonOf, collapsed, netOf }: StepListProp
       {open && (
         <Box as="ol" listStyleType="none" m="0" p="0">
           {steps.map((t, i) => (
-            <Step key={t.seq} index={i + 1} transfer={t} reason={stepReason(t, reasonOf)} />
+            <Step key={keyOf(t)} index={i + 1} transfer={t} reason={lineOf(t)} />
           ))}
         </Box>
       )}

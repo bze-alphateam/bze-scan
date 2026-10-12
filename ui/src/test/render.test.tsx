@@ -10,7 +10,7 @@ import { fakeApi, pendingApi, renderWithProviders } from "./render";
 function BlocksTable() {
   const { data } = useBlocks();
   if (!data) return <TableSkeleton rows={3} columns={4} />;
-  return <p>{data.items.length} blocks</p>;
+  return <p>{data.pages[0].items.length} blocks</p>;
 }
 
 describe("renderWithProviders", () => {

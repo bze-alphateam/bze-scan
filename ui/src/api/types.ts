@@ -89,6 +89,12 @@ export interface Transfer {
   exponent: number | null;
 }
 
+/** An item of `/blocks/{height}/transfers`: a transfer with its transaction, `tx_index` -1 and `tx_hash` null for the block's own. */
+export interface BlockTransfer extends Transfer {
+  tx_index: number;
+  tx_hash: string | null;
+}
+
 export interface BlockEvent {
   seq: number;
   type: string;
