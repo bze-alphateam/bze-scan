@@ -229,6 +229,8 @@ describe("dates and status", () => {
   it("names the status, a deposit period that ended as dropped", () => {
     expect(items.map((p) => statusInfo(p, now).text)).toEqual(["Deposit period", "Voting now", "Passed", "Rejected", "Passed"]);
     expect(statusInfo(items[0], new Date("2099-10-13T00:00:00Z")).text).toBe("Dropped");
+    expect(statusInfo({ status: "dropped", deposit_end_time: "2099-10-01T00:00:00Z" }, now)).toEqual({ text: "Dropped", tone: "gray" });
+    expect(endedText({ status: "dropped", voting_end_time: null }, now)).toBeNull();
   });
 
   it("counts down to the end of voting", () => {
@@ -291,5 +293,6 @@ describe("the proposer's text", () => {
     expect(depositsReturned("rejected", false)).toBe(true);
     expect(depositsReturned("rejected", true)).toBe(false);
     expect(depositsReturned("voting_period", false)).toBe(false);
+    expect(depositsReturned("dropped", false)).toBe(false);
   });
 });

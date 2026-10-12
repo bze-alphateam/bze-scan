@@ -30,7 +30,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 12
+const latestVersion = 13
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -312,4 +312,24 @@ func TestMigrateCommand(t *testing.T) {
 	assert.Equal(t, strconv.Itoa(latestVersion), strings.TrimSpace(run("version")))
 	assert.Contains(t, run("down", "2"), `"version":`+strconv.Itoa(latestVersion-2))
 	assert.Equal(t, strconv.Itoa(latestVersion-2), strings.TrimSpace(run("version")))
+}
+
+// Proposals dropped for lack of deposit were stored as rejected: the
+// migration renames them, a proposal rejected by vote stays.
+func TestMigrateDropsTheProposalsThatNeverReachedAVote(t *testing.T) {
+	dbURL := freshDatabase(t, true)
+	db := connect(t, dbURL)
+	migrateUp(t, dbURL)
+	mg := openMigrator(t, dbURL)
+	_, err := mg.Down(1)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO explorer.proposals (id, title, kind, status, submit_time, voting_start_time, updated_at)
+		VALUES (1, 'spam', 'text', 'rejected', now(), NULL, now()),
+		       (2, 'voted', 'text', 'rejected', now(), now(), now()),
+		       (3, 'open', 'text', 'deposit_period', now(), NULL, now())`)
+	require.NoError(t, err)
+
+	migrateUp(t, dbURL)
+	assert.Equal(t, []string{"1 dropped", "2 rejected", "3 deposit_period"}, queryStrings(t, db,
+		`SELECT concat_ws(' ', id, status) FROM explorer.proposals ORDER BY id`))
 }

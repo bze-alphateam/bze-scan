@@ -160,7 +160,8 @@ func blockGovEvents(ents *Entities, b Block, events []node.Event) {
 		case ev.Type == evInactiveProposal && result == resultFailed:
 			st.Status = proposals.StatusFailed
 		case ev.Type == evInactiveProposal:
-			st.Status = proposals.StatusRejected
+			// proposal_dropped: the deposit period ended short of the minimum.
+			st.Status = proposals.StatusDropped
 		case result == resultPassed:
 			st.Status = proposals.StatusPassed
 			// A passed proposal may have changed parameters: the params set

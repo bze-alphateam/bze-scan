@@ -16,7 +16,7 @@ import (
 )
 
 // proposalStatuses are the values of the status filter.
-var proposalStatuses = []string{"deposit_period", "voting_period", "passed", "rejected", "failed", "canceled"}
+var proposalStatuses = []string{"deposit_period", "voting_period", "passed", "rejected", "failed", "canceled", "dropped"}
 
 // voteOptions are the values of the votes' option filter: a single option,
 // or the split votes.

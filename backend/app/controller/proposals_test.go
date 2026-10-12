@@ -100,6 +100,10 @@ func TestProposalsListNewestFirstAndPages(t *testing.T) {
 	assert.Nil(t, last.Items[2].Tally, "not tallied yet")
 	assert.Nil(t, last.Items[2].TurnoutPct)
 
+	rec = get(t, e, "/api/v1/proposals?status=dropped")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "dropped", *f.gotStatus)
+
 	for _, path := range []string{"/api/v1/proposals?status=open", "/api/v1/proposals?cursor=!!", "/api/v1/proposals?limit=0"} {
 		rec := get(t, e, path)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, path)

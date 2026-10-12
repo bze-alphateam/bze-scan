@@ -40,6 +40,9 @@ const (
 	StatusPassed   = "passed"
 	StatusRejected = "rejected"
 	StatusFailed   = "failed"
+	// StatusDropped is a proposal whose deposit period ended short of the
+	// minimum deposit: the chain deletes it without a vote.
+	StatusDropped = "dropped"
 	// StatusCanceled is a proposal its proposer withdrew (MsgCancelProposal):
 	// the chain deletes it, only the explorer remembers it.
 	StatusCanceled = "canceled"

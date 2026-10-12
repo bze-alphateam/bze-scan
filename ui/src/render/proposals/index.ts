@@ -39,8 +39,10 @@ export function kindLabel(kind: string): string {
 export type Tone = "blue" | "green" | "red" | "gray" | "orange";
 
 /**
- * The status pill. A proposal still in its deposit period after the period
- * ended was dropped: the chain deleted it, the explorer keeps it.
+ * The status pill. A proposal whose deposit period ended short of the minimum
+ * deposit was dropped: the chain deleted it, the explorer keeps it. One still
+ * in its deposit period after the period ended is shown dropped until the
+ * drop is indexed.
  */
 export function statusInfo(p: Pick<ProposalSummary, "status" | "deposit_end_time">, now: Date): { text: string; tone: Tone } {
   switch (p.status) {
@@ -58,6 +60,8 @@ export function statusInfo(p: Pick<ProposalSummary, "status" | "deposit_end_time
       return { text: "Failed", tone: "red" };
     case "canceled":
       return { text: "Canceled", tone: "gray" };
+    case "dropped":
+      return { text: "Dropped", tone: "gray" };
   }
 }
 
@@ -171,7 +175,7 @@ export function endsIn(end: string, now: Date): string {
 
 /** The list's Ended cell: the date, or `ends in 3 days` while voting; null before voting. */
 export function endedText(p: Pick<ProposalSummary, "status" | "voting_end_time">, now: Date): string | null {
-  if (!p.voting_end_time || p.status === "deposit_period" || p.status === "canceled") return null;
+  if (!p.voting_end_time || p.status === "deposit_period" || p.status === "canceled" || p.status === "dropped") return null;
   if (p.status === "voting_period") {
     const days = Math.ceil((new Date(p.voting_end_time).getTime() - now.getTime()) / 86_400_000);
     return days <= 1 ? "ends today" : `ends in ${days} days`;

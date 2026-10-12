@@ -180,7 +180,7 @@ func TestGovDepositsVotesAndResolutions(t *testing.T) {
 		Option: "no_with_veto", Height: 10, TxIndex: 0, MsgIndex: 3, Time: at}, ents.ProposalVotes[1])
 
 	assert.Equal(t, []transform.ProposalStatus{
-		{ProposalID: 54, Status: "rejected", Height: 10, Resolved: true},
+		{ProposalID: 54, Status: "dropped", Height: 10, Resolved: true},
 		{ProposalID: 55, Status: "rejected", Height: 10, Resolved: true},
 		{ProposalID: 56, Status: "voting_period", Height: 10, ExpeditedOff: true},
 		{ProposalID: 57, Status: "failed", Height: 10, Resolved: true},
