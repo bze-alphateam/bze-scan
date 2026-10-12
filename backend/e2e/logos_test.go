@@ -73,7 +73,7 @@ func TestValidatorLogosComeFromKeybaseOncePerDay(t *testing.T) {
 	require.Equal(t, 0, code)
 	assert.Equal(t, recordedKeys, e.kb.count(), "one lookup per key suffix")
 	logo := `SELECT concat_ws(' ', coalesce(logo_url, '-'), logo_checked_at IS NOT NULL) FROM explorer.validators WHERE operator_address = $1`
-	assert.Equal(t, []string{chainToolsLogo + " true"}, queryStrings(t, e.db, logo, chainTools))
+	assert.Equal(t, []string{chainToolsLogo + " t"}, queryStrings(t, e.db, logo, chainTools))
 	assert.Equal(t, recordedIdentities, e.count(t, `SELECT count(*) FROM explorer.validators WHERE logo_checked_at IS NOT NULL`))
 	assert.Equal(t, 1, e.count(t, `SELECT count(*) FROM explorer.validators WHERE logo_url IS NOT NULL`))
 
@@ -82,7 +82,7 @@ func TestValidatorLogosComeFromKeybaseOncePerDay(t *testing.T) {
 	code, _ = e.syncState(t)
 	require.Equal(t, 0, code)
 	assert.Equal(t, recordedKeys, e.kb.count())
-	assert.Equal(t, []string{chainToolsLogo + " true"}, queryStrings(t, e.db, logo, chainTools))
+	assert.Equal(t, []string{chainToolsLogo + " t"}, queryStrings(t, e.db, logo, chainTools))
 
 	// A day later Keybase is down: the logo and its check time stay.
 	_, err := e.db.Exec(`UPDATE explorer.validators SET logo_checked_at = now() - interval '25 hours' WHERE operator_address = $1`, chainTools)
