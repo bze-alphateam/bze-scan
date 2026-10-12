@@ -279,8 +279,14 @@ func (r *Explorer) Txs(ctx context.Context, before *TxKey, success *bool, limit 
 	q := `SELECT t.height, t.tx_index, t.hash, t.time, t.success, t.msg_count, t.msg_types, t.fee, t.signers[1],
 		` + firstMessageCols + `
 		FROM explorer.transactions t` + firstMessageJoin(bound) + ` WHERE true` + where
-	if success != nil {
-		q += ` AND t.success = ` + arg(*success)
+	// A literal, not a parameter: a generic plan cannot prove a parameter
+	// matches the partial index on failed transactions.
+	switch {
+	case success == nil:
+	case *success:
+		q += ` AND t.success`
+	default:
+		q += ` AND NOT t.success`
 	}
 	q += ` ORDER BY t.height DESC, t.tx_index DESC LIMIT ` + arg(limit)
 
