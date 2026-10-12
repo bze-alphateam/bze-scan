@@ -3,7 +3,8 @@
 // semaphore of workers, each worker fetches and transforms one height under a
 // global rate limit, and one batching writer flushes the results as bulk
 // inserts. Failures never stall a run: a height that keeps failing is
-// recorded in index_failures and skipped.
+// recorded in index_failures and skipped. An unreachable archive is not a
+// failure of its heights: the workers wait for it, which pauses the run.
 //
 // The main job walks down from the live floor to a configured floor and
 // checkpoints its progress; the catch-up job walks up from the live cursor
@@ -12,6 +13,7 @@ package backfill
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -24,8 +26,10 @@ import (
 )
 
 // Node is the part of the node client a worker fetches through, always by
-// height; *node.Client satisfies it.
+// height, and asks /status when a fetch finds it unavailable; *node.Client
+// satisfies it.
 type Node interface {
+	Status(ctx context.Context) (*node.Status, []byte, error)
 	Block(ctx context.Context, height int64) (*node.Block, []byte, error)
 	BlockResults(ctx context.Context, height int64) (*node.BlockResults, []byte, error)
 	Commit(ctx context.Context, height int64) (*node.Commit, []byte, error)
@@ -67,6 +71,10 @@ const (
 	DefaultBatch        = 50
 	DefaultQuiet        = 2 * time.Second
 	DefaultFlushTimeout = 2 * time.Minute
+	// DefaultUnavailableMin and DefaultUnavailableMax bound the waits of a
+	// worker while the archive is unreachable.
+	DefaultUnavailableMin = time.Second
+	DefaultUnavailableMax = time.Minute
 )
 
 // DefaultRetryDelays are the waits before the three retries of a height,
@@ -86,6 +94,11 @@ type Config struct {
 	// are len(RetryDelays)+1, the first against Deps.Archive and the retries
 	// against Deps.ArchiveRetry.
 	RetryDelays []time.Duration
+	// UnavailableMin is a worker's first wait while the archive is
+	// unreachable; each wait doubles, up to UnavailableMax. These waits
+	// spend no attempt and last as long as the outage.
+	UnavailableMin time.Duration
+	UnavailableMax time.Duration
 	// FailureSource is index_failures.source; empty is "backfill".
 	FailureSource string
 	// FlushTimeout bounds one flush or failure record. Flushes run on even
@@ -157,6 +170,12 @@ func New(cfg Config, deps Deps) *Pipeline {
 	}
 	if cfg.RetryDelays == nil {
 		cfg.RetryDelays = DefaultRetryDelays
+	}
+	if cfg.UnavailableMin <= 0 {
+		cfg.UnavailableMin = DefaultUnavailableMin
+	}
+	if cfg.UnavailableMax <= 0 {
+		cfg.UnavailableMax = DefaultUnavailableMax
 	}
 	if cfg.FailureSource == "" {
 		cfg.FailureSource = writer.FailureSourceBackfill
@@ -276,13 +295,11 @@ func (p *Pipeline) work(ctx context.Context, h int64) (outcome, bool) {
 	attempts := len(p.cfg.RetryDelays) + 1
 	var in transform.Input
 	var err error
+	wait := p.cfg.UnavailableMin
 	attempt := 1
-	for ; attempt <= attempts; attempt++ {
+	for {
 		n := p.deps.Archive
 		if attempt > 1 {
-			if p.cfg.Sleep(ctx, p.cfg.RetryDelays[attempt-2]) != nil {
-				return outcome{}, false
-			}
 			n = p.deps.ArchiveRetry
 		}
 		in, err = p.fetch(ctx, n, h)
@@ -292,10 +309,26 @@ func (p *Pipeline) work(ctx context.Context, h int64) (outcome, bool) {
 		if ctx.Err() != nil {
 			return outcome{}, false
 		}
+		if p.down(ctx, n, err) {
+			// An outage, not a bad height: wait for the archive without
+			// spending the attempt.
+			p.deps.Log.WithError(err).WithFields(log.Fields{"height": h, "retry_in": wait.String()}).
+				Warn("backfill: archive unavailable, waiting")
+			if p.cfg.Sleep(ctx, wait) != nil {
+				return outcome{}, false
+			}
+			wait = min(wait*2, p.cfg.UnavailableMax)
+			continue
+		}
+		wait = p.cfg.UnavailableMin
 		p.deps.Log.WithError(err).WithFields(log.Fields{"height": h, "attempt": attempt}).Warn("backfill: fetch failed")
-	}
-	if err != nil {
-		return outcome{height: h, attempts: attempts, err: err}, true
+		if attempt == attempts {
+			return outcome{height: h, attempts: attempts, err: err}, true
+		}
+		if p.cfg.Sleep(ctx, p.cfg.RetryDelays[attempt-1]) != nil {
+			return outcome{}, false
+		}
+		attempt++
 	}
 	if p.deps.Adapter != nil {
 		if err := p.deps.Adapter.Adapt(h, &in); err != nil {
@@ -307,6 +340,21 @@ func (p *Pipeline) work(ctx context.Context, h int64) (outcome, bool) {
 		return outcome{height: h, attempts: attempt, err: fmt.Errorf("transform: %w", err)}, true
 	}
 	return outcome{height: h, ents: ents}, true
+}
+
+// down reports whether err is n being unreachable rather than a problem of
+// the height: the fetch found it unavailable and /status does not answer
+// either. A node that answers /status had trouble with this height only (a
+// slow block timing out, say), which is an ordinary failed attempt.
+func (p *Pipeline) down(ctx context.Context, n Node, err error) bool {
+	if !errors.Is(err, node.ErrUnavailable) {
+		return false
+	}
+	if p.wait(ctx) != nil {
+		return false
+	}
+	_, _, serr := n.Status(ctx)
+	return serr != nil && ctx.Err() == nil
 }
 
 func (p *Pipeline) fetch(ctx context.Context, n Node, h int64) (transform.Input, error) {

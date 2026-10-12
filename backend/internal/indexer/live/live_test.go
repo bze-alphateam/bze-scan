@@ -81,19 +81,30 @@ func (s *mockSubscription) Wait(ctx context.Context) (int64, error) {
 func (s *mockSubscription) Close() {}
 
 // mockNode answers every height with a minimal block. failBlock queues
-// errors for Block at a height; statusErr fails /status.
+// errors for Block at a height; statusErr fails /status; goDown makes the
+// node go down at a height's Block call for the next /status calls.
 type mockNode struct {
 	mu        sync.Mutex
 	tip       int64
 	earliest  int64
 	statusErr error
+	downAt    map[int64]int
+	statusOff int
 	blockErrs map[int64][]error
 	badBlocks map[int64]bool
 	calls     map[int64]int
 }
 
 func newMockNode(tip int64) *mockNode {
-	return &mockNode{tip: tip, blockErrs: map[int64][]error{}, badBlocks: map[int64]bool{}, calls: map[int64]int{}}
+	return &mockNode{tip: tip, blockErrs: map[int64][]error{}, badBlocks: map[int64]bool{}, calls: map[int64]int{}, downAt: map[int64]int{}}
+}
+
+// goDown makes the first Block call at h find the node unreachable, and the
+// next statuses /status calls fail too.
+func (n *mockNode) goDown(h int64, statuses int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.downAt[h] = statuses
 }
 
 func (n *mockNode) setTip(h int64) {
@@ -120,6 +131,10 @@ func (n *mockNode) Status(context.Context) (*node.Status, []byte, error) {
 	if n.statusErr != nil {
 		return nil, nil, n.statusErr
 	}
+	if n.statusOff > 0 {
+		n.statusOff--
+		return nil, nil, fmt.Errorf("status: %w: connection refused", node.ErrUnavailable)
+	}
 	return &node.Status{Network: "beezee-1", LatestBlockHeight: n.tip, EarliestBlockHeight: n.earliest}, nil, nil
 }
 
@@ -127,6 +142,11 @@ func (n *mockNode) Block(_ context.Context, h int64) (*node.Block, []byte, error
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.calls[h]++
+	if statuses, ok := n.downAt[h]; ok {
+		delete(n.downAt, h)
+		n.statusOff = statuses
+		return nil, nil, fmt.Errorf("block: %w: connection refused", node.ErrUnavailable)
+	}
 	if errs := n.blockErrs[h]; len(errs) > 0 {
 		n.blockErrs[h] = errs[1:]
 		return nil, nil, errs[0]
@@ -515,6 +535,43 @@ func TestNodeDownRecordsNoFailure(t *testing.T) {
 	assert.Zero(t, n.callsAt(100))
 	_, failed := h.store.failure(100)
 	assert.False(t, failed)
+}
+
+func TestNodeGoingDownMidPassRecordsNoFailure(t *testing.T) {
+	n := newMockNode(99)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	// The node restarts while the pass is at 102: the probe and the next
+	// pass's /status find it down.
+	n.goDown(102, 2)
+	n.setTip(104)
+	sub.notify(104)
+	h.listener.next(t)
+	h.listener.next(t)
+	h.waitWritten(t, 100, 101, 102, 103, 104)
+	for hgt := int64(100); hgt <= 104; hgt++ {
+		_, failed := h.store.failure(hgt)
+		assert.False(t, failed, "height %d", hgt)
+	}
+	assert.Equal(t, 2, n.callsAt(102), "the same height again after the reconnect")
+	assert.Equal(t, []time.Duration{time.Second, time.Second}, h.clock.recorded(), "two reconnects, no height retries")
+}
+
+func TestUnavailableHeightOfAnAnsweringNodeIsRecorded(t *testing.T) {
+	n := newMockNode(99)
+	slow := fmt.Errorf("block: %w: context deadline exceeded", node.ErrUnavailable)
+	n.failBlock(100, slow, slow, slow)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	n.setTip(101)
+	sub.notify(101)
+	h.waitWritten(t, 101)
+	f, ok := h.store.failure(100)
+	require.True(t, ok, "the node answers /status: the height itself fails")
+	assert.Equal(t, 3, f.attempts)
+	assert.ErrorIs(t, f.err, node.ErrUnavailable)
 }
 
 func TestShutdownBetweenAttemptsRecordsNoFailure(t *testing.T) {

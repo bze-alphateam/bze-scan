@@ -3,6 +3,7 @@ package backfill_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
@@ -148,8 +150,8 @@ func TestCancelledRunStillWritesWhatItFetched(t *testing.T) {
 
 func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	e := newEnv()
-	e.archive.fail(3, errUnavailable)
-	e.retry.fail(3, errUnavailable, errUnavailable, errUnavailable)
+	e.archive.fail(3, errFetch)
+	e.retry.fail(3, errFetch, errFetch, errFetch)
 
 	res := e.pipeline(2, 2).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 
@@ -159,7 +161,7 @@ func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	require.Len(t, e.writer.recorded(), 1)
 	f := e.writer.recorded()[0]
 	assert.Equal(t, "3/"+writer.FailureSourceBackfill+"/4", describe(f))
-	assert.ErrorIs(t, f.err, errUnavailable)
+	assert.ErrorIs(t, f.err, errFetch)
 	assert.Equal(t, int64(1), res.Failed)
 	assert.Equal(t, int64(4), res.Written)
 	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
@@ -168,7 +170,7 @@ func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 
 func TestARetryOnTheRetryNodeSucceeds(t *testing.T) {
 	e := newEnv()
-	e.archive.fail(2, errUnavailable)
+	e.archive.fail(2, errFetch)
 
 	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), writer.ModeInsert)
 
@@ -178,9 +180,64 @@ func TestARetryOnTheRetryNodeSucceeds(t *testing.T) {
 	assert.Equal(t, []int64{2}, e.retry.blockCalls())
 }
 
+func TestAnArchiveOutagePausesTheRunWithoutFailures(t *testing.T) {
+	e := newEnv()
+	e.archive.outage(6)
+	cfg := e.config(1, 10)
+	cfg.UnavailableMax = 10 * time.Second
+
+	res := backfill.New(cfg, e.deps()).Run(context.Background(), backfill.Descending(3, 1, nil), writer.ModeInsert)
+
+	require.NoError(t, res.Err)
+	assert.True(t, res.Complete)
+	assert.Equal(t, []int64{3, 2, 1}, e.writer.written())
+	assert.Empty(t, e.writer.recorded(), "an outage records no height")
+	assert.Zero(t, res.Failed)
+	assert.Equal(t, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 10 * time.Second, 10 * time.Second},
+		e.clock.recordedSleeps(), "doubling up to the cap, as long as the outage")
+	assert.Empty(t, e.retry.blockCalls(), "the waits spend no attempt")
+	assert.Equal(t, 6, e.archive.statusCalls())
+}
+
+func TestAnUnavailableHeightOfAnAnsweringArchiveIsRecorded(t *testing.T) {
+	e := newEnv()
+	slow := fmt.Errorf("block: %w: context deadline exceeded", node.ErrUnavailable)
+	e.archive.fail(2, slow)
+	e.retry.fail(2, slow, slow, slow)
+
+	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), writer.ModeInsert)
+
+	require.True(t, res.Complete)
+	require.Len(t, e.writer.recorded(), 1)
+	f := e.writer.recorded()[0]
+	assert.Equal(t, "2/"+writer.FailureSourceBackfill+"/4", describe(f))
+	assert.ErrorIs(t, f.err, node.ErrUnavailable)
+	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
+	assert.Equal(t, 1, e.archive.statusCalls(), "the archive answered the probe")
+	assert.Equal(t, 3, e.retry.statusCalls())
+}
+
+func TestACancelDuringAnOutageRecordsNothing(t *testing.T) {
+	e := newEnv()
+	e.archive.outage(1 << 30)
+	ctx, cancel := context.WithCancel(context.Background())
+	e.clock.onSleep = func(n int) {
+		if n == 5 {
+			cancel()
+		}
+	}
+
+	res := e.pipeline(2, 10).Run(ctx, backfill.Descending(3, 1, nil), writer.ModeInsert)
+
+	require.NoError(t, res.Err)
+	assert.False(t, res.Complete)
+	assert.Empty(t, e.writer.written())
+	assert.Empty(t, e.writer.recorded())
+}
+
 func TestTheRateLimiterPacesEveryRequest(t *testing.T) {
 	e := newEnv()
-	e.archive.fail(4, errUnavailable)
+	e.archive.fail(4, errFetch)
 
 	res := e.pipeline(3, 10).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 

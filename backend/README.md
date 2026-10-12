@@ -448,9 +448,14 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
 - A height is tried three times (waits of 0.5 s and 2 s). Then, or at once
   when the node reports the height pruned, it is recorded in
   `explorer.index_failures` with source `live`, logged, and the cursor moves
-  past it. A pass stops (and reconnects) only when the database or the
-  node's `/status` cannot be reached, so a node restart never turns into
-  recorded failures.
+  past it. A pass stops (and reconnects) when the database or the node
+  cannot be reached, without recording anything or moving the cursor: a
+  fetch the node did not answer (connection refused or reset, a timeout,
+  HTTP 429/502/503/504 from a proxy) is checked with a `/status` call, and
+  when that fails too the node is down and the next pass resumes at the
+  same height. So a node restart, even in the middle of a catch-up, never
+  turns into recorded failures. A node that answers `/status` but not a
+  height is a failed attempt at that height.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the
   height, the node supplies the data.
@@ -489,6 +494,15 @@ elsewhere ends without stopping the process, and the next start resumes it).
   database is gone): the run stops with checkpoint status `error`.
 - **Failures.** After the retries a height is upserted into
   `explorer.index_failures` with source `backfill`, logged, and skipped.
+- **Outages.** An unreachable archive is not a failure of its heights. When
+  a fetch gets no answer (connection refused or reset, a timeout, HTTP
+  429/502/503/504 from a proxy) and the node's `/status` does not answer
+  either, the worker waits (1 s, doubling up to 1 min) and fetches the same
+  height again without spending an attempt, for as long as the outage
+  lasts. Every worker waits, so the run pauses and resumes on its own; the
+  catch-up and the reindex behave the same (Ctrl-C stops a waiting
+  reindex). A node that answers `/status` but not a height (a slow block
+  timing out, say) is an ordinary failed attempt.
 - **Checkpoint.** `explorer.backfill_checkpoints` row `main` (ceiling, floor,
   `lowest_dispatched`, `blocks_done`, status, last error), saved every 5 s
   and after every flush. Dispatch is monotonic, so on restart the dispatcher

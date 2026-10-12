@@ -202,8 +202,8 @@ func (c *mockCursor) AdvanceCursor(_ context.Context, h int64) error {
 
 func TestCatchUpWalksUpAndMovesTheCursor(t *testing.T) {
 	e := newEnv()
-	e.archive.fail(103, errUnavailable)
-	e.retry.fail(103, errUnavailable, errUnavailable, errUnavailable)
+	e.archive.fail(103, errFetch)
+	e.retry.fail(103, errFetch, errFetch, errFetch)
 	store := newMockStore(0)
 	store.present[102] = true
 	cursor := &mockCursor{}

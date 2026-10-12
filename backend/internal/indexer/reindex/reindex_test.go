@@ -3,6 +3,7 @@ package reindex_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -65,7 +66,8 @@ func TestParse(t *testing.T) {
 }
 
 // mockNode serves every height up to tip and records the heights asked for
-// Block; pruned answers the pruned error below it.
+// Block; pruned answers the pruned error below it. Block at downAt starts an
+// outage: every call fails unavailable until downFor /status calls failed.
 type mockNode struct {
 	mu        sync.Mutex
 	tip       int64
@@ -73,9 +75,18 @@ type mockNode struct {
 	earliest  int64
 	statusErr error
 	blocks    []int64
+	downAt    int64
+	downFor   int
+	down      int
 }
 
 func (n *mockNode) check(h int64) error {
+	if h == n.downAt {
+		n.downAt, n.down = 0, n.downFor
+	}
+	if n.down > 0 {
+		return fmt.Errorf("%w: connection refused", node.ErrUnavailable)
+	}
 	switch {
 	case h > n.tip:
 		return errors.New("height above the node's tip")
@@ -96,6 +107,8 @@ func (n *mockNode) Block(_ context.Context, h int64) (*node.Block, []byte, error
 }
 
 func (n *mockNode) BlockResults(_ context.Context, h int64) (*node.BlockResults, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	if err := n.check(h); err != nil {
 		return nil, nil, err
 	}
@@ -103,6 +116,8 @@ func (n *mockNode) BlockResults(_ context.Context, h int64) (*node.BlockResults,
 }
 
 func (n *mockNode) Commit(_ context.Context, h int64) (*node.Commit, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	if err := n.check(h); err != nil {
 		return nil, nil, err
 	}
@@ -110,6 +125,12 @@ func (n *mockNode) Commit(_ context.Context, h int64) (*node.Commit, []byte, err
 }
 
 func (n *mockNode) Status(context.Context) (*node.Status, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.down > 0 {
+		n.down--
+		return nil, nil, fmt.Errorf("%w: connection refused", node.ErrUnavailable)
+	}
 	if n.statusErr != nil {
 		return nil, nil, n.statusErr
 	}
@@ -255,6 +276,17 @@ func TestEveryHeightFromTheArchiveWithoutALocalNode(t *testing.T) {
 	_, err = e.run(t, nil, reindex.Selection{Kind: reindex.KindHeights, Heights: []int64{70}})
 	require.NoError(t, err)
 	assert.Equal(t, []int64{70}, e.archive.asked())
+}
+
+func TestALocalNodeRestartIsWaitedOut(t *testing.T) {
+	e := newEnv()
+	e.local.downAt, e.local.downFor = 60, 2
+	res, err := e.run(t, e.local, reindex.Selection{Kind: reindex.KindHeights, Heights: []int64{60}})
+	require.NoError(t, err)
+	assert.Empty(t, res.Failed, "an outage is not a failed height")
+	assert.Empty(t, e.writer.failures)
+	assert.Equal(t, []int64{60}, e.writer.written)
+	assert.Empty(t, e.archive.asked(), "the height stays on the local node")
 }
 
 func TestARunOverwritesAndEndsDone(t *testing.T) {

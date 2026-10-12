@@ -42,8 +42,12 @@ func backfilled() []string {
 	return out
 }
 
-// quickRetries keep the failing height from slowing the tests down.
-var quickRetries = serve.Options{BackfillRetryDelays: []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}}
+// quickRetries keep the failing height and the outages from slowing the
+// tests down.
+var quickRetries = serve.Options{
+	BackfillRetryDelays:    []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond},
+	BackfillUnavailableMin: time.Millisecond,
+}
 
 type backfillEnv struct {
 	url     string
@@ -122,6 +126,16 @@ func TestBackfillFillsTheRangeDownToTheFloor(t *testing.T) {
 	e.archive.ResetRequests()
 	require.NoError(t, serve.RunBackfill(context.Background(), e.config(0), quickRetries))
 	assert.Zero(t, e.archive.Requests(fakenode.RouteBlock))
+}
+
+func TestAnArchiveOutageLeavesNoHoles(t *testing.T) {
+	e := newBackfillEnv(t)
+	// The archive restarts once the run reaches 24998325: far more 503s
+	// than the attempts at a height.
+	e.archive.GoDownAt(fakenode.RouteBlock, 24998325, 30)
+	require.NoError(t, serve.RunBackfill(context.Background(), e.config(0), quickRetries))
+	e.assertComplete(t)
+	assert.Positive(t, e.archive.Requests(fakenode.RouteStatus), "the workers probed the archive")
 }
 
 func TestBackfillResumesAfterACancel(t *testing.T) {
