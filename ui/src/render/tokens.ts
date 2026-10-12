@@ -1,4 +1,4 @@
-import type { Label, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
+import type { Label, OriginChain, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
 import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
@@ -51,6 +51,48 @@ export function hopsExplainer(t: Pick<TokenSummary, "ibc_hops" | "via_chain" | "
     `It is a different token from the ${tokenSymbol(t)} sent directly from ${home}: the two are not interchangeable on BZE. ` +
     `To swap one for the other, send it back the way it came.`
   );
+}
+
+export interface RouteChain {
+  name: string;
+  logoUrl: string | null;
+}
+
+export interface RouteHop {
+  /** port/channel, as the path writes it. */
+  channel: string;
+  /** The chain the channel is on, and the one it leads to. */
+  on: string;
+  toward: string;
+}
+
+/**
+ * The way an IBC token came to BZE: the chains from its home to BZE, and each
+ * hop of its path. A multi-hop path names the chain of its first hop (`via`)
+ * and the home chain; a chain between them is "another chain" (the explorer
+ * knows only BZE's channels). Null for the other kinds and an unknown path.
+ */
+export function ibcRoute(
+  t: Pick<TokenSummary, "kind" | "via_chain" | "origin_chain"> & { ibc_path: string | null; origin_chain_id: string | null },
+): { chains: RouteChain[]; hops: RouteHop[] } | null {
+  if (t.kind !== "ibc" || !t.ibc_path) return null;
+  const parts = t.ibc_path.split("/");
+  if (parts.length < 2 || parts.length % 2 !== 0) return null;
+  const pairs: string[] = [];
+  for (let i = 0; i < parts.length; i += 2) pairs.push(`${parts[i]}/${parts[i + 1]}`);
+  const named = (c: OriginChain | null, fallback: string): RouteChain => ({
+    name: c?.name || c?.chain_id || fallback,
+    logoUrl: c?.logo_url ?? null,
+  });
+  const home = named(t.origin_chain, t.origin_chain_id || "its home chain");
+  // From BZE outwards: BZE, the first hop's chain, …, home.
+  const outward: RouteChain[] = [{ name: "BZE", logoUrl: null }];
+  for (let i = 1; i < pairs.length; i++) {
+    outward.push(i === 1 ? named(t.via_chain, "another chain") : { name: "another chain", logoUrl: null });
+  }
+  outward.push(home);
+  const hops = pairs.map((channel, i) => ({ channel, on: outward[i].name, toward: outward[i + 1].name }));
+  return { chains: [...outward].reverse(), hops };
 }
 
 /** The one short tag of a list row; "Other" for a kind the explorer does not know (the raw denom stays in More details). */

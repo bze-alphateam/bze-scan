@@ -60,7 +60,7 @@ function Row({ row, a }: { row: TokenRow; a: Account }) {
         </Stack>
       </HStack>
       <Box minW="0">
-        <Badge variant="subtle" size="sm" maxW="full" truncate title={row.origin} data-testid="origin-tag">
+        <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
           {row.origin}
         </Badge>
       </Box>

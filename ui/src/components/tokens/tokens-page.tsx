@@ -159,7 +159,7 @@ function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSum
         </Stack>
       </HStack>
       <HStack gap="1" minW="0" wrap="wrap">
-        <Badge variant="subtle" size="sm" maxW="full" truncate data-testid="origin-tag">
+        <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
           {listOriginTag(t)}
         </Badge>
         {hop && (

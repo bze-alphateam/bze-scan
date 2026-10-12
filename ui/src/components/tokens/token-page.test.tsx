@@ -47,12 +47,24 @@ describe("TokenPage", () => {
   });
 
   it("explains a multi-hop token and names a pool share's two assets", async () => {
-    const twoHop = { ...usdc, ibc_hops: 2, via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null } };
+    const twoHop = {
+      ...usdc,
+      ibc_path: "transfer/channel-1/transfer/channel-750",
+      ibc_hops: 2,
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+    };
     const { unmount } = renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(twoHop) });
     expect(await screen.findByTestId("hops-explainer")).toHaveTextContent(
       "This USDC came to BZE through Osmosis (2 hops), not straight from Noble.",
     );
     expect(screen.getByTestId("token-chips")).toHaveTextContent("2 hops via Osmosis");
+    const about = screen.getByTestId("token-about");
+    expect(within(about).getByTestId("ibc-route")).toHaveTextContent("NobleOsmosisBZE");
+    expect(within(about).getByTestId("ibc-path")).toHaveTextContent(
+      "transfer/channel-1 on BZE, to Osmosistransfer/channel-750 on Osmosis, to Noble",
+    );
+    expect(about).toHaveTextContent("Origin chainNoble· 2 hops via Osmosis");
+    expect(screen.getByText(/minted on Noble and reached BZE through Osmosis\./)).toBeInTheDocument();
     unmount();
 
     const lp = {

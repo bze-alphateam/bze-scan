@@ -20,6 +20,7 @@ import {
   headerChips,
   hopsExplainer,
   hopsText,
+  ibcRoute,
   listOriginTag,
   mergeEvents,
   mintBurnText,
@@ -80,6 +81,39 @@ describe("tokens list", () => {
         "To swap one for the other, send it back the way it came.",
     );
     expect(hopsExplainer({ ...twoHop, via_chain: null })).toContain("through another chain (2 hops)");
+  });
+
+  it("traces an IBC token's route from its home chain to BZE", () => {
+    const injective = { chain_id: "injective-1", name: "Injective", logo_url: "inj.png" };
+    const hub = { chain_id: "cosmoshub-4", name: "Cosmos Hub", logo_url: "hub.png" };
+    const base = { kind: "ibc", origin_chain: injective, origin_chain_id: "injective-1", via_chain: null };
+    expect(ibcRoute({ ...base, ibc_path: "transfer/channel-13" })).toEqual({
+      chains: [
+        { name: "Injective", logoUrl: "inj.png" },
+        { name: "BZE", logoUrl: null },
+      ],
+      hops: [{ channel: "transfer/channel-13", on: "BZE", toward: "Injective" }],
+    });
+    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-11/transfer/channel-220" })).toEqual({
+      chains: [
+        { name: "Injective", logoUrl: "inj.png" },
+        { name: "Cosmos Hub", logoUrl: "hub.png" },
+        { name: "BZE", logoUrl: null },
+      ],
+      hops: [
+        { channel: "transfer/channel-11", on: "BZE", toward: "Cosmos Hub" },
+        { channel: "transfer/channel-220", on: "Cosmos Hub", toward: "Injective" },
+      ],
+    });
+    // Beyond the first hop the explorer knows only the home chain.
+    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-1/transfer/channel-2/transfer/channel-3" })?.hops).toEqual([
+      { channel: "transfer/channel-1", on: "BZE", toward: "Cosmos Hub" },
+      { channel: "transfer/channel-2", on: "Cosmos Hub", toward: "another chain" },
+      { channel: "transfer/channel-3", on: "another chain", toward: "Injective" },
+    ]);
+    expect(ibcRoute({ ...base, ibc_path: null })).toBeNull();
+    expect(ibcRoute({ ...base, ibc_path: "transfer" })).toBeNull();
+    expect(ibcRoute({ ...base, kind: "factory", ibc_path: "transfer/channel-1" })).toBeNull();
   });
 
   it("filters by chip, then on symbol or name", () => {

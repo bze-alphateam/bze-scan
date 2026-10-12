@@ -3,7 +3,7 @@
 import { Badge, Box, Button, Grid, Heading, HStack, Image, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { LuArrowRight, LuExternalLink } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
@@ -18,7 +18,7 @@ import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
 import { externalLinks, websiteLink } from "@/lib/links";
-import { dexAssetUrl } from "@/render/account";
+import { dexAssetUrl, multiHop } from "@/render/account";
 import {
   activityItems,
   adminNote,
@@ -28,6 +28,8 @@ import {
   headerChips,
   holdersSub,
   hopsExplainer,
+  hopsText,
+  ibcRoute,
   mergeEvents,
   mintBurnText,
   onDex,
@@ -193,6 +195,7 @@ function SupplyBox({ t, events, complete }: { t: Token; events: TokenEvent[]; co
   if (!state) return null;
   const symbol = tokenSymbol(t);
   const chain = t.origin_chain?.name || t.origin_chain?.chain_id || "its own chain";
+  const via = multiHop(t)?.via;
   let body: ReactNode;
   switch (state) {
     case "admin":
@@ -220,7 +223,8 @@ function SupplyBox({ t, events, complete }: { t: Token; events: TokenEvent[]; co
         <>
           <Text fontWeight="semibold">The supply of {symbol} is fixed on BZE</Text>
           <Text>
-            {symbol} is minted on {chain}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the
+            {symbol} is minted on {chain}
+            {via ? ` and reached BZE through ${via}` : ""}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the
             same way.
           </Text>
         </>
@@ -284,6 +288,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function About({ t }: { t: Token }) {
+  const route = ibcRoute(t);
+  const hop = multiHop(t);
   return (
     <Card title="About">
       <Stack gap="0" data-testid="token-about">
@@ -320,16 +326,50 @@ function About({ t }: { t: Token }) {
         {t.kind === "ibc" && (
           <>
             <Row label="Origin chain">
-              <HStack gap="1.5">
+              <HStack gap="1.5" wrap="wrap">
                 {t.origin_chain?.logo_url && <Image src={t.origin_chain.logo_url} alt="" boxSize="5" rounded="full" />}
                 <Text as="span">{t.origin_chain?.name || t.origin_chain?.chain_id || t.origin_chain_id || "not known yet"}</Text>
+                {hop && (
+                  <Text as="span" color="fg.muted">
+                    · {hopsText(hop)}
+                  </Text>
+                )}
               </HStack>
             </Row>
+            {route && route.hops.length > 1 && (
+              <Row label="Route">
+                <HStack gap="1.5" wrap="wrap" data-testid="ibc-route">
+                  {route.chains.map((c, i) => (
+                    <HStack key={i} gap="1.5" as="span">
+                      {i > 0 && <LuArrowRight aria-label="then" />}
+                      {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="5" rounded="full" />}
+                      <Text as="span">{c.name}</Text>
+                    </HStack>
+                  ))}
+                </HStack>
+              </Row>
+            )}
             <Row label="Base denom there">
               <Text fontFamily="mono">{t.ibc_base_denom ?? "—"}</Text>
             </Row>
             <Row label="Path">
-              <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
+              {route ? (
+                <Stack gap="1" data-testid="ibc-path">
+                  {route.hops.map((h) => (
+                    <Text key={h.channel}>
+                      <Text as="span" fontFamily="mono">
+                        {h.channel}
+                      </Text>
+                      <Text as="span" color="fg.muted">
+                        {" "}
+                        on {h.on}, to {h.toward}
+                      </Text>
+                    </Text>
+                  ))}
+                </Stack>
+              ) : (
+                <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
+              )}
             </Row>
           </>
         )}
