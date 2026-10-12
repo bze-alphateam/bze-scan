@@ -7,6 +7,10 @@ import list from "../../test/fixtures/api/v1/validators.json";
 import params from "../../test/fixtures/api/v1/params.json";
 
 import {
+  HALL_OF_FAME_MAX_MISSED,
+  hallOfFame,
+  recentVotesText,
+  signingText,
   cleanRecord,
   eventText,
   filterByMoniker,
@@ -149,5 +153,34 @@ describe("history", () => {
       "orange",
       "purple",
     ]);
+  });
+});
+
+describe("hall of fame", () => {
+  const items = list.items as Validator[];
+  const base = items[0];
+
+  it("keeps the active validators that voted on every recent proposal and missed at most ten blocks, smallest first", () => {
+    expect(hallOfFame(items).map((v) => v.moniker)).toEqual(["Thamar Node", "Honeycomb"]);
+    const at = (v: Partial<Validator>) => hallOfFame([{ ...base, ...v }]).length;
+    expect(at({ missed_blocks: 10 })).toBe(1);
+    expect(at({ missed_blocks: 11 })).toBe(0);
+    expect(at({ missed_blocks: null })).toBe(0);
+    expect(at({ recent_votes: { voted: 9, of: 10 } })).toBe(0);
+    expect(at({ recent_votes: { voted: 3, of: 3 } })).toBe(1);
+    expect(at({ recent_votes: { voted: 0, of: 0 } })).toBe(0);
+    expect(at({ jailed: true })).toBe(0);
+    expect(at({ status: "unbonding" })).toBe(0);
+    expect(HALL_OF_FAME_MAX_MISSED).toBe(10);
+  });
+
+  it("says how it signed and voted", () => {
+    expect(signingText({ missed_blocks: 0, signed_blocks_window: 10000 }, 5)).toBe("Didn't miss a block in the last 10,000 blocks");
+    expect(signingText({ missed_blocks: 3, signed_blocks_window: null }, 10000)).toBe("Missed 3 of the last 10,000 blocks");
+    expect(signingText({ missed_blocks: null, signed_blocks_window: null }, 10000)).toBe("Signing record not known yet");
+    expect(recentVotesText({ recent_votes: { voted: 10, of: 10 } })).toBe("Voted on all of the last 10 proposals");
+    expect(recentVotesText({ recent_votes: { voted: 1, of: 1 } })).toBe("Voted on the last proposal");
+    expect(recentVotesText({ recent_votes: { voted: 4, of: 10 } })).toBe("Voted on 4 of the last 10 proposals");
+    expect(recentVotesText({ recent_votes: { voted: 0, of: 0 } })).toBe("No proposal has closed yet");
   });
 });

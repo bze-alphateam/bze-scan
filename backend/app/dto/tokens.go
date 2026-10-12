@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -21,6 +22,11 @@ import (
 // other denoms and until traced; ViaChain is a multi-hop denom's first hop
 // chain (the counterparty of the BZE channel), null for one hop. LPPair is
 // an LP denom's pool assets, null for other denoms and when unknown.
+// IBCChannel is BZE's channel of an IBC denom's first hop, null for other
+// denoms and until the channel is known. Stranded is an IBC denom that can
+// no longer travel back: its channel is closed, its light client expired or
+// frozen, or its origin or first-hop chain was shut down (killed in the
+// chain registry).
 type TokenSummary struct {
 	Denom             string       `json:"denom"`
 	Symbol            *string      `json:"symbol"`
@@ -38,6 +44,17 @@ type TokenSummary struct {
 	ViaChain          *OriginChain `json:"via_chain"`
 	LPPair            *LPPair      `json:"lp_pair"`
 	CreatedTime       *time.Time   `json:"created_time"`
+	IBCChannel        *TokenIBC    `json:"ibc_channel"`
+	Stranded          bool         `json:"stranded"`
+}
+
+// TokenIBC is BZE's channel of an IBC denom's first hop. State is the
+// channel's (open, closed…), ClientStatus its light client's (active,
+// expired, frozen); each null until known.
+type TokenIBC struct {
+	ChannelID    string  `json:"channel_id"`
+	State        *string `json:"state"`
+	ClientStatus *string `json:"client_status"`
 }
 
 // LPPair is the two pool assets of an LP denom.
@@ -46,13 +63,14 @@ type LPPair struct {
 	Quote string `json:"quote"`
 }
 
-// OriginChain is where an IBC denom comes from. Name and LogoURL are the
-// chain registry's, null for a chain the registry does not know (shown by
-// its chain id).
+// OriginChain is where an IBC denom comes from. Name, LogoURL and Status
+// (live, upcoming, killed) are the chain registry's, null for a chain the
+// registry does not know (shown by its chain id).
 type OriginChain struct {
 	ChainID string  `json:"chain_id"`
 	Name    *string `json:"name"`
 	LogoURL *string `json:"logo_url"`
+	Status  *string `json:"status"`
 }
 
 // TokenHolder is one holder of a denom in the last snapshot. SharePct is
@@ -132,18 +150,34 @@ func NewTokenSummary(t repository.TokenSummary) TokenSummary {
 		Halted: t.Halted, LogoURL: t.LogoURL, CreatedTime: utc(t.CreatedTime),
 	}
 	if t.OriginChainID != nil {
-		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo}
+		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo,
+			Status: t.OriginChainStatus}
 	}
 	if t.Kind == "ibc" && t.IBCPath != nil {
 		out.IBCHops = ibcHops(*t.IBCPath)
 	}
 	if t.ViaChainID != nil {
-		out.ViaChain = &OriginChain{ChainID: *t.ViaChainID, Name: t.ViaChainName, LogoURL: t.ViaChainLogo}
+		out.ViaChain = &OriginChain{ChainID: *t.ViaChainID, Name: t.ViaChainName, LogoURL: t.ViaChainLogo,
+			Status: t.ViaChainStatus}
 	}
+	if t.ChannelID != nil {
+		out.IBCChannel = &TokenIBC{ChannelID: *t.ChannelID, State: t.ChannelState, ClientStatus: t.ClientStatus}
+	}
+	out.Stranded = t.Kind == "ibc" && (is(t.ChannelState, "closed") || is(t.ClientStatus, "expired", "frozen") ||
+		is(t.OriginChainStatus, killed) || is(t.ViaChainStatus, killed))
 	if t.Kind == "lp" && t.LPBase != nil && t.LPQuote != nil {
 		out.LPPair = &LPPair{Base: *t.LPBase, Quote: *t.LPQuote}
 	}
 	return out
+}
+
+// killed is the chain registry's status of a chain whose network was shut
+// down.
+const killed = "killed"
+
+// is tells whether s is set to one of values.
+func is(s *string, values ...string) bool {
+	return s != nil && slices.Contains(values, *s)
 }
 
 // ibcHops counts the port/channel pairs of an IBC path; nil for a path that

@@ -49,17 +49,18 @@ func (s *PGStore) Wanted(ctx context.Context) ([]string, error) {
 // chainSQL upserts a chain; updated_at moves only when a value changes, the
 // fetch time on every fetch.
 const chainSQL = `INSERT INTO explorer.chains AS c (chain_id, registry_name, pretty_name, network_type, bech32_prefix,
-		logo_url, explorer_tx_url, explorer_account_url, registry_fetched_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+		logo_url, explorer_tx_url, explorer_account_url, status, registry_fetched_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, $9)
 	ON CONFLICT (chain_id) DO UPDATE SET
 		registry_name = EXCLUDED.registry_name, pretty_name = EXCLUDED.pretty_name,
 		network_type = EXCLUDED.network_type, bech32_prefix = EXCLUDED.bech32_prefix,
 		logo_url = EXCLUDED.logo_url, explorer_tx_url = EXCLUDED.explorer_tx_url,
-		explorer_account_url = EXCLUDED.explorer_account_url, registry_fetched_at = EXCLUDED.registry_fetched_at,
+		explorer_account_url = EXCLUDED.explorer_account_url, status = EXCLUDED.status,
+		registry_fetched_at = EXCLUDED.registry_fetched_at,
 		updated_at = CASE WHEN (c.registry_name, c.pretty_name, c.network_type, c.bech32_prefix, c.logo_url,
-				c.explorer_tx_url, c.explorer_account_url)
+				c.explorer_tx_url, c.explorer_account_url, c.status)
 			IS DISTINCT FROM (EXCLUDED.registry_name, EXCLUDED.pretty_name, EXCLUDED.network_type, EXCLUDED.bech32_prefix,
-				EXCLUDED.logo_url, EXCLUDED.explorer_tx_url, EXCLUDED.explorer_account_url)
+				EXCLUDED.logo_url, EXCLUDED.explorer_tx_url, EXCLUDED.explorer_account_url, EXCLUDED.status)
 			THEN EXCLUDED.updated_at ELSE c.updated_at END`
 
 // assetSQL upserts an asset; updated_at moves only when a value changes.
@@ -87,7 +88,8 @@ func (s *PGStore) Save(ctx context.Context, chain chainregistry.Chain, assets []
 
 	batch := &pgx.Batch{}
 	batch.Queue(chainSQL, chain.ChainID, null(chain.Name), null(chain.PrettyName), null(chain.NetworkType),
-		null(chain.Bech32Prefix), null(chain.LogoURL), null(chain.ExplorerTxURL), null(chain.ExplorerAccountURL), fetched)
+		null(chain.Bech32Prefix), null(chain.LogoURL), null(chain.ExplorerTxURL), null(chain.ExplorerAccountURL), fetched,
+		null(chain.Status))
 	bases := make([]string, 0, len(assets))
 	for _, a := range assets {
 		bases = append(bases, a.Base)

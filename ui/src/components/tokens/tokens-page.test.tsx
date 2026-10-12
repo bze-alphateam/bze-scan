@@ -34,13 +34,31 @@ describe("TokensPage", () => {
     expect(within(rows[6]).getByTestId("obsolete-tag")).toHaveAttribute("title", expect.stringContaining("no longer list"));
   });
 
+  it("marks a stranded token, explained", async () => {
+    const items = (list as Page<TokenSummary>).items;
+    const flix = {
+      ...items[3],
+      denom: "ibc/FF39851E73089ACBD0B09BDF62FA3C67FBD77A2CD97CD159DBCE9C770561F8AF",
+      symbol: "FLIX",
+      origin_chain: { chain_id: "omniflixhub-1", name: "OmniFlix", logo_url: null, status: "killed" },
+      ibc_channel: { channel_id: "channel-5", state: "open", client_status: "expired" },
+      stranded: true,
+    };
+    renderWithProviders(<TokensPage />, { api: api(() => Promise.resolve({ items: [...items, flix], next_cursor: null })) });
+    await screen.findAllByTestId("token-list-row");
+    expect(screen.getAllByTestId("stranded-tag")).toHaveLength(1);
+    const row = screen.getAllByTestId("token-list-row")[6];
+    expect(within(row).getByTestId("token-badges")).toHaveTextContent("Cross-chainOmniFlix (shut down)Stranded");
+    expect(within(row).getByTestId("stranded-tag")).toHaveAttribute("title", expect.stringContaining("OmniFlix, where it was minted, has shut down."));
+  });
+
   it("marks a multi-hop token and pairs a pool share's two logos", async () => {
     const items = (list as Page<TokenSummary>).items;
     const twoHop = {
       ...items[3],
       denom: "ibc/0000000000000000000000000000000000000000000000000000000000000002",
       ibc_hops: 2,
-      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null },
     };
     const logos = items.map((t) => (t.symbol === "BZE" ? { ...t, logo_url: "https://registry.example/bze.png" } : t));
     renderWithProviders(<TokensPage />, {
@@ -51,7 +69,10 @@ describe("TokensPage", () => {
     const direct = rows[3];
     const hop = rows[6];
     expect(within(direct).queryByTestId("hops-tag")).not.toBeInTheDocument();
-    expect(within(hop).getByTestId("origin-tag")).toHaveTextContent("Cross-chain · Cosmos Hub via Osmosis");
+    // Born cross-chain, received from Osmosis (same color), minted on Cosmos Hub (another color), 2 hops.
+    expect(within(hop).getByTestId("token-badges")).toHaveTextContent("Cross-chainOsmosisCosmos Hub2 hops");
+    expect(within(hop).getByTestId("direct-tag")).toHaveTextContent("Osmosis");
+    expect(within(hop).getByTestId("home-tag")).toHaveTextContent("Cosmos Hub");
     expect(within(hop).getByTestId("hops-tag")).toHaveTextContent("2 hops");
     expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
 
@@ -97,7 +118,7 @@ describe("TokensPage", () => {
     );
     expect(vdl).toHaveTextContent("— no market");
     expect(within(vdl).queryByRole("link", { name: /View on DEX/ })).not.toBeInTheDocument();
-    expect(atom).toHaveTextContent("Cross-chain · Cosmos Hub");
+    expect(within(atom).getByTestId("token-badges")).toHaveTextContent("Cross-chainCosmos Hub");
     expect(atom).toHaveTextContent("— Halted on the DEX");
     expect(usdc).toHaveTextContent("$1.00");
     // The raw denom stays in each token's More details.

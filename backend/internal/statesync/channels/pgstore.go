@@ -28,22 +28,24 @@ func NewPGStore(db DB) *PGStore {
 	return &PGStore{db: db}
 }
 
-// channelSQL upserts a channel; a counterparty chain the node did not
-// answer keeps the stored one, and updated_at moves only when a value
+// channelSQL upserts a channel; a counterparty chain or client status the
+// node did not answer keeps the stored one, and updated_at moves only when a value
 // changes.
 const channelSQL = `INSERT INTO explorer.ibc_channels AS c (channel_id, port_id, client_id, connection_id,
-		counterparty_chain_id, counterparty_channel_id, state, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+		counterparty_chain_id, counterparty_channel_id, state, client_status, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
 	ON CONFLICT (channel_id) DO UPDATE SET
 		port_id = EXCLUDED.port_id, client_id = COALESCE(EXCLUDED.client_id, c.client_id),
 		connection_id = EXCLUDED.connection_id,
 		counterparty_chain_id = COALESCE(EXCLUDED.counterparty_chain_id, c.counterparty_chain_id),
-		counterparty_channel_id = EXCLUDED.counterparty_channel_id, state = EXCLUDED.state, updated_at = now()
-	WHERE (c.port_id, c.client_id, c.connection_id, c.counterparty_chain_id, c.counterparty_channel_id, c.state)
+		counterparty_channel_id = EXCLUDED.counterparty_channel_id, state = EXCLUDED.state,
+		client_status = COALESCE(EXCLUDED.client_status, c.client_status), updated_at = now()
+	WHERE (c.port_id, c.client_id, c.connection_id, c.counterparty_chain_id, c.counterparty_channel_id, c.state,
+	       c.client_status)
 	      IS DISTINCT FROM
 	      (EXCLUDED.port_id, COALESCE(EXCLUDED.client_id, c.client_id), EXCLUDED.connection_id,
 	       COALESCE(EXCLUDED.counterparty_chain_id, c.counterparty_chain_id), EXCLUDED.counterparty_channel_id,
-	       EXCLUDED.state)`
+	       EXCLUDED.state, COALESCE(EXCLUDED.client_status, c.client_status))`
 
 // escrowLabelSQL names a channel's escrow account after its counterparty
 // chain: the registry's pretty name, else the chain id, else the channel.
@@ -78,7 +80,7 @@ func (s *PGStore) Save(ctx context.Context, rows []Row) error {
 	batch := &pgx.Batch{}
 	for _, r := range rows {
 		batch.Queue(channelSQL, r.ChannelID, r.PortID, null(r.ClientID), null(r.ConnectionID),
-			null(r.CounterpartyChainID), null(r.CounterpartyChannelID), null(r.State))
+			null(r.CounterpartyChainID), null(r.CounterpartyChannelID), null(r.State), null(r.ClientStatus))
 		batch.Queue(escrowLabelSQL, r.Escrow, r.ChannelID)
 		batch.Queue(transfersChainSQL, r.ChannelID)
 	}

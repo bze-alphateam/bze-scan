@@ -18,7 +18,7 @@ import { CardSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate } from "@/lib/format";
-import { externalLinks, websiteLink } from "@/lib/links";
+import { externalLinks, stakeHref, websiteLink } from "@/lib/links";
 import {
   bondCompact,
   bondFull,
@@ -95,7 +95,7 @@ function Header({ v, activeCount }: { v: ValidatorDetail; activeCount: number | 
           </Stack>
         </HStack>
         <Button asChild colorPalette="blue" minH="44px">
-          <a href={externalLinks.staking} target="_blank" rel="noopener noreferrer">
+          <a href={stakeHref(v.operator_address)} target="_blank" rel="noopener noreferrer">
             Stake with this validator <LuExternalLink aria-hidden />
           </a>
         </Button>

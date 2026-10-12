@@ -62,6 +62,9 @@ const (
 	KindUnknown = "unknown"
 )
 
+// LPExponent is a pool share's display exponent, as the BZE apps show it.
+const LPExponent = 12
+
 // Kind classifies a base denom by its shape: the native denom, a
 // tokenfactory denom, an IBC voucher or a tradebin liquidity-pool share
 // (ulp/<hash> since chain v8.2.0, ulp_<base>_<quote> before).
@@ -613,6 +616,9 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 	}
 	if row.Kind == KindLP {
 		row.LPBase, row.LPQuote, _ = lpPair(denom, pools)
+		// The chain's metadata says 6; the BZE apps show pool shares with
+		// 12 decimals (LP_ASSETS_DECIMALS), and so does the explorer.
+		row.Exponent = LPExponent
 	}
 	if row.Kind == KindIBC && s.deps.Transfer != nil {
 		if err := s.ibc(ctx, &row, origins); err != nil {

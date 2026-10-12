@@ -1,7 +1,7 @@
 {
   "$schema": "../chain.schema.json",
   "chain_name": "mirage",
-  "status": "live",
+  "status": "killed",
   "network_type": "mainnet",
   "pretty_name": "Mirage",
   "chain_type": "cosmos",

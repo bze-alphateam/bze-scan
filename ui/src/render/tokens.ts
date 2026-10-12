@@ -2,7 +2,7 @@ import type { Label, OriginChain, Token, TokenEvent, TokenHolder, TokenSummary, 
 import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
-import { multiHop, originTag } from "./account";
+import { multiHop } from "./account";
 
 // The tokens pages' words and numbers, kept pure so they are tested without
 // rendering. Amounts stay in base units until formatted.
@@ -111,11 +111,6 @@ export const OBSOLETE_EXPLAINER =
 
 export const isObsolete = (denom: string) => OBSOLETE_DENOMS.has(denom);
 
-/** The one short tag of a list row; "Other" for a kind the explorer does not know (the raw denom stays in More details). */
-export function listOriginTag(t: TokenSummary): string {
-  return originTag(t, "Other");
-}
-
 export type TokenFilter = "all" | "native" | "factory" | "ibc";
 
 export const TOKEN_FILTERS: { value: TokenFilter; label: string }[] = [
@@ -198,41 +193,6 @@ export function supplyText(t: Pick<TokenSummary, "supply" | "exponent" | "symbol
 }
 
 // The token page
-
-export interface HeaderChip {
-  text: string;
-  tone: "blue" | "purple" | "teal" | "gray" | "green" | "red" | "orange";
-  /** A tooltip that explains the chip. */
-  title?: string;
-  logoUrl?: string | null;
-}
-
-/** The chips under a token's name: its origin, then whether it trades or is halted on the DEX. */
-export function headerChips(t: Token): HeaderChip[] {
-  const chips: HeaderChip[] = [];
-  switch (t.kind) {
-    case "native":
-      chips.push({ text: "Native", tone: "blue" });
-      break;
-    case "factory":
-      chips.push({ text: "Created on Factory", tone: "purple" });
-      break;
-    case "ibc": {
-      const chain = t.origin_chain?.name || t.origin_chain?.chain_id;
-      chips.push({ text: chain ? `Cross-chain from ${chain}` : "Cross-chain", tone: "teal", logoUrl: t.origin_chain?.logo_url });
-      const hop = multiHop(t);
-      if (hop) chips.push({ text: hopsText(hop), tone: "orange", logoUrl: t.via_chain?.logo_url, title: hopsExplainer(t) ?? undefined });
-      break;
-    }
-    case "lp":
-      chips.push({ text: "DEX pool share", tone: "gray" });
-      break;
-  }
-  if (isObsolete(t.denom)) chips.push({ text: "Obsolete", tone: "gray", title: OBSOLETE_EXPLAINER });
-  if (t.halted) chips.push({ text: "Halted on the DEX", tone: "red" });
-  else if (t.markets.length > 0) chips.push({ text: "Trading on the DEX", tone: "green" });
-  return chips;
-}
 
 /**
  * Whether the supply can change, and who decides it:

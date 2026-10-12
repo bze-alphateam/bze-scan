@@ -114,6 +114,11 @@ func TestIBCChannelsAndEndpoints(t *testing.T) {
 		FROM explorer.ibc_channels WHERE channel_id = 'channel-3'`))
 	assert.Equal(t, []string{"14"}, queryStrings(t, e.db,
 		`SELECT count(*) FROM explorer.labels WHERE kind = 'ibc_escrow' AND module = 'transfer' AND source = 'sync'`))
+	// Six of the recorded light clients have expired (Vidulum's among them).
+	assert.Equal(t, []string{"channel-1", "channel-4", "channel-5", "channel-7", "channel-8", "channel-9"},
+		queryStrings(t, e.db, `SELECT channel_id FROM explorer.ibc_channels WHERE client_status = 'expired'`))
+	assert.Equal(t, []string{"8"}, queryStrings(t, e.db,
+		`SELECT count(*) FROM explorer.ibc_channels WHERE client_status = 'active'`))
 	escrow := func(channel string) []string {
 		return queryStrings(t, e.db, `SELECT name FROM explorer.labels WHERE address = $1`,
 			chain.EscrowAddress(chain.TransferPort, channel))

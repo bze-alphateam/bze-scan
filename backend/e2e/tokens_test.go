@@ -112,6 +112,11 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	assert.Equal(t, 1, *ibc.IBCHops)
 	assert.Nil(t, ibc.ViaChain, "one hop")
 	assert.Nil(t, ibc.LPPair)
+	// Noble's channel-3 has an active client: USDC.n is not stranded.
+	require.NotNil(t, ibc.IBCChannel)
+	assert.Equal(t, "channel-3", ibc.IBCChannel.ChannelID)
+	assert.Equal(t, "active", *ibc.IBCChannel.ClientStatus)
+	assert.False(t, ibc.Stranded)
 
 	// ATONE through Osmosis: two hops, Osmosis as the via chain.
 	waitFor(t, 10*time.Second, func() bool {
@@ -130,6 +135,7 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	require.NotNil(t, lp.Symbol)
 	assert.Equal(t, "VDL/BZE LP", *lp.Symbol)
 	assert.Equal(t, "VDL/BZE LP Shares", *lp.Name)
+	assert.Equal(t, 12, lp.Exponent, "as the BZE apps show pool shares")
 	assert.Nil(t, lp.IBCHops)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/api/v1/tokens/"+url.PathEscape("factory/bze1nobody/uzz")).status)
 }

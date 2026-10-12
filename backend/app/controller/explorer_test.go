@@ -765,6 +765,7 @@ func validatorRows(n int) []repository.ValidatorSummary {
 			Position: int64(i + 1), Rank: &rank, Moniker: fmt.Sprintf("val %d", i+1),
 			OperatorAddress: fmt.Sprintf("bzevaloper%d", i+1), Tokens: "1000", VotingPowerPct: &pct,
 			CommissionRate: "0.050000000000000000", MissedBlocks: &missed, SignedBlocksWindow: &window, Status: "bonded",
+			RecentVotes: int64(i), RecentProposals: 10,
 		}
 	}
 	return out
@@ -798,6 +799,10 @@ func TestValidatorsPaginatesInRankOrder(t *testing.T) {
 		assert.Contains(t, items[0], k)
 	}
 	assert.JSONEq(t, `null`, string(items[0]["logo_url"]), "no logo looked up")
+	// What the Hall of Fame reads: the signing window and the recent votes.
+	assert.JSONEq(t, `16`, string(items[0]["missed_blocks"]))
+	assert.JSONEq(t, `10000`, string(items[0]["signed_blocks_window"]))
+	assert.JSONEq(t, `{"voted":2,"of":10}`, string(items[2]["recent_votes"]))
 }
 
 func TestValidatorsStatusFilter(t *testing.T) {

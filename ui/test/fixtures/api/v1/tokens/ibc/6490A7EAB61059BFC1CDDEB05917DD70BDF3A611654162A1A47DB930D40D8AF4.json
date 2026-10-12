@@ -13,7 +13,8 @@
   "origin_chain": {
     "chain_id": "noble-1",
     "name": "Noble",
-    "logo_url": null
+    "logo_url": null,
+    "status": "live"
   },
   "created_time": null,
   "description": null,
@@ -41,5 +42,11 @@
   },
   "ibc_hops": 1,
   "via_chain": null,
-  "lp_pair": null
+  "lp_pair": null,
+  "ibc_channel": {
+    "channel_id": "channel-1",
+    "state": "open",
+    "client_status": "active"
+  },
+  "stranded": false
 }

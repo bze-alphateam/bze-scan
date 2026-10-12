@@ -34,6 +34,7 @@ var Services = map[string]string{
 	"mint":           "cosmos.mint.v1beta1.Query",
 	"transfer":       "ibc.applications.transfer.v1.Query",
 	"channel":        "ibc.core.channel.v1.Query",
+	"client":         "ibc.core.client.v1.Query",
 	"tradebin":       "bze.tradebin.Query",
 	"tokenfactory":   "bze.tokenfactory.Query",
 	"rewards":        "bze.rewards.Query",

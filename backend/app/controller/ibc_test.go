@@ -115,13 +115,13 @@ func TestAccountIBCPage(t *testing.T) {
 
 func TestIBCChannelsList(t *testing.T) {
 	f := &fakeReader{channels: []repository.IBCChannel{
-		{ChannelID: "channel-0", PortID: "transfer", State: str("open"), ClientID: str("07-tendermint-2"),
-			ConnectionID: str("connection-0"), CounterpartyChannelID: str("channel-340"), UpdatedAt: ibcAt,
+		{ChannelID: "channel-0", PortID: "transfer", State: str("open"), ClientStatus: str("expired"),
+			ClientID: str("07-tendermint-2"), ConnectionID: str("connection-0"), CounterpartyChannelID: str("channel-340"), UpdatedAt: ibcAt,
 			Counterparty: repository.Chain{ChainID: str("osmosis-1")}},
 	}}
 	rec := get(t, newAPI(f), "/ibc/channels")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.JSONEq(t, `{"items":[{"channel_id":"channel-0","port_id":"transfer","state":"open",
+	assert.JSONEq(t, `{"items":[{"channel_id":"channel-0","port_id":"transfer","state":"open","client_status":"expired",
 		"client_id":"07-tendermint-2","connection_id":"connection-0","counterparty_channel_id":"channel-340",
 		"counterparty":{"chain_id":"osmosis-1","pretty_name":null,"logo_url":null,"explorer_account_url":null,
 		"explorer_tx_url":null},

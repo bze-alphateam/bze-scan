@@ -40,11 +40,13 @@ type ProposalSummary struct {
 	TallySource     *string    `json:"tally_source"`
 }
 
-// ValidatorsVoted is how many of the bonded validators have an owner that
-// voted.
+// ValidatorsVoted is how many validators have an owner that voted, whatever
+// their status today, and, while the proposal is in its voting period, how
+// many validators are active (null once voting ended: today's active set is
+// not the one that could vote then).
 type ValidatorsVoted struct {
-	Voted int `json:"voted"`
-	Total int `json:"total"`
+	Voted int  `json:"voted"`
+	Total *int `json:"total"`
 }
 
 // Proposal is GET /api/v1/proposals/{id}. Messages are the proposal's

@@ -50,7 +50,7 @@
   "resolved_height": 17131437,
   "validators_voted": {
     "voted": 1,
-    "total": 3
+    "total": null
   },
   "votes_count": 27,
   "updated_at": "2026-10-10T12:00:00Z"

@@ -40,7 +40,10 @@ describe("ValidatorPage", () => {
     expect(await screen.findByText("Active · rank 1 of 3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /honeycomb\.example\.org/ })).toHaveAttribute("href", "https://honeycomb.example.org/");
     expect(screen.getByText("Validating since Apr 17, 2022 · 1,204 accounts stake here")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Stake with this validator/ })).toHaveAttribute("href", "https://staking.getbze.com");
+    expect(screen.getByRole("link", { name: /Stake with this validator/ })).toHaveAttribute(
+      "href",
+      "https://staking.getbze.com/?stake=bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    );
 
     const tiles = screen.getAllByTestId("tile").map((t) => t.textContent);
     expect(tiles).toEqual([

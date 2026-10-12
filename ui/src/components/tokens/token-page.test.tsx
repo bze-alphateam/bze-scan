@@ -51,13 +51,13 @@ describe("TokenPage", () => {
       ...usdc,
       ibc_path: "transfer/channel-1/transfer/channel-750",
       ibc_hops: 2,
-      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null },
     };
     const { unmount } = renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(twoHop) });
     expect(await screen.findByTestId("hops-explainer")).toHaveTextContent(
       "This USDC came to BZE through Osmosis (2 hops), not straight from Noble.",
     );
-    expect(screen.getByTestId("token-chips")).toHaveTextContent("2 hops via Osmosis");
+    expect(screen.getByTestId("token-chips")).toHaveTextContent("Cross-chainOsmosisNoble2 hopsTrading on the DEX");
     const about = screen.getByTestId("token-about");
     expect(within(about).getByTestId("ibc-route")).toHaveTextContent("NobleOsmosisBZE");
     expect(within(about).getByTestId("ibc-path")).toHaveTextContent(
@@ -90,7 +90,7 @@ describe("TokenPage", () => {
   it("renders a Factory token whose admin can change the supply", async () => {
     renderWithProviders(<TokenPage denom={honey.denom} />, { api: api() });
     expect(await screen.findByRole("heading", { level: 1, name: "HONEY" })).toBeInTheDocument();
-    expect(screen.getByTestId("token-chips")).toHaveTextContent("Created on FactoryTrading on the DEXhoney.example");
+    expect(screen.getByTestId("token-chips")).toHaveTextContent("FactoryTrading on the DEXhoney.example");
     expect(screen.getByTestId("token-created")).toHaveTextContent("Created Oct 2, 2099 by3Gbze13gz…yhqk");
     expect(screen.getByRole("link", { name: /View on the DEX/ })).toHaveAttribute("href", expect.stringContaining("uhoney"));
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
@@ -197,8 +197,9 @@ describe("TokenPage", () => {
   it("renders a cross-chain token with its origin chain", async () => {
     renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(usdc) });
     expect(await screen.findByRole("heading", { level: 1, name: "USDC" })).toBeInTheDocument();
-    expect(screen.getByTestId("token-chips")).toHaveTextContent("Cross-chain from Noble");
+    expect(screen.getByTestId("token-chips")).toHaveTextContent("Cross-chainNobleTrading on the DEX");
     expect(screen.queryByTestId("token-created")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("stranded-explainer")).not.toBeInTheDocument();
     const box = screen.getByTestId("supply-box");
     expect(box).toHaveAttribute("data-state", "elsewhere");
     expect(box).toHaveTextContent("USDC is minted on Noble");
@@ -206,8 +207,30 @@ describe("TokenPage", () => {
     expect(about).toHaveTextContent("Origin chainNoble");
     expect(about).toHaveTextContent("Base denom thereuusdc");
     expect(about).toHaveTextContent("Pathtransfer/channel-1");
+    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1 open and active");
     expect(about).not.toHaveTextContent("Admin");
     expect(await screen.findByText("No activity indexed yet.")).toBeInTheDocument();
+  });
+
+  it("warns about a stranded token and says why, its chain shut down and its connection expired", async () => {
+    const stranded = {
+      ...usdc,
+      origin_chain: { chain_id: "noble-1", name: "Noble", logo_url: null, status: "killed" },
+      ibc_channel: { channel_id: "channel-1", state: "open", client_status: "expired" },
+      stranded: true,
+    };
+    renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(stranded) });
+    expect(await screen.findByTestId("stranded-tag")).toHaveTextContent("Stranded");
+    expect(screen.getByTestId("token-chips")).toHaveTextContent("Cross-chainNoble (shut down)Stranded");
+    expect(screen.getByTestId("stranded-explainer")).toHaveTextContent(
+      "Noble, where it was minted, has shut down. BZE's connection to Noble (channel-1) has expired",
+    );
+    const about = screen.getByTestId("token-about");
+    expect(within(about).getByTestId("chain-dead")).toHaveTextContent("shut down");
+    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1 expired: no relayer kept it updated");
+    // Every badge explains itself on tap, not only on hover.
+    await userEvent.click(screen.getByTestId("stranded-tag"));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("can never be sent back");
   });
 
   it("keeps the full name, base unit and raw metadata in More details", async () => {

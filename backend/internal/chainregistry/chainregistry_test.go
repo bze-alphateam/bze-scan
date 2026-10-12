@@ -44,6 +44,7 @@ func TestRecordedChains(t *testing.T) {
 	assert.Contains(t, hub.LogoURL, ".png")
 	assert.Contains(t, hub.ExplorerTxURL, "${txHash}", "the first explorer's template")
 	assert.Contains(t, hub.ExplorerAccountURL, "${accountAddress}")
+	assert.Equal(t, "live", hub.Status)
 
 	noble, err := c.Chain(ctx, "noble")
 	require.NoError(t, err)
@@ -55,6 +56,7 @@ func TestRecordedChains(t *testing.T) {
 	assert.Equal(t, "mirage-1", mirage.ChainID)
 	assert.Empty(t, mirage.ExplorerTxURL, "a chain without explorers")
 	assert.Empty(t, mirage.ExplorerAccountURL)
+	assert.Equal(t, "killed", mirage.Status, "a chain whose network was shut down")
 
 	_, err = c.Chain(ctx, "nosuchchain")
 	assert.ErrorIs(t, err, chainregistry.ErrNotFound)

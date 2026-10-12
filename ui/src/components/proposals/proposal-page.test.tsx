@@ -166,10 +166,14 @@ describe("ProposalPage", () => {
     expect(screen.getByTestId("votes-card")).toHaveTextContent("Final result");
     expect(screen.queryByTestId("want-to-vote")).not.toBeInTheDocument();
     expect(await screen.findByTestId("votes-summary")).toHaveTextContent(
-      "1 validator voted Yes, 2 did not vote. 2 accounts voted on their own.",
+      "1 validator voted Yes. 2 accounts voted on their own.",
     );
     await userEvent.click(screen.getByRole("button", { name: "See every vote" }));
     expect(await screen.findByRole("tab", { name: "Everyone · 3" })).toBeInTheDocument();
+    // Voting ended: today's active set is not the one that could vote, so no
+    // "of N" and no "did not vote" (the summary and the tab once disagreed).
+    expect(screen.getByRole("tab", { name: "Validators · 1" })).toBeInTheDocument();
+    expect(screen.queryByTestId("not-voted")).not.toBeInTheDocument();
 
     // Indexed votes and a synced turnout: nothing is marked historical.
     expect(await screen.findAllByTestId("validator-vote")).toHaveLength(1);

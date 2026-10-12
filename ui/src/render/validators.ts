@@ -2,6 +2,7 @@ import BigNumber from "bignumber.js";
 
 import type { ChainParams, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
 import { formatAmount, formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
+import { compareDecimals } from "@/lib/math";
 
 // The validators pages' words and numbers, kept pure so they are tested
 // without rendering. Rates from the API: `commission_*` are fractions
@@ -23,6 +24,53 @@ export function splitValidators<T extends Pick<Validator, "status">>(items: T[])
     active: items.filter((v) => v.status === "bonded"),
     inactive: items.filter((v) => v.status !== "bonded"),
   };
+}
+
+/** The most blocks a Hall of Fame validator may have missed in the signing window (99.9% of 10,000). */
+export const HALL_OF_FAME_MAX_MISSED = 10;
+
+/**
+ * The Hall of Fame: active validators that voted, whatever the option, on
+ * every one of the last proposals (ten, fewer while the chain has fewer)
+ * and missed at most HALL_OF_FAME_MAX_MISSED blocks of the signing window;
+ * the smallest first, so the stake can spread.
+ */
+export function hallOfFame<T extends Pick<Validator, "status" | "jailed" | "recent_votes" | "missed_blocks" | "tokens">>(items: T[]): T[] {
+  return items
+    .filter(
+      (v) =>
+        v.status === "bonded" &&
+        !v.jailed &&
+        v.recent_votes.of > 0 &&
+        v.recent_votes.voted >= v.recent_votes.of &&
+        v.missed_blocks != null &&
+        v.missed_blocks <= HALL_OF_FAME_MAX_MISSED,
+    )
+    .sort((a, b) => compareDecimals(a.tokens, b.tokens));
+}
+
+/** What earns a validator its place in the Hall of Fame, in one sentence. */
+export function hallOfFameExplainer(recentProposals: number, window: number): string {
+  return (
+    `In the Hall of Fame: it voted on every one of the last ${formatCount(recentProposals)} proposals and missed no more than ` +
+    `${formatCount(HALL_OF_FAME_MAX_MISSED)} of the last ${formatCount(window)} blocks.`
+  );
+}
+
+/** "Didn't miss a block in the last 10,000 blocks", or how many it missed. */
+export function signingText(v: Pick<Validator, "missed_blocks" | "signed_blocks_window">, fallbackWindow: number): string {
+  const window = formatCount(v.signed_blocks_window ?? fallbackWindow);
+  if (v.missed_blocks == null) return "Signing record not known yet";
+  if (v.missed_blocks === 0) return `Didn't miss a block in the last ${window} blocks`;
+  return `Missed ${formatCount(v.missed_blocks)} of the last ${window} blocks`;
+}
+
+/** "Voted on all of the last 10 proposals", or on how many of them. */
+export function recentVotesText(v: Pick<Validator, "recent_votes">): string {
+  const { voted, of } = v.recent_votes;
+  if (of === 0) return "No proposal has closed yet";
+  if (voted >= of) return of === 1 ? "Voted on the last proposal" : `Voted on all of the last ${formatCount(of)} proposals`;
+  return `Voted on ${formatCount(voted)} of the last ${formatCount(of)} proposals`;
 }
 
 /** The validators whose moniker contains `query`, any case; all of them for a blank query. */

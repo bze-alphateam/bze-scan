@@ -21,6 +21,8 @@ import (
 
 const honeyDenom = "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney"
 
+func intp(i int) *int { return &i }
+
 func strp(s string) *string { return &s }
 
 // fakeTokens answers the token reads from fixed rows and records the

@@ -258,6 +258,11 @@ export interface Validator {
   status: ValidatorStatus;
   /** The Keybase picture of the validator's identity; null without one. */
   logo_url: string | null;
+  /** Blocks missed in the last `signed_blocks_window` blocks (the slashing module's signing info); null until known. */
+  missed_blocks: number | null;
+  signed_blocks_window: number | null;
+  /** Of the last `of` proposals whose voting ended (ten, fewer while the chain has fewer), how many it voted on. */
+  recent_votes: { voted: number; of: number };
 }
 
 export interface ValidatorsSummary {
@@ -418,6 +423,15 @@ export interface OriginChain {
   chain_id: string;
   name: string | null;
   logo_url: string | null;
+  /** The chain registry's status: live, upcoming, or killed (the chain was shut down); null when unknown. */
+  status: string | null;
+}
+
+/** BZE's channel of an IBC denom's first hop: its state (open, closed…) and its light client's status (active, expired, frozen). */
+export interface TokenIbcChannel {
+  channel_id: string;
+  state: string | null;
+  client_status: string | null;
 }
 
 export interface TokenSummary {
@@ -441,6 +455,10 @@ export interface TokenSummary {
   via_chain: OriginChain | null;
   /** The two assets of a liquidity-pool share; null for the other kinds. */
   lp_pair: LpPair | null;
+  /** BZE's channel of an IBC denom's first hop; null for the other kinds and until known. */
+  ibc_channel: TokenIbcChannel | null;
+  /** An IBC denom that can no longer travel back: closed channel, expired or frozen client, or a shut-down chain. */
+  stranded: boolean;
 }
 
 export interface LpPair {
@@ -590,7 +608,8 @@ export interface Proposal extends ProposalSummary {
   submit_tx_hash: string | null;
   resolved_height: number | null;
   /** Bonded validators whose owner voted, of all bonded validators. */
-  validators_voted: { voted: number; total: number };
+  /** Validators whose owner voted, whatever their status today; `total` is the active set while voting, null once voting ended. */
+  validators_voted: { voted: number; total: number | null };
   /** The accounts that voted (one vote each, the latest). */
   votes_count: number;
   updated_at: string;

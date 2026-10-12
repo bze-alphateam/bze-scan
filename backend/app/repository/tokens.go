@@ -29,6 +29,16 @@ type TokenSummary struct {
 	OriginChainID   *string
 	OriginChainName *string
 	OriginChainLogo *string
+	// OriginChainStatus and ViaChainStatus are the registry's status of the
+	// chains (live, upcoming, killed), nil when unknown.
+	OriginChainStatus *string
+	ViaChainStatus    *string
+	// ChannelID, ChannelState and ClientStatus are BZE's channel of an IBC
+	// denom's first hop and its state and light client's status, nil until
+	// the channel is known.
+	ChannelID    *string
+	ChannelState *string
+	ClientStatus *string
 	// IBCPath is an IBC denom's trace path, nil until traced.
 	IBCPath *string
 	// ViaChainID is a multi-hop IBC denom's first hop chain; ViaChainName
@@ -133,17 +143,20 @@ const sortKey = `lower(coalesce(d.symbol, d.denom))`
 const tokenSummaryCols = `d.denom, d.symbol, d.name, d.kind, d.exponent, d.supply::text, d.holders_count,
 		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
 		oc.logo_url, d.ibc_path, d.via_chain_id, vc.pretty_name, vc.logo_url, d.lp_base, d.lp_quote,
-		d.created_time, ` + sortKey + `, ` + kindRank
+		d.created_time, oc.status, vc.status, ic.channel_id, ic.state, ic.client_status, ` + sortKey + `, ` + kindRank
 
-// originJoin names the origin and via chains of the denoms row d.
+// originJoin names the origin and via chains of the denoms row d and BZE's
+// channel of its first hop (the path's first port/channel pair).
 const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chain_id
-		LEFT JOIN explorer.chains vc ON vc.chain_id = d.via_chain_id`
+		LEFT JOIN explorer.chains vc ON vc.chain_id = d.via_chain_id
+		LEFT JOIN explorer.ibc_channels ic ON d.kind = 'ibc' AND ic.channel_id = split_part(d.ibc_path, '/', 2)`
 
 func tokenSummaryDest(t *TokenSummary) []any {
 	return []any{&t.Denom, &t.Symbol, &t.Name, &t.Kind, &t.Exponent, &t.Supply, &t.HoldersCount,
 		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
 		&t.OriginChainLogo, &t.IBCPath, &t.ViaChainID, &t.ViaChainName, &t.ViaChainLogo, &t.LPBase, &t.LPQuote,
-		&t.CreatedTime, &t.SortKey, &t.KindRank}
+		&t.CreatedTime, &t.OriginChainStatus, &t.ViaChainStatus, &t.ChannelID, &t.ChannelState, &t.ClientStatus,
+		&t.SortKey, &t.KindRank}
 }
 
 // Tokens returns up to limit denoms of kind (every kind when nil), by kind

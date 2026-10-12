@@ -43,10 +43,12 @@ type Proposal struct {
 	SubmitTxHash   *string
 	ResolvedHeight *int64
 	UpdatedAt      time.Time
-	// ValidatorsVoted of ValidatorsTotal bonded validators have an owner
-	// that voted on the proposal.
+	// ValidatorsVoted validators, whatever their status today, have an owner
+	// that voted on the proposal. ValidatorsTotal is the bonded validators
+	// while the proposal is in its voting period, nil once voting ended:
+	// today's active set is not the one that could vote then.
 	ValidatorsVoted int
-	ValidatorsTotal int
+	ValidatorsTotal *int
 	// VotesCount is how many accounts voted (one vote each, the latest).
 	VotesCount int
 }
@@ -138,9 +140,9 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 	err := r.db.QueryRow(ctx, `SELECT `+proposalSummaryCols+`, p.summary, p.metadata, p.proposer, l.name, l.kind,
 			p.message_types, p.messages, p.total_deposit, p.tally_updated_at, p.submit_height, p.submit_tx_hash,
 			p.resolved_height, p.updated_at,
-			(SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded'
-			   AND EXISTS (SELECT 1 FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id AND pv.voter = v.account_address)),
-			(SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded'),
+			(SELECT count(*) FROM explorer.validators v
+			  WHERE EXISTS (SELECT 1 FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id AND pv.voter = v.account_address)),
+			CASE WHEN p.status = 'voting_period' THEN (SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded') END,
 			(SELECT count(*) FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id)
 		FROM explorer.proposals p
 		LEFT JOIN explorer.labels l ON l.address = p.proposer

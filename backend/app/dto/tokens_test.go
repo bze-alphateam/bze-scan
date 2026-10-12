@@ -94,3 +94,37 @@ func TestNewTokenSummaryCarriesTheViaChainAndTheLPPair(t *testing.T) {
 		assert.Contains(t, string(raw), key, "always present")
 	}
 }
+
+// An IBC denom is stranded when it can no longer travel back: its channel
+// closed, its light client expired or frozen, or its origin or first-hop
+// chain shut down.
+func TestNewTokenSummaryMarksStrandedIBCDenoms(t *testing.T) {
+	s := func(v string) *string { return &v }
+	ibc := func(state, client, origin, via *string) repository.TokenSummary {
+		return repository.TokenSummary{Denom: "ibc/AB", Kind: "ibc", IBCPath: s("transfer/channel-1"),
+			OriginChainID: s("vidulum-1"), OriginChainStatus: origin, ViaChainID: s("osmosis-1"), ViaChainStatus: via,
+			ChannelID: s("channel-1"), ChannelState: state, ClientStatus: client}
+	}
+	for name, tc := range map[string]struct {
+		row      repository.TokenSummary
+		stranded bool
+	}{
+		"healthy":        {ibc(s("open"), s("active"), s("live"), s("live")), false},
+		"unknown":        {ibc(nil, nil, nil, nil), false},
+		"expired client": {ibc(s("open"), s("expired"), s("live"), nil), true},
+		"frozen client":  {ibc(s("open"), s("frozen"), s("live"), nil), true},
+		"closed channel": {ibc(s("closed"), s("active"), s("live"), nil), true},
+		"killed origin":  {ibc(s("open"), s("active"), s("killed"), nil), true},
+		"killed hop":     {ibc(s("open"), s("active"), s("live"), s("killed")), true},
+		"not ibc":        {repository.TokenSummary{Denom: "ubze", Kind: "native", ClientStatus: s("expired")}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.stranded, dto.NewTokenSummary(tc.row).Stranded)
+		})
+	}
+
+	out := dto.NewTokenSummary(ibc(s("open"), s("expired"), s("killed"), nil))
+	assert.Equal(t, &dto.TokenIBC{ChannelID: "channel-1", State: s("open"), ClientStatus: s("expired")}, out.IBCChannel)
+	assert.Equal(t, s("killed"), out.OriginChain.Status)
+	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "ubze", Kind: "native"}).IBCChannel)
+}

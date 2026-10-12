@@ -11,6 +11,7 @@ import type { LpPair, Token, TokenEvent } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { ExplainedBadge } from "@/components/ui/explained-badge";
 import { JsonBlock } from "@/components/ui/json-block";
 import { MoreDetails } from "@/components/ui/more-details";
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
@@ -19,13 +20,13 @@ import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
 import { externalLinks, websiteLink } from "@/lib/links";
 import { dexAssetUrl, multiHop } from "@/render/account";
+import { connectionHealthy, connectionText, headerChips, isDeadChain, strandedExplainer } from "@/render/badges";
 import {
   activityItems,
   adminNote,
   baseUnitText,
   changeText,
   eventLine,
-  headerChips,
   holdersSub,
   hopsExplainer,
   hopsText,
@@ -108,10 +109,7 @@ function Header({ t }: { t: Token }) {
             </HStack>
             <HStack gap="2" wrap="wrap" data-testid="token-chips">
               {headerChips(t).map((c) => (
-                <Badge key={c.text} colorPalette={c.tone} variant="subtle" size="md" rounded="full" title={c.title}>
-                  {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="4" rounded="full" />}
-                  {c.text}
-                </Badge>
+                <ExplainedBadge key={c.kind} badge={c} size="md" />
               ))}
               {site && (
                 <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" fontSize="sm">
@@ -119,6 +117,11 @@ function Header({ t }: { t: Token }) {
                 </Link>
               )}
             </HStack>
+            {strandedExplainer(t) && (
+              <Text fontSize="sm" color="orange.fg" maxW="2xl" data-testid="stranded-explainer">
+                {strandedExplainer(t)}
+              </Text>
+            )}
             {hopsExplainer(t) && (
               <Text fontSize="sm" color="fg.muted" maxW="2xl" data-testid="hops-explainer">
                 {hopsExplainer(t)}
@@ -329,6 +332,11 @@ function About({ t }: { t: Token }) {
               <HStack gap="1.5" wrap="wrap">
                 {t.origin_chain?.logo_url && <Image src={t.origin_chain.logo_url} alt="" boxSize="5" rounded="full" />}
                 <Text as="span">{t.origin_chain?.name || t.origin_chain?.chain_id || t.origin_chain_id || "not known yet"}</Text>
+                {isDeadChain(t.origin_chain) && (
+                  <Badge colorPalette="red" variant="subtle" size="sm" data-testid="chain-dead">
+                    shut down
+                  </Badge>
+                )}
                 {hop && (
                   <Text as="span" color="fg.muted">
                     · {hopsText(hop)}
@@ -371,6 +379,19 @@ function About({ t }: { t: Token }) {
                 <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
               )}
             </Row>
+            {t.ibc_channel && (
+              <Row label="Connection">
+                <Text data-testid="ibc-connection">
+                  <Text as="span" fontFamily="mono">
+                    {t.ibc_channel.channel_id}
+                  </Text>
+                  <Text as="span" color={connectionHealthy(t.ibc_channel) ? "fg.muted" : "orange.fg"}>
+                    {" "}
+                    {connectionText(t.ibc_channel)}
+                  </Text>
+                </Text>
+              </Row>
+            )}
           </>
         )}
         {t.description && (
