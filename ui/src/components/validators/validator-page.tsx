@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Grid, Heading, HStack, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
+import { Badge, Box, Button, Grid, Heading, HStack, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
 import { LuExternalLink } from "react-icons/lu";
@@ -35,6 +35,7 @@ import {
   uptimeDetail,
   uptimeText,
   voteOption,
+  voteTone,
 } from "@/render/validators";
 
 export function pingPubValidatorUrl(operator: string): string {
@@ -259,27 +260,39 @@ function History({ v }: { v: ValidatorDetail }) {
           </Stack>
         )}
         {clean && <Text color="green.fg">{clean}</Text>}
-        <Box data-testid="validator-votes">
+        <Stack gap="1" data-testid="validator-votes">
           {v.votes.length === 0 ? (
             <Text color="fg.muted">{v.moniker} has not voted yet.</Text>
           ) : (
-            <Text>
-              Last votes:{" "}
-              {v.votes.map((vote, i) => (
-                <Text as="span" key={`${vote.proposal_id}-${vote.height}`}>
-                  {i > 0 && ", "}
-                  {voteOption(vote)} on{" "}
-                  <Link asChild>
-                    <NextLink href={`/proposals/${vote.proposal_id}`}>
-                      #{vote.proposal_id}
-                      {vote.title ? ` ${vote.title}` : ""}
-                    </NextLink>
-                  </Link>
-                </Text>
-              ))}
-            </Text>
+            <>
+              <Text fontWeight="medium">Last governance votes</Text>
+              <Stack gap="0" role="list" aria-label="Last governance votes">
+                {v.votes.map((vote, i) => (
+                  <HStack
+                    key={`${vote.proposal_id}-${vote.height}`}
+                    role="listitem"
+                    gap="2"
+                    py="1.5"
+                    align="start"
+                    borderTopWidth={i === 0 ? "0" : "1px"}
+                    borderColor="border.panel"
+                    data-testid="validator-vote"
+                  >
+                    <Badge colorPalette={voteTone(vote)} variant="subtle" size="sm" flexShrink={0} minW="16" justifyContent="center">
+                      {voteOption(vote)}
+                    </Badge>
+                    <Link asChild minW="0">
+                      <NextLink href={`/proposals/${vote.proposal_id}`}>
+                        #{vote.proposal_id}
+                        {vote.title ? ` ${vote.title}` : ""}
+                      </NextLink>
+                    </Link>
+                  </HStack>
+                ))}
+              </Stack>
+            </>
           )}
-        </Box>
+        </Stack>
       </Stack>
     </Card>
   );

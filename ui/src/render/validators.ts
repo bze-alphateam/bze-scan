@@ -200,6 +200,13 @@ const OPTIONS: Record<string, string> = {
   no_with_veto: "No with veto",
 };
 
+const TONES: Record<string, "green" | "red" | "gray" | "orange"> = { yes: "green", no: "red", abstain: "gray", no_with_veto: "orange" };
+
+/** A vote's badge colour: green Yes, red No, gray Abstain, orange veto, purple split. */
+export function voteTone(v: Pick<ValidatorVote, "option">): "green" | "red" | "gray" | "orange" | "purple" {
+  return v.option ? TONES[v.option] ?? "gray" : "purple";
+}
+
 /** `Yes`, `No with veto`; `Split vote` for a weighted one. */
 export function voteOption(v: Pick<ValidatorVote, "option">): string {
   return v.option ? OPTIONS[v.option] ?? humanise(v.option) : "Split vote";
