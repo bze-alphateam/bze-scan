@@ -32,10 +32,10 @@ describe("Header", () => {
   it("submits a search to /search?q=", async () => {
     renderWithProviders(<Header />);
     await userEvent.click(screen.getByRole("button", { name: "Open search" }));
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search the explorer" }), " bze1abc {Enter}");
+    await userEvent.type(screen.getByRole("combobox", { name: "Search the explorer" }), " bze1abc {Enter}");
     expect(push).toHaveBeenCalledWith("/search?q=bze1abc");
     // Submitting closes the phone box.
-    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("ignores an empty search", async () => {
@@ -62,9 +62,9 @@ describe("Header", () => {
 
   it("opens the phone search box from its icon", async () => {
     renderWithProviders(<Header />);
-    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Open search" }));
-    expect(screen.getByRole("searchbox")).toHaveFocus();
+    expect(screen.getByRole("combobox")).toHaveFocus();
     expect(screen.getByRole("button", { name: "Close search" })).toHaveAttribute("aria-expanded", "true");
   });
 });

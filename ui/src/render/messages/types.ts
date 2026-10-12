@@ -18,6 +18,12 @@ export interface RenderMessage {
   msg_index: number | null;
 }
 
+/** The other side of a message: an account, a validator, or a name ("Community pool"). */
+export type Counterparty =
+  | { kind: "account"; address: string }
+  | { kind: "validator"; operator: string }
+  | { kind: "name"; name: string };
+
 /** What the API knows about a denom's display. */
 export interface DenomInfo {
   symbol: string | null;
@@ -53,6 +59,8 @@ export interface MessageRenderer {
   summary(msg: RenderMessage, ctx: RenderContext): string;
   /** The action card's body. */
   Body: ComponentType<BodyProps>;
+  /** Who the signer dealt with, for "signer → counterparty" in lists; absent or null when nobody in particular. */
+  counterparty?(msg: RenderMessage): Counterparty | null;
   /** Why one of this message's transfers happened, for the funds flow; the title when absent. */
   reasonFor?(transfer: Transfer, msg: RenderMessage, ctx: RenderContext): string;
 }
@@ -63,3 +71,9 @@ export function renderer(
 ): MessageRenderer {
   return { summary: r.title, ...r };
 }
+
+/** An account counterparty; null without an address. */
+export const account = (address: string | null): Counterparty | null => (address ? { kind: "account", address } : null);
+
+/** A validator counterparty; null without an operator address. */
+export const validator = (operator: string | null): Counterparty | null => (operator ? { kind: "validator", operator } : null);

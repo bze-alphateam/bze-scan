@@ -20,6 +20,8 @@ import type {
   TokenListParams,
   TokenSummary,
   TxListParams,
+  TxStatusFilter,
+  TxSummary,
   ValidatorList,
   ValidatorListParams,
   VoteOption,
@@ -28,11 +30,13 @@ import type {
 /** Query keys, one tuple per route and its arguments. */
 export const queryKeys = {
   status: () => ["status"] as const,
-  blocks: () => ["blocks"] as const,
+  blocks: (p: PageParams) => ["blocks", p] as const,
+  blockList: () => ["blocks", "list"] as const,
   block: (height: number) => ["block", height] as const,
   blockTransfers: (height: number) => ["block-transfers", height] as const,
   blockEvents: (height: number, p: PageParams) => ["block-events", height, p] as const,
   transactions: (p: TxListParams) => ["txs", p] as const,
+  transactionList: (status: TxStatusFilter | null) => ["txs", "list", status ?? "all"] as const,
   transaction: (hash: string) => ["tx", hash.toUpperCase()] as const,
   validators: (p: ValidatorListParams) => ["validators", p] as const,
   allValidators: () => ["validators", "all-pages"] as const,
@@ -70,17 +74,26 @@ export function useStatus() {
   return useQuery({ queryKey: queryKeys.status(), queryFn: ({ signal }) => api.status(signal), ...status });
 }
 
-/**
- * The blocks list, newest first, 25 a page. The first page is live; once an
- * older page is loaded the list is a snapshot, never refetched, until
- * `latest()` drops the older pages and polls again.
- */
-export function useBlocks() {
+/** One page of the latest blocks (the home page's five): live. */
+export function useBlocks(params: PageParams = {}) {
   const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.blocks(params),
+    queryFn: ({ signal }) => api.blocks(params, signal),
+    ...listPolicy(params),
+  });
+}
+
+/**
+ * A list a page grows on request, newest first, 25 a page. The first page is
+ * live; once an older page is loaded the list is a snapshot, never refetched,
+ * until `latest()` drops the older pages and polls again.
+ */
+function useLiveList<T>(queryKey: readonly unknown[], read: (p: PageParams, signal: AbortSignal) => Promise<Page<T>>) {
   const client = useQueryClient();
   const query = useInfiniteQuery({
-    queryKey: queryKeys.blocks(),
-    queryFn: ({ pageParam, signal }) => api.blocks(pageParam, signal),
+    queryKey,
+    queryFn: ({ pageParam, signal }) => read(pageParam, signal),
     initialPageParam: firstPage(25),
     getNextPageParam: nextPage(25),
     ...live,
@@ -88,12 +101,26 @@ export function useBlocks() {
     staleTime: (q) => (isSnapshot(q.state.data) ? Infinity : live.staleTime),
   });
   const latest = () => {
-    client.setQueryData<InfiniteData<Page<BlockSummary>, PageParams>>(queryKeys.blocks(), (d) =>
+    client.setQueryData<InfiniteData<Page<T>, PageParams>>(queryKey, (d) =>
       d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) },
     );
     void query.refetch();
   };
   return { ...query, snapshot: isSnapshot(query.data), latest };
+}
+
+/** The blocks list: live until an older page is loaded (see `useLiveList`). */
+export function useBlockList() {
+  const api = useApi();
+  return useLiveList<BlockSummary>(queryKeys.blockList(), (p, signal) => api.blocks(p, signal));
+}
+
+/** The transactions list of one status (every one for null): live until an older page is loaded. */
+export function useTransactionList(status: TxStatusFilter | null) {
+  const api = useApi();
+  return useLiveList<TxSummary>(queryKeys.transactionList(status), (p, signal) =>
+    api.transactions({ ...p, status: status ?? undefined }, signal),
+  );
 }
 
 const isSnapshot = (d: InfiniteData<unknown> | undefined) => (d?.pages.length ?? 0) > 1;
@@ -468,15 +495,15 @@ export function useParams({ poll = false }: { poll?: boolean } = {}) {
   });
 }
 
-/** Runs only for a non-empty query. */
-export function useSearch(q: string) {
+/** The search route's matches; runs only when `enabled` and for a non-empty query, never polled. */
+export function useSearch(q: string, enabled = true) {
   const api = useApi();
   const query = q.trim();
   return useQuery({
     queryKey: queryKeys.search(query),
     queryFn: ({ signal }) => api.search(query, signal),
-    enabled: query !== "",
-    ...live,
+    enabled: enabled && query !== "",
+    ...reference,
   });
 }
 

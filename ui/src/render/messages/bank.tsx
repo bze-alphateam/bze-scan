@@ -1,12 +1,13 @@
 import { Stack, Text } from "@chakra-ui/react";
 
 import { Account, accountName, coins, coinsText, Coins, Fields, FromTo, obj, str } from "./common";
-import { renderer, type BodyProps, type MessageRenderer } from "./types";
+import { account, renderer, type BodyProps, type MessageRenderer } from "./types";
 
 const send = renderer({
   category: "send",
   title: (msg, ctx) => `Send ${coinsText(coins(msg.body?.amount), ctx)} to ${accountName(str(msg, "to_address"), ctx)}`,
   summary: (msg, ctx) => `Send · ${coinsText(coins(msg.body?.amount), ctx)} → ${accountName(str(msg, "to_address"), ctx)}`,
+  counterparty: (msg) => account(str(msg, "to_address")),
   reasonFor: () => "sent",
   Body: function SendBody({ msg, ctx }: BodyProps) {
     return (
