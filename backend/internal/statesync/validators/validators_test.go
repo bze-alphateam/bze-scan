@@ -489,3 +489,114 @@ func TestCanonicalLearnsFromTheResyncs(t *testing.T) {
 	require.Error(t, set.FullResync(context.Background()))
 	assert.Equal(t, cons, set.Canonical(cons), "learnt from saved snapshots only")
 }
+
+// ChainTools' and PaceVali's recorded identities.
+const (
+	chainToolsIdentity = "1857FF1BC2EA6A69"
+	paceValiIdentity   = "168237257EE5F3AD"
+	withIdentity       = 48 // recorded validators with an identity
+)
+
+// fakeLogos answers PictureURL from maps, recording the identities asked.
+type fakeLogos struct {
+	urls  map[string]string
+	errs  map[string]error
+	asked []string
+}
+
+func (l *fakeLogos) PictureURL(_ context.Context, identity string) (string, error) {
+	l.asked = append(l.asked, identity)
+	if err := l.errs[identity]; err != nil {
+		return "", err
+	}
+	return l.urls[identity], nil
+}
+
+type fixedClock time.Time
+
+func (c fixedClock) Now() time.Time { return time.Time(c) }
+
+var now = time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+
+func logoSet(n *fakeNode, st *fakeStore, l *fakeLogos) *validators.Set {
+	newSet(n, st) // builds the codec
+	return validators.New(validators.Deps{Staking: n, Slashing: n, Store: st, Keys: codec.InterfaceRegistry(),
+		Logos: l, Clock: fixedClock(now)}, 0)
+}
+
+func logoOf(t *testing.T, snap validators.Snapshot, op string) *validators.Logo {
+	t.Helper()
+	for i := range snap.Logos {
+		if snap.Logos[i].Operator == op {
+			return &snap.Logos[i]
+		}
+	}
+	return nil
+}
+
+func TestTheFirstSyncLooksEveryIdentityUp(t *testing.T) {
+	n, st := newFakeNode(t), &fakeStore{}
+	l := &fakeLogos{urls: map[string]string{chainToolsIdentity: "https://x/chaintools.jpg"}}
+	require.NoError(t, logoSet(n, st, l).FullResync(context.Background()))
+	snap := st.saved[0]
+
+	assert.Len(t, l.asked, withIdentity, "one lookup per identity, none without")
+	assert.Equal(t, &validators.Logo{Operator: chainTools, URL: "https://x/chaintools.jpg", CheckedAt: &now}, logoOf(t, snap, chainTools))
+	assert.Equal(t, &validators.Logo{Operator: paceVali, CheckedAt: &now}, logoOf(t, snap, paceVali), "no picture: none, checked")
+	assert.Len(t, snap.Logos, recordedCount, "the validators without an identity have no logo")
+	for _, logo := range snap.Logos {
+		if logo.CheckedAt == nil {
+			assert.Equal(t, validators.Logo{Operator: logo.Operator}, logo)
+		}
+	}
+}
+
+func TestALogoIsRecheckedAfterADayOrAnIdentityChange(t *testing.T) {
+	n := newFakeNode(t)
+	fresh, stale := now.Add(-time.Hour), now.Add(-validators.LogoTTL)
+	st := &fakeStore{standings: []validators.Standing{
+		{Operator: chainTools, Status: validators.StatusBonded, Tokens: sdkmath.NewInt(1), Identity: chainToolsIdentity, LogoCheckedAt: &fresh},
+		{Operator: paceVali, Status: validators.StatusUnbonded, Tokens: sdkmath.NewInt(1), Identity: paceValiIdentity, LogoCheckedAt: &stale},
+	}}
+	l := &fakeLogos{}
+	require.NoError(t, logoSet(n, st, l).FullResync(context.Background()))
+	assert.NotContains(t, l.asked, chainToolsIdentity, "checked an hour ago")
+	assert.Contains(t, l.asked, paceValiIdentity, "checked a day ago")
+	assert.Nil(t, logoOf(t, st.saved[0], chainTools), "kept as stored")
+
+	// The identity changed an hour after the last check.
+	st.standings[0].Identity = "0000000000000000"
+	l.asked = nil
+	require.NoError(t, logoSet(n, st, l).ResyncOne(context.Background(), chainTools))
+	assert.Equal(t, []string{chainToolsIdentity}, l.asked)
+	assert.Equal(t, &validators.Logo{Operator: chainTools, CheckedAt: &now}, logoOf(t, st.saved[1], chainTools))
+
+	// A never-checked validator is looked up even with its identity unchanged.
+	st.standings[0].Identity, st.standings[0].LogoCheckedAt = chainToolsIdentity, nil
+	l.asked = nil
+	require.NoError(t, logoSet(n, st, l).ResyncOne(context.Background(), chainTools))
+	assert.Equal(t, []string{chainToolsIdentity}, l.asked)
+}
+
+func TestAFailedLookupKeepsTheLogoAndTheSync(t *testing.T) {
+	n := newFakeNode(t)
+	stale := now.Add(-2 * validators.LogoTTL)
+	st := &fakeStore{standings: []validators.Standing{
+		{Operator: chainTools, Status: validators.StatusBonded, Tokens: sdkmath.NewInt(1), Identity: chainToolsIdentity, LogoCheckedAt: &stale},
+		{Operator: paceVali, Status: validators.StatusUnbonded, Tokens: sdkmath.NewInt(1), Identity: "OLDIDENTITY", LogoCheckedAt: &stale},
+	}}
+	down := errors.New("keybase down")
+	l := &fakeLogos{errs: map[string]error{chainToolsIdentity: down, paceValiIdentity: down}}
+	require.NoError(t, logoSet(n, st, l).FullResync(context.Background()), "a lookup never fails the sync")
+	snap := st.saved[0]
+	assert.Len(t, snap.Validators, recordedCount)
+	assert.Nil(t, logoOf(t, snap, chainTools), "the old logo and its check time stay")
+	assert.Equal(t, &validators.Logo{Operator: paceVali, Keep: true}, logoOf(t, snap, paceVali),
+		"identity changed: the old logo stays, unchecked so the next run retries")
+}
+
+func TestWithoutLogosTheSetLeavesThemAlone(t *testing.T) {
+	n, st := newFakeNode(t), &fakeStore{}
+	require.NoError(t, newSet(n, st).FullResync(context.Background()))
+	assert.Nil(t, st.saved[0].Logos)
+}

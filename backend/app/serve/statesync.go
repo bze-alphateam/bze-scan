@@ -25,6 +25,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
+	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
@@ -45,6 +46,10 @@ import (
 // registry, the aggregator).
 const outboundTimeout = 30 * time.Second
 
+// keybaseTimeout bounds one validator logo lookup: the validators set looks
+// them up one after the other.
+const keybaseTimeout = 10 * time.Second
+
 // NewStateSync builds the state sync over the local node's gRPC
 // (NODE_GRPC_ADDR) with every registered set, on a pool of its own. Later
 // domains register their sets here, in the order the start resync runs
@@ -56,7 +61,8 @@ const outboundTimeout = 30 * time.Second
 // reads nothing the others write), the chain state after them (it counts
 // the validators and copies the native price), the daily statistics last
 // (they read only the indexed tables). The chain registry runs only
-// with both its URLs, the prices only with AGGREGATOR_URL. Call closeFn
+// with both its URLs, the prices only with AGGREGATOR_URL, the validator
+// logos only with a KeybaseURL (Load always sets one). Call closeFn
 // when done.
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
@@ -78,6 +84,10 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	denomStore := denoms.NewPGStore(pool)
 	tradebin := tradebintypes.NewQueryClient(conn)
 	resyncs := &statesync.Deferred{}
+	var logos validators.Logos
+	if cfg.KeybaseURL != "" {
+		logos = keybase.New(&http.Client{Timeout: keybaseTimeout}, cfg.KeybaseURL)
+	}
 
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
@@ -85,6 +95,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Slashing: slashingtypes.NewQueryClient(conn),
 			Store:    validators.NewPGStore(pool),
 			Keys:     codec.InterfaceRegistry(),
+			Logos:    logos,
 		}, 0),
 		channels.New(channels.Deps{
 			Channel: channeltypes.NewQueryClient(conn),

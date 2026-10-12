@@ -64,11 +64,12 @@ func validatorPage() *fakeReader {
 	missed, window := int64(25), int64(10000)
 	hash := hashUpper
 	yes := "yes"
+	logo := "https://x/chaintools.jpg"
 	return &fakeReader{
 		validator: &repository.ValidatorDetail{
 			ValidatorSummary: repository.ValidatorSummary{
 				OperatorAddress: valoper, Moniker: "ChainTools", Tokens: "7895930982372", CommissionRate: "0.050000000000000000",
-				MissedBlocks: &missed, SignedBlocksWindow: &window, Status: "bonded",
+				MissedBlocks: &missed, SignedBlocksWindow: &window, Status: "bonded", LogoURL: &logo,
 			},
 			AccountAddress: account, ConsensusAddress: &cons, DelegatorShares: "7895930982372.000000000000000000",
 			CommissionMaxRate: "0.500000000000000000", CommissionMaxChangeRate: "0.100000000000000000",
@@ -94,6 +95,8 @@ func TestValidatorPage(t *testing.T) {
 	assert.Equal(t, account, v.AccountAddress)
 	assert.Equal(t, "99.75000", *v.Uptime, "1 − missed / window")
 	assert.Equal(t, int64(25), *v.MissedBlocks)
+	require.NotNil(t, v.LogoURL)
+	assert.Equal(t, "https://x/chaintools.jpg", *v.LogoURL, "the Keybase picture")
 
 	require.Len(t, v.RecentBlocks, controller.ValidatorRecentBlocks)
 	assert.Equal(t, int64(500), v.RecentBlocks[0].Height)

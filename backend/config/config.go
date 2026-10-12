@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 )
 
 // Log formats accepted in LOG_FORMAT.
@@ -114,6 +115,10 @@ type Config struct {
 	// files' base; the chain_registry job runs only with both.
 	ChainRegistryAPIURL string
 	ChainRegistryRawURL string
+	// KeybaseURL is the Keybase user lookup endpoint the validators set
+	// reads validator logos from (by description identity). Load always
+	// sets it; a Config built in code without one leaves the logos alone.
+	KeybaseURL string
 
 	// DebugAddr, when set, makes serve expose net/http/pprof on this
 	// host:port. Empty (the default) exposes nothing.
@@ -153,6 +158,7 @@ func Load() (*Config, error) {
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
+		KeybaseURL:          envString("KEYBASE_URL", keybase.DefaultURL),
 		DebugAddr:           envString("DEBUG_ADDR", ""),
 	}
 
@@ -198,9 +204,9 @@ func Load() (*Config, error) {
 	for key, v := range map[string]string{
 		"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL,
 		"AGGREGATOR_URL": cfg.AggregatorURL, "CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
-		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL,
+		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL, "KEYBASE_URL": cfg.KeybaseURL,
 	} {
-		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL") {
+		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL" || key == "KEYBASE_URL") {
 			continue
 		}
 		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

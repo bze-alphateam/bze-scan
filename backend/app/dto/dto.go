@@ -214,7 +214,8 @@ type Message struct {
 // Validator is an item of GET /api/v1/validators. VotingPowerPct and
 // Uptime are percentages with five decimals; Rank and VotingPowerPct are
 // null for a validator outside the active set, Uptime before its first
-// signing window is known.
+// signing window is known. LogoURL is the Keybase picture of its identity,
+// null without an identity or a picture.
 type Validator struct {
 	Rank            *int64  `json:"rank"`
 	Moniker         string  `json:"moniker"`
@@ -225,6 +226,7 @@ type Validator struct {
 	Uptime          *string `json:"uptime"`
 	Jailed          bool    `json:"jailed"`
 	Status          string  `json:"status"`
+	LogoURL         *string `json:"logo_url"`
 }
 
 // NewValidator maps a validator list row. Uptime is 1 − missed / window,
@@ -233,7 +235,7 @@ func NewValidator(v repository.ValidatorSummary) Validator {
 	return Validator{
 		Rank: v.Rank, Moniker: v.Moniker, OperatorAddress: v.OperatorAddress, Tokens: v.Tokens,
 		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
-		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow),
+		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow), LogoURL: v.LogoURL,
 	}
 }
 

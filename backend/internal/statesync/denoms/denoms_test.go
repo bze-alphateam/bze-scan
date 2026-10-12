@@ -560,7 +560,7 @@ func (w withSupply) TotalSupply(ctx context.Context, in *banktypes.QueryTotalSup
 
 func TestAHashedLPDenomTakesItsPairFromThePoolOnly(t *testing.T) {
 	coreyLP := tradebintypes.GetLpDenom(corey + "_ubze") // in the hand-written pool list
-	unknownLP := tradebintypes.GetLpDenom("abc_def")      // in no pool
+	unknownLP := tradebintypes.GetLpDenom("abc_def")     // in no pool
 	n, st := newFakeNode(t), &fakeStore{}
 	bank := withSupply{n, []sdk.Coin{sdk.NewCoin(coreyLP, sdkmath.NewInt(7)), sdk.NewCoin(unknownLP, sdkmath.NewInt(9))}}
 	set := denoms.New(denoms.Deps{Bank: bank, TokenFactory: n, Tradebin: n, Store: st}, 0)

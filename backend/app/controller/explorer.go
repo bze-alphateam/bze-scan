@@ -75,6 +75,8 @@ type ExplorerReader interface {
 	TxIBCTransfers(ctx context.Context, hash string) ([]repository.IBCTransfer, error)
 	// IBCChannels returns every IBC channel with its counterparty chain.
 	IBCChannels(ctx context.Context) ([]repository.IBCChannel, error)
+	// ModuleAccounts returns the module account labels, by name.
+	ModuleAccounts(ctx context.Context) ([]repository.ModuleAccount, error)
 	// TxPosition returns the height and the index in the block of a
 	// transaction.
 	TxPosition(ctx context.Context, hash string) (height, index int64, err error)

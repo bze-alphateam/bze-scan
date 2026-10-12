@@ -28,7 +28,7 @@ func NewPGStore(db DB) *PGStore {
 // Standings lists every stored validator.
 func (s *PGStore) Standings(ctx context.Context) ([]Standing, error) {
 	rows, err := s.db.Query(ctx, `SELECT operator_address, status, tokens::text, jailed, tombstoned,
-		coalesce(consensus_address, '') FROM explorer.validators`)
+		coalesce(consensus_address, ''), coalesce(identity, ''), logo_checked_at FROM explorer.validators`)
 	if err != nil {
 		return nil, fmt.Errorf("validators standings: %w", err)
 	}
@@ -37,7 +37,8 @@ func (s *PGStore) Standings(ctx context.Context) ([]Standing, error) {
 	for rows.Next() {
 		var st Standing
 		var tokens string
-		if err := rows.Scan(&st.Operator, &st.Status, &tokens, &st.Jailed, &st.Tombstoned, &st.ConsensusAddress); err != nil {
+		if err := rows.Scan(&st.Operator, &st.Status, &tokens, &st.Jailed, &st.Tombstoned, &st.ConsensusAddress,
+			&st.Identity, &st.LogoCheckedAt); err != nil {
 			return nil, fmt.Errorf("validators standings: %w", err)
 		}
 		t, ok := sdkmath.NewIntFromString(tokens)
@@ -80,6 +81,13 @@ const upsertSQL = `INSERT INTO explorer.validators (
 		first_seen_time = COALESCE((SELECT min(time) FROM explorer.validator_events
 		                             WHERE operator_address = $1 AND kind = 'created'), explorer.validators.first_seen_time),
 		updated_at = now()`
+
+// logoSQL writes one validator's logo ($3 true keeps the stored URL). The
+// upsert above never touches the logo columns.
+const logoSQL = `UPDATE explorer.validators
+	SET logo_url = CASE WHEN $3 THEN logo_url ELSE $2 END, logo_checked_at = $4
+	WHERE operator_address = $1
+	  AND (logo_url, logo_checked_at) IS DISTINCT FROM (CASE WHEN $3 THEN logo_url ELSE $2 END, $4)`
 
 // SyncSeqBase is the first seq of the validator_events rows the sync writes
 // at a height. They share tx_index -1 with the block's slash events, whose
@@ -134,6 +142,11 @@ func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
 		}
 		if _, err := tx.Exec(ctx, labelSQL, v.AccountAddress, v.Moniker); err != nil {
 			return fmt.Errorf("validator %s: label: %w", v.OperatorAddress, err)
+		}
+	}
+	for _, l := range snap.Logos {
+		if _, err := tx.Exec(ctx, logoSQL, l.Operator, nullable(l.URL), l.Keep, l.CheckedAt); err != nil {
+			return fmt.Errorf("validator %s: logo: %w", l.Operator, err)
 		}
 	}
 	if snap.Full {
