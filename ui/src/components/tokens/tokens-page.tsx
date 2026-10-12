@@ -13,7 +13,7 @@ import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
-import { dexAssetUrl, multiHop } from "@/render/account";
+import { BOND_DENOM, dexAssetUrl, multiHop } from "@/render/account";
 import {
   changeText,
   filterTokens,
@@ -69,11 +69,14 @@ export function TokenLogo({ t, denoms, size = "9" }: { t: LogoToken; denoms?: Ma
 /** What a token without a logo shows: the DEX's placeholder. */
 export const TOKEN_LOGO_PLACEHOLDER = "/images/token.svg";
 
+/** BZE's own logo, the one the DEX shows, over the registry's. */
+export const BZE_LOGO = "/images/bze_alternative_512x512.png";
+
 function SingleLogo({ t, size }: { t: Pick<TokenSummary, "logo_url" | "symbol" | "denom">; size: string }) {
   return (
     <Avatar
       name={tokenSymbol(t)}
-      src={t.logo_url}
+      src={t.denom === BOND_DENOM ? BZE_LOGO : t.logo_url}
       fallbackSrc={TOKEN_LOGO_PLACEHOLDER}
       size={size}
       fontSize={size === "full" ? "2xs" : undefined}
