@@ -71,7 +71,7 @@ describe("ValidatorsPage", () => {
     expect(honeycomb).toHaveTextContent("99.9%");
     expect(within(honeycomb).getAllByRole("link", { name: "Stake with Honeycomb" })[0]).toHaveAttribute(
       "href",
-      "https://staking.getbze.com",
+      "https://staking.getbze.com/?stake=bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
     );
 
     expect(await screen.findByText(/share of the last 10,000 blocks the validator signed/)).toBeInTheDocument();

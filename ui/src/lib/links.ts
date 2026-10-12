@@ -26,6 +26,15 @@ export const externalLinks = {
   pingPub: env.pingPubUrl,
 };
 
+/**
+ * The staking app's form for one validator: `?stake=<operator>` opens its
+ * delegate form (BFE-172; until it ships the staking app ignores the
+ * parameter and shows its page).
+ */
+export function stakeHref(operator: string): string {
+  return `${externalLinks.staking}/?stake=${encodeURIComponent(operator)}`;
+}
+
 /** The "Apps" menu: the other BZE apps. */
 export const appLinks: NavLink[] = [
   { label: "Website", href: externalLinks.website },

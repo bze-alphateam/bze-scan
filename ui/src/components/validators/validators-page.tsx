@@ -13,7 +13,7 @@ import { ExplainedBadge } from "@/components/ui/explained-badge";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
-import { externalLinks } from "@/lib/links";
+import { externalLinks, stakeHref } from "@/lib/links";
 import {
   bondCompact,
   filterByMoniker,
@@ -73,10 +73,10 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
 
 const COLUMNS = { base: "1fr auto", md: "56px minmax(0, 2.2fr) 1.5fr 1fr 1fr 88px" };
 
-function StakeButton({ moniker }: { moniker: string }) {
+function StakeButton({ moniker, operator }: { moniker: string; operator: string }) {
   return (
     <Button asChild size="sm" variant="outline" minH="44px">
-      <a href={externalLinks.staking} target="_blank" rel="noopener noreferrer" aria-label={`Stake with ${moniker}`}>
+      <a href={stakeHref(operator)} target="_blank" rel="noopener noreferrer" aria-label={`Stake with ${moniker}`}>
         Stake
       </a>
     </Button>
@@ -140,7 +140,7 @@ function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: num
         </Stack>
       </HStack>
       <Box hideFrom="md" gridRow="span 1">
-        <StakeButton moniker={v.moniker} />
+        <StakeButton moniker={v.moniker} operator={v.operator_address} />
       </Box>
       <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }}>
         <PhoneLabel>Staked</PhoneLabel>
@@ -161,7 +161,7 @@ function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: num
         {uptimeText(v.uptime)}
       </Text>
       <Box hideBelow="md">
-        <StakeButton moniker={v.moniker} />
+        <StakeButton moniker={v.moniker} operator={v.operator_address} />
       </Box>
     </Grid>
   );
@@ -300,7 +300,7 @@ function HallOfFameRow({ v, place, window }: { v: Validator; place: number; wind
           </Badge>
         </HStack>
       </Stack>
-      <StakeButton moniker={v.moniker} />
+      <StakeButton moniker={v.moniker} operator={v.operator_address} />
     </HStack>
   );
 }
