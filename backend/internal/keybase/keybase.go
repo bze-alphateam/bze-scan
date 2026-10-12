@@ -11,11 +11,20 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
 // DefaultURL is the Keybase user lookup endpoint.
 const DefaultURL = "https://keybase.io/_/api/1.0/user/lookup.json"
+
+// keySuffix is the shape of an identity Keybase can look up. Validators also
+// put placeholders there ("0", "URI_VALIDATOR"), which Keybase rejects with
+// INPUT_ERROR: those have no picture, and are never sent.
+var keySuffix = regexp.MustCompile(`^[0-9A-Fa-f]{16}$`)
+
+// inputError is the status Keybase answers a key suffix it cannot look up with.
+const inputError = 100
 
 // maxBody bounds a response: one user's pictures are a few hundred bytes.
 const maxBody = 1 << 20
@@ -37,8 +46,12 @@ func New(http Doer, lookupURL string) *Client {
 }
 
 // PictureURL returns the primary picture of the Keybase user whose key ends
-// in identity; "" when no user has that key or the user has no picture.
+// in identity; "" when no user has that key, the user has no picture or
+// identity is not a key suffix at all.
 func (c *Client) PictureURL(ctx context.Context, identity string) (string, error) {
+	if !keySuffix.MatchString(identity) {
+		return "", nil
+	}
 	q := url.Values{"key_suffix": {identity}, "fields": {"pictures"}}
 	sep := "?"
 	if strings.Contains(c.url, "?") {
@@ -72,6 +85,9 @@ func (c *Client) PictureURL(ctx context.Context, identity string) (string, error
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&body); err != nil {
 		return "", fmt.Errorf("keybase %s: %w", identity, err)
+	}
+	if body.Status.Code == inputError {
+		return "", nil
 	}
 	if body.Status.Code != 0 {
 		return "", fmt.Errorf("keybase %s: status %d %s", identity, body.Status.Code, body.Status.Name)

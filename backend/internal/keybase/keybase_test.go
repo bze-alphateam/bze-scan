@@ -57,7 +57,7 @@ func TestPictureURLFailures(t *testing.T) {
 		body   string
 	}{
 		"http":   {http.StatusTooManyRequests, `{}`},
-		"status": {http.StatusOK, `{"status":{"code":100,"name":"INPUT_ERROR"}}`},
+		"status": {http.StatusOK, `{"status":{"code":218,"name":"RATE_LIMIT"}}`},
 		"body":   {http.StatusOK, `not json`},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -67,6 +67,24 @@ func TestPictureURLFailures(t *testing.T) {
 			assert.Contains(t, err.Error(), "keybase 1857FF1BC2EA6A69")
 		})
 	}
-	_, err := keybase.New(http.DefaultClient, "http://127.0.0.1:1/lookup.json").PictureURL(context.Background(), "x")
+	_, err := keybase.New(http.DefaultClient, "http://127.0.0.1:1/lookup.json").PictureURL(context.Background(), "1857FF1BC2EA6A69")
 	require.Error(t, err, "unreachable")
+}
+
+// Placeholders some validators set as identity ("0", "URI_VALIDATOR") have
+// no picture: they are never sent, and Keybase's INPUT_ERROR for a key it
+// cannot look up is no picture too, not a failure retried every run.
+func TestPictureURLOfAnIdentityThatIsNoKey(t *testing.T) {
+	c, queries := lookup(t, http.StatusOK, `{"status":{"code":100,"name":"INPUT_ERROR"}}`)
+	for _, identity := range []string{"0", "00", "URI_VALIDATOR", "1857FF1BC2EA6A6", "1857FF1BC2EA6A69Z", "1857FF1BC2EA6A6G"} {
+		url, err := c.PictureURL(context.Background(), identity)
+		require.NoError(t, err, identity)
+		assert.Empty(t, url, identity)
+	}
+	assert.Empty(t, *queries, "never sent")
+
+	url, err := c.PictureURL(context.Background(), "1857ff1bc2ea6a69")
+	require.NoError(t, err)
+	assert.Empty(t, url)
+	assert.Len(t, *queries, 1)
 }

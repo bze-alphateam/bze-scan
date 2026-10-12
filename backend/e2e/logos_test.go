@@ -19,6 +19,7 @@ const (
 	chainToolsIdentity = "1857FF1BC2EA6A69"
 	chainToolsLogo     = "https://s3.amazonaws.com/keybase_processed_uploads/chaintools_360_360.jpg"
 	recordedIdentities = 48 // recorded validators with an identity
+	recordedKeys       = 45 // of them Keybase key suffixes; "0", "00" and "URI_VALIDATOR" are never looked up
 )
 
 // fakeKeybase stands in for the Keybase user lookup, counting the lookups.
@@ -70,7 +71,7 @@ func TestValidatorLogosComeFromKeybaseOncePerDay(t *testing.T) {
 	e := newSyncEnv(t)
 	code, _ := e.syncState(t)
 	require.Equal(t, 0, code)
-	assert.Equal(t, recordedIdentities, e.kb.count(), "one lookup per identity")
+	assert.Equal(t, recordedKeys, e.kb.count(), "one lookup per key suffix")
 	logo := `SELECT concat_ws(' ', coalesce(logo_url, '-'), logo_checked_at IS NOT NULL) FROM explorer.validators WHERE operator_address = $1`
 	assert.Equal(t, []string{chainToolsLogo + " true"}, queryStrings(t, e.db, logo, chainTools))
 	assert.Equal(t, recordedIdentities, e.count(t, `SELECT count(*) FROM explorer.validators WHERE logo_checked_at IS NOT NULL`))
@@ -80,7 +81,7 @@ func TestValidatorLogosComeFromKeybaseOncePerDay(t *testing.T) {
 	// validators upsert keeps the logo.
 	code, _ = e.syncState(t)
 	require.Equal(t, 0, code)
-	assert.Equal(t, recordedIdentities, e.kb.count())
+	assert.Equal(t, recordedKeys, e.kb.count())
 	assert.Equal(t, []string{chainToolsLogo + " true"}, queryStrings(t, e.db, logo, chainTools))
 
 	// A day later Keybase is down: the logo and its check time stay.
@@ -89,7 +90,7 @@ func TestValidatorLogosComeFromKeybaseOncePerDay(t *testing.T) {
 	e.kb.setDown(true)
 	code, _ = e.syncState(t)
 	require.Equal(t, 0, code, "a failed lookup never fails the sync")
-	assert.Equal(t, recordedIdentities+1, e.kb.count())
+	assert.Equal(t, recordedKeys+1, e.kb.count())
 	assert.Equal(t, 1, e.count(t, `SELECT count(*) FROM explorer.validators
 		WHERE operator_address = $1 AND logo_url = $2 AND logo_checked_at < now() - interval '24 hours'`, chainTools, chainToolsLogo))
 }

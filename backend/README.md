@@ -920,7 +920,10 @@ A validator's `logo_url` is the Keybase picture of its description
 `them[0].pictures.primary.url`, as the BZE staking dapp does. Both resyncs
 look a validator up, one after the other, only when its `logo_checked_at` is
 null, older than 24 hours, or its identity changed; a validator without an
-identity has a NULL logo. A successful lookup writes the URL (NULL when the
+identity has a NULL logo. An identity that is not a key suffix (16 hex
+digits; validators set placeholders such as `0` or `URI_VALIDATOR`) is never
+sent and counts as a lookup with no picture, as does Keybase's `INPUT_ERROR`
+answer. A successful lookup writes the URL (NULL when the
 user has no picture) and `logo_checked_at`. A failed one is logged and never
 fails the sync: the stored logo stays and `logo_checked_at` is not bumped
 (after an identity change it is cleared, so the next run retries). The
