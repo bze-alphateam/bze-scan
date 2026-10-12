@@ -547,6 +547,12 @@ export interface ProposalSummary {
   tally: Tally | null;
   /** The share of the bonded tokens that voted, percent with five decimals. */
   turnout_pct: string | null;
+  /**
+   * Where the bonded tokens behind the turnout come from: `sync` while the
+   * proposal voted, `archive` read after the fact by the snapshots command
+   * (historical); null without them.
+   */
+  tally_source: "sync" | "archive" | null;
 }
 
 export interface Proposal extends ProposalSummary {
@@ -579,6 +585,9 @@ export interface VoteListParams extends PageParams {
   voter?: "validators";
 }
 
+/** Where a vote or deposit row comes from: an indexed transaction, or the archive's state before the tally. */
+export type RowSource = "event" | "archive";
+
 export interface ProposalVote {
   voter: string;
   voter_label: Label | null;
@@ -593,6 +602,8 @@ export interface ProposalVote {
   validator: string | null;
   validator_operator: string | null;
   voting_power_pct: string | null;
+  /** `archive`: read from the state before the tally (historical: tx_index -1, no tx_hash, the tally block's time). */
+  source: RowSource;
 }
 
 export interface ProposalDeposit {
@@ -603,6 +614,8 @@ export interface ProposalDeposit {
   tx_index: number;
   tx_hash: string | null;
   time: string;
+  /** `archive`: the depositor's total read from the state before the tally (historical, no tx_hash). */
+  source: RowSource;
 }
 
 // Statistics

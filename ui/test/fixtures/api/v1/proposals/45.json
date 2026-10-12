@@ -15,6 +15,7 @@
     "no_with_veto": "0"
   },
   "turnout_pct": "70.41289",
+  "tally_source": "sync",
   "summary": "### Fund BZE Liquidity Pools\n\nIf this proposal passes, we will spend 3M BZE from the community pool to improve liquidity on BeeZee DEX.",
   "metadata": "",
   "proposer": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",

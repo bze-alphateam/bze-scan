@@ -227,7 +227,7 @@ describe("the votes", () => {
 
 describe("dates and status", () => {
   it("names the status, a deposit period that ended as dropped", () => {
-    expect(items.map((p) => statusInfo(p, now).text)).toEqual(["Deposit period", "Voting now", "Passed", "Rejected", "Passed"]);
+    expect(items.map((p) => statusInfo(p, now).text)).toEqual(["Deposit period", "Voting now", "Passed", "Rejected", "Passed", "Passed"]);
     expect(statusInfo(items[0], new Date("2099-10-13T00:00:00Z")).text).toBe("Dropped");
     expect(statusInfo({ status: "dropped", deposit_end_time: "2099-10-01T00:00:00Z" }, now)).toEqual({ text: "Dropped", tone: "gray" });
     expect(endedText({ status: "dropped", voting_end_time: null }, now)).toBeNull();
@@ -238,7 +238,7 @@ describe("dates and status", () => {
     expect(endsIn("2099-10-11T15:30:00Z", now)).toBe("in 5 h");
     expect(endsIn("2099-10-11T10:12:30Z", now)).toBe("in 12 min");
     expect(endsIn("2099-10-11T09:00:00Z", now)).toBe("ended");
-    expect(items.map((p) => endedText(p, now))).toEqual([null, "ends in 4 days", "Jul 21, 2026", "May 7, 2026", "Dec 13, 2025"]);
+    expect(items.map((p) => endedText(p, now))).toEqual([null, "ends in 4 days", "Jul 21, 2026", "May 7, 2026", "Dec 13, 2025", "May 6, 2025"]);
   });
 
   it("words the result line", () => {

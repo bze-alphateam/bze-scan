@@ -48,7 +48,7 @@ import {
   type Checks,
 } from "@/render/proposals";
 
-import { ChecksList, ProposalStatusBadge, TallyBars, VerdictChip } from "./parts";
+import { ChecksList, HistoricalChip, ProposalStatusBadge, TallyBars, VerdictChip } from "./parts";
 import { ActionView } from "./what-it-does";
 
 const SUMMARY_FOLD = 600;
@@ -104,9 +104,12 @@ function Header({ p, now }: { p: Proposal; now: Date }) {
           <Text color="fg.muted">
             Voting {formatDateTime(p.voting_start_time)} to {formatDateTime(p.voting_end_time)}
           </Text>
-          <Text fontWeight="medium" data-testid="result-line">
-            {resultLine(p, now)}
-          </Text>
+          <HStack gap="1.5" wrap="wrap">
+            <Text fontWeight="medium" data-testid="result-line">
+              {resultLine(p, now)}
+            </Text>
+            <HistoricalChip p={p} />
+          </HStack>
         </Stack>
       )}
     </Stack>
@@ -174,7 +177,7 @@ const MEANINGS: [string, string][] = [
   ["No with veto", "you think it is harmful or spam. Too many vetoes reject it and burn its deposit."],
 ];
 
-function Votes({ p, c, denoms }: { p: Proposal; c: Checks | null; denoms?: Map<string, TokenSummary> }) {
+function Votes({ p, c, denoms, historical }: { p: Proposal; c: Checks | null; denoms?: Map<string, TokenSummary>; historical: boolean }) {
   const voting = p.status === "voting_period";
   if (p.status === "deposit_period" || p.status === "canceled" || p.status === "dropped") {
     return (
@@ -202,7 +205,7 @@ function Votes({ p, c, denoms }: { p: Proposal; c: Checks | null; denoms?: Map<s
       <Stack gap="4">
         {p.tally ? <TallyBars tally={p.tally} denoms={denoms} amounts /> : <Text fontSize="sm" color="fg.muted">Not tallied yet.</Text>}
         {c ? (
-          <ChecksList c={c} />
+          <ChecksList c={c} p={p} />
         ) : (
           p.tally && (
             <Text fontSize="sm" color="fg.muted">
@@ -225,6 +228,12 @@ function Votes({ p, c, denoms }: { p: Proposal; c: Checks | null; denoms?: Map<s
             </Text>
           ))}
         </Stack>
+        {historical && (
+          <Text fontSize="sm" color="fg.muted" data-testid="historical-explainer">
+            Some votes were read from the chain&apos;s state at the end of voting (marked historical). The chain deletes votes once a
+            proposal is tallied, so these show the final choice but not when it was made.
+          </Text>
+        )}
       </Stack>
     </Card>
   );
@@ -284,7 +293,14 @@ function VoteRow({ v, i, validator }: { v: ProposalVote; i: number; validator?: 
         </Text>
       )}
       <HStack gap="1" color="fg.muted" fontSize="xs" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        {v.tx_hash ? (
+        {v.source === "archive" ? (
+          // The time is the tally block's, not the vote's: never shown.
+          <Link asChild color="fg.muted">
+            <NextLink href={`/blocks/${v.height}`} title={HISTORICAL_VOTE} data-testid="historical-vote">
+              historical
+            </NextLink>
+          </Link>
+        ) : v.tx_hash ? (
           <Link asChild color="fg.muted">
             <NextLink href={`/txs/${v.tx_hash.toUpperCase()}`}>
               <TimeAgo time={v.time} />
@@ -299,6 +315,7 @@ function VoteRow({ v, i, validator }: { v: ProposalVote; i: number; validator?: 
 }
 
 const NOT_VOTED_SHOWN = 5;
+const HISTORICAL_VOTE = "Vote as recorded on chain when voting ended; the voting transaction itself is not indexed.";
 
 function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | undefined }) {
   const validators = useAllValidators();
@@ -514,7 +531,10 @@ function Details({ p, actions, vetoed, denoms }: { p: Proposal; actions: Action[
               <Stack gap="1" data-testid="deposits">
                 {deposits.data.map((d, i) => (
                   <HStack key={`${d.depositor}-${d.height}-${i}`} gap="1.5" wrap="wrap">
-                    <Text as="span">{coinsText(d.amount, denoms)} by</Text>
+                    <Text as="span">
+                      {coinsText(d.amount, denoms)}
+                      {d.source === "archive" && " in total · historical ·"} by
+                    </Text>
                     <AccountChip address={d.depositor} label={d.depositor_label} />
                     {returned && <Text as="span" color="fg.muted">· returned</Text>}
                   </HStack>
@@ -541,6 +561,24 @@ function Details({ p, actions, vetoed, denoms }: { p: Proposal; actions: Action[
   );
 }
 
+/**
+ * Whether a vote or deposit of the proposal is one the snapshots command read
+ * from the archive. The queries are the ones the vote tabs and the deposits
+ * list run, so they are shared, not repeated.
+ */
+function useHasHistoricalRows(p: Proposal): boolean {
+  const open = isOpen(p.status);
+  const validatorVotes = useValidatorVotes(p.id, open);
+  const votes = useProposalVotes(p.id, null, open);
+  const deposits = useProposalDeposits(p.id);
+  const rows: { source: string }[] = [
+    ...(validatorVotes.data ?? []),
+    ...(votes.data?.pages.flatMap((page) => page.items) ?? []),
+    ...(deposits.data ?? []),
+  ];
+  return rows.some((r) => r.source === "archive");
+}
+
 /** A found proposal. */
 export function ProposalView({ p }: { p: Proposal }) {
   const now = new Date();
@@ -556,6 +594,7 @@ export function ProposalView({ p }: { p: Proposal }) {
   const reached = upgrade?.height != null && dbHeight != null && dbHeight >= upgrade.height;
   const depositText = p.total_deposit && p.total_deposit.length > 0 ? coinsText(p.total_deposit, denoms.data) : null;
   const items = timeline(p, depositText, upgrade?.height != null ? { height: upgrade.height, eta, reached } : null, now);
+  const historical = useHasHistoricalRows(p);
   return (
     <Stack gap={{ base: "6", md: "8" }}>
       <Header p={p} now={now} />
@@ -565,7 +604,7 @@ export function ProposalView({ p }: { p: Proposal }) {
           <WhoVoted p={p} />
         </Stack>
         <Stack gap="6" minW="0">
-          <Votes p={p} c={c} denoms={denoms.data} />
+          <Votes p={p} c={c} denoms={denoms.data} historical={historical} />
           {p.status === "voting_period" && <WantToVote p={p} />}
           <Timeline items={items} />
         </Stack>

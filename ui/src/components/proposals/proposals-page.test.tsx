@@ -58,6 +58,7 @@ describe("ProposalsPage", () => {
     ]);
     expect(await within(card).findByText("82.7% of staked BZE voted · quorum of 33.4% reached")).toBeInTheDocument();
     expect(within(card).getByTestId("verdict")).toHaveTextContent("On track to pass");
+    expect(within(card).queryByTestId("historical-turnout")).toBeNull();
   });
 
   it("lists every proposal with its status, result, turnout and end", async () => {
@@ -69,8 +70,9 @@ describe("ProposalsPage", () => {
       "#47Upgrade network to v8.1.1",
       "#46Change maximum number of validators to 100",
       "#45Fund Liquidity Pools",
+      "#43Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
     ]);
-    const [p49, p48row, , p46] = screen.getAllByTestId("proposal-row");
+    const [p49, p48row, , p46, p45row, p43row] = screen.getAllByTestId("proposal-row");
     expect(p49).toHaveTextContent("Deposit period");
     expect(p48row).toHaveTextContent("Voting now");
     expect(p48row).toHaveTextContent("Yes 89.6%");
@@ -78,6 +80,23 @@ describe("ProposalsPage", () => {
     expect(p46).toHaveTextContent("Rejected");
     expect(p46).toHaveTextContent("No 70.6%");
     expect(p46).toHaveTextContent("May 7, 2026");
+
+    // Only the turnout the archive measured is marked, in its own column.
+    expect(screen.getAllByTestId("historical-turnout")).toHaveLength(1);
+    const chip = within(within(p43row).getByTestId("turnout")).getByTestId("historical-turnout");
+    expect(chip).toHaveTextContent("historical");
+    expect(chip).toHaveAttribute("title", expect.stringContaining("the explorer was not running when this proposal was voted on"));
+    expect(within(p43row).getByTestId("turnout")).toHaveTextContent("67.3%");
+    expect(within(p45row).queryByTestId("historical-turnout")).toBeNull();
+    expect(within(p49).queryByTestId("historical-turnout")).toBeNull();
+  });
+
+  it("marks a voting card's turnout only when the archive measured it", async () => {
+    const archived = { ...all.items[1], tally_source: "archive" } as ProposalSummary;
+    const proposals = vi.fn(() => Promise.resolve({ items: [archived], next_cursor: null }));
+    renderWithProviders(<ProposalsPage />, { api: api({ proposals }) });
+    const card = await screen.findByTestId("voting-card");
+    expect(within(card).getByTestId("historical-turnout")).toHaveTextContent("historical");
   });
 
   it("filters by chip on the API and by title on the page", async () => {
@@ -86,7 +105,7 @@ describe("ProposalsPage", () => {
     await screen.findByTestId("voting-card");
     await userEvent.click(screen.getByRole("button", { name: "Passed" }));
     expect(screen.getByRole("button", { name: "Passed" })).toHaveAttribute("aria-pressed", "true");
-    await waitFor(() => expect(titles()).toEqual(["#47Upgrade network to v8.1.1", "#45Fund Liquidity Pools"]));
+    await waitFor(() => expect(titles()).toEqual(["#47Upgrade network to v8.1.1", "#45Fund Liquidity Pools", "#43Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher"]));
     expect(proposals).toHaveBeenCalledWith({ limit: 20, status: "passed" }, expect.anything());
     await userEvent.type(screen.getByRole("textbox", { name: "Find a proposal" }), "liquidity");
     expect(titles()).toEqual(["#45Fund Liquidity Pools"]);
@@ -120,7 +139,7 @@ describe("ProposalsPage", () => {
     renderWithProviders(<ProposalsPage />, { api: api({ proposals }) });
     await waitFor(() => expect(screen.getAllByTestId("proposal-row")).toHaveLength(3));
     await userEvent.click(screen.getByRole("button", { name: "Show older proposals" }));
-    await waitFor(() => expect(screen.getAllByTestId("proposal-row")).toHaveLength(5));
+    await waitFor(() => expect(screen.getAllByTestId("proposal-row")).toHaveLength(all.items.length));
     expect(proposals).toHaveBeenCalledWith({ cursor: "c1", limit: 20, status: undefined }, expect.anything());
   });
 

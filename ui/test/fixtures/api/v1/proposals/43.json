@@ -1,0 +1,57 @@
+{
+  "id": 43,
+  "title": "Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
+  "kind": "cointrunk_publisher",
+  "status": "passed",
+  "expedited": false,
+  "submit_time": "2025-05-01T15:24:34Z",
+  "deposit_end_time": "2025-05-03T15:24:34Z",
+  "voting_start_time": "2025-05-01T15:24:34Z",
+  "voting_end_time": "2025-05-06T15:24:34Z",
+  "tally": {
+    "yes": "99467225294527",
+    "no": "0",
+    "abstain": "0",
+    "no_with_veto": "0"
+  },
+  "turnout_pct": "67.30967",
+  "tally_source": "archive",
+  "summary": "If this proposal passes, ⚛️ Cosmos Ecosystem ⚛️  will be added as publisher on CoinTrunk module. ⚛️ Cosmos Ecosystem ⚛️  is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check them on twitter(x) https://x.com/CosmosEcosystem. Make sure you follow them for latest news, BZE news are always included.",
+  "metadata": "",
+  "proposer": null,
+  "proposer_label": null,
+  "message_types": [
+    "/cosmos.gov.v1.MsgExecLegacyContent"
+  ],
+  "messages": [
+    {
+      "@type": "/cosmos.gov.v1.MsgExecLegacyContent",
+      "content": {
+        "@type": "/bze.cointrunk.v1.PublisherProposal",
+        "title": "Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
+        "description": "If this proposal passes, ⚛️ Cosmos Ecosystem ⚛️  will be added as publisher on CoinTrunk module. ⚛️ Cosmos Ecosystem ⚛️  is a major contributor in Cosmos providing latest news regarding blockchains in this ecosystem. You can check them on twitter(x) https://x.com/CosmosEcosystem. Make sure you follow them for latest news, BZE news are always included.",
+        "name": "⚛️ Cosmos Ecosystem⚛️",
+        "address": "bze1g9dkuc6nf85hetsuhhznqnx4ma0y8l62xek0qz",
+        "active": true
+      },
+      "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
+    }
+  ],
+  "total_deposit": [
+    {
+      "denom": "ubze",
+      "amount": "100000000000"
+    }
+  ],
+  "tally_bonded_tokens": "147775542451704",
+  "tally_updated_at": "2025-05-06T15:24:34Z",
+  "submit_height": null,
+  "submit_tx_hash": null,
+  "resolved_height": 17131437,
+  "validators_voted": {
+    "voted": 1,
+    "total": 3
+  },
+  "votes_count": 27,
+  "updated_at": "2026-10-10T12:00:00Z"
+}

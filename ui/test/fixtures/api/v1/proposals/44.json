@@ -15,6 +15,7 @@
     "no_with_veto": "0"
   },
   "turnout_pct": "70.41289",
+  "tally_source": "sync",
   "summary": "Upgrade the network to v8.0.0.",
   "metadata": "",
   "proposer": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
