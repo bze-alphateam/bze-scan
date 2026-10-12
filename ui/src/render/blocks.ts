@@ -1,9 +1,7 @@
 import BigNumber from "bignumber.js";
 
-import type { Block, BlockTx, Coin, Status } from "@/api/types";
+import type { Block, Coin, Status } from "@/api/types";
 import { formatCount } from "@/lib/format";
-import { fallbackRenderer } from "@/render/messages/fallback";
-import type { RenderContext, RenderMessage } from "@/render/messages/types";
 
 /**
  * Why the explorer has no block at `height`: above its latest block it is
@@ -54,33 +52,4 @@ export function blockTimeText(ms: number | null): string {
 /** `4 KB`, `1.5 KB` from bytes (one decimal, trailing `.0` dropped). */
 export function sizeText(bytes: number | null): string {
   return bytes == null ? "—" : `${formatCount((bytes / 1024).toFixed(1)).replace(/\.0$/, "")} KB`;
-}
-
-/**
- * What a block's transaction did, in one line: its first message's title
- * through the registry (the fallback's for an unknown type), and
- * "+ N more actions" when it has more.
- */
-export function txOneLine(tx: BlockTx, ctx: RenderContext): string {
-  const more = tx.msg_types.length - 1;
-  const suffix = more > 0 ? ` + ${more} more action${more === 1 ? "" : "s"}` : "";
-  const first = tx.first_message;
-  const typeUrl = first?.type_url ?? tx.msg_types[0];
-  if (!typeUrl) return "No actions";
-  const msg: RenderMessage = {
-    type_url: typeUrl,
-    sender: tx.signer,
-    module: first?.module ?? null,
-    body: first?.body ?? null,
-    events: null,
-    msg_index: 0,
-  };
-  let title: string;
-  try {
-    title = ctx.rendererFor(typeUrl).title(msg, ctx);
-  } catch {
-    // A body a renderer did not expect: its type in words.
-    title = fallbackRenderer.title(msg, ctx);
-  }
-  return title + suffix;
 }

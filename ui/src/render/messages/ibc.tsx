@@ -17,6 +17,10 @@ const transfer = renderer({
       (channel ? ` through ${channel}` : "")
     );
   },
+  counterparty: (msg) => {
+    const receiver = str(msg, "receiver");
+    return receiver ? { kind: "name", name: shortAddress(receiver) } : null;
+  },
   reasonFor: () => "held for the cross-chain transfer",
   Body: function TransferBody({ msg, ctx }: BodyProps) {
     const token = coin(msg, "token");

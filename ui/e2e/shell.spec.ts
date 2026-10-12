@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+import { mockApi } from "./mock-api";
+
 test.describe("site shell", () => {
   test("renders the hero, the footer and no horizontal scroll", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Explore the BeeZee network" })).toBeVisible();
-    await expect(page.getByText("The explorer is being built")).toBeVisible();
-    await expect(page.getByTestId("tile-skeleton")).toHaveCount(6);
+    await expect(page.getByTestId("tile")).toHaveCount(6);
 
     const footer = page.getByRole("contentinfo");
     await expect(footer.getByText("BZE Explorer · chain beezee-1")).toBeVisible();
@@ -20,15 +21,16 @@ test.describe("site shell", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
-  test("submits a search to /search", async ({ page }) => {
+  test("submits text without a match to the search page", async ({ page }) => {
+    await mockApi(page, { "v1/search": { results: [] } });
     await page.goto("/");
     // The hero's box is on every viewport.
-    const box = page.getByRole("main").getByRole("searchbox", { name: "Search the explorer" });
+    const box = page.getByRole("main").getByRole("combobox", { name: "Search the explorer" });
     await box.fill("bze1abc");
+    await expect(page.getByRole("main").getByText("No validator or known account matches")).toBeVisible();
     await box.press("Enter");
     await expect(page).toHaveURL(/\/search\?q=bze1abc$/);
-    // The search page lands with its ticket; until then it is a 404.
-    await expect(page.getByRole("heading", { name: "Nothing here" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Results for “bze1abc”");
   });
 });
 
@@ -40,7 +42,7 @@ test.describe("desktop header", () => {
     const header = page.getByRole("banner");
     const nav = header.getByRole("navigation", { name: "Explorer" });
     await expect(nav.getByRole("link")).toHaveText(["Blocks", "Transactions", "Validators", "Tokens", "Proposals", "Parameters"]);
-    await expect(header.getByRole("searchbox", { name: "Search the explorer" })).toBeVisible();
+    await expect(header.getByRole("combobox", { name: "Search the explorer" })).toBeVisible();
     await expect(header.getByText("Mainnet")).toBeVisible();
     await expect(header.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Open menu" })).toBeHidden();
@@ -59,10 +61,10 @@ test.describe("phone header", () => {
     const header = page.getByRole("banner");
     await expect(header.getByRole("link", { name: "BZE Explorer home" })).toBeVisible();
     await expect(header.getByRole("navigation", { name: "Explorer" })).toBeHidden();
-    await expect(header.getByRole("searchbox")).toBeHidden();
+    await expect(header.getByRole("combobox")).toBeHidden();
 
     await header.getByRole("button", { name: "Open search" }).click();
-    await expect(header.getByRole("searchbox", { name: "Search the explorer" })).toBeFocused();
+    await expect(header.getByRole("combobox", { name: "Search the explorer" })).toBeFocused();
   });
 
   test("opens the drawer and navigates from it", async ({ page }) => {

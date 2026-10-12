@@ -3,7 +3,7 @@ import BigNumber from "bignumber.js";
 import { formatDate, formatPct } from "@/lib/format";
 
 import { Account, coin, coinText, Coins, eventAttr, Fields, FromTo, obj, str, Validator, validatorName } from "./common";
-import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
+import { renderer, validator, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 const amountText = (msg: RenderMessage, ctx: RenderContext) => {
   const c = coin(msg, "amount");
@@ -34,6 +34,7 @@ function DelegationBody({ msg, ctx }: BodyProps) {
 const delegate = renderer({
   category: "staking",
   title: (msg, ctx) => `Stake ${amountText(msg, ctx)} with ${validatorName(str(msg, "validator_address"), ctx)}`,
+  counterparty: (msg) => validator(str(msg, "validator_address")),
   reasonFor: () => "staked",
   Body: DelegationBody,
 });
@@ -50,6 +51,7 @@ const undelegate = renderer({
     const base = `Unstake ${amountText(msg, ctx)} from ${validatorName(str(msg, "validator_address"), ctx)}`;
     return back ? `${base} · back on ${back}` : base;
   },
+  counterparty: (msg) => validator(str(msg, "validator_address")),
   reasonFor: () => "unstaked, waiting out the unbonding period",
   Body: function UndelegateBody({ msg, ctx }: BodyProps) {
     return (
@@ -65,6 +67,7 @@ const redelegate = renderer({
   category: "staking",
   title: (msg, ctx) =>
     `Move ${amountText(msg, ctx)} of stake from ${validatorName(str(msg, "validator_src_address"), ctx)} to ${validatorName(str(msg, "validator_dst_address"), ctx)}`,
+  counterparty: (msg) => validator(str(msg, "validator_dst_address")),
   Body: function RedelegateBody({ msg, ctx }: BodyProps) {
     return (
       <Fields
@@ -89,6 +92,7 @@ const redelegate = renderer({
 const cancelUnbonding = renderer({
   category: "staking",
   title: (msg, ctx) => `Cancel unstaking ${amountText(msg, ctx)} from ${validatorName(str(msg, "validator_address"), ctx)}`,
+  counterparty: (msg) => validator(str(msg, "validator_address")),
   reasonFor: () => "staked again",
   Body: DelegationBody,
 });

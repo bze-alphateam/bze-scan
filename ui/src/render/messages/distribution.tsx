@@ -1,5 +1,5 @@
 import { Account, accountName, coins, coinsText, Coins, eventAttr, Fields, parseCoins, str, Validator, validatorName } from "./common";
-import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
+import { renderer, validator, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 /** What an event says was paid out; empty for nothing (an empty amount attribute). */
 const paidOut = (msg: RenderMessage, event: string) => parseCoins(eventAttr(msg, event, "amount"));
@@ -9,6 +9,7 @@ const withText = (list: ReturnType<typeof coins>, ctx: RenderContext) => (list.l
 const withdrawReward = renderer({
   category: "staking",
   title: (msg, ctx) => `Claim staking rewards from ${validatorName(str(msg, "validator_address"), ctx)}`,
+  counterparty: (msg) => validator(str(msg, "validator_address")),
   summary: (msg, ctx) =>
     `Claim staking rewards from ${validatorName(str(msg, "validator_address"), ctx)}${withText(paidOut(msg, "withdraw_rewards"), ctx)}`,
   reasonFor: () => "staking rewards",
@@ -59,6 +60,7 @@ const setWithdrawAddress = renderer({
 const fundCommunityPool = renderer({
   category: "send",
   title: (msg, ctx) => `Fund the community pool with ${coinsText(coins(msg.body?.amount), ctx)}`,
+  counterparty: () => ({ kind: "name", name: "Community pool" }),
   reasonFor: () => "to the community pool",
   Body: function FundCommunityPoolBody({ msg, ctx }: BodyProps) {
     return (

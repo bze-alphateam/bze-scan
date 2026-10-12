@@ -15,7 +15,10 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | --- | --- |
 | `src/app` | routes; `layout.tsx` (header, footer), `providers.tsx` (the composition root), `not-found.tsx`, `error.tsx` |
 | `src/api` | `types.ts` (the API's shapes), `client.ts` (the `ExplorerApi` interface, `createHttpApi`, `ApiError`), `provider.tsx` (`ApiProvider`, `useApi`), `hooks.ts` (one React Query hook per route), `policy.ts` (the refetch policies) |
-| `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light |
+| `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light; `search-box.tsx`: an identifier opens its page on submit, other text lists the matching validators and labelled accounts under the box while typing (debounced 250 ms, arrows/Enter/Escape), the form submits to `/search` without JavaScript |
+| `src/components/home` | the home page: hero with the search box, six live tiles from `/stats`, the latest blocks and transactions, the app links |
+| `src/components/search` | the `/search` results page (rendered on the server by `src/app/search/page.tsx`, which redirects an identifier to its page) and the result row shared with the dropdown |
+| `src/components/txs` | the transactions list (status chips, live until an older page is loaded) and `useListRenderContext` (the renderers' context for list rows) |
 | `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
 | `src/components/blocks` | the blocks list (live until an older page is loaded, then a snapshot) and the block page (header, overview, transactions in one line each, the block's funds flow by group, More details with the raw JSON tabs, the not-found explanations) |
@@ -27,12 +30,14 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/proposals` | the proposals list (voting cards, status chips, title filter) and the proposal page (what it does, votes and checks, where to vote, who voted, timeline, More details) |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
-| `src/render/blocks.ts`, `src/render/block-flow.ts` | the blocks pages' words and numbers: why a height is not found, fee and gas sums, a transaction in one line; the block's transfers grouped by the label names the backend seeds (Fees, DEX, Staking, Rewards programs, Burner, Cross-chain, Governance, Payments, Other) with each group's line |
+| `src/render/blocks.ts`, `src/render/block-flow.ts` | the blocks pages' words and numbers: why a height is not found, fee and gas sums; the block's transfers grouped by the label names the backend seeds (Fees, DEX, Staking, Rewards programs, Burner, Cross-chain, Governance, Payments, Other) with each group's line |
+| `src/render/txs.ts` | a transaction in one line (its first message's registry title, "+ N more actions") and its counterparty (a renderer's `counterparty`, "Burner" for a burner fund) |
+| `src/render/home.ts` | the home tiles' words and the price change's sign and colour |
 | `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
 | `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
 | `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
-| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use), `parameters.ts` (the chain parameters dictionary, below) |
+| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `search.ts` (`classifyQuery`: what a query is without a request; result links and order), `use-debounced.ts`, `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use), `parameters.ts` (the chain parameters dictionary, below) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
 | `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
 | `e2e` | Playwright specs, the `mockApi` helper and `noHorizontalScroll` (`layout.ts`) |
@@ -94,9 +99,11 @@ A 4xx answer is never retried; other failures are retried twice. The hooks
 apply the policies: a list hook with a `cursor` is `immutable`. `useBlock` does the same for a height above the explorer's
 latest block (`waitForIt`), with `expired` once the window is over.
 
-`useBlocks` is an infinite query: its first page is `live`; once an older page
-is loaded the list is a snapshot, never refetched, until `latest()` drops the
-older pages. `useBlockTransfers` follows every page of a block's transfers.
+`useBlockList` and `useTransactionList(status)` are infinite queries: the
+first page is `live`; once an older page is loaded the list is a snapshot,
+never refetched, until `latest()` drops the older pages. `useBlocks` and
+`useTransactions` read one page (the home page's five). `useBlockTransfers`
+follows every page of a block's transfers. `useSearch` is never polled.
 
 A transaction the API answers 404 for is pending, never failed:
 `useTransaction` asks again every 7 s for the pending window
@@ -153,7 +160,9 @@ keys with `describeParam` and link to the module's group (`groupOfModule`).
 heading, also the page description), `summary(msg, ctx)` (one line for lists,
 the title by default), `Body` (the card's content) and an optional
 `reasonFor(transfer, msg, ctx)` (why one of its transfers happened, for the
-funds flow; the title otherwise). A type without a renderer goes through the
+funds flow; the title otherwise) and an optional `counterparty(msg)` (who the
+signer dealt with, for "signer → counterparty" on the home page: an account,
+a validator or a name). A type without a renderer goes through the
 fallback: its type in words and its body as a key/value table.
 
 Renderers read the API's proto JSON body (snake_case) and the message's

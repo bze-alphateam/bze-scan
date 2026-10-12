@@ -3,7 +3,7 @@
 import { Box, Button, Grid, Heading, HStack, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 
-import { useBlocks } from "@/api/hooks";
+import { useBlockList } from "@/api/hooks";
 import type { BlockSummary } from "@/api/types";
 import { Card } from "@/components/ui/card";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -99,7 +99,7 @@ function LoadError({ onRetry }: { onRetry: () => void }) {
 
 /** `/blocks`: the latest blocks, polled, until older ones are loaded. */
 export function BlocksPage() {
-  const list = useBlocks();
+  const list = useBlockList();
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <Stack gap={{ base: "6", md: "8" }}>

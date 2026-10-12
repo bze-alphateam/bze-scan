@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { Block, BlockTx, Status } from "@/api/types";
-import { createRenderContext } from "@/render/messages/registry";
+import type { Block, Status } from "@/api/types";
 
 import block from "../../test/fixtures/api/v1/blocks/25120440.json";
 import status from "../../test/fixtures/api/v1/status.json";
 
-import { blockFees, blockGas, blockNotFound, blockTimeText, sizeText, sumCoins, txOneLine } from "./blocks";
+import { blockFees, blockGas, blockNotFound, blockTimeText, sizeText, sumCoins } from "./blocks";
 
 const b = block as unknown as Block;
 const s = status as Status;
@@ -64,23 +63,5 @@ describe("formatting", () => {
     expect(sizeText(1536)).toBe("1.5 KB");
     expect(sizeText(2_000_000)).toBe("1,953.1 KB");
     expect(sizeText(null)).toBe("—");
-  });
-});
-
-describe("txOneLine", () => {
-  const ctx = createRenderContext({ transfers: b.transfers });
-  const [send, delegate] = b.transactions as BlockTx[];
-
-  it("reads the first message through the registry and counts the others", () => {
-    expect(txOneLine(send, ctx)).toBe("Send 10 BZE to bze1m3k…9ds4");
-    expect(txOneLine(delegate, ctx)).toMatch(/^Stake 500 BZE with .+ \+ 1 more action$/);
-    expect(txOneLine({ ...send, msg_types: [...send.msg_types, "a", "b"] }, ctx)).toBe("Send 10 BZE to bze1m3k…9ds4 + 2 more actions");
-  });
-
-  it("falls back to the type in words for an unknown or unreadable message", () => {
-    const unknown = { type_url: "/bze.tradebin.MsgCreateOrder", module: "tradebin", body: null };
-    expect(txOneLine({ ...send, msg_types: [unknown.type_url], first_message: unknown }, ctx)).not.toBe("");
-    expect(txOneLine({ ...send, first_message: { ...send.first_message!, body: null } }, ctx)).not.toBe("");
-    expect(txOneLine({ ...send, msg_types: [], first_message: null }, ctx)).toBe("No actions");
   });
 });
