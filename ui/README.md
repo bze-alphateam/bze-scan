@@ -22,6 +22,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
 | `src/components/tokens` | the tokens list (tiles, kind chips, name filter) and the token page (supply box, about, top holders, recent activity, More details) |
+| `src/components/parameters` | the chain parameters page: last change, anchor nav, one table per group (plain name, human and stored value, what it means), the raw-values box |
 | `src/components/proposals` | the proposals list (voting cards, status chips, title filter) and the proposal page (what it does, votes and checks, where to vote, who voted, timeline, More details) |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
@@ -29,7 +30,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
 | `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
-| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use) |
+| `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use), `parameters.ts` (the chain parameters dictionary, below) |
 | `src/test` | the unit-test setup and `renderWithProviders` |
 | `test/mock-api`, `test/fixtures` | the mock API of the end-to-end tests and its JSON answers; `test/fixtures/messages` holds one message per renderer for the unit tests |
 | `e2e` | Playwright specs, the `mockApi` helper and `noHorizontalScroll` (`layout.ts`) |
@@ -82,7 +83,7 @@ numbers itself:
 | --- | --- | --- |
 | `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 7 s, refetched every 7 s, paused in background tabs |
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
-| `status` | the status light | refetched every 60 s |
+| `status` | the status light, the parameters page | refetched every 60 s |
 | `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
@@ -121,6 +122,19 @@ proposal collects deposits or votes and stops once it resolves.
 thresholds from `useParams()` (gov), never constants; an upgrade's date is
 estimated from `useStatus()`'s height and `useStats()`'s block time. Where to
 vote is data: `voteDestinations()` in `src/lib/links.ts`.
+
+## Chain parameters
+
+`src/lib/parameters.ts` is the dictionary of the parameters page: one
+`ParamDef` per row (`group`, the `/params` `module`, the dotted `paths` inside
+its params, a plain `name`, a `format` per path, an optional `show` composing
+the value cell and `explain(values, ctx)`, which may read `/stats` and the
+other modules). Only words live there: every number comes from the live
+answer, and "Inflation right now" from `/stats`. A path the answer lacks
+renders "not available"; a key no row covers is appended to its group as an
+"advanced" row, raw. `useParams({ poll: true })` refetches every minute on
+that page; elsewhere it is `reference`. Parameter-change proposals name their
+keys with `describeParam` and link to the module's group (`groupOfModule`).
 
 ## Messages in plain words
 

@@ -1,11 +1,12 @@
 {
-  "slashing": {
+  "txfeecollector": {
     "params": {
-      "signed_blocks_window": "10000",
-      "min_signed_per_window": "0.050000000000000000",
-      "downtime_jail_duration": "600s",
-      "slash_fraction_double_sign": "0.050000000000000000",
-      "slash_fraction_downtime": "0.000100000000000000"
+      "ValidatorMinGasFee": {
+        "denom": "ubze",
+        "amount": "0.010000000000000000"
+      },
+      "MaxBalanceIterations": "100",
+      "BlockedIbcInbound": []
     },
     "last_change": null
   },
@@ -23,6 +24,36 @@
       "time": "2025-03-12T10:00:00Z",
       "proposal_id": 11
     }
+  },
+  "mint": {
+    "params": {
+      "mint_denom": "ubze",
+      "inflation_rate_change": "0.100000000000000000",
+      "inflation_max": "0.150000000000000000",
+      "inflation_min": "0.050000000000000000",
+      "goal_bonded": "0.200000000000000000",
+      "blocks_per_year": "5543269"
+    },
+    "last_change": null
+  },
+  "distribution": {
+    "params": {
+      "community_tax": "0.050000000000000000",
+      "base_proposer_reward": "0.000000000000000000",
+      "bonus_proposer_reward": "0.000000000000000000",
+      "withdraw_addr_enabled": true
+    },
+    "last_change": null
+  },
+  "slashing": {
+    "params": {
+      "signed_blocks_window": "10000",
+      "min_signed_per_window": "0.050000000000000000",
+      "downtime_jail_duration": "600s",
+      "slash_fraction_double_sign": "0.050000000000000000",
+      "slash_fraction_downtime": "0.000100000000000000"
+    },
+    "last_change": null
   },
   "gov": {
     "params": {
@@ -58,5 +89,98 @@
       "time": "2025-11-01T10:00:00Z",
       "proposal_id": 40
     }
+  },
+  "tradebin": {
+    "params": {
+      "createMarketFee": {
+        "denom": "ubze",
+        "amount": "25000000000"
+      },
+      "marketMakerFee": {
+        "denom": "ubze",
+        "amount": "1000"
+      },
+      "marketTakerFee": {
+        "denom": "ubze",
+        "amount": "100000"
+      },
+      "makerFeeDestination": "burner",
+      "takerFeeDestination": "burner",
+      "native_denom": "ubze",
+      "orderBookExtraGasWindow": "100",
+      "orderBookQueueExtraGas": "25000",
+      "fillOrdersExtraGas": "5000",
+      "minNativeLiquidityForModuleSwap": "100000000000",
+      "orderBookPerBlockMessages": "500",
+      "orderBookQueueMessageScanExtraGas": "5000"
+    },
+    "last_change": {
+      "height": 20250000,
+      "time": "2025-11-24T09:00:00Z",
+      "proposal_id": 44
+    }
+  },
+  "tokenfactory": {
+    "params": {
+      "create_denom_fee": {
+        "denom": "ubze",
+        "amount": "25000000000"
+      }
+    },
+    "last_change": null
+  },
+  "rewards": {
+    "params": {
+      "createStakingRewardFee": {
+        "denom": "ubze",
+        "amount": "25000000000"
+      },
+      "createTradingRewardFee": {
+        "denom": "ubze",
+        "amount": "50000000000"
+      },
+      "extraGasForExitStake": "1000000",
+      "createDenomRewardFee": {
+        "denom": "ubze",
+        "amount": "25000000000"
+      },
+      "createDenomRewardPrizeFee": {
+        "denom": "ubze",
+        "amount": "5000000000"
+      },
+      "addDenomRewardScheduleFee": {
+        "denom": "ubze",
+        "amount": "5000000000"
+      },
+      "maxPrizeDenomsPerDr": 5,
+      "extraGasForDenomExit": "1000000",
+      "denomRewardLock": 5,
+      "denomRewardMinStake": "1000000"
+    },
+    "last_change": {
+      "height": 20250000,
+      "time": "2025-11-24T09:00:00Z",
+      "proposal_id": 44
+    }
+  },
+  "burner": {
+    "params": {
+      "periodic_burning_weeks": "4"
+    },
+    "last_change": null
+  },
+  "cointrunk": {
+    "params": {
+      "anon_article_limit": "5",
+      "anon_article_cost": {
+        "denom": "ubze",
+        "amount": "25000000000"
+      },
+      "publisher_respect_params": {
+        "tax": "0.200000000000000000",
+        "denom": "ubze"
+      }
+    },
+    "last_change": null
   }
 }

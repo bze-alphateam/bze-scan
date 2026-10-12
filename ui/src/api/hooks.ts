@@ -403,10 +403,17 @@ export function useStats() {
   return useQuery({ queryKey: queryKeys.stats(), queryFn: ({ signal }) => api.stats(signal), ...live });
 }
 
-/** Every module's live parameters: they change only through governance. */
-export function useParams() {
+/**
+ * Every module's live parameters: they change only through governance.
+ * `poll` (the parameters page) refetches them every minute.
+ */
+export function useParams({ poll = false }: { poll?: boolean } = {}) {
   const api = useApi();
-  return useQuery({ queryKey: queryKeys.params(), queryFn: ({ signal }) => api.params(signal), ...reference });
+  return useQuery({
+    queryKey: queryKeys.params(),
+    queryFn: ({ signal }) => api.params(signal),
+    ...(poll ? status : reference),
+  });
 }
 
 /** Runs only for a non-empty query. */

@@ -9,6 +9,7 @@ import { AccountChip } from "@/components/ui/account-chip";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount, formatDate } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
+import { describeParam, groupOfModule, PARAM_GROUPS, plainKey } from "@/lib/parameters";
 import { coins, Fields, humanise } from "@/render/messages/common";
 import { coinsText, type Action, type Entry } from "@/render/proposals";
 
@@ -39,6 +40,30 @@ function Value({ value, denoms }: { value: unknown; denoms?: Map<string, TokenSu
 
 function EntryTable({ entries, denoms }: { entries: Entry[]; denoms?: Map<string, TokenSummary> }) {
   return <Fields rows={entries.map((e) => ({ label: humanise(e.key), value: <Value value={e.value} denoms={denoms} /> }))} />;
+}
+
+/** A parameter change's new values: plain names and values from the parameters dictionary, raw for keys it lacks. */
+function ParamTable({ module, entries, denoms }: { module: string; entries: Entry[]; denoms?: Map<string, TokenSummary> }) {
+  return (
+    <Fields
+      rows={entries.map((e) => {
+        const plain = describeParam(module, e.key, e.value);
+        return {
+          label: plain?.name ?? plainKey(e.key),
+          value: plain ? (
+            <Text as="span">
+              {plain.value}{" "}
+              <Text as="span" fontFamily="mono" fontSize="xs" color="fg.subtle">
+                {e.key}
+              </Text>
+            </Text>
+          ) : (
+            <Value value={e.value} denoms={denoms} />
+          ),
+        };
+      })}
+    />
+  );
 }
 
 const blockLink = (height: number) => (
@@ -120,7 +145,8 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
           )}
         </Stack>
       );
-    case "params":
+    case "params": {
+      const group = PARAM_GROUPS.find((g) => g.group === groupOfModule(a.module));
       return (
         <Stack gap="3" fontSize="sm" data-testid="action" data-action={a.type}>
           <Text>
@@ -128,15 +154,18 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
             {a.entries.length === 1 ? "parameter" : "parameters"}
             {a.whole ? ", to these values:" : ":"}
           </Text>
-          <EntryTable entries={a.entries} denoms={denoms} />
+          <ParamTable module={a.module} entries={a.entries} denoms={denoms} />
           <Text color="fg.muted">
             Takes effect the moment the proposal passes ·{" "}
             <Link asChild>
-              <NextLink href={`/parameters#${encodeURIComponent(a.module)}`}>see all {a.module} parameters</NextLink>
+              <NextLink href={`/parameters#${group?.group ?? encodeURIComponent(a.module)}`}>
+                see all {group?.label ?? a.module} parameters
+              </NextLink>
             </Link>
           </Text>
         </Stack>
       );
+    }
     case "publisher":
       return (
         <HStack gap="1.5" wrap="wrap" fontSize="sm" data-testid="action" data-action={a.type}>
