@@ -15,6 +15,7 @@
     "no_with_veto": "5000000000000"
   },
   "turnout_pct": "82.71605",
+  "tally_source": "sync",
   "summary": "If passed, this proposal upgrades the chain to v8.2.0. It adds halted denoms on the DEX, denom rewards and a safer IBC filter.\n\nValidators: build from the tag or download the binaries from the release page.",
   "metadata": "https://github.com/bze-alphateam/bze/releases/tag/v8.2.0",
   "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",

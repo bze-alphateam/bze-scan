@@ -7,6 +7,9 @@ import type { ChainParams, Page, Proposal, ProposalDeposit, ProposalVote, Stats,
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
+import p43Json from "../../../test/fixtures/api/v1/proposals/43.json";
+import deposits43 from "../../../test/fixtures/api/v1/proposals/43/deposits.json";
+import votes43 from "../../../test/fixtures/api/v1/proposals/43/votes.json";
 import p45Json from "../../../test/fixtures/api/v1/proposals/45.json";
 import deposits45 from "../../../test/fixtures/api/v1/proposals/45/deposits.json";
 import votes45 from "../../../test/fixtures/api/v1/proposals/45/votes.json";
@@ -22,8 +25,18 @@ import { ProposalPage } from "./proposal-page";
 
 const p48 = p48Json as Proposal;
 const p45 = p45Json as Proposal;
-const VOTES: Record<number, Page<ProposalVote>> = { 48: votes48 as Page<ProposalVote>, 45: votes45 as Page<ProposalVote> };
-const DEPOSITS: Record<number, Page<ProposalDeposit>> = { 48: deposits48 as Page<ProposalDeposit>, 45: deposits45 as Page<ProposalDeposit> };
+// 43 was tallied before the explorer ran: the snapshots command read its turnout, votes and deposit from the archive.
+const p43 = p43Json as Proposal;
+const VOTES: Record<number, Page<ProposalVote>> = {
+  48: votes48 as Page<ProposalVote>,
+  45: votes45 as Page<ProposalVote>,
+  43: votes43 as Page<ProposalVote>,
+};
+const DEPOSITS: Record<number, Page<ProposalDeposit>> = {
+  48: deposits48 as Page<ProposalDeposit>,
+  45: deposits45 as Page<ProposalDeposit>,
+  43: deposits43 as Page<ProposalDeposit>,
+};
 
 // The fake API filters like the backend: by option, and by validator owners.
 const proposalVotes: ExplorerApi["proposalVotes"] = (id, p) =>
@@ -141,6 +154,54 @@ describe("ProposalPage", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "See every vote" }));
     expect(await screen.findByRole("tab", { name: "Everyone · 3" })).toBeInTheDocument();
+
+    // Indexed votes and a synced turnout: nothing is marked historical.
+    expect(await screen.findAllByTestId("validator-vote")).toHaveLength(1);
+    expect(screen.queryByTestId("historical-turnout")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("historical-vote")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("historical-explainer")).not.toBeInTheDocument();
+  });
+
+  it("marks what the archive read as historical: the turnout, the votes and the deposit", async () => {
+    renderWithProviders(<ProposalPage id={43} />, { api: api(p43) });
+    expect(await screen.findByTestId("result-line")).toHaveTextContent("Passed May 6, 2025 · 100% Yes · 67.3% turnout");
+    // The header's chip, then the turnout check's once the voting rules load.
+    await waitFor(() => expect(screen.getAllByTestId("historical-turnout")).toHaveLength(2));
+    const [header, check] = screen.getAllByTestId("historical-turnout");
+    expect(header).toHaveAttribute("title", expect.stringContaining("after the fact"));
+    expect(within(screen.getByTestId("votes-card")).getByTestId("historical-turnout")).toBe(check);
+    expect(await screen.findByTestId("historical-explainer")).toHaveTextContent(
+      "Some votes were read from the chain's state at the end of voting (marked historical).",
+    );
+
+    const who = screen.getByTestId("who-voted");
+    await userEvent.click(within(who).getByRole("button", { name: "See every vote" }));
+    const [validatorVote] = await within(who).findAllByTestId("validator-vote");
+    const mark = within(validatorVote).getByRole("link", { name: "historical" });
+    expect(mark).toHaveAttribute("href", "/blocks/17131436");
+    expect(mark).toHaveAttribute("title", "Vote as recorded on chain when voting ended; the voting transaction itself is not indexed.");
+    expect(validatorVote).not.toHaveTextContent(/ago/);
+
+    await userEvent.click(within(who).getByRole("tab", { name: "Everyone · 27" }));
+    const rows = await within(who).findAllByTestId("vote-row");
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(within(row).getByRole("link", { name: "historical" })).toHaveAttribute("href", "/blocks/17131436");
+      expect(row).not.toHaveTextContent(/ago/);
+      expect(within(row).queryByRole("link", { name: /ago/ })).not.toBeInTheDocument();
+    }
+
+    await userEvent.click(screen.getByRole("button", { name: /More details/ }));
+    const deposits = await screen.findByTestId("deposits");
+    expect(deposits).toHaveTextContent("100,000 BZE in total · historical · by");
+    expect(within(deposits).queryByRole("link", { name: /tx|ago/i })).not.toBeInTheDocument();
+  });
+
+  it("explains the historical rows when only a deposit came from the archive", async () => {
+    const archived: Page<ProposalDeposit> = { items: [{ ...deposits45.items[0], source: "archive" } as ProposalDeposit], next_cursor: null };
+    renderWithProviders(<ProposalPage id={45} />, { api: api(p45, { proposalDeposits: () => Promise.resolve(archived) }) });
+    expect(await screen.findByTestId("historical-explainer")).toBeInTheDocument();
+    expect(screen.queryByTestId("historical-turnout")).not.toBeInTheDocument();
   });
 
   it("keeps message types, deposits and the raw proposal in More details", async () => {

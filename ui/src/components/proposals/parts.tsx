@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Box, Grid, HStack, Stack, Text } from "@chakra-ui/react";
+import type { ReactNode } from "react";
 import { LuCircleCheck, LuCircleX } from "react-icons/lu";
 
 import type { ProposalSummary, Tally, TokenSummary } from "@/api/types";
@@ -59,6 +60,19 @@ export function TallyBars({
   );
 }
 
+const HISTORICAL_TURNOUT =
+  "Read from the chain's state at the end of voting, after the fact: the explorer was not running when this proposal was voted on.";
+
+/** The muted "historical" mark of a turnout the snapshots command read from the archive; nothing otherwise. */
+export function HistoricalChip({ p }: { p: Pick<ProposalSummary, "tally_source"> }) {
+  if (p.tally_source !== "archive") return null;
+  return (
+    <Badge variant="outline" colorPalette="gray" size="sm" rounded="full" color="fg.muted" title={HISTORICAL_TURNOUT} data-testid="historical-turnout">
+      historical
+    </Badge>
+  );
+}
+
 export function VerdictChip({ v }: { v: { pass: boolean; text: string } }) {
   return (
     <Badge colorPalette={v.pass ? "green" : "orange"} variant="subtle" size="md" rounded="full" data-testid="verdict">
@@ -67,7 +81,7 @@ export function VerdictChip({ v }: { v: { pass: boolean; text: string } }) {
   );
 }
 
-function CheckRow({ ok, title, detail }: { ok: boolean; title: string; detail: string }) {
+function CheckRow({ ok, title, detail, mark }: { ok: boolean; title: string; detail: string; mark?: ReactNode }) {
   return (
     <HStack gap="2" align="start" role="listitem" data-testid="check" data-ok={ok}>
       <Box color={ok ? "green.fg" : "red.fg"} pt="0.5" aria-hidden>
@@ -80,22 +94,24 @@ function CheckRow({ ok, title, detail }: { ok: boolean; title: string; detail: s
             {ok ? ": yes" : ": no"}
           </Text>
         </Text>
-        <Text fontSize="xs" color="fg.muted">
-          {detail}
-        </Text>
+        <HStack gap="1.5" wrap="wrap" fontSize="xs" color="fg.muted">
+          <Text as="span">{detail}</Text>
+          {mark}
+        </HStack>
       </Stack>
     </HStack>
   );
 }
 
-/** The three checks the chain runs when voting ends. */
-export function ChecksList({ c }: { c: Checks }) {
+/** The three checks the chain runs when voting ends; the turnout marked historical when the archive measured it. */
+export function ChecksList({ c, p }: { c: Checks; p?: Pick<ProposalSummary, "tally_source"> }) {
   return (
     <Stack gap="2" role="list" aria-label="Checks">
       <CheckRow
         ok={c.turnout.ok}
         title="Enough people voted"
         detail={`${formatPct(c.turnout.value)} of staked BZE voted · ${formatPct(c.turnout.need, { trim: true })} needed`}
+        mark={p && <HistoricalChip p={p} />}
       />
       <CheckRow
         ok={c.yes.ok}

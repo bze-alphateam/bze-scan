@@ -13,7 +13,7 @@ import { TableSkeleton } from "@/components/ui/skeleton";
 import { formatDateTime, formatPct } from "@/lib/format";
 import { checks, endedText, endsIn, excerpt, govRules, kindLabel, resultText, verdict } from "@/render/proposals";
 
-import { ProposalStatusBadge, TallyBars, VerdictChip } from "./parts";
+import { HistoricalChip, ProposalStatusBadge, TallyBars, VerdictChip } from "./parts";
 
 const proposalHref = (id: number) => `/proposals/${id}`;
 
@@ -58,10 +58,13 @@ function VotingCard({ p, now }: { p: ProposalSummary; now: Date }) {
         </HStack>
         <TallyBars tally={p.tally} />
         <HStack justify="space-between" wrap="wrap" gap="2">
-          <Text fontSize="sm" color="fg.muted">
-            {p.turnout_pct != null ? `${formatPct(p.turnout_pct)} of staked BZE voted` : "Not tallied yet"}
-            {c && ` · quorum of ${formatPct(c.turnout.need, { trim: true })} ${c.turnout.ok ? "reached" : "not reached yet"}`}
-          </Text>
+          <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted">
+            <Text as="span">
+              {p.turnout_pct != null ? `${formatPct(p.turnout_pct)} of staked BZE voted` : "Not tallied yet"}
+              {c && ` · quorum of ${formatPct(c.turnout.need, { trim: true })} ${c.turnout.ok ? "reached" : "not reached yet"}`}
+            </Text>
+            <HistoricalChip p={p} />
+          </HStack>
           {c && <VerdictChip v={verdict(c)} />}
         </HStack>
       </Stack>
@@ -167,10 +170,13 @@ function ProposalRow({ p, now }: { p: ProposalSummary; now: Date }) {
         <PhoneLabel>Result</PhoneLabel>
         {result ?? "—"}
       </Text>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        <PhoneLabel>Turnout</PhoneLabel>
-        {p.turnout_pct != null ? formatPct(p.turnout_pct) : "—"}
-      </Text>
+      <HStack gap="1.5" wrap="wrap" fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }} data-testid="turnout">
+        <Text as="span">
+          <PhoneLabel>Turnout</PhoneLabel>
+          {p.turnout_pct != null ? formatPct(p.turnout_pct) : "—"}
+        </Text>
+        <HistoricalChip p={p} />
+      </HStack>
       <Text fontSize="sm" color="fg.muted" gridColumn={{ base: "1 / -1", md: "auto" }}>
         <PhoneLabel>Ended</PhoneLabel>
         {ended ?? "—"}
