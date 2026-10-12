@@ -1,0 +1,58 @@
+{
+  "id": 48,
+  "title": "Upgrade network to v8.2.0",
+  "kind": "software_upgrade",
+  "status": "voting_period",
+  "expedited": false,
+  "submit_time": "2099-10-09T10:00:00Z",
+  "deposit_end_time": "2099-10-11T10:00:00Z",
+  "voting_start_time": "2099-10-09T10:00:00Z",
+  "voting_end_time": "2099-10-14T14:00:00Z",
+  "tally": {
+    "yes": "300000000000000",
+    "no": "20000000000000",
+    "abstain": "10000000000000",
+    "no_with_veto": "5000000000000"
+  },
+  "turnout_pct": "82.71605",
+  "summary": "If passed, this proposal upgrades the chain to v8.2.0. It adds halted denoms on the DEX, denom rewards and a safer IBC filter.\n\nValidators: build from the tag or download the binaries from the release page.",
+  "metadata": "https://github.com/bze-alphateam/bze/releases/tag/v8.2.0",
+  "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "proposer_label": {
+    "name": "Honeycomb",
+    "kind": "validator_owner"
+  },
+  "message_types": [
+    "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"
+  ],
+  "messages": [
+    {
+      "@type": "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+      "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+      "plan": {
+        "name": "v8.2.0",
+        "time": "0001-01-01T00:00:00Z",
+        "height": "25200000",
+        "info": "",
+        "upgraded_client_state": null
+      }
+    }
+  ],
+  "total_deposit": [
+    {
+      "denom": "ubze",
+      "amount": "100000000000"
+    }
+  ],
+  "tally_bonded_tokens": "405000000000000",
+  "tally_updated_at": "2099-10-11T09:59:00Z",
+  "submit_height": 25080000,
+  "submit_tx_hash": "4C2F8E1A9B7D6C5E4F3A2B1C0D9E8F7A6B5C4D3E2F1A0B9C8D7E6F5A4B3C2D1E",
+  "resolved_height": null,
+  "validators_voted": {
+    "voted": 2,
+    "total": 3
+  },
+  "votes_count": 5,
+  "updated_at": "2099-10-11T09:59:00Z"
+}

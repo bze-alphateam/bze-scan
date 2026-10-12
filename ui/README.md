@@ -22,9 +22,11 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
 | `src/components/tokens` | the tokens list (tiles, kind chips, name filter) and the token page (supply box, about, top holders, recent activity, More details) |
+| `src/components/proposals` | the proposals list (voting cards, status chips, title filter) and the proposal page (what it does, votes and checks, where to vote, who voted, timeline, More details) |
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
 | `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
+| `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
 | `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
 | `src/lib` | `env.ts` (settings), `links.ts` (nav and app links, `websiteLink`), `format.ts` (display helpers), `math.ts` (decimal sums, values and shares on string amounts: the only `bignumber.js` math pages use) |
@@ -109,6 +111,16 @@ too. `useTokenHolders` (the top 10, then 100 a page) and `useTokenTransfers`
 (20 a page) are infinite queries the page grows on request;
 `useTokenEventsAfter` reads every event older than the token's newest 20, so
 the mint and burn totals count them all.
+
+`useProposals(status)` is an infinite query, 20 a page, one cache entry per
+status chip (a chip change shows skeleton rows). `useProposal` polls while a
+proposal collects deposits or votes and stops once it resolves.
+`useValidatorVotes` reads every vote of a validator owner
+(`?voter=validators`) for the validators tab and the not-voted list;
+`useProposalVotes` pages everyone's votes, by option. The checks read the
+thresholds from `useParams()` (gov), never constants; an upgrade's date is
+estimated from `useStatus()`'s height and `useStats()`'s block time. Where to
+vote is data: `voteDestinations()` in `src/lib/links.ts`.
 
 ## Messages in plain words
 

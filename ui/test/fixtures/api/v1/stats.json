@@ -1,0 +1,22 @@
+{
+  "latest_height": 25120450,
+  "latest_time": "2026-10-11T12:00:00Z",
+  "avg_block_time_ms": 5900,
+  "txs_24h": 1840,
+  "bonded_tokens": "405000000000000",
+  "supply": "661300000000000",
+  "community_pool": "12500000000000",
+  "staked_share": "61.23456",
+  "inflation": "9.80000",
+  "reward_rate": "8.91234",
+  "validators": {
+    "active": 3,
+    "total": 5
+  },
+  "max_validators": 40,
+  "unbonding_period": 1814400,
+  "price_usd": "0.0015",
+  "price_change_24h_pct": "1.23450",
+  "daily": [],
+  "today": null
+}

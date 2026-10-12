@@ -45,6 +45,8 @@ type Proposal struct {
 	// that voted on the proposal.
 	ValidatorsVoted int
 	ValidatorsTotal int
+	// VotesCount is how many accounts voted (one vote each, the latest).
+	VotesCount int
 }
 
 // ProposalVote is a proposal_votes row with its transaction's hash, the
@@ -124,13 +126,14 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 	var name, kind *string
 	dest := append(proposalSummaryDest(&p.ProposalSummary), &p.Summary, &p.Metadata, &p.Proposer, &name, &kind,
 		&p.MessageTypes, &p.Messages, &p.TotalDeposit, &p.TallyUpdatedAt, &p.SubmitHeight, &p.SubmitTxHash,
-		&p.ResolvedHeight, &p.UpdatedAt, &p.ValidatorsVoted, &p.ValidatorsTotal)
+		&p.ResolvedHeight, &p.UpdatedAt, &p.ValidatorsVoted, &p.ValidatorsTotal, &p.VotesCount)
 	err := r.db.QueryRow(ctx, `SELECT `+proposalSummaryCols+`, p.summary, p.metadata, p.proposer, l.name, l.kind,
 			p.message_types, p.messages, p.total_deposit, p.tally_updated_at, p.submit_height, p.submit_tx_hash,
 			p.resolved_height, p.updated_at,
 			(SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded'
 			   AND EXISTS (SELECT 1 FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id AND pv.voter = v.account_address)),
-			(SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded')
+			(SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded'),
+			(SELECT count(*) FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id)
 		FROM explorer.proposals p
 		LEFT JOIN explorer.labels l ON l.address = p.proposer
 		WHERE p.id = $1`, id).Scan(dest...)
@@ -147,13 +150,14 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 // ProposalVotes returns up to limit votes on proposal id, newest first,
 // before the key before (from the newest when nil). option filters by the
 // single option (yes, no, abstain, no_with_veto) or, "weighted", the split
-// votes; nil keeps every vote.
-func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, before *VoteKey, limit int) ([]ProposalVote, error) {
-	args := []any{id, option, limit}
+// votes; nil keeps every vote. validators keeps only the votes of accounts
+// that own a validator.
+func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, validators bool, before *VoteKey, limit int) ([]ProposalVote, error) {
+	args := []any{id, option, limit, validators}
 	keyset := ""
 	if before != nil {
 		args = append(args, before.Height, before.TxIndex, before.Voter)
-		keyset = ` AND (pv.height, pv.tx_index, pv.voter) < ($4, $5, $6)`
+		keyset = ` AND (pv.height, pv.tx_index, pv.voter) < ($5, $6, $7)`
 	}
 	rows, err := r.db.Query(ctx, `SELECT pv.voter, l.name, l.kind, pv.option, pv.options, pv.height, pv.tx_index,
 			t.hash, pv.time, v.moniker, v.operator_address, v.voting_power_pct::text
@@ -163,7 +167,8 @@ func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, 
 		LEFT JOIN LATERAL (SELECT moniker, operator_address, voting_power_pct FROM explorer.validators
 		                    WHERE account_address = pv.voter ORDER BY tokens DESC LIMIT 1) v ON true
 		WHERE pv.proposal_id = $1
-		  AND ($2::text IS NULL OR ($2 = 'weighted' AND pv.option IS NULL) OR pv.option = $2)`+keyset+`
+		  AND ($2::text IS NULL OR ($2 = 'weighted' AND pv.option IS NULL) OR pv.option = $2)
+		  AND (NOT $4::boolean OR v.operator_address IS NOT NULL)`+keyset+`
 		ORDER BY pv.height DESC, pv.tx_index DESC, pv.voter DESC LIMIT $3`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("proposal %d votes: %w", id, err)

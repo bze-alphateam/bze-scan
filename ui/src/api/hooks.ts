@@ -10,12 +10,17 @@ import type { ExplorerApi } from "./client";
 import type {
   Page,
   PageParams,
+  Proposal,
+  ProposalDeposit,
+  ProposalStatus,
+  ProposalVote,
   TokenEvent,
   TokenListParams,
   TokenSummary,
   TxListParams,
   ValidatorList,
   ValidatorListParams,
+  VoteOption,
 } from "./types";
 
 /** Query keys, one tuple per route and its arguments. */
@@ -40,7 +45,13 @@ export const queryKeys = {
   tokenEventsAfter: (denom: string, cursor: string) => ["token-events", denom, cursor] as const,
   tokenHolders: (denom: string) => ["token-holders", denom] as const,
   tokenTransfers: (denom: string) => ["token-transfers", denom] as const,
+  proposals: (status: ProposalStatus | null) => ["proposals", status] as const,
+  proposal: (id: number) => ["proposal", id] as const,
+  proposalVotes: (id: number, option: VoteOption | "weighted" | null) => ["proposal-votes", id, option] as const,
+  validatorVotes: (id: number) => ["proposal-votes", id, "validators"] as const,
+  proposalDeposits: (id: number) => ["proposal-deposits", id] as const,
   search: (q: string) => ["search", q] as const,
+  stats: () => ["stats"] as const,
   params: () => ["params"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -309,6 +320,87 @@ export function useTokenTransfers(denom: string) {
     getNextPageParam: nextPage(20),
     ...live,
   });
+}
+
+/** Every page of a list route, pages of 100 followed to the last. */
+async function allPages<T>(read: (cursor: string | undefined) => Promise<Page<T>>): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await read(cursor);
+    items.push(...page.items);
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor);
+  return items;
+}
+
+/** The proposals, newest first, of one status (every status for null): 20 a page, the loaded pages polled. */
+export function useProposals(status: ProposalStatus | null) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.proposals(status),
+    queryFn: ({ pageParam, signal }) => api.proposals({ ...pageParam, status: status ?? undefined }, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...live,
+  });
+}
+
+/** A proposal still moves while it collects deposits or votes; once resolved it never changes. */
+const resolved = (p: Proposal | undefined) => p != null && p.status !== "deposit_period" && p.status !== "voting_period";
+
+/** A proposal: polled while open, fetched once after its resolution. */
+export function useProposal(id: number) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.proposal(id),
+    queryFn: ({ signal }) => api.proposal(id, signal),
+    ...live,
+    refetchInterval: (q) => (resolved(q.state.data) ? false : live.refetchInterval),
+    staleTime: (q) => (resolved(q.state.data) ? Infinity : live.staleTime),
+  });
+}
+
+/** Everyone's votes on a proposal, newest first, of one option (every vote for null): 25 a page. */
+export function useProposalVotes(id: number, option: VoteOption | "weighted" | null, open = true) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.proposalVotes(id, option),
+    queryFn: ({ pageParam, signal }) => api.proposalVotes(id, { ...pageParam, option: option ?? undefined }, signal),
+    initialPageParam: firstPage(25),
+    getNextPageParam: nextPage(25),
+    ...(open ? live : immutable),
+  });
+}
+
+/** Every vote of a validator owner on a proposal (a few dozen at most); polled while voting is open. */
+export function useValidatorVotes(id: number, open = true) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.validatorVotes(id),
+    queryFn: async ({ signal }): Promise<ProposalVote[]> =>
+      (await allPages((cursor) => api.proposalVotes(id, { voter: "validators", limit: 100, cursor }, signal))).filter(
+        (v) => v.validator_operator != null,
+      ),
+    ...(open ? live : immutable),
+  });
+}
+
+/** Every deposit on a proposal: a proposal has a handful. */
+export function useProposalDeposits(id: number) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.proposalDeposits(id),
+    queryFn: ({ signal }): Promise<ProposalDeposit[]> =>
+      allPages((cursor) => api.proposalDeposits(id, { limit: 100, cursor }, signal)),
+    ...reference,
+  });
+}
+
+/** The home tiles: chain height, block time, supply and staking. */
+export function useStats() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.stats(), queryFn: ({ signal }) => api.stats(signal), ...live });
 }
 
 /** Every module's live parameters: they change only through governance. */

@@ -95,6 +95,7 @@ func TestProposalsVotesAndTheFrozenTally(t *testing.T) {
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100000000000"}]`, string(p.TotalDeposit))
 	assert.Equal(t, 1, p.ValidatorsVoted.Voted, "one of the two voters owns a bonded validator")
 	assert.Positive(t, p.ValidatorsVoted.Total)
+	assert.Equal(t, 2, p.VotesCount)
 	assert.Nil(t, p.ResolvedHeight)
 
 	votes := into[dto.List[dto.ProposalVote]](t, fetch(t, base+"/proposals/47/votes"))
@@ -109,6 +110,9 @@ func TestProposalsVotesAndTheFrozenTally(t *testing.T) {
 	assert.Equal(t, alphaOperator, *val.ValidatorOperator)
 	assert.NotEmpty(t, *val.VotingPowerPct)
 	assert.Empty(t, into[dto.List[dto.ProposalVote]](t, fetch(t, base+"/proposals/47/votes?option=no")).Items)
+	owners := into[dto.List[dto.ProposalVote]](t, fetch(t, base+"/proposals/47/votes?voter=validators"))
+	require.Len(t, owners.Items, 1, "the validator owner's vote only")
+	assert.Equal(t, alphaOwner, owners.Items[0].Voter)
 
 	deposits := into[dto.List[dto.ProposalDeposit]](t, fetch(t, base+"/proposals/47/deposits"))
 	require.Len(t, deposits.Items, 1)

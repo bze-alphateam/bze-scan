@@ -28,6 +28,7 @@ type fakeProposals struct {
 	err      error
 
 	gotStatus, gotOption *string
+	gotValidators        bool
 	gotBefore            *int64
 	gotVoteKey           *repository.VoteKey
 	gotDepositKey        *repository.DepositKey
@@ -49,8 +50,8 @@ func (f *fakeProposals) Proposal(_ context.Context, id int64) (*repository.Propo
 	return f.proposal, nil
 }
 
-func (f *fakeProposals) ProposalVotes(_ context.Context, _ int64, option *string, before *repository.VoteKey, limit int) ([]repository.ProposalVote, error) {
-	f.gotOption, f.gotVoteKey, f.gotLimit = option, before, limit
+func (f *fakeProposals) ProposalVotes(_ context.Context, _ int64, option *string, validators bool, before *repository.VoteKey, limit int) ([]repository.ProposalVote, error) {
+	f.gotOption, f.gotValidators, f.gotVoteKey, f.gotLimit = option, validators, before, limit
 	return f.votes[:min(limit, len(f.votes))], nil
 }
 
@@ -110,7 +111,7 @@ func TestProposalPage(t *testing.T) {
 	p := &repository.Proposal{ProposalSummary: summary(47), Proposer: strp("bze1p"),
 		MessageTypes: []string{"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"},
 		Messages:     json.RawMessage(`[{"@type":"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"}]`),
-		TotalDeposit: json.RawMessage(`[{"denom":"ubze","amount":"100"}]`), ValidatorsVoted: 7, ValidatorsTotal: 30,
+		TotalDeposit: json.RawMessage(`[{"denom":"ubze","amount":"100"}]`), ValidatorsVoted: 7, ValidatorsTotal: 30, VotesCount: 842,
 		ProposerLabel: &repository.Label{Address: "bze1p", Name: "Alpha", Kind: "known"}, UpdatedAt: time.Unix(5, 0)}
 	e := proposalServer(&fakeProposals{proposal: p})
 
@@ -119,6 +120,7 @@ func TestProposalPage(t *testing.T) {
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
 	got := decode[dto.Proposal](t, rec)
 	assert.Equal(t, dto.ValidatorsVoted{Voted: 7, Total: 30}, got.ValidatorsVoted)
+	assert.Equal(t, 842, got.VotesCount)
 	assert.Equal(t, "Alpha", got.ProposerLabel.Name)
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100"}]`, string(got.TotalDeposit))
 	assert.Nil(t, got.ResolvedHeight)
@@ -141,6 +143,7 @@ func TestProposalVotesNameValidatorsAndPage(t *testing.T) {
 	rec := get(t, e, "/api/v1/proposals/47/votes?limit=1&option=yes")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, "yes", *f.gotOption)
+	assert.False(t, f.gotValidators)
 	page := decode[dto.List[dto.ProposalVote]](t, rec)
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "ChainTools", *page.Items[0].Validator)
@@ -155,6 +158,9 @@ func TestProposalVotesNameValidatorsAndPage(t *testing.T) {
 	assert.Nil(t, rest.Items[1].Option, "a split vote")
 	assert.Nil(t, rest.Items[1].Validator, "not a validator owner")
 
+	require.Equal(t, http.StatusOK, get(t, e, "/api/v1/proposals/47/votes?voter=validators").Code)
+	assert.True(t, f.gotValidators, "voter=validators keeps the validator owners")
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/votes?voter=all").Code)
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/votes?option=maybe").Code)
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/votes?cursor="+dto.EncodeCursor(1)).Code)
 	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/proposals/9/votes").Code)
