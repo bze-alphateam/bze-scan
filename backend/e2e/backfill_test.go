@@ -10,6 +10,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,7 @@ func backfilled() []string {
 var quickRetries = serve.Options{
 	BackfillRetryDelays:    []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond},
 	BackfillUnavailableMin: time.Millisecond,
+	BackfillLockRetry:      20 * time.Millisecond,
 }
 
 type backfillEnv struct {
@@ -289,6 +291,29 @@ func TestServeRunsTheBackfillAndTheStatusFollowsIt(t *testing.T) {
 	}
 	require.Equal(t, "finished", last.BackFill.Status)
 	assert.True(t, heightIs(last.BackFill.OldestHeight, backfillFloor))
+	e.assertComplete(t)
+}
+
+// A restart can start the new process before the old one has released the
+// backfill's lock (a blue/green deploy always does): serve waits for the lock
+// and runs the job once it is free, instead of skipping it until the next
+// start.
+func TestServeRunsTheBackfillOnceAnotherProcessReleasesItsLock(t *testing.T) {
+	e := newBackfillEnv(t)
+	release, ok, err := backfill.NewPGLocker(e.url).TryLock(context.Background(), backfill.JobMain)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	runServeBackfill(t, e, true, 0)
+	time.Sleep(200 * time.Millisecond)
+	assert.Empty(t, e.heights(t), "the lock is held elsewhere")
+	assert.Zero(t, e.archive.Requests(fakenode.RouteBlock))
+
+	release()
+	require.Eventually(t, func() bool { return len(e.heights(t)) == len(backfilled()) },
+		15*time.Second, 50*time.Millisecond, "the backfill ran once the lock was free")
+	require.Eventually(t, func() bool { return strings.HasPrefix(e.checkpoint(t), "done ") },
+		5*time.Second, 50*time.Millisecond)
 	e.assertComplete(t)
 }
 
