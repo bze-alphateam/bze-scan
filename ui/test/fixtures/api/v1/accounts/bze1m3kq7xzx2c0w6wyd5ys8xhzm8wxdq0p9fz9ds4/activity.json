@@ -1,0 +1,249 @@
+{
+  "items": [
+    {
+      "time": "2026-10-12T09:58:00Z",
+      "height": 25120440,
+      "tx_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "kind": "send",
+      "category": "sent",
+      "is_signer": true,
+      "success": true,
+      "counterparty": {
+        "address": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "label": null,
+        "moniker": null
+      },
+      "deltas": [
+        {
+          "denom": "ubze",
+          "amount": "-10002000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ],
+      "details": null,
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ]
+    },
+    {
+      "time": "2026-10-12T09:41:00Z",
+      "height": 25120301,
+      "tx_hash": null,
+      "kind": "dex_fill",
+      "category": "dex",
+      "is_signer": false,
+      "success": true,
+      "counterparty": null,
+      "deltas": [
+        {
+          "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "amount": "2560000",
+          "symbol": "USDC",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [],
+      "details": [
+        {
+          "type": "bze.tradebin.OrderExecutedEvent",
+          "attrs": {
+            "id": "000000000000000000000412",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "sell",
+            "amount": "200000000",
+            "price": "0.0128",
+            "maker": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+            "taker": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+            "mode": "EndBlock"
+          }
+        }
+      ],
+      "fee": null
+    },
+    {
+      "time": "2026-10-12T08:12:00Z",
+      "height": 25119522,
+      "tx_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "kind": "send",
+      "category": "received",
+      "is_signer": false,
+      "success": true,
+      "counterparty": {
+        "address": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+        "label": null,
+        "moniker": null
+      },
+      "deltas": [
+        {
+          "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+          "amount": "25000000",
+          "symbol": "HONEY",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ],
+      "details": null,
+      "fee": null
+    },
+    {
+      "time": "2026-10-11T19:30:00Z",
+      "height": 25111608,
+      "tx_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "kind": "delegate",
+      "category": "staking",
+      "is_signer": true,
+      "success": true,
+      "counterparty": {
+        "address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+        "label": null,
+        "moniker": "Honeycomb"
+      },
+      "deltas": [
+        {
+          "denom": "ubze",
+          "amount": "-500002000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/cosmos.staking.v1beta1.MsgDelegate"
+      ],
+      "details": null,
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ]
+    },
+    {
+      "time": "2026-10-11T15:02:00Z",
+      "height": 25108950,
+      "tx_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+      "kind": "burner_fund",
+      "category": "burner",
+      "is_signer": true,
+      "success": true,
+      "counterparty": null,
+      "deltas": [
+        {
+          "denom": "ubze",
+          "amount": "-250002000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/bze.burner.MsgFundBurner"
+      ],
+      "details": null,
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ]
+    },
+    {
+      "time": "2026-10-10T21:47:00Z",
+      "height": 25098705,
+      "tx_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+      "kind": "claim_rewards",
+      "category": "staking",
+      "is_signer": true,
+      "success": true,
+      "counterparty": null,
+      "deltas": [
+        {
+          "denom": "ubze",
+          "amount": "15748000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+        "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward"
+      ],
+      "details": null,
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ]
+    },
+    {
+      "time": "2026-10-10T11:20:00Z",
+      "height": 25092571,
+      "tx_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+      "kind": "ibc_in",
+      "category": "cross_chain",
+      "is_signer": false,
+      "success": true,
+      "counterparty": null,
+      "deltas": [
+        {
+          "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "amount": "320000000",
+          "symbol": "USDC",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/ibc.core.channel.v1.MsgRecvPacket"
+      ],
+      "details": null,
+      "fee": null
+    },
+    {
+      "time": "2026-10-09T17:05:00Z",
+      "height": 25081920,
+      "tx_hash": "8888888888888888888888888888888888888888888888888888888888888888",
+      "kind": "fee_only",
+      "category": "other",
+      "is_signer": true,
+      "success": false,
+      "counterparty": null,
+      "deltas": [
+        {
+          "denom": "ubze",
+          "amount": "-2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ],
+      "msg_types": [
+        "/cosmos.bank.v1beta1.MsgSend"
+      ],
+      "details": null,
+      "fee": [
+        {
+          "denom": "ubze",
+          "amount": "2000",
+          "symbol": "BZE",
+          "exponent": 6
+        }
+      ]
+    }
+  ],
+  "next_cursor": "MjUwODE5MjA6MQ"
+}
