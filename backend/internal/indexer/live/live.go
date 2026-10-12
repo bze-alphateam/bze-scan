@@ -221,7 +221,8 @@ func heightRange(cursor int64, hasCursor bool, floor int64, hasFloor bool, notif
 
 // pass indexes every height between the cursor and the target, in order. It
 // returns an error only for what a reconnect may fix (the database or the
-// node unreachable); a height that keeps failing is recorded and skipped.
+// node unreachable, which never advances the cursor); a height that keeps
+// failing while the node answers is recorded and skipped.
 func (ix *Indexer) pass(ctx context.Context, notified int64) error {
 	st, _, err := ix.node.Status(ctx)
 	if err != nil {
@@ -296,9 +297,26 @@ func (ix *Indexer) indexHeight(ctx context.Context, h int64) error {
 			// pipeline reads it from an archive node.
 			return ix.recordFailure(hctx, h, attempt, lastErr)
 		}
+		if ix.down(hctx, lastErr) {
+			// An outage, not a bad height: end the session without
+			// recording, so the next pass resumes at this height.
+			return fmt.Errorf("height %d: %w", h, lastErr)
+		}
 		log.WithError(lastErr).WithFields(log.Fields{"height": h, "attempt": attempt}).Warn("live indexer: height failed")
 	}
 	return ix.recordFailure(hctx, h, attempts, lastErr)
+}
+
+// down reports whether err is the node being unreachable rather than a
+// problem of the height: the node did not answer and does not answer /status
+// either. A node that answers /status had trouble with this height only (a
+// slow block timing out, say).
+func (ix *Indexer) down(ctx context.Context, err error) bool {
+	if !errors.Is(err, node.ErrUnavailable) {
+		return false
+	}
+	_, _, serr := ix.node.Status(ctx)
+	return serr != nil
 }
 
 func (ix *Indexer) recordFailure(ctx context.Context, h int64, attempts int, cause error) error {

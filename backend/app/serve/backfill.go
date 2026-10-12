@@ -50,10 +50,11 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 		store:  backfill.NewPGStore(pool),
 		writer: w,
 		cfg: backfill.Config{
-			Workers:     cfg.BackfillWorkers,
-			Batch:       cfg.BackfillBatch,
-			Quiet:       cfg.BackfillQuiet,
-			RetryDelays: opts.BackfillRetryDelays,
+			Workers:        cfg.BackfillWorkers,
+			Batch:          cfg.BackfillBatch,
+			Quiet:          cfg.BackfillQuiet,
+			RetryDelays:    opts.BackfillRetryDelays,
+			UnavailableMin: opts.BackfillUnavailableMin,
 		},
 		deps: backfill.Deps{
 			Archive:      node.New(cfg.ArchiveRPCURL),

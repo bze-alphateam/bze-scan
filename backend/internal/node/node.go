@@ -283,12 +283,12 @@ func (c *Client) callQuery(ctx context.Context, route string, height int64, q ur
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", route, err)
+		return nil, unavailable(ctx, route, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
-		return nil, fmt.Errorf("%s: read body: %w", route, err)
+		return nil, unavailable(ctx, route+": read body", err)
 	}
 
 	var env struct {
@@ -300,10 +300,16 @@ func (c *Client) callQuery(ctx context.Context, route string, height int64, q ur
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
+		if unavailableStatus(resp.StatusCode) {
+			return nil, fmt.Errorf("%s: %w: HTTP %d", route, ErrUnavailable, resp.StatusCode)
+		}
 		return nil, fmt.Errorf("%s: HTTP %d, not a JSON-RPC response: %w", route, resp.StatusCode, err)
 	}
 	if env.Error != nil {
 		return nil, newRPCError(route, height, env.Error.Code, env.Error.Message, env.Error.Data)
+	}
+	if unavailableStatus(resp.StatusCode) {
+		return nil, fmt.Errorf("%s: %w: HTTP %d", route, ErrUnavailable, resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK || len(env.Result) == 0 {
 		return nil, fmt.Errorf("%s: HTTP %d without a result", route, resp.StatusCode)
@@ -320,7 +326,30 @@ var (
 	ErrAboveTip = errors.New("height above the node's tip")
 	// ErrPruned: the node no longer has the height.
 	ErrPruned = errors.New("height pruned by the node")
+	// ErrUnavailable: the node did not answer (connection refused or reset,
+	// a timeout) or a proxy in front of it answered 429, 502, 503 or 504.
+	// It says nothing about the height asked for.
+	ErrUnavailable = errors.New("node unavailable")
 )
+
+// unavailable wraps a transport error in ErrUnavailable, unless ctx is done:
+// a cancelled call is not an outage.
+func unavailable(ctx context.Context, route string, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("%s: %w", route, err)
+	}
+	return fmt.Errorf("%s: %w: %w", route, ErrUnavailable, err)
+}
+
+// unavailableStatus reports whether an HTTP status without a JSON-RPC error
+// is a proxy's answer for a node it cannot reach or that sheds load.
+func unavailableStatus(code int) bool {
+	switch code {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
 
 // RPCError is a JSON-RPC error envelope answered by the node. errors.Is
 // matches ErrAboveTip or ErrPruned when the node's message says so.

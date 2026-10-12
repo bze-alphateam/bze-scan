@@ -48,14 +48,14 @@ func TestFloorDateIsTheFirstBlockAtOrAfterIt(t *testing.T) {
 
 func TestFloorDateProbeFallsBackToTheRetryNode(t *testing.T) {
 	archive, retry := newMockNode(), newMockNode()
-	archive.fail(500, errUnavailable)
+	archive.fail(500, errFetch)
 	got, err := backfill.ResolveFloor(context.Background(), backfill.Floor{Date: blockTime(300)}, archive, retry, 1000)
 	require.NoError(t, err)
 	assert.Equal(t, int64(300), got)
 	assert.Equal(t, []int64{500}, retry.blockCalls())
 
-	archive.fail(500, errUnavailable)
-	retry.fail(500, errUnavailable)
+	archive.fail(500, errFetch)
+	retry.fail(500, errFetch)
 	_, err = backfill.ResolveFloor(context.Background(), backfill.Floor{Date: blockTime(300)}, archive, retry, 1000)
-	require.ErrorIs(t, err, errUnavailable)
+	require.ErrorIs(t, err, errFetch)
 }

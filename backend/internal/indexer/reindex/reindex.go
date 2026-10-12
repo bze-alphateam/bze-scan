@@ -44,7 +44,6 @@ type Store interface {
 // asked once for the lowest height it still has. *node.Client satisfies it.
 type LocalNode interface {
 	backfill.Node
-	Status(ctx context.Context) (*node.Status, []byte, error)
 }
 
 // Deps are the reindex's collaborators. Pipeline.Archive and
@@ -227,6 +226,16 @@ func via[T any](r *routed, h int64, call func(backfill.Node) (T, []byte, error))
 		return call(r.remote)
 	}
 	return v, raw, err
+}
+
+// Status answers when every node a height may be read from answers.
+func (r *routed) Status(ctx context.Context) (*node.Status, []byte, error) {
+	if r.local != nil {
+		if _, _, err := r.local.Status(ctx); err != nil {
+			return nil, nil, err
+		}
+	}
+	return r.remote.Status(ctx)
 }
 
 func (r *routed) Block(ctx context.Context, h int64) (*node.Block, []byte, error) {

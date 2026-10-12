@@ -242,6 +242,22 @@ func TestLiveRecordsAFailingHeightAndMovesOn(t *testing.T) {
 	assert.Equal(t, "24998320", env.state(t, writer.KeyLastIndexedHeight))
 }
 
+func TestLiveWaitsOutANodeRestart(t *testing.T) {
+	env := newLiveEnv(t, h316)
+
+	// The node restarts as the pass reaches 318: more 503s than the
+	// attempts at a height.
+	env.node.GoDownAt(fakenode.RouteBlock, h318, 8)
+	env.node.SetStatusHeight(h318)
+	insertSinkBlock(t, env.db, h318)
+	env.waitBlock(t, h318, 10*time.Second)
+
+	assert.Equal(t, []string{"24998316", "24998317", "24998318"},
+		queryStrings(t, env.db, `SELECT height::text FROM explorer.blocks ORDER BY height`))
+	assert.Empty(t, queryStrings(t, env.db, `SELECT height::text FROM explorer.index_failures`), "an outage is not a failed height")
+	assert.Equal(t, "24998318", env.state(t, writer.KeyLastIndexedHeight))
+}
+
 func TestLiveFloorIsWrittenOnce(t *testing.T) {
 	env := newLiveEnv(t, h316)
 	assert.Equal(t, "24998316", env.state(t, writer.KeyLiveFloor))

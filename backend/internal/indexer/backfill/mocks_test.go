@@ -23,9 +23,13 @@ func blockTime(h int64) time.Time {
 }
 
 // mockNode serves every height. fail makes the next len(errs) requests of a
-// height fail; gate, when set, holds every Block call until it is closed.
+// height fail; gate, when set, holds every Block call until it is closed;
+// down > 0 is an outage: every Block call fails unavailable, and it ends
+// after down /status calls (each failing).
 type mockNode struct {
 	mu       sync.Mutex
+	down     int
+	statuses int
 	fails    map[int64][]error
 	blocks   []int64 // Block calls in order
 	requests int
@@ -53,6 +57,29 @@ func (n *mockNode) next(h int64) error {
 	return nil
 }
 
+func (n *mockNode) Status(context.Context) (*node.Status, []byte, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.statuses++
+	if n.down > 0 {
+		n.down--
+		return nil, nil, fmt.Errorf("status: %w: connection refused", node.ErrUnavailable)
+	}
+	return &node.Status{LatestBlockHeight: 1 << 40, EarliestBlockHeight: 1}, nil, nil
+}
+
+func (n *mockNode) outage(statuses int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.down = statuses
+}
+
+func (n *mockNode) statusCalls() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.statuses
+}
+
 func (n *mockNode) Block(ctx context.Context, h int64) (*node.Block, []byte, error) {
 	n.mu.Lock()
 	n.blocks = append(n.blocks, h)
@@ -74,6 +101,10 @@ func (n *mockNode) Block(ctx context.Context, h int64) (*node.Block, []byte, err
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if n.down > 0 {
+		n.requests++
+		return nil, nil, fmt.Errorf("block: %w: connection refused", node.ErrUnavailable)
+	}
 	if err := n.next(h); err != nil {
 		return nil, nil, err
 	}
@@ -205,12 +236,18 @@ type fakeClock struct {
 	mu     sync.Mutex
 	sleeps []time.Duration
 	timers []chan time.Time
+	// onSleep, when set, is called with the number of sleeps so far.
+	onSleep func(n int)
 }
 
 func (c *fakeClock) Sleep(ctx context.Context, d time.Duration) error {
 	c.mu.Lock()
 	c.sleeps = append(c.sleeps, d)
+	n, on := len(c.sleeps), c.onSleep
 	c.mu.Unlock()
+	if on != nil {
+		on(n)
+	}
 	return ctx.Err()
 }
 
@@ -343,7 +380,7 @@ func (l *mockLocker) TryLock(context.Context, string) (func(), bool, error) {
 	}, true, nil
 }
 
-var errUnavailable = errors.New("archive unavailable")
+var errFetch = errors.New("fetch failed")
 
 func heights(from, to int64) []int64 {
 	var out []int64

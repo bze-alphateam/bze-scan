@@ -41,6 +41,9 @@ type Options struct {
 	Live live.Config
 	// BackfillRetryDelays overrides the backfill's waits between retries.
 	BackfillRetryDelays []time.Duration
+	// BackfillUnavailableMin overrides the backfill's first wait while the
+	// archive is unreachable.
+	BackfillUnavailableMin time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is

@@ -75,6 +75,10 @@ type Node struct {
 	earliest      int64 // 0: the recorded earliest height, nothing pruned
 	requestCounts map[string]int
 	heightCounts  map[string]int
+	down          int    // requests left to answer 503
+	downRoute     string // with downHeight: the request that starts an outage
+	downHeight    int64
+	downFor       int
 }
 
 // New starts a fake node serving the recorded fixtures and closes it when the
@@ -154,6 +158,23 @@ func (n *Node) SetEarliestHeight(h int64) {
 	n.earliest = h
 }
 
+// GoDown makes the next requests requests, of any route, answer HTTP 503 with
+// a proxy's HTML page, as an archive behind a load balancer does while its
+// node restarts.
+func (n *Node) GoDown(requests int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.down = requests
+}
+
+// GoDownAt is GoDown starting with the first request of route at height:
+// that request and the requests-1 after it answer 503.
+func (n *Node) GoDownAt(route string, height int64, requests int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.downRoute, n.downHeight, n.downFor = route, height, requests
+}
+
 // RequestsAt returns how many requests route has received for height.
 func (n *Node) RequestsAt(route string, height int64) int {
 	n.mu.Lock()
@@ -228,7 +249,21 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	n.mu.Lock()
 	n.requestCounts[route]++
 	statusHeight, earliest := n.statusHeight, n.earliest
+	if n.downRoute == route && r.URL.Query().Get("height") == strconv.FormatInt(n.downHeight, 10) {
+		n.down, n.downRoute = n.downFor, ""
+	}
+	down := n.down > 0
+	if down {
+		n.down--
+	}
 	n.mu.Unlock()
+
+	if down {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("<html><body>503 Service Unavailable</body></html>"))
+		return
+	}
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

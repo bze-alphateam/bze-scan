@@ -213,3 +213,35 @@ func TestABCIQueryAnswersTheRecordedState(t *testing.T) {
 	assert.Equal(t, uint32(1), abciErr.Code)
 	assert.Contains(t, abciErr.Log, "no fixture")
 }
+
+func statusCode(t *testing.T, url string) int {
+	t.Helper()
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestGoDownAnswers503ForTheNextRequests(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	block := fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h)
+
+	n.GoDown(2)
+	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, n.URL+fakenode.RouteStatus))
+	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, block))
+	assert.Equal(t, http.StatusOK, statusCode(t, block))
+}
+
+func TestGoDownAtStartsWithThatRequest(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	block := fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h)
+
+	n.GoDownAt(fakenode.RouteBlock, h, 2)
+	assert.Equal(t, http.StatusOK, statusCode(t, n.URL+fakenode.RouteStatus))
+	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, block))
+	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, n.URL+fakenode.RouteStatus))
+	assert.Equal(t, http.StatusOK, statusCode(t, block))
+	assert.Equal(t, http.StatusOK, statusCode(t, block), "once only")
+}

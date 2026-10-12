@@ -255,3 +255,75 @@ func TestPrunedHeightIsErrPruned(t *testing.T) {
 	require.ErrorIs(t, err, node.ErrPruned)
 	assert.NotErrorIs(t, err, node.ErrAboveTip)
 }
+
+func TestUnreachableNodeIsErrUnavailable(t *testing.T) {
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	_, _, err := node.New(closed.URL).Block(context.Background(), 5)
+	require.ErrorIs(t, err, node.ErrUnavailable, "connection refused")
+
+	d := &mockDoer{err: errors.New("read: connection reset by peer")}
+	_, _, err = node.NewWithDoer("http://node:26657", d).Status(context.Background())
+	require.ErrorIs(t, err, node.ErrUnavailable)
+	assert.Contains(t, err.Error(), "connection reset by peer")
+}
+
+func TestProxyStatusesAreErrUnavailable(t *testing.T) {
+	cases := map[string]struct {
+		status int
+		body   string
+	}{
+		"429":                 {http.StatusTooManyRequests, `rate limited`},
+		"502":                 {http.StatusBadGateway, `<html>bad gateway</html>`},
+		"503":                 {http.StatusServiceUnavailable, ``},
+		"504":                 {http.StatusGatewayTimeout, `<html>gateway timeout</html>`},
+		"503 json, no result": {http.StatusServiceUnavailable, `{"message":"no healthy upstream"}`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, err := node.New(srv.URL).Block(context.Background(), 100)
+			require.ErrorIs(t, err, node.ErrUnavailable)
+			assert.NotErrorIs(t, err, node.ErrPruned)
+		})
+	}
+}
+
+func TestHeightErrorsAreNotErrUnavailable(t *testing.T) {
+	cases := map[string]struct {
+		status int
+		body   string
+	}{
+		"above tip":              {http.StatusInternalServerError, `{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"height 200 must be less than or equal to the current blockchain height 100"}}`},
+		"rpc error behind a 503": {http.StatusServiceUnavailable, `{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"something else"}}`},
+		"not json":               {http.StatusInternalServerError, `<html>oops</html>`},
+		"bad result":             {http.StatusOK, `{"jsonrpc":"2.0","id":-1,"result":{"block":{"header":{"height":"x"}}}}`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, err := node.New(srv.URL).Block(context.Background(), 200)
+			require.Error(t, err)
+			assert.NotErrorIs(t, err, node.ErrUnavailable)
+		})
+	}
+}
+
+func TestCancelledCallIsNotErrUnavailable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := &mockDoer{err: context.Canceled}
+	_, _, err := node.NewWithDoer("http://node:26657", d).Block(ctx, 5)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, node.ErrUnavailable)
+}
