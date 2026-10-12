@@ -3,6 +3,7 @@ package backfill_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,13 +28,12 @@ func TestResumeWindow(t *testing.T) {
 		want    int64
 	}{
 		{"first run starts at the ceiling", backfill.Checkpoint{}, false, 1000, 1000},
-		{"X+M above the lowest dispatched", backfill.Checkpoint{LowestDispatched: 500}, true, 1000, 515},
-		{"never above the ceiling", backfill.Checkpoint{LowestDispatched: 990}, true, 1000, 1000},
-		{"nothing dispatched yet", backfill.Checkpoint{LowestDispatched: 1001}, true, 1000, 1000},
+		{"the resume height", backfill.Checkpoint{LowestDispatched: 500, ResumeHeight: 740}, true, 1000, 740},
+		{"never above the ceiling", backfill.Checkpoint{ResumeHeight: 1200}, true, 1000, 1000},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, backfill.ResumeFrom(c.ceiling, c.cp, c.has, 10, 5))
+			assert.Equal(t, c.want, backfill.ResumeFrom(c.ceiling, c.cp, c.has))
 		})
 	}
 }
@@ -52,9 +52,10 @@ func TestMainJobWalksFromTheCeilingToTheFloor(t *testing.T) {
 	assert.NotContains(t, e.archive.blockCalls(), int64(101))
 	assert.NotContains(t, e.archive.blockCalls(), int64(89))
 	assert.Equal(t, backfill.Checkpoint{Job: backfill.JobMain, Ceiling: 100, Floor: 90, LowestDispatched: 90,
-		BlocksDone: 11, Status: backfill.StatusDone}, store.last())
+		ResumeHeight: 90, BlocksDone: 11, Status: backfill.StatusDone}, store.last())
 	assert.Equal(t, backfill.StatusRunning, store.saves[0].Status)
 	assert.Equal(t, int64(101), store.saves[0].LowestDispatched, "nothing dispatched before the run")
+	assert.Equal(t, int64(100), store.saves[0].ResumeHeight, "the ceiling before the run")
 	assert.Equal(t, 1, locker.released)
 }
 
@@ -75,7 +76,7 @@ func TestMainJobResumesAboveTheCheckpointAndSkipsWhatIsPresent(t *testing.T) {
 	e := newEnv()
 	store := newMockStore(1001)
 	store.checkpoint = &backfill.Checkpoint{Job: backfill.JobMain, Ceiling: 1000, Floor: 1,
-		LowestDispatched: 500, BlocksDone: 495, Status: backfill.StatusRunning}
+		LowestDispatched: 500, ResumeHeight: 505, BlocksDone: 495, Status: backfill.StatusRunning}
 	for h := int64(503); h <= 1000; h++ {
 		store.present[h] = true
 	}
@@ -86,7 +87,7 @@ func TestMainJobResumesAboveTheCheckpointAndSkipsWhatIsPresent(t *testing.T) {
 	assert.Equal(t, backfill.StatusDone, status)
 	calls := e.archive.blockCalls()
 	require.NotEmpty(t, calls)
-	assert.Equal(t, int64(502), calls[0], "resume window 505..1000 (X=1, M=4) minus the present heights")
+	assert.Equal(t, int64(502), calls[0], "from the resume height 505, minus the present heights")
 	assert.ElementsMatch(t, heights(502, 480), e.writer.written())
 	assert.Equal(t, int64(495+23), store.last().BlocksDone)
 }
@@ -108,7 +109,7 @@ func TestMainJobContinuesBelowAnEarlierFloor(t *testing.T) {
 	e := newEnv()
 	store := newMockStore(1001)
 	store.checkpoint = &backfill.Checkpoint{Job: backfill.JobMain, Ceiling: 1000, Floor: 900,
-		LowestDispatched: 900, Status: backfill.StatusDone}
+		LowestDispatched: 900, ResumeHeight: 900, Status: backfill.StatusDone}
 	for h := int64(900); h <= 1000; h++ {
 		store.present[h] = true
 	}
@@ -176,6 +177,43 @@ func TestMainJobStoppedByShutdownStaysRunning(t *testing.T) {
 	cp := store.last()
 	assert.Equal(t, backfill.StatusRunning, cp.Status)
 	assert.Equal(t, int64(99), cp.LowestDispatched)
+	assert.Equal(t, int64(100), cp.ResumeHeight, "both heights were in flight")
+}
+
+// A height held up (retries, a slow block) while the other workers walk far
+// below it, then a stop: the next run starts at that height. The old resume
+// point, lowest dispatched + workers + batch, lay below it and the descending
+// walk never came back to it.
+func TestMainJobResumesAtAHeightLeftBehindByAStop(t *testing.T) {
+	e := newEnv()
+	e.archive.hold(100)
+	store := newMockStore(101)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := e.job(store, &mockLocker{}, backfill.Floor{Height: 1}, 2, 2).Run(ctx)
+		done <- err
+	}()
+	require.Eventually(t, func() bool { return slices.Contains(e.writer.written(), 60) }, 5*time.Second, time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+
+	cp := store.last()
+	assert.LessOrEqual(t, cp.LowestDispatched, int64(60))
+	assert.Equal(t, int64(100), cp.ResumeHeight)
+	assert.NotContains(t, e.writer.written(), int64(100))
+
+	next := newEnv()
+	for _, h := range e.writer.written() {
+		store.present[h] = true
+	}
+	status, err := next.job(store, &mockLocker{}, backfill.Floor{Height: 1}, 2, 2).Run(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, backfill.StatusDone, status)
+	require.NotEmpty(t, next.archive.blockCalls())
+	assert.Equal(t, int64(100), slices.Max(next.archive.blockCalls()), "resumed at 100")
+	assert.Contains(t, next.writer.written(), int64(100))
+	assert.Len(t, append(e.writer.written(), next.writer.written()...), 100, "every height of 1..100 once")
 }
 
 func TestPause(t *testing.T) {

@@ -504,9 +504,12 @@ elsewhere ends without stopping the process, and the next start resumes it).
   reindex). A node that answers `/status` but not a height (a slow block
   timing out, say) is an ordinary failed attempt.
 - **Checkpoint.** `explorer.backfill_checkpoints` row `main` (ceiling, floor,
-  `lowest_dispatched`, `blocks_done`, status, last error), saved every 5 s
-  and after every flush. Dispatch is monotonic, so on restart the dispatcher
-  starts X + M heights above `lowest_dispatched` and skips the heights
+  `lowest_dispatched`, `resume_height`, `blocks_done`, status, last error),
+  saved every 5 s and after every flush. `resume_height` is the highest
+  height still pending (in flight, queued or held unflushed), so every height
+  above it is written or recorded: a height held up by retries can lie far
+  above `lowest_dispatched`, and a stop drops the heights in flight. On
+  restart the dispatcher starts at `resume_height` and skips the heights
   already in `explorer.blocks` (one query per 1,000 heights). Status:
   `running`, `done` at the floor, `error` after a fatal error (resumed at the
   next start), `paused` while `BACKFILL_ENABLED=false`. A done job is not

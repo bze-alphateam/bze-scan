@@ -140,7 +140,7 @@ func (j *Job) Run(ctx context.Context, p Plan) (Result, error) {
 
 	cp := backfill.Checkpoint{
 		Job: res.Job, Ceiling: p.Highest(), Floor: p.Lowest(),
-		LowestDispatched: p.Highest() + 1, Status: backfill.StatusRunning,
+		LowestDispatched: p.Highest() + 1, ResumeHeight: p.Highest(), Status: backfill.StatusRunning,
 	}
 	if err := j.deps.Store.SaveCheckpoint(ctx, cp); err != nil {
 		return res, err
@@ -184,7 +184,7 @@ func (j *Job) Run(ctx context.Context, p Plan) (Result, error) {
 			runErr = fmt.Errorf("%w: %w", ErrInterrupted, cause)
 		}
 	default:
-		cp.Status, cp.LowestDispatched = backfill.StatusDone, p.Lowest()
+		cp.Status, cp.LowestDispatched, cp.ResumeHeight = backfill.StatusDone, p.Lowest(), p.Lowest()
 	}
 	if runErr != nil {
 		cp.Status, cp.LastError = backfill.StatusError, runErr.Error()

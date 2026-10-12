@@ -79,6 +79,8 @@ type Node struct {
 	downRoute     string // with downHeight: the request that starts an outage
 	downHeight    int64
 	downFor       int
+	holdRoute     string // with holdHeight: the request that never answers
+	holdHeight    int64
 }
 
 // New starts a fake node serving the recorded fixtures and closes it when the
@@ -175,6 +177,15 @@ func (n *Node) GoDownAt(route string, height int64, requests int) {
 	n.downRoute, n.downHeight, n.downFor = route, height, requests
 }
 
+// HoldAt makes the next request of route at height hang until the client
+// gives up (its ctx is cancelled), as a block too slow to serve does. Later
+// requests answer normally.
+func (n *Node) HoldAt(route string, height int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.holdRoute, n.holdHeight = route, height
+}
+
 // RequestsAt returns how many requests route has received for height.
 func (n *Node) RequestsAt(route string, height int64) int {
 	n.mu.Lock()
@@ -256,7 +267,16 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if down {
 		n.down--
 	}
+	hold := n.holdRoute == route && r.URL.Query().Get("height") == strconv.FormatInt(n.holdHeight, 10)
+	if hold {
+		n.holdRoute = ""
+	}
 	n.mu.Unlock()
+
+	if hold {
+		<-r.Context().Done()
+		return
+	}
 
 	if down {
 		w.Header().Set("Content-Type", "text/html")

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/assert"
@@ -243,5 +244,21 @@ func TestGoDownAtStartsWithThatRequest(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, block))
 	assert.Equal(t, http.StatusServiceUnavailable, statusCode(t, n.URL+fakenode.RouteStatus))
 	assert.Equal(t, http.StatusOK, statusCode(t, block))
+	assert.Equal(t, http.StatusOK, statusCode(t, block), "once only")
+}
+
+func TestHoldAtHangsThatRequestUntilTheClientGivesUp(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	block := fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h)
+
+	n.HoldAt(fakenode.RouteBlock, h)
+	assert.Equal(t, http.StatusOK, statusCode(t, n.URL+fakenode.RouteStatus))
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, block, nil)
+	require.NoError(t, err)
+	_, err = http.DefaultClient.Do(req) //nolint:bodyclose // no response
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, http.StatusOK, statusCode(t, block), "once only")
 }

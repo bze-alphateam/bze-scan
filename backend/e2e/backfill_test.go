@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -84,7 +86,8 @@ func (e *backfillEnv) heights(t *testing.T) []string {
 
 func (e *backfillEnv) checkpoint(t *testing.T) string {
 	t.Helper()
-	rows := queryStrings(t, e.db, `SELECT concat_ws(' ', status, ceiling_height, floor_height, lowest_dispatched, blocks_done)
+	rows := queryStrings(t, e.db, `SELECT concat_ws(' ', status, ceiling_height, floor_height, lowest_dispatched, resume_height,
+		blocks_done)
 		FROM explorer.backfill_checkpoints WHERE job = 'main'`)
 	if len(rows) == 0 {
 		return ""
@@ -98,7 +101,7 @@ func (e *backfillEnv) assertComplete(t *testing.T) {
 	assert.Equal(t, backfilled(), e.heights(t), "every height from the floor to the ceiling, nothing else")
 	assert.Equal(t, []string{"24998319 backfill 4"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', height, source, attempts) FROM explorer.index_failures`))
-	assert.Equal(t, "done 24998330 24998316 24998316 14", e.checkpoint(t))
+	assert.Equal(t, "done 24998330 24998316 24998316 24998316 14", e.checkpoint(t))
 	assert.Zero(t, e.archive.RequestsAt(fakenode.RouteBlock, seededLiveFloor), "never above the ceiling")
 	assert.Zero(t, e.archive.RequestsAt(fakenode.RouteBlock, backfillFloor-1), "never below the floor")
 }
@@ -160,6 +163,27 @@ func TestBackfillResumesAfterACancel(t *testing.T) {
 	// key: compare the counts with the fixtures' content.
 	assert.Equal(t, []string{"14"}, queryStrings(t, e.db, `SELECT count(*) FROM explorer.blocks`))
 	assert.Equal(t, []string{"7"}, queryStrings(t, e.db, `SELECT count(*) FROM explorer.transactions`))
+}
+
+// The ceiling's block hangs while the other workers finish the range below
+// it, then the process stops: the next run starts at the ceiling again. The
+// old resume point, lowest dispatched + X + M, lay below it and the
+// descending walk never came back.
+func TestAHeightHeldUpAtAStopIsFetchedOnResume(t *testing.T) {
+	e := newBackfillEnv(t)
+	e.archive.HoldAt(fakenode.RouteBlock, backfillCeiling)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- serve.RunBackfill(ctx, e.config(0), quickRetries) }()
+	below := backfilled()[:len(backfilled())-1]
+	waitFor(t, 10*time.Second, func() bool { return slices.Equal(e.heights(t), below) }, "every height but the ceiling")
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	assert.Equal(t, fmt.Sprintf("running %d %d %d %d 13", backfillCeiling, backfillFloor, backfillFloor, backfillCeiling),
+		e.checkpoint(t), "the walk reached the floor, the ceiling is still owed")
+
+	require.NoError(t, serve.RunBackfill(context.Background(), e.config(0), quickRetries))
+	e.assertComplete(t)
 }
 
 func TestASecondBackfillCannotTakeTheLock(t *testing.T) {
@@ -271,8 +295,8 @@ func TestServeRunsTheBackfillAndTheStatusFollowsIt(t *testing.T) {
 func TestServeWithTheBackfillDisabledPausesAnUnfinishedJob(t *testing.T) {
 	e := newBackfillEnv(t)
 	_, err := e.db.Exec(`INSERT INTO explorer.backfill_checkpoints
-		(job, ceiling_height, floor_height, lowest_dispatched, blocks_done, status, started_at, updated_at)
-		VALUES ('main', $1, $2, $3, 5, 'running', now(), now())`, backfillCeiling, backfillFloor, backfillCeiling-5)
+		(job, ceiling_height, floor_height, lowest_dispatched, resume_height, blocks_done, status, started_at, updated_at)
+		VALUES ('main', $1, $2, $3, $3, 5, 'running', now(), now())`, backfillCeiling, backfillFloor, backfillCeiling-5)
 	require.NoError(t, err)
 
 	url := runServeBackfill(t, e, false, 0)

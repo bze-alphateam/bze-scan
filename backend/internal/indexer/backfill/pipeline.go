@@ -135,6 +135,13 @@ type Progress struct {
 	Lowest, Highest int64
 	// Dispatched heights, Written by a flush, Failed and recorded.
 	Dispatched, Written, Failed int64
+	// Resume is where a descending walk resumes: every height above it was
+	// written or recorded as failed. It is the highest height still pending
+	// (in flight, queued or held unflushed), or Lowest when none is; 0
+	// before the first dispatch. A height held up by retries can lie any
+	// number of heights above Lowest, and a stop drops the heights in
+	// flight, so Lowest plus a margin is not a safe resume point.
+	Resume int64
 }
 
 // Result is the outcome of a run.
@@ -155,6 +162,8 @@ type Pipeline struct {
 
 	mu       sync.Mutex
 	progress Progress
+	// pending are the heights dispatched and neither written nor recorded.
+	pending map[int64]struct{}
 }
 
 // New returns a pipeline.
@@ -195,14 +204,14 @@ func New(cfg Config, deps Deps) *Pipeline {
 	if deps.Log == nil {
 		deps.Log = log.StandardLogger()
 	}
-	return &Pipeline{cfg: cfg, deps: deps}
+	return &Pipeline{cfg: cfg, deps: deps, pending: map[int64]struct{}{}}
 }
 
 // Progress returns the progress so far; safe to call during Run.
 func (p *Pipeline) Progress() Progress {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.progress
+	return p.snapshot()
 }
 
 // outcome is one worker's result: entities, or the error that failed the
@@ -287,6 +296,20 @@ func (p *Pipeline) dispatched(h int64) {
 	p.progress.Lowest = min(p.progress.Lowest, h)
 	p.progress.Highest = max(p.progress.Highest, h)
 	p.progress.Dispatched++
+	p.pending[h] = struct{}{}
+}
+
+// snapshot returns the progress with Resume set; p.mu must be held.
+func (p *Pipeline) snapshot() Progress {
+	pr := p.progress
+	if pr.Dispatched == 0 {
+		return pr
+	}
+	pr.Resume = pr.Lowest
+	for h := range p.pending {
+		pr.Resume = max(pr.Resume, h)
+	}
+	return pr
 }
 
 // work fetches, adapts and transforms one height. ok false means ctx was
@@ -394,12 +417,13 @@ func (p *Pipeline) wait(ctx context.Context) error {
 func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, results <-chan outcome, mode writer.Mode) error {
 	wctx := context.WithoutCancel(ctx)
 	var held []*transform.Entities
+	var heldHeights []int64
 	var quiet <-chan time.Time
 	var fatal error
 
 	flush := func() {
-		batch := held
-		held, quiet = nil, nil
+		batch, heights := held, heldHeights
+		held, heldHeights, quiet = nil, nil, nil
 		if fatal != nil || len(batch) == 0 {
 			return
 		}
@@ -412,7 +436,10 @@ func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, re
 		}
 		p.mu.Lock()
 		p.progress.Written += int64(len(batch))
-		pr := p.progress
+		for _, h := range heights {
+			delete(p.pending, h)
+		}
+		pr := p.snapshot()
 		p.mu.Unlock()
 		if p.cfg.OnFlush != nil {
 			p.cfg.OnFlush(pr)
@@ -433,7 +460,7 @@ func (p *Pipeline) write(ctx context.Context, cancel context.CancelCauseFunc, re
 				p.recordFailure(wctx, o, cancel, &fatal)
 				continue
 			}
-			held = append(held, o.ents)
+			held, heldHeights = append(held, o.ents), append(heldHeights, o.height)
 			if len(held) >= p.cfg.Batch {
 				flush()
 			} else {
@@ -457,6 +484,7 @@ func (p *Pipeline) recordFailure(ctx context.Context, o outcome, cancel context.
 	}
 	p.mu.Lock()
 	p.progress.Failed++
+	delete(p.pending, o.height)
 	p.mu.Unlock()
 }
 
