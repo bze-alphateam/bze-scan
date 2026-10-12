@@ -3,10 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { Account, Page, TokenSummary, ValidatorList } from "@/api/types";
+import type { Account, Activity, IbcTransfer, Page, TokenSummary, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import plain from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
+import activity from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4/activity.json";
+import ibc from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4/ibc.json";
 import nodeDown from "../../../test/fixtures/api/v1/accounts/bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
@@ -20,6 +22,8 @@ function api(account: unknown = plain, extra: Partial<ExplorerApi> = {}): Explor
     account: () => Promise.resolve(account as Account),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     validators: () => Promise.resolve(list as ValidatorList),
+    accountActivity: () => Promise.resolve(activity as Page<Activity>),
+    accountIbc: () => Promise.resolve(ibc as Page<IbcTransfer>),
     ...extra,
   });
 }
@@ -60,10 +64,10 @@ describe("AccountPage", () => {
     ]);
     expect(screen.getByRole("link", { name: /Claim on Staking/ })).toHaveAttribute("href", "https://staking.getbze.com");
 
-    expect(screen.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Activity · 1,530" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Tokens · 5" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Staking · 3 validators" })).toBeInTheDocument();
-    expect(screen.getByText("Activity is coming")).toBeInTheDocument();
+    expect(await screen.findAllByTestId("activity-row")).toHaveLength(8);
   });
 
   it("names a module account with a dashed chip, and the Staking tab is empty", async () => {
@@ -106,6 +110,7 @@ describe("AccountPage", () => {
       "Live balances are unavailable right now: the node did not answer. Transactions and activity are still here.",
     );
     expect(screen.getAllByTestId("tile").map((t) => t.children[1].textContent)).toEqual(["—", "—", "—", "—"]);
+    expect(screen.getByRole("tab", { name: "Activity · 5" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Tokens" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Staking" })).toBeInTheDocument();
   });
@@ -163,7 +168,7 @@ describe("Tokens tab", () => {
       "USDC",
       "uzzz",
     ]);
-    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Activity · 1,530" }));
     expect(window.location.search).toBe("");
   });
 

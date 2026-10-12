@@ -1,11 +1,15 @@
 import type {
   Account,
+  Activity,
+  ActivityParams,
   Block,
   ChainParams,
   BlockEvent,
   BlockSummary,
   BlockTransfer,
   ErrorBody,
+  IbcListParams,
+  IbcTransfer,
   Page,
   PageParams,
   Proposal,
@@ -54,6 +58,8 @@ export interface ExplorerApi {
   validatorBlocks(operator: string, params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
 
   account(address: string, signal?: AbortSignal): Promise<Account>;
+  accountActivity(address: string, params: ActivityParams, signal?: AbortSignal): Promise<Page<Activity>>;
+  accountIbc(address: string, params: IbcListParams, signal?: AbortSignal): Promise<Page<IbcTransfer>>;
 
   tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
   token(denom: string, signal?: AbortSignal): Promise<Token>;
@@ -163,6 +169,10 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     validatorBlocks: (operator, params, signal) => get(`/validators/${seg(operator)}/blocks`, page(params), signal),
 
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
+    accountActivity: (address, params, signal) =>
+      get(`/accounts/${seg(address)}/activity`, { ...page(params), category: params.category }, signal),
+    accountIbc: (address, params, signal) =>
+      get(`/accounts/${seg(address)}/ibc`, { ...page(params), direction: params.direction }, signal),
 
     tokens: (params, signal) => get("/tokens", { ...page(params), kind: params.kind }, signal),
     token: (denom, signal) => byDenom(denom, "", {}, signal),

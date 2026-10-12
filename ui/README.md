@@ -112,6 +112,11 @@ is `immutable`, except while `isUnsettled`: the order book has not processed
 its DEX messages (`dex.pending`) or a cross-chain transfer it created is
 `pending` and not expired. It is then refetched every 7 s (`live`).
 
+`useAccountActivity(address, { category })` is the same live-until-older
+list over the account's activity. `useAccountIbc(address)` reads the
+account's latest 100 cross-chain transfers in both directions (`live`), only
+to give activity rows the other chain's name and the transfer's status.
+
 `useAllValidators` follows `next_cursor` to the last page (100 per page, all
 statuses) and keeps the first page's `summary`; the list and the validator
 page share it.
@@ -199,6 +204,23 @@ BZE specifics:
   its body; `IbcStatus` is the chip (Pending, Expired, Delivered, Refunded,
   Received, Rejected), the settling transaction and the other chain's
   explorer from the registry's `${accountAddress}` template (https only).
+
+## Account activity
+
+`src/render/activity.tsx` turns an activity row into a sentence from what the
+row carries (`kind`, `counterparty`, `deltas`, `details`, `msg_types`,
+`success`, `is_signer`); a row is never completed by fetching its
+transaction. `activityLine` gives the parts (words, and the counterparty as a
+chip: a validator by moniker, a module account dashed) and the chips (the
+cross-chain status, Failed). Block-level rows read their `details`: a DEX fill
+is summed per market and side (the event's `order_type` is the resting
+order's, so the taker did the opposite), a raffle or trading-reward win shows
+the amount. `ibcFor` matches a sent transfer by its creating transaction, a
+received one by the transaction that brought it in and a refund by the
+settling transaction. The amounts column (`deltaLines`) shows the deltas
+without the fee and the fee on its own line. An unknown kind reads as its
+first message type in words; a unit test walks every kind in
+`backend/internal/classify/classify.go` and fails on one without a sentence.
 
 ## Loading states
 

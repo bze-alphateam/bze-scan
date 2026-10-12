@@ -5,13 +5,14 @@ import type { Account } from "@/api/types";
 import { AccountPage } from "@/components/accounts/account-page";
 import { serverApiUrl } from "@/lib/env";
 import { accountTitle, parseTab } from "@/render/account";
+import { parseCategory } from "@/render/activity";
 
 // A `bze1…` account; contracts and interchain accounts are longer than 38.
 const ADDRESS = /^bze1[02-9ac-hj-np-z]{38,}$/;
 
 interface Props {
   params: Promise<{ address: string }>;
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<{ tab?: string | string[]; category?: string | string[] }>;
 }
 
 /** The account, or null for any failure, read on the server for the title. */
@@ -39,6 +40,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function AccountRoute({ params, searchParams }: Props) {
   const { address } = await params;
   if (!ADDRESS.test(address)) notFound();
-  const { tab } = await searchParams;
-  return <AccountPage key={address} address={address} initialTab={parseTab(tab)} />;
+  const { tab, category } = await searchParams;
+  return (
+    <AccountPage key={address} address={address} initialTab={parseTab(tab)} initialCategory={parseCategory(category)} />
+  );
 }

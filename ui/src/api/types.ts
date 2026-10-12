@@ -349,6 +349,61 @@ export interface Account {
   live: { available: boolean };
 }
 
+/** The activity list's category filters. */
+export type ActivityCategory =
+  | "sent"
+  | "received"
+  | "staking"
+  | "dex"
+  | "governance"
+  | "tokens"
+  | "rewards"
+  | "burner"
+  | "cross_chain"
+  | "other";
+
+export interface ActivityParams extends PageParams {
+  category?: ActivityCategory;
+}
+
+/** The other party of an activity row: an account, a validator operator (with its moniker) or a module account (with its label). */
+export interface ActivityCounterparty {
+  address: string;
+  label: Label | null;
+  moniker: string | null;
+}
+
+/** A typed event naming the address, on a block-level row: attribute values decoded (strings, or arrays for repeated fields). */
+export interface ActivityDetail {
+  type: string;
+  attrs: Record<string, unknown>;
+}
+
+/** What one transaction (`tx_hash` set) or one block's own events (`tx_hash` null) did to an address. */
+export interface Activity {
+  time: string;
+  height: number;
+  tx_hash: string | null;
+  /** The classification's kind (`send`, `dex_fill`, …): `backend/internal/classify/classify.go`. */
+  kind: string;
+  category: ActivityCategory;
+  is_signer: boolean;
+  success: boolean;
+  /** Null unless there is exactly one other party. */
+  counterparty: ActivityCounterparty | null;
+  /** The net balance change per denom, the fee included. */
+  deltas: Balance[];
+  msg_types: string[];
+  /** Block-level rows only; null on transaction rows. */
+  details: ActivityDetail[] | null;
+  /** The transaction's fee when the address signed or paid it; null otherwise. */
+  fee: Balance[] | null;
+}
+
+export interface IbcListParams extends PageParams {
+  direction?: "in" | "out";
+}
+
 // Tokens
 
 export type TokenKind = "native" | "factory" | "ibc" | "lp" | "unknown";

@@ -1,0 +1,61 @@
+{
+  "items": [
+    {
+      "channel_id": "channel-0",
+      "sequence": 1880,
+      "direction": "in",
+      "status": "received",
+      "expired": false,
+      "sender": "noble1q2w3e4r5t6y7u8i9o0pasdfghjklzxcvbnm7x8",
+      "receiver": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "denom": "uusdc",
+      "amount": "320000000",
+      "memo": null,
+      "counterparty": {
+        "chain_id": "noble-1",
+        "pretty_name": "Noble",
+        "logo_url": null,
+        "explorer_account_url": "https://www.mintscan.io/noble/address/${accountAddress}",
+        "explorer_tx_url": null
+      },
+      "created_height": 25092571,
+      "created_tx_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+      "created_time": "2026-10-10T11:20:00Z",
+      "timeout_height": null,
+      "timeout_time": null,
+      "result_height": 25092571,
+      "result_tx_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+      "result_time": "2026-10-10T11:20:00Z",
+      "ack_error": null
+    },
+    {
+      "channel_id": "channel-3",
+      "sequence": 77,
+      "direction": "out",
+      "status": "delivered",
+      "expired": false,
+      "sender": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "receiver": "cosmos1q2w3e4r5t6y7u8i9o0pasdfghjklzxcvb9k2m",
+      "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+      "amount": "2000000",
+      "memo": null,
+      "counterparty": {
+        "chain_id": "cosmoshub-4",
+        "pretty_name": "Cosmos Hub",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "created_height": 25048730,
+      "created_tx_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "created_time": "2026-10-07T10:00:00Z",
+      "timeout_height": null,
+      "timeout_time": "2026-10-07T10:10:00Z",
+      "result_height": 25048741,
+      "result_tx_hash": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "result_time": "2026-10-07T10:01:00Z",
+      "ack_error": null
+    }
+  ],
+  "next_cursor": null
+}

@@ -27,6 +27,11 @@ const CATEGORIES: Record<ActionCategory, { icon: IconType; label: string; palett
   other: { icon: LuShapes, label: "Other", palette: "gray" },
 };
 
+/** A category's icon, label and colour palette (the action cards and the account's activity rows). */
+export function categoryLook(category: ActionCategory): { icon: IconType; label: string; palette: string } {
+  return CATEGORIES[category];
+}
+
 interface ActionCardProps {
   /** 1-based position among the transaction's actions. */
   index: number;

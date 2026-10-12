@@ -8,6 +8,8 @@ import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WIND
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
 import type {
+  Activity,
+  ActivityCategory,
   BlockSummary,
   BlockTransfer,
   Page,
@@ -44,6 +46,9 @@ export const queryKeys = {
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
   account: (address: string) => ["account", address] as const,
+  accountActivity: (address: string, category: ActivityCategory | null) =>
+    ["account-activity", address, category ?? "all"] as const,
+  accountIbc: (address: string) => ["account-ibc", address] as const,
   tokens: (p: TokenListParams) => ["tokens", p] as const,
   validatorDirectory: () => ["validator-directory"] as const,
   tokenDirectory: () => ["token-directory"] as const,
@@ -280,6 +285,32 @@ export function useAccount(address: string) {
   return useQuery({
     queryKey: queryKeys.account(address),
     queryFn: ({ signal }) => api.account(address, signal),
+    ...live,
+  });
+}
+
+/**
+ * An account's activity of one category (every one for null), newest first:
+ * live until an older page is loaded (see `useLiveList`).
+ */
+export function useAccountActivity(address: string, { category }: { category: ActivityCategory | null }) {
+  const api = useApi();
+  return useLiveList<Activity>(queryKeys.accountActivity(address, category), (p, signal) =>
+    api.accountActivity(address, { ...p, category: category ?? undefined }, signal),
+  );
+}
+
+/**
+ * The account's latest 100 cross-chain transfers, both directions, polled:
+ * only to decorate its activity rows with their status and the other chain
+ * (an activity row never names the other chain).
+ */
+export function useAccountIbc(address: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.accountIbc(address),
+    queryFn: ({ signal }) => api.accountIbc(address, { limit: 100 }, signal),
+    select: (page) => page.items,
     ...live,
   });
 }

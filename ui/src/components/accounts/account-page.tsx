@@ -7,7 +7,7 @@ import { LuExternalLink } from "react-icons/lu";
 
 import { ApiError, isNotFound } from "@/api/client";
 import { useAccount, useAllValidators, useDenoms } from "@/api/hooks";
-import type { Account } from "@/api/types";
+import type { Account, ActivityCategory } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -31,6 +31,7 @@ import {
 } from "@/render/account";
 import { BOND, bondCompact } from "@/render/validators";
 
+import { ActivityTab } from "./activity-tab";
 import { StakingTab } from "./staking-tab";
 import { TokensTab } from "./tokens-tab";
 
@@ -135,13 +136,14 @@ function Tiles({ a }: { a: Account }) {
   );
 }
 
-/** The tab strip's labels: counts only when the live state could be read. */
+/** The tab strip's labels: the activity count is indexed; the others count only when the live state could be read. */
 function tabLabels(a: Account): Record<AccountTab, string> {
-  if (!a.live.available) return { activity: "Activity", tokens: "Tokens", staking: "Staking" };
+  const activity = `Activity · ${formatCount(a.activity_count)}`;
+  if (!a.live.available) return { activity, tokens: "Tokens", staking: "Staking" };
   const tokens = tokenRows(a.balances, undefined, "name").length;
   const n = a.delegations.length;
   return {
-    activity: "Activity",
+    activity,
     tokens: `Tokens · ${formatCount(tokens)}`,
     staking: `Staking · ${formatCount(n)} ${n === 1 ? "validator" : "validators"}`,
   };
@@ -152,11 +154,21 @@ function writeTab(tab: AccountTab) {
   const url = new URL(window.location.href);
   if (tab === "activity") url.searchParams.delete("tab");
   else url.searchParams.set("tab", tab);
+  // The category belongs to the Activity tab.
+  url.searchParams.delete("category");
   window.history.replaceState(window.history.state, "", url);
 }
 
 /** A loaded account: header, tiles and the tabs. */
-export function AccountView({ a, initialTab = "activity" }: { a: Account; initialTab?: AccountTab }) {
+export function AccountView({
+  a,
+  initialTab = "activity",
+  initialCategory = null,
+}: {
+  a: Account;
+  initialTab?: AccountTab;
+  initialCategory?: ActivityCategory | null;
+}) {
   const [tab, setTab] = useState<AccountTab>(initialTab);
   const labels = tabLabels(a);
   return (
@@ -183,12 +195,7 @@ export function AccountView({ a, initialTab = "activity" }: { a: Account; initia
           </Tabs.List>
         </Box>
         <Tabs.Content value="activity" pt="4">
-          <Card title="Activity is coming">
-            <Text fontSize="sm" color="fg.muted">
-              What each transaction did to this account will be listed here. Until then, the Tokens and Staking tabs show
-              what it holds right now.
-            </Text>
-          </Card>
+          <ActivityTab address={a.address} initialCategory={initialCategory} />
         </Tabs.Content>
         <Tabs.Content value="tokens" pt="4">
           <TokensTab a={a} />
@@ -234,9 +241,17 @@ function isInvalid(error: unknown): boolean {
 }
 
 /** `/accounts/[address]`: the skeleton, then the account (polled), not found for an address the API refuses, or the error state. */
-export function AccountPage({ address, initialTab }: { address: string; initialTab?: AccountTab }) {
+export function AccountPage({
+  address,
+  initialTab,
+  initialCategory,
+}: {
+  address: string;
+  initialTab?: AccountTab;
+  initialCategory?: ActivityCategory | null;
+}) {
   const { data, error, refetch } = useAccount(address);
-  if (data) return <AccountView a={data} initialTab={initialTab} />;
+  if (data) return <AccountView a={data} initialTab={initialTab} initialCategory={initialCategory} />;
   if (isInvalid(error)) {
     return (
       <Card title="Not a BZE account">
