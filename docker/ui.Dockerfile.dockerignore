@@ -1,0 +1,15 @@
+# Build context of docker/ui.Dockerfile (BuildKit reads this file instead of
+# the root .dockerignore, which belongs to the backend). Allow-list: the UI
+# sources only, without dependencies, build output, env files or test output.
+*
+!ui/
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/**/.env
+ui/**/.env.*
+ui/playwright-report/
+ui/test-results/
+ui/coverage/
+ui/graphify-out/
+ui/*.tsbuildinfo

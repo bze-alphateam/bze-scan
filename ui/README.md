@@ -48,8 +48,10 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `pnpm check` | lint, typecheck and unit tests: what CI runs besides the build and e2e |
 | `pnpm dev`, `pnpm start` | the development and production servers |
 
-CI runs three workflows on changes under `ui/`, one check each: `ui-lint`
-(lint, typecheck, build), `ui-unit` and `ui-e2e`.
+CI runs three workflows on pull requests touching `ui/`, one check each:
+`ui-lint` (lint, typecheck, build), `ui-unit` and `ui-e2e`, plus `ui-image`,
+which builds and smoke-tests the container image. On `main`, `ui-image` runs
+`ui-unit` and `ui-e2e` first and publishes the image only when both pass.
 
 The development VM never starts the app: build, lint, typecheck and unit
 tests only. The end-to-end tests run in CI, or on a developer machine with
@@ -173,6 +175,23 @@ and `JsonSkeleton`.
 - An error replaces the skeleton with the error state; a skeleton is never
   left on screen.
 - The status light's loading state is its grey dot.
+
+## Container image
+
+`next.config.ts` sets `output: "standalone"`, so `next build` also writes a
+self-contained server to `.next/standalone`. `docker/ui.Dockerfile` packs it
+into `ghcr.io/bze-alphateam/bze-scan-ui` (see `docker/README.md`). Build it
+locally from the repository root, with `.env.dist` (or your own file) as the
+build env:
+
+```
+docker build -f docker/ui.Dockerfile --secret id=build_env,src=ui/.env.dist --build-arg GIT_SHA=$(git rev-parse --short=8 HEAD) .
+```
+
+The build env is read as `.env.production`: its `NEXT_PUBLIC_*` values are
+baked into the bundle, and the file itself is left out of the image. `API_URL`
+is read by the server at run time, so it comes from the container
+environment; unset, the server uses `NEXT_PUBLIC_API_URL`.
 
 ## Tests
 
