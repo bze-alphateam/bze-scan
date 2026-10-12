@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -26,6 +27,7 @@ var postMigrate = []Step{
 	{Name: "partitions", Run: ensurePartitions},
 	{Name: "classification", Run: mirrorClassification},
 	{Name: "labels", Run: seedLabels},
+	{Name: "message_events", Run: rewriteMessageEvents},
 }
 
 // ensurePartitions creates the history-table partitions for
@@ -44,4 +46,32 @@ func mirrorClassification(ctx context.Context, db Execer) error {
 // seedLabels writes the module and known account labels.
 func seedLabels(ctx context.Context, db Execer) error {
 	return labels.Seed(ctx, db)
+}
+
+// leanEvents matches the stored message events explorer.kept_events changes.
+const leanEvents = `'$[*] ? (@.type == "message" || @.type == "transfer" || @.type == "coin_spent" ||
+  @.type == "coin_received" || (@.type == "update_client" && exists(@.attrs.header)))'`
+
+// rewriteMessageEvents filters the stored explorer.messages events through
+// explorer.kept_events (migration 000018) while its pending_rewrites row
+// exists: one statement per partition, then one for every height above
+// PartitionsUpTo, each its own transaction, then the row goes. Once it has
+// gone every statement stops at its one-time filter without reading a row.
+func rewriteMessageEvents(ctx context.Context, db Execer) error {
+	const pending = `EXISTS (SELECT 1 FROM explorer.pending_rewrites WHERE name = 'message_events')`
+	rewrite := func(where string) error {
+		_, err := db.Exec(ctx, `UPDATE explorer.messages SET events = explorer.kept_events(events)
+			WHERE `+where+` AND `+pending+` AND events @? `+leanEvents)
+		return err
+	}
+	for lo := int64(0); lo <= PartitionsUpTo; lo += PartitionSize {
+		if err := rewrite(fmt.Sprintf("height >= %d AND height < %d", lo, lo+PartitionSize)); err != nil {
+			return fmt.Errorf("partition %s: %w", PartitionName("messages", lo), err)
+		}
+	}
+	if err := rewrite(fmt.Sprintf("height > %d", PartitionsUpTo)); err != nil {
+		return fmt.Errorf("above the partitions: %w", err)
+	}
+	_, err := db.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = 'message_events'`)
+	return err
 }

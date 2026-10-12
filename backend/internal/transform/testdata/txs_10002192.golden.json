@@ -39,52 +39,10 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
-            "sender": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "103992426ubze",
-            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "103992426ubze",
-            "receiver": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "103992426ubze",
-            "recipient": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
           "type": "withdraw_rewards",
           "attrs": {
             "amount": "103992426ubze",
             "validator": "bzevaloper1qawmt58g2kf3pesnwkvss7gxse6gp340ul4l4w"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "distribution",
-            "sender": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
           }
         }
       ],
@@ -102,52 +60,10 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
-            "sender": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "7282068ubze",
-            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "7282068ubze",
-            "receiver": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "7282068ubze",
-            "recipient": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
           "type": "withdraw_rewards",
           "attrs": {
             "amount": "7282068ubze",
             "validator": "bzevaloper1dueyxyvv4xr8mf04zk8ynp2jlxuvfjspf5mcas"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "distribution",
-            "sender": "bze1etxgzvugw5wsetpesrnnltne02h73jjapn5yfx"
           }
         }
       ],

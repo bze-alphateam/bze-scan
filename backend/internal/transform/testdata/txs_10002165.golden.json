@@ -38,66 +38,11 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.authz.v1beta1.MsgExec",
-            "sender": "bze1lpmfdfzknt3kg4l4ujkduzn245zj85xf77ty4s"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "100967544ubze",
-            "authz_msg_index": "0",
-            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "100967544ubze",
-            "authz_msg_index": "0",
-            "receiver": "bze1yqvxyhzqd4e6mg6hhd0x08jr5yg6mdzjr6tmpa"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "100967544ubze",
-            "authz_msg_index": "0",
-            "recipient": "bze1yqvxyhzqd4e6mg6hhd0x08jr5yg6mdzjr6tmpa",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "authz_msg_index": "0",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
           "type": "withdraw_rewards",
           "attrs": {
             "amount": "100967544ubze",
             "authz_msg_index": "0",
             "validator": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "100963175ubze",
-            "authz_msg_index": "0",
-            "spender": "bze1yqvxyhzqd4e6mg6hhd0x08jr5yg6mdzjr6tmpa"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "100963175ubze",
-            "authz_msg_index": "0",
-            "receiver": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
           }
         },
         {
@@ -107,14 +52,6 @@
             "authz_msg_index": "0",
             "new_shares": "100963175.000000000000000000",
             "validator": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "authz_msg_index": "0",
-            "module": "staking",
-            "sender": "bze1yqvxyhzqd4e6mg6hhd0x08jr5yg6mdzjr6tmpa"
           }
         }
       ],

@@ -36,16 +36,7 @@
       "TypeURL": "/cosmos.slashing.v1beta1.MsgUnjail",
       "Sender": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher",
       "Module": "slashing",
-      "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.slashing.v1beta1.MsgUnjail",
-            "module": "slashing",
-            "sender": "bze1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpk7qher"
-          }
-        }
-      ],
+      "Events": [],
       "Body": {
         "validator_addr": "bzevaloper1dnhhhhge8qphr5w7mz0cvp5ukxgr6drpw6ludu"
       }

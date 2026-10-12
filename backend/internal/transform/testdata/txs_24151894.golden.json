@@ -38,14 +38,6 @@
       "Module": "staking",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.staking.v1beta1.MsgEditValidator",
-            "module": "staking",
-            "sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
-          }
-        },
-        {
           "type": "edit_validator",
           "attrs": {
             "commission_rate": "commission_rates:\u003crate:\"100000000000000000\" max_rate:\"200000000000000000\" max_change_rate:\"10000000000000000\" \u003e update_time:\u003cseconds:1786313850 nanos:108825268 \u003e ",

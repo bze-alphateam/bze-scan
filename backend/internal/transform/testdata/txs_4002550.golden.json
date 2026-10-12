@@ -38,41 +38,6 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/ibc.applications.transfer.v1.MsgTransfer",
-            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "5000000ubze",
-            "spender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "5000000ubze",
-            "receiver": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "5000000ubze",
-            "recipient": "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee",
-            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
-          }
-        },
-        {
           "type": "send_packet",
           "attrs": {
             "packet_channel_ordering": "ORDER_UNORDERED",
@@ -89,12 +54,6 @@
           }
         },
         {
-          "type": "message",
-          "attrs": {
-            "module": "ibc_channel"
-          }
-        },
-        {
           "type": "ibc_transfer",
           "attrs": {
             "amount": "5000000",
@@ -102,12 +61,6 @@
             "memo": "",
             "receiver": "osmo19l9wsymdh3mp7munzrlk8rs03ttnu2uaujyktu",
             "sender": "bze19l9wsymdh3mp7munzrlk8rs03ttnu2uafdmd0e"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "transfer"
           }
         }
       ],

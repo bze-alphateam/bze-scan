@@ -38,48 +38,6 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/ibc.applications.transfer.v1.MsgTransfer",
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
-            "spender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
-            "receiver": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
-            "recipient": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95",
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
-            "spender": "bze1yl6hdjhmkf37639730gffanpzndzdpmhnm6z95"
-          }
-        },
-        {
           "type": "burn",
           "attrs": {
             "amount": "957617ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
@@ -104,12 +62,6 @@
           }
         },
         {
-          "type": "message",
-          "attrs": {
-            "module": "ibc_channel"
-          }
-        },
-        {
           "type": "ibc_transfer",
           "attrs": {
             "amount": "957617",
@@ -117,12 +69,6 @@
             "memo": "{\"forward\":{\"channel\":\"channel-1\",\"next\":{\"wasm\":{\"contract\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"msg\":{\"swap_and_action\":{\"affiliates\":[],\"min_asset\":{\"native\":{\"amount\":\"5043987638\",\"denom\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\"}},\"post_swap_action\":{\"ibc_transfer\":{\"ibc_info\":{\"memo\":\"\",\"receiver\":\"bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y\",\"recover_address\":\"osmo1mjpllwcpca0t2dmnr3wez2ugkr5l07lf04z2wp\",\"source_channel\":\"channel-340\"}}},\"timeout_timestamp\":1791479095283102700,\"user_swap\":{\"swap_exact_asset_in\":{\"operations\":[{\"denom_in\":\"ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4\",\"denom_out\":\"uosmo\",\"pool\":\"1464\"},{\"denom_in\":\"uosmo\",\"denom_out\":\"ibc/C822645522FC3EECF817609AA38C24B64D04F5C267A23BCCF8F2E3BC5755FA88\",\"pool\":\"856\"}],\"swap_venue_name\":\"osmosis-poolmanager\"}}}}}},\"port\":\"transfer\",\"receiver\":\"osmo10a3k4hvk37cc4hnxctw4p95fhscd2z6h2rmx0aukc6rm8u9qqx9smfsh7u\",\"retries\":2,\"timeout\":1791479095283082641}}",
             "receiver": "noble1mjpllwcpca0t2dmnr3wez2ugkr5l07lf0dyjqa",
             "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "transfer"
           }
         }
       ],

@@ -38,25 +38,11 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.gov.v1beta1.MsgVote",
-            "sender": "bze1cgtrksac0pjj53lym42uaxrjsumtql29zxv2py"
-          }
-        },
-        {
           "type": "proposal_vote",
           "attrs": {
             "option": "[{\"option\":1,\"weight\":\"1.000000000000000000\"}]",
             "proposal_id": "44",
             "voter": "bze1cgtrksac0pjj53lym42uaxrjsumtql29zxv2py"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "governance",
-            "sender": "bze1cgtrksac0pjj53lym42uaxrjsumtql29zxv2py"
           }
         }
       ],

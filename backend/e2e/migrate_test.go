@@ -30,7 +30,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 17
+const latestVersion = 18
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -42,13 +42,13 @@ var explorerTables = []string{
 	"block_events", "blocks", "chain_state", "chains", "daily_stats", "denoms",
 	"ibc_channels", "ibc_transfers", "index_failures", "indexer_state", "labels",
 	"message_kinds", "messages", "order_fills", "order_messages", "orders",
-	"param_snapshots", "proposal_deposits", "proposal_votes", "proposals",
+	"param_snapshots", "pending_rewrites", "proposal_deposits", "proposal_votes", "proposals",
 	"registry_assets", "sync_jobs", "token_events", "token_holders",
 	"transactions", "transfers", "validator_events", "validators",
 }
 
 // explorerFunctions are the functions the migrations create.
-var explorerFunctions = []string{"ensure_partitions", "notify_block", "reclassify_unknown"}
+var explorerFunctions = []string{"ensure_partitions", "kept_events", "notify_block", "reclassify_unknown"}
 
 // freshDatabase creates an empty database on the compose PostgreSQL, with the
 // sink schema installed when withSink is set, drops it when the test ends and
@@ -155,7 +155,7 @@ func TestMigrateUpBuildsTheExplorerSchema(t *testing.T) {
 	db := connect(t, dbURL)
 
 	res := migrateUp(t, dbURL)
-	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification", "labels"}}, res)
+	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification", "labels", "message_events"}}, res)
 
 	var version int64
 	var dirty bool

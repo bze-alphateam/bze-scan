@@ -38,14 +38,6 @@
       "Module": "gov",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.gov.v1beta1.MsgVote",
-            "module": "gov",
-            "sender": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
-          }
-        },
-        {
           "type": "proposal_vote",
           "attrs": {
             "option": "[{\"option\":1,\"weight\":\"1.000000000000000000\"}]",

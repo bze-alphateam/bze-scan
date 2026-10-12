@@ -79,13 +79,14 @@ func TestFixtureTransactions(t *testing.T) {
 		assert.Equal(t, "bank", send.Module)
 		assert.Equal(t, "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw", send.Sender)
 		assert.NotEmpty(t, send.Body)
-		types := []string{}
-		for _, ev := range send.Events {
-			types = append(types, ev.Type)
-			assert.NotContains(t, ev.Attrs, "msg_index")
+		assert.Empty(t, send.Events, "a send emits only message, transfer and coin events, none of them stored")
+		var moved []transform.Transfer
+		for _, tr := range ents.Transfers {
+			if tr.TxIndex == 0 {
+				moved = append(moved, tr)
+			}
 		}
-		assert.Equal(t, "message", types[0], "the message event comes first")
-		assert.Contains(t, types, "transfer")
+		assert.NotEmpty(t, moved, "the transfer events still make transfers rows")
 	})
 
 	t.Run("failed transaction: body only", func(t *testing.T) {
@@ -233,7 +234,7 @@ func TestMessageEvents(t *testing.T) {
 	ents, err := tr.Transform(oneTx(node.TxResult{Events: []node.Event{
 		{Type: "tx", Attributes: attrs("fee", "1ubze")},
 		{Type: "message", Attributes: attrs("action", "/x.MsgA", "sender", "bze1a", "module", "x", "msg_index", "0")},
-		{Type: "transfer", Attributes: attrs("amount", "1ubze", "msg_index", "0")},
+		{Type: "x.sdk", Attributes: attrs("amount", "1ubze", "msg_index", "0")},
 		{Type: "message", Attributes: attrs("action", "/x.MsgB", "sender", "bze1b", "module", "y", "msg_index", "1")},
 		{Type: "message", Attributes: attrs("sender", "bze1later", "msg_index", "1")},
 		{Type: "bze.x.Typed", Attributes: attrs(
@@ -246,20 +247,20 @@ func TestMessageEvents(t *testing.T) {
 	a, b := ents.Messages[0], ents.Messages[1]
 	assert.Equal(t, "bze1a", a.Sender)
 	assert.Equal(t, "x", a.Module)
-	assert.Equal(t, []string{"message", "transfer"}, []string{a.Events[0].Type, a.Events[1].Type})
+	assert.Equal(t, []string{"x.sdk"}, []string{a.Events[0].Type})
 	assert.Equal(t, "bze1b", b.Sender, "the first message event names the sender")
 	assert.Equal(t, "y", b.Module)
-	require.Len(t, b.Events, 3)
+	require.Len(t, b.Events, 1)
 
-	got, err := json.Marshal(b.Events[2])
+	got, err := json.Marshal(b.Events[0])
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"type":"bze.x.Typed","attrs":{
 		"text":"quoted","num":18446744073709551616000,"obj":{"k":[1,2]},"plain":"not json","twice":1}}`, string(got))
 	assert.Contains(t, string(got), "18446744073709551616000", "numbers keep every digit")
 
-	sdkEvent, err := json.Marshal(a.Events[1])
+	sdkEvent, err := json.Marshal(a.Events[0])
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"type":"transfer","attrs":{"amount":"1ubze"}}`, string(sdkEvent), "SDK values stay strings")
+	assert.JSONEq(t, `{"type":"x.sdk","attrs":{"amount":"1ubze"}}`, string(sdkEvent), "SDK values stay strings")
 }
 
 func TestUndecodableMessageIsStoredWithoutBody(t *testing.T) {
@@ -305,4 +306,52 @@ func TestUndecodableTransactionIsStoredFromItsResults(t *testing.T) {
 	require.Len(t, hook.Entries, 1)
 	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level)
 	assert.Equal(t, tx.Hash, hook.LastEntry().Data["hash"])
+}
+
+func TestStoredEventsLeaveOutWhatOtherTablesHold(t *testing.T) {
+	const from, to = "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw", "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+	tr, _ := mockTransformer(mockDecoder{txs: map[string]*chain.Tx{"tx": {
+		Signers: []string{from},
+		Msgs:    []chain.Msg{{TypeURL: "/cosmos.bank.v1beta1.MsgSend"}},
+	}}})
+	ents, err := tr.Transform(oneTx(node.TxResult{Events: []node.Event{
+		{Type: "tx", Attributes: attrs("fee", "1ubze", "fee_payer", from)},
+		{Type: "message", Attributes: attrs("action", "/cosmos.bank.v1beta1.MsgSend", "sender", from, "module", "bank", "msg_index", "0")},
+		{Type: "coin_spent", Attributes: attrs("spender", from, "amount", "5ubze", "msg_index", "0")},
+		{Type: "coin_received", Attributes: attrs("receiver", to, "amount", "5ubze", "msg_index", "0")},
+		{Type: "transfer", Attributes: attrs("recipient", to, "sender", from, "amount", "5ubze", "msg_index", "0")},
+		{Type: "update_client", Attributes: attrs(
+			"client_id", "07-tendermint-0", "consensus_heights", "1-100", "header", "0a0b0c", "msg_index", "0")},
+		{Type: "bze.x.Typed", Attributes: attrs("k", `"v"`, "msg_index", "0")},
+	}}))
+	require.NoError(t, err)
+	require.Len(t, ents.Messages, 1)
+	m := ents.Messages[0]
+
+	got, err := json.Marshal(m.Events)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[
+		{"type":"update_client","attrs":{"client_id":"07-tendermint-0","consensus_heights":"1-100"}},
+		{"type":"bze.x.Typed","attrs":{"k":"v"}}]`, string(got), "kept events in order, header gone")
+	assert.Equal(t, from, m.Sender, "the message event still names the sender")
+	assert.Equal(t, "bank", m.Module)
+
+	require.Len(t, ents.Transfers, 1, "the transfer event still makes its row")
+	assert.Equal(t, transform.Transfer{
+		Height: ents.Transfers[0].Height, MsgIndex: ents.Transfers[0].MsgIndex,
+		Kind: transform.TransferKindTransfer, Sender: from, Recipient: to, Denom: "ubze", Amount: "5",
+	}, ents.Transfers[0])
+
+	byAddr := map[string]transform.Activity{}
+	for _, a := range ents.Activity {
+		byAddr[a.Address] = a
+	}
+	require.Contains(t, byAddr, to, "the recipient, named only by the dropped events, still has its activity row")
+	assert.Equal(t, to, byAddr[from].Counterparty, "the counterparty still comes from transfer.recipient")
+	assert.Equal(t, []chain.Coin{{Denom: "ubze", Amount: "5"}}, byAddr[to].Deltas)
+}
+
+func TestUnstoredEvents(t *testing.T) {
+	assert.Equal(t, []string{"message", "transfer", "coin_spent", "coin_received"}, transform.UnstoredEventTypes)
+	assert.Equal(t, map[string][]string{"update_client": {"header"}}, transform.UnstoredEventAttributes)
 }

@@ -38,28 +38,6 @@
       "Module": "staking",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.staking.v1beta1.MsgCreateValidator",
-            "module": "staking",
-            "sender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "3000000000ubze",
-            "spender": "bze13nwzm5dfd26ue74jr6sc39gyn3qze0rj6qufta"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "3000000000ubze",
-            "receiver": "bze1tygms3xhhs3yv487phx3dw4a95jn7t7lule4a5"
-          }
-        },
-        {
           "type": "create_validator",
           "attrs": {
             "amount": "3000000000ubze",
