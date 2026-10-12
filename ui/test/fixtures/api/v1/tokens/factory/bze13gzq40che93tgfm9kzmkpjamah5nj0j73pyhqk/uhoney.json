@@ -124,5 +124,7 @@
   },
   "ibc_hops": null,
   "via_chain": null,
-  "lp_pair": null
+  "lp_pair": null,
+  "ibc_channel": null,
+  "stranded": false
 }

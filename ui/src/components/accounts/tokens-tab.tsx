@@ -9,7 +9,8 @@ import type { Account } from "@/api/types";
 import { Amount } from "@/components/ui/amount";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { TokenLogo } from "@/components/tokens/tokens-page";
-import { isObsolete, OBSOLETE_EXPLAINER } from "@/render/tokens";
+import { ExplainedBadges } from "@/components/ui/explained-badge";
+import { tokenBadges } from "@/render/badges";
 import { formatCount, formatUsd } from "@/lib/format";
 import { sumAmounts } from "@/lib/math";
 import { BOND_DENOM, dexAssetUrl, tokenRows, tokensTotalUsd, type TokenRow, type TokenSort } from "@/render/account";
@@ -60,16 +61,13 @@ function Row({ row, a }: { row: TokenRow; a: Account }) {
           )}
         </Stack>
       </HStack>
-      <HStack gap="1" minW="0" wrap="wrap">
+      {row.token ? (
+        <ExplainedBadges badges={tokenBadges(row.token)} />
+      ) : (
         <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
           {row.origin}
         </Badge>
-        {isObsolete(row.denom) && (
-          <Badge colorPalette="gray" variant="outline" size="sm" title={OBSOLETE_EXPLAINER} data-testid="obsolete-tag">
-            Obsolete
-          </Badge>
-        )}
-      </HStack>
+      )}
       <Stack gap="0" fontSize="sm" minW="0">
         <Text wordBreak="break-word">
           <PhoneLabel>Balance</PhoneLabel>

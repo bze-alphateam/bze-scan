@@ -16,10 +16,14 @@ import { externalLinks } from "@/lib/links";
 import {
   bondCompact,
   filterByMoniker,
+  HALL_OF_FAME_MAX_MISSED,
+  hallOfFame,
   inactiveLabel,
   pctText,
   rateText,
+  recentVotesText,
   signedBlocksWindow,
+  signingText,
   splitValidators,
   unbondingText,
   uptimeText,
@@ -240,7 +244,74 @@ function LoadError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-type Tab = "active" | "inactive";
+/** A Hall of Fame row: the validator, its stake and what earned it the place. */
+function HallOfFameRow({ v, place, window }: { v: Validator; place: number; window: number }) {
+  const href = `/validators/${encodeURIComponent(v.operator_address)}`;
+  return (
+    <HStack
+      role="listitem"
+      gap="3"
+      px="4"
+      py="3"
+      minH="56px"
+      borderTopWidth="1px"
+      borderColor="border.panel"
+      align="center"
+      data-testid="hall-of-fame-row"
+    >
+      <Text color="fg.muted" fontSize="sm" w="6" flexShrink={0}>
+        {place}
+      </Text>
+      <Avatar name={v.moniker} src={v.logo_url} />
+      <Stack gap="0.5" minW="0" flex="1">
+        <Link asChild fontWeight="medium" truncate>
+          <NextLink href={href}>{v.moniker}</NextLink>
+        </Link>
+        <Text fontSize="sm" color="fg.muted">
+          {bondCompact(v.tokens)}
+          {v.voting_power_pct ? ` · ${pctText(v.voting_power_pct)} of the voting power` : ""}
+        </Text>
+        <HStack gap="1.5" wrap="wrap">
+          <Badge colorPalette="green" variant="subtle" size="sm" whiteSpace="normal" h="auto" data-testid="hall-of-fame-signing">
+            {signingText(v, window)}
+          </Badge>
+          <Badge colorPalette="purple" variant="subtle" size="sm" whiteSpace="normal" h="auto" data-testid="hall-of-fame-votes">
+            {recentVotesText(v)}
+          </Badge>
+        </HStack>
+      </Stack>
+      <StakeButton moniker={v.moniker} />
+    </HStack>
+  );
+}
+
+function HallOfFame({ items, window, query }: { items: Validator[]; window: number; query: string }) {
+  const rows = filterByMoniker(items, query);
+  return (
+    <Stack gap="3">
+      <Text fontSize="sm" color="fg.muted" maxW="3xl" data-testid="hall-of-fame-intro">
+        Active validators that voted on every one of the last {formatCount(items[0]?.recent_votes.of ?? 10)} proposals,
+        whatever their vote, and missed no more than {formatCount(HALL_OF_FAME_MAX_MISSED)} of the last {formatCount(window)}{" "}
+        blocks. The smallest come first: staking with them spreads the voting power.
+      </Text>
+      <Card p="0">
+        {rows.length === 0 ? (
+          <Text px="4" py="6" color="fg.muted" textAlign="center">
+            {query ? "No Hall of Fame validator has that name." : "No validator meets the bar right now."}
+          </Text>
+        ) : (
+          <Box role="list" aria-label="Hall of Fame">
+            {rows.map((v) => (
+              <HallOfFameRow key={v.operator_address} v={v} place={items.indexOf(v) + 1} window={window} />
+            ))}
+          </Box>
+        )}
+      </Card>
+    </Stack>
+  );
+}
+
+type Tab = "active" | "inactive" | "fame";
 
 /** The list once loaded: intro, tiles, tabs with the filter, the table and the footnotes. */
 export function ValidatorsView({ list }: { list: ValidatorList }) {
@@ -248,6 +319,7 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
   const [query, setQuery] = useState("");
   const params = useParams();
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
+  const fame = useMemo(() => hallOfFame(list.items), [list.items]);
   const seats = list.summary?.max_validators ?? null;
   const window = signedBlocksWindow(params.data) ?? 10_000;
   // Each panel filters its own list: the panel leaving keeps its rows while its exit animation runs.
@@ -271,6 +343,9 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
               </Tabs.Trigger>
               <Tabs.Trigger value="inactive" minH="44px">
                 Inactive · {formatCount(inactive.length)}
+              </Tabs.Trigger>
+              <Tabs.Trigger value="fame" minH="44px">
+                Hall of Fame · {formatCount(fame.length)}
               </Tabs.Trigger>
             </Tabs.List>
             <HStack
@@ -302,6 +377,9 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
               items={inactiveRows}
               empty={query ? "No inactive validator has that name." : "Every validator is active."}
             />
+          </Tabs.Content>
+          <Tabs.Content value="fame" pt="3">
+            <HallOfFame items={fame} window={window} query={query} />
           </Tabs.Content>
         </Tabs.Root>
         <Text fontSize="sm" color="fg.muted">

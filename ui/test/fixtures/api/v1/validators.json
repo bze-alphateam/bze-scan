@@ -10,7 +10,13 @@
       "uptime": "99.99000",
       "jailed": false,
       "status": "bonded",
-      "logo_url": null
+      "logo_url": null,
+      "missed_blocks": 1,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 10,
+        "of": 10
+      }
     },
     {
       "rank": 2,
@@ -22,7 +28,13 @@
       "uptime": "100.00000",
       "jailed": false,
       "status": "bonded",
-      "logo_url": null
+      "logo_url": null,
+      "missed_blocks": 0,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 10,
+        "of": 10
+      }
     },
     {
       "rank": 3,
@@ -34,7 +46,13 @@
       "uptime": "98.40000",
       "jailed": false,
       "status": "bonded",
-      "logo_url": null
+      "logo_url": null,
+      "missed_blocks": 160,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 10,
+        "of": 10
+      }
     },
     {
       "rank": null,
@@ -46,7 +64,13 @@
       "uptime": "61.20000",
       "jailed": true,
       "status": "unbonding",
-      "logo_url": null
+      "logo_url": null,
+      "missed_blocks": 3880,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 4,
+        "of": 10
+      }
     },
     {
       "rank": null,
@@ -58,7 +82,13 @@
       "uptime": null,
       "jailed": false,
       "status": "unbonded",
-      "logo_url": null
+      "logo_url": null,
+      "missed_blocks": null,
+      "signed_blocks_window": null,
+      "recent_votes": {
+        "voted": 0,
+        "of": 10
+      }
     }
   ],
   "next_cursor": null,

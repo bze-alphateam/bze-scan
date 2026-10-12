@@ -126,6 +126,8 @@ export interface TokenRow {
   /** A pool share's two assets, for its paired logo. */
   lpPair: LpPair | null;
   origin: string;
+  /** The token as the tokens list knows it; null for a denom the explorer does not know. */
+  token: TokenSummary | null;
   /** The balance in USD; null without a price. */
   valueUsd: string | null;
 }
@@ -154,6 +156,7 @@ export function tokenRows(balances: Balance[], denoms: Map<string, TokenSummary>
         logoUrl: t?.logo_url ?? null,
         lpPair: t?.lp_pair ?? null,
         origin: originTag(t, b.denom),
+        token: t ?? null,
         valueUsd: exponent != null ? usdValue(b.amount, exponent, t?.price_usd) : null,
       };
     });

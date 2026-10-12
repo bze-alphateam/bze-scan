@@ -28,6 +28,13 @@ test.describe("validators list", () => {
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
 
+    await page.getByRole("tab", { name: "Hall of Fame · 2" }).click();
+    const fame = page.getByTestId("hall-of-fame-row");
+    await expect(fame).toHaveCount(2);
+    await expect(fame.first()).toContainText("Thamar Node");
+    await expect(fame.first()).toContainText("Didn't miss a block in the last 10,000 blocks");
+    await noHorizontalScroll(page);
+
     await page.getByRole("tab", { name: "Active · 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");
     await expect(rows(page)).toHaveCount(1);

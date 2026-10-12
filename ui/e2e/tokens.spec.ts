@@ -27,7 +27,11 @@ test.describe("tokens list", () => {
 
     await page.getByRole("button", { name: "Cross-chain", exact: true }).click();
     await expect(rows(page)).toHaveCount(2);
-    await expect(rows(page).first()).toContainText("Cross-chain · Cosmos Hub");
+    await expect(rows(page).first().getByTestId("token-badges")).toContainText("Cross-chainCosmos Hub");
+    // A badge explains itself on tap.
+    await rows(page).first().getByTestId("direct-tag").click();
+    await expect(page.getByRole("dialog")).toContainText("ATOM comes from Cosmos Hub, sent straight to BZE.");
+    await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "All", exact: true }).click();
     await page.getByRole("textbox", { name: "Find a token" }).fill("honey");
@@ -43,7 +47,7 @@ test.describe("token page", () => {
   test("a Factory token shows the orange supply box, its top holders and activity", async ({ page }) => {
     await page.goto(tokenPath(honey.denom));
     await expect(page).toHaveTitle("HONEY · Honey · BZE Explorer");
-    await expect(page.getByTestId("token-chips")).toContainText("Created on Factory");
+    await expect(page.getByTestId("token-chips")).toContainText("Factory");
     await expect(page.getByTestId("supply-box")).toHaveAttribute("data-state", "admin");
     await expect(page.getByTestId("supply-box")).toContainText("So far: 2 mints adding 1,000,500 HONEY, 1 burn removing 200 HONEY.");
     await expect(page.getByTestId("holder-row")).toHaveCount(6);
@@ -63,7 +67,8 @@ test.describe("token page", () => {
 
   test("a cross-chain token shows its origin chain", async ({ page }) => {
     await page.goto(tokenPath(usdc.denom));
-    await expect(page.getByTestId("token-chips")).toContainText("Cross-chain from Noble");
+    await expect(page.getByTestId("token-chips")).toContainText("Cross-chainNoble");
+    await expect(page.getByTestId("ibc-connection")).toContainText("open and active");
     await expect(page.getByTestId("supply-box")).toContainText("USDC is minted on Noble");
     await expect(page.getByTestId("token-about")).toContainText("Base denom thereuusdc");
     await expect(page.getByText("No activity indexed yet.")).toBeVisible();

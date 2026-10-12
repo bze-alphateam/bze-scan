@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo, useState } from "react";
 import { LuExternalLink, LuSearch } from "react-icons/lu";
@@ -10,17 +10,15 @@ import type { LpPair, TokenSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { ExplainedBadges } from "@/components/ui/explained-badge";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
-import { BOND_DENOM, dexAssetUrl, multiHop } from "@/render/account";
+import { BOND_DENOM, dexAssetUrl } from "@/render/account";
+import { tokenBadges } from "@/render/badges";
 import {
   changeText,
   filterTokens,
-  hopsExplainer,
-  isObsolete,
-  OBSOLETE_EXPLAINER,
-  listOriginTag,
   noPriceText,
   priceText,
   supplyText,
@@ -144,7 +142,6 @@ function PriceCell({ t }: { t: TokenSummary }) {
 }
 
 function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSummary> }) {
-  const hop = multiHop(t);
   return (
     <Grid
       role="listitem"
@@ -173,21 +170,7 @@ function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSum
           )}
         </Stack>
       </HStack>
-      <HStack gap="1" minW="0" wrap="wrap">
-        <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
-          {listOriginTag(t)}
-        </Badge>
-        {isObsolete(t.denom) && (
-          <Badge colorPalette="gray" variant="outline" size="sm" title={OBSOLETE_EXPLAINER} data-testid="obsolete-tag">
-            Obsolete
-          </Badge>
-        )}
-        {hop && (
-          <Badge colorPalette="orange" variant="subtle" size="sm" title={hopsExplainer(t) ?? undefined} data-testid="hops-tag">
-            {hop.hops} hops
-          </Badge>
-        )}
-      </HStack>
+      <ExplainedBadges badges={tokenBadges(t)} />
       <Text fontSize="sm" wordBreak="break-word">
         <PhoneLabel>Supply</PhoneLabel>
         {supplyText(t) ?? "—"}

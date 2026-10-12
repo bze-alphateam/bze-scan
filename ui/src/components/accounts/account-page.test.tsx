@@ -182,7 +182,8 @@ describe("Tokens tab", () => {
       "uzzz",
     ]);
     expect(screen.getByTestId("tokens-summary")).toHaveTextContent("5 tokens · ≈ $37.35 in total, at DEX prices");
-    expect(rows[0]).toHaveTextContent("Cross-chain · Noble");
+    expect(within(rows[0]).getByTestId("token-badges")).toHaveTextContent("Cross-chainNoble");
+    expect(within(rows[0]).getByTestId("direct-tag")).toHaveAttribute("title", "USDC comes from Noble, sent straight to BZE.");
     expect(rows[0]).toHaveTextContent("25.5 USDC");
     expect(rows[0]).toHaveTextContent("≈ $25.50");
     expect(within(rows[0]).getByRole("link", { name: /View on DEX/ })).toHaveAttribute(

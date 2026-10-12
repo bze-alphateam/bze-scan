@@ -86,7 +86,7 @@ describe("tokens tab", () => {
     expect(originTag(byDenom(a.balances[2].denom), a.balances[2].denom)).toBe("Cross-chain · Noble");
     expect(originTag(byDenom(a.balances[4].denom), a.balances[4].denom)).toBe("DEX pool share");
     expect(originTag(undefined, "uzzz")).toBe("uzzz");
-    const noName = { ...byDenom(a.balances[2].denom)!, origin_chain: { chain_id: "noble-1", name: null, logo_url: null } };
+    const noName = { ...byDenom(a.balances[2].denom)!, origin_chain: { chain_id: "noble-1", name: null, logo_url: null, status: null } };
     expect(originTag(noName, noName.denom)).toBe("Cross-chain · noble-1");
   });
 

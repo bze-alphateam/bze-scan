@@ -75,6 +75,24 @@ describe("ValidatorsPage", () => {
     expect(old).toHaveTextContent("—");
   });
 
+  it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await userEvent.click(await screen.findByRole("tab", { name: /Hall of Fame · 2/ }));
+    expect(screen.getByTestId("hall-of-fame-intro")).toHaveTextContent(
+      "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 10 of the last 10,000 blocks",
+    );
+    const rows = screen.getAllByTestId("hall-of-fame-row");
+    // Deep Fields missed 160 blocks, Sleepy Node is not active and voted on 4: neither is listed.
+    expect(rows.map((r) => within(r).getAllByRole("link")[0].textContent)).toEqual(["Thamar Node", "Honeycomb"]);
+    expect(within(rows[0]).getByTestId("hall-of-fame-signing")).toHaveTextContent("Didn't miss a block in the last 10,000 blocks");
+    expect(within(rows[1]).getByTestId("hall-of-fame-signing")).toHaveTextContent("Missed 1 of the last 10,000 blocks");
+    expect(within(rows[1]).getByTestId("hall-of-fame-votes")).toHaveTextContent("Voted on all of the last 10 proposals");
+    expect(rows[1]).toHaveTextContent("50M BZE · 12.3% of the voting power");
+
+    await userEvent.type(screen.getByRole("textbox", { name: "Find a validator" }), "zzz");
+    expect(screen.getByText("No Hall of Fame validator has that name.")).toBeInTheDocument();
+  });
+
   it("shows each validator's picture, else its initials", async () => {
     const withLogo = { ...list, items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/v.jpg" } : v)) };
     renderWithProviders(<ValidatorsPage />, { api: api({ validators: () => Promise.resolve(withLogo as ValidatorList) }) });
