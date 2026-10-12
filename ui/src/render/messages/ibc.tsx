@@ -1,9 +1,10 @@
-import { Text } from "@chakra-ui/react";
+import { HStack, Stack, Text } from "@chakra-ui/react";
 
 import type { Coin } from "@/api/types";
 import { shortAddress } from "@/lib/format";
 
-import { Account, coin, coinsText, Coins, eventAttr, Fields, ForeignAddress, obj, str, transfersOf } from "./common";
+import { Account, accountName, coin, coinsText, Coins, eventAttr, Fields, ForeignAddress, obj, str, transfersOf } from "./common";
+import { ChainLogo, chainName, IbcStatus, ibcRowFor } from "./ibc-status";
 import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 const transfer = renderer({
@@ -12,6 +13,8 @@ const transfer = renderer({
     const token = coin(msg, "token");
     const receiver = str(msg, "receiver");
     const channel = str(msg, "source_channel");
+    const row = ibcRowFor(msg, ctx);
+    if (row) return `Cross-chain transfer to ${chainName(row)} · ${token ? coinsText([token], ctx) : "tokens"}`;
     return (
       `Cross-chain transfer · ${token ? coinsText([token], ctx) : "tokens"} → ${receiver ? shortAddress(receiver) : "another chain"}` +
       (channel ? ` through ${channel}` : "")
@@ -24,16 +27,29 @@ const transfer = renderer({
   reasonFor: () => "held for the cross-chain transfer",
   Body: function TransferBody({ msg, ctx }: BodyProps) {
     const token = coin(msg, "token");
+    const row = ibcRowFor(msg, ctx);
     return (
-      <Fields
-        rows={[
-          { label: "From", value: <Account address={str(msg, "sender")} ctx={ctx} /> },
-          { label: "To", value: <ForeignAddress address={str(msg, "receiver")} /> },
-          { label: "Amount", value: token && <Coins list={[token]} ctx={ctx} /> },
-          { label: "Channel", value: str(msg, "source_channel") },
-          { label: "Memo", value: str(msg, "memo") },
-        ]}
-      />
+      <Stack gap="3">
+        {row && <IbcStatus t={row} />}
+        <Fields
+          rows={[
+            { label: "From", value: <Account address={str(msg, "sender")} ctx={ctx} /> },
+            {
+              label: "To",
+              value: (
+                <HStack gap="2" wrap="wrap">
+                  {row && <ChainLogo t={row} />}
+                  {row && <Text as="span">{chainName(row)}</Text>}
+                  <ForeignAddress address={str(msg, "receiver")} />
+                </HStack>
+              ),
+            },
+            { label: "Amount", value: token && <Coins list={[token]} ctx={ctx} /> },
+            { label: "Channel", value: str(msg, "source_channel") },
+            { label: "Memo", value: str(msg, "memo") },
+          ]}
+        />
+      </Stack>
     );
   },
 });
@@ -57,14 +73,18 @@ const packet = (msg: RenderMessage) => obj(msg.body?.packet);
 
 function PacketFields({ msg, ctx }: BodyProps) {
   const p = packet(msg);
+  const row = ibcRowFor(msg, ctx);
   return (
-    <Fields
-      rows={[
-        { label: "Channel", value: typeof p?.destination_channel === "string" ? `${p.source_channel} → ${p.destination_channel}` : null },
-        { label: "Sequence", value: p?.sequence != null ? String(p.sequence) : null },
-        { label: "Relayed by", value: <Account address={str(msg, "signer")} ctx={ctx} /> },
-      ]}
-    />
+    <Stack gap="3">
+      {row && <IbcStatus t={row} />}
+      <Fields
+        rows={[
+          { label: "Channel", value: typeof p?.destination_channel === "string" ? `${p.source_channel} → ${p.destination_channel}` : null },
+          { label: "Sequence", value: p?.sequence != null ? String(p.sequence) : null },
+          { label: "Relayed by", value: <Account address={str(msg, "signer")} ctx={ctx} /> },
+        ]}
+      />
+    </Stack>
   );
 }
 
@@ -72,6 +92,11 @@ const recvPacket = renderer({
   category: "cross_chain",
   title: (msg, ctx) => {
     const r = received(msg, ctx);
+    const row = ibcRowFor(msg, ctx);
+    if (row) {
+      const amount = r?.coins.length ? coinsText(r.coins, ctx) : coinsText([{ denom: row.denom, amount: row.amount }], ctx);
+      return `Cross-chain transfer from ${chainName(row)} · ${amount} to ${accountName(row.receiver, ctx)}`;
+    }
     if (!r) return "Cross-chain packet received";
     return `Cross-chain transfer received: ${coinsText(r.coins, ctx)} to ${r.receiver ? shortAddress(r.receiver) : "an account"}`;
   },

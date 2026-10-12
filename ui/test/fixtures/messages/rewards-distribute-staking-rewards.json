@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.rewards.MsgDistributeStakingRewards",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "reward_id": "12",
+    "amount": "50000000"
+  },
+  "events": []
+}

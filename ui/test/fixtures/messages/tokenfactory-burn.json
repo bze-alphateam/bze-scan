@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.tokenfactory.MsgBurn",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "coins": "500000000factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney"
+  },
+  "events": []
+}

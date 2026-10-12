@@ -19,6 +19,7 @@ import type {
   TokenEvent,
   TokenListParams,
   TokenSummary,
+  Tx,
   TxListParams,
   TxStatusFilter,
   TxSummary,
@@ -191,9 +192,19 @@ export function useTransactions(params: TxListParams = {}) {
 export type PendingState = "looking" | "not_found" | null;
 
 /**
- * A transaction: immutable once found. A 404 means "not indexed yet": the
- * query is polled every 7 s for the pending window, then given up on.
- * Mount it under a `key` of the hash so the window restarts per hash.
+ * Whether a found transaction can still change: the order book has not
+ * processed its DEX messages yet, or a cross-chain transfer it created waits
+ * for the relayer (an expired one waits for a refund that may never come).
+ */
+export function isUnsettled(tx: Tx): boolean {
+  return tx.dex?.pending === true || (tx.ibc_transfers ?? []).some((t) => t.status === "pending" && !t.expired);
+}
+
+/**
+ * A transaction: immutable once found and settled, `live` while unsettled
+ * (`isUnsettled`). A 404 means "not indexed yet": the query is polled every
+ * 7 s for the pending window, then given up on. Mount it under a `key` of
+ * the hash so the window restarts per hash.
  */
 export function useTransaction(hash: string) {
   const api = useApi();
@@ -202,7 +213,10 @@ export function useTransaction(hash: string) {
     queryKey: queryKeys.transaction(hash),
     queryFn: ({ signal }) => api.transaction(hash.toUpperCase(), signal),
     ...immutable,
-    refetchInterval: (q) => (isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false),
+    refetchInterval: (q) => {
+      if (q.state.data) return isUnsettled(q.state.data) ? live.refetchInterval : false;
+      return isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false;
+    },
   });
   const notFound = isNotFound(query.error);
   usePendingWindow(notFound, setExpired);

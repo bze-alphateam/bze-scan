@@ -1,0 +1,14 @@
+{
+  "type_url": "/bze.rewards.MsgCreateTradingReward",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "prize_amount": "500000000",
+    "prize_denom": "ubze",
+    "duration": "14",
+    "market_id": "ubze/factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "slots": "3"
+  },
+  "events": []
+}

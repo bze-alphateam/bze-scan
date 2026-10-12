@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.burner.MsgFundBurner",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "burner",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "amount": "250000000ubze"
+  },
+  "events": []
+}

@@ -40,11 +40,6 @@ export function txOneLine(tx: TxLine, ctx: RenderContext): string {
   return title + suffix;
 }
 
-// Chain messages the registry does not read yet, whose other side is a module.
-const MODULE_COUNTERPARTIES: Record<string, string> = {
-  "/bze.burner.MsgFundBurner": "Burner",
-};
-
 /**
  * Who the signer dealt with in the first message: the recipient of a send,
  * the validator of a stake, "Burner" for a burner fund; null when the
@@ -53,8 +48,6 @@ const MODULE_COUNTERPARTIES: Record<string, string> = {
 export function txCounterparty(tx: TxLine, ctx: RenderContext): Counterparty | null {
   const msg = firstMessage(tx);
   if (!msg) return null;
-  const name = MODULE_COUNTERPARTIES[msg.type_url];
-  if (name) return { kind: "name", name };
   try {
     return ctx.rendererFor(msg.type_url).counterparty?.(msg) ?? null;
   } catch {

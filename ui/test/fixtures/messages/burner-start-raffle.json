@@ -1,0 +1,15 @@
+{
+  "type_url": "/bze.burner.MsgStartRaffle",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "burner",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "pot": "1000000000",
+    "duration": "7",
+    "chances": "500",
+    "ratio": "0.1",
+    "ticket_price": "10000000",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney"
+  },
+  "events": []
+}

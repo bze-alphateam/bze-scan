@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.burner.MsgJoinRaffle",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "burner",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "tickets": "2"
+  },
+  "events": []
+}

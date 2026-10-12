@@ -1,0 +1,147 @@
+{
+  "height": 25120440,
+  "tx_index": 5,
+  "hash": "9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/ibc.applications.transfer.v1.MsgTransfer"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/ibc.applications.transfer.v1.MsgTransfer",
+    "module": "transfer",
+    "body": {
+      "source_port": "transfer",
+      "source_channel": "channel-3",
+      "token": {
+        "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+        "amount": "2000000"
+      },
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "receiver": "cosmos1k4yvd7n5r9zxq4ta6l2h3g0wm8s0e7jcwf7fha",
+      "timeout_height": {
+        "revision_number": "0",
+        "revision_height": "0"
+      },
+      "timeout_timestamp": "1791000000000000000",
+      "memo": ""
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 200000,
+  "gas_used": 98211,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/ibc.applications.transfer.v1.MsgTransfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "transfer",
+      "body": {
+        "source_port": "transfer",
+        "source_channel": "channel-3",
+        "token": {
+          "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+          "amount": "2000000"
+        },
+        "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "receiver": "cosmos1k4yvd7n5r9zxq4ta6l2h3g0wm8s0e7jcwf7fha",
+        "timeout_height": {
+          "revision_number": "0",
+          "revision_height": "0"
+        },
+        "timeout_timestamp": "1791000000000000000",
+        "memo": ""
+      },
+      "events": [
+        {
+          "type": "send_packet",
+          "attrs": {
+            "packet_sequence": "77",
+            "packet_src_channel": "channel-3",
+            "packet_src_port": "transfer"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "seq": 1,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze1x54ltnyg88k0ejmk8ytwrhd3ltm84xehrnlslf",
+      "recipient_label": {
+        "name": "Cross-chain escrow",
+        "kind": "ibc_escrow"
+      },
+      "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+      "amount": "2000000",
+      "symbol": "ATOM",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": [
+    {
+      "channel_id": "channel-3",
+      "sequence": 77,
+      "direction": "out",
+      "status": "pending",
+      "expired": false,
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "receiver": "cosmos1k4yvd7n5r9zxq4ta6l2h3g0wm8s0e7jcwf7fha",
+      "denom": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+      "amount": "2000000",
+      "memo": null,
+      "counterparty": {
+        "chain_id": "cosmoshub-4",
+        "pretty_name": "Cosmos Hub",
+        "logo_url": null,
+        "explorer_account_url": "https://www.mintscan.io/cosmos/address/${accountAddress}",
+        "explorer_tx_url": null
+      },
+      "created_height": 25120440,
+      "created_tx_hash": "9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E",
+      "created_time": "2026-10-11T09:15:02Z",
+      "timeout_height": null,
+      "timeout_time": "2026-10-11T10:15:02Z",
+      "result_height": null,
+      "result_tx_hash": null,
+      "result_time": null,
+      "ack_error": null
+    }
+  ]
+}

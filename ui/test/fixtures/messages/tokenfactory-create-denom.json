@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.tokenfactory.MsgCreateDenom",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "subdenom": "uhoney"
+  },
+  "events": []
+}

@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.cointrunk.MsgPayPublisherRespect",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "cointrunk",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "amount": "10000000ubze"
+  },
+  "events": []
+}

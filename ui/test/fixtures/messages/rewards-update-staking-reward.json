@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.rewards.MsgUpdateStakingReward",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "reward_id": "12",
+    "duration": "10"
+  },
+  "events": []
+}

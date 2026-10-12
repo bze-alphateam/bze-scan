@@ -7,6 +7,8 @@ on:
   pull_request:
     paths:
       - "ui/**"
+      # bze.test.tsx checks every BZE type classified there has a renderer.
+      - "backend/internal/classify/classify.go"
       - ".github/workflows/ui-unit.yml"
 
 permissions:

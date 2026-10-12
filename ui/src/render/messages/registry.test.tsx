@@ -24,6 +24,7 @@ const V1 = "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c";
 const V2 = "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e";
 const ATOM = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
 const USDC = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4";
+const HONEY = `factory/${A}/uhoney`;
 
 const transfers: Transfer[] = [
   {
@@ -46,6 +47,8 @@ const ctx = createRenderContext({
   tokens: new Map([
     ["ubze", { symbol: "BZE", exponent: 6, price_usd: "0.0015" }],
     [ATOM, { symbol: "ATOM", exponent: 6, price_usd: null }],
+    [USDC, { symbol: "USDC", exponent: 6, price_usd: "1" }],
+    [HONEY, { symbol: "HONEY", exponent: 6, price_usd: null }],
   ]),
   validators: new Map([
     [V1, { moniker: "Honeycomb" }],
@@ -85,6 +88,43 @@ const TITLES: Record<string, string> = {
   "authz-exec-single": "Vote No on proposal #14",
   "feegrant-grant-allowance": "Pay the fees of bze1m3k…9ds4",
   "feegrant-revoke-allowance": "Stop paying the fees of bze1m3k…9ds4",
+  "tradebin-create-order": "Buy order · 1,000 BZE at 0.0125 USDC",
+  "tradebin-cancel-order": "Cancel order #1042 on BZE/USDC",
+  "tradebin-fill-orders": "Fill 2 orders on BZE/USDC",
+  "tradebin-multi-swap": "Swap 50 USDC → BZE",
+  "tradebin-add-liquidity": "Add liquidity to the USDC/BZE pool · 1.25 USDC + 100 BZE",
+  "tradebin-remove-liquidity": "Remove liquidity from the USDC/BZE pool",
+  "tradebin-create-liquidity-pool": "Create the BZE/HONEY pool",
+  "tradebin-create-market": "Open the HONEY/BZE market",
+  "burner-fund-burner": "Fund the Burner · 250 BZE",
+  "burner-join-raffle": "Join the HONEY raffle · 2 tickets",
+  "burner-start-raffle": "Start a raffle for HONEY · prize 1,000 HONEY",
+  "burner-move-ibc-locked-coins": "Move locked cross-chain coins to the Burner",
+  "tokenfactory-create-denom": "Create token uhoney",
+  "tokenfactory-mint": "Mint 1,000,000 HONEY to bze18uf…9zhw",
+  "tokenfactory-burn": "Burn 500 HONEY",
+  "tokenfactory-change-admin": "Hand HONEY's admin to bze1m3k…9ds4",
+  "tokenfactory-change-admin-renounce": "Renounce HONEY's admin",
+  "tokenfactory-set-denom-metadata": "Update HONEY's metadata (name, symbol, decimals)",
+  "tokenfactory-set-denom-branding": "Update HONEY's branding (font and colours)",
+  "rewards-create-staking-reward": "Open a staking reward for HONEY · 100 BZE per day for 30 days",
+  "rewards-update-staking-reward": "Extend staking reward #12 by 10 days",
+  "rewards-join-staking": "Join staking reward #12",
+  "rewards-exit-staking": "Leave staking reward #12",
+  "rewards-claim-staking-rewards": "Claim staking-reward prizes",
+  "rewards-distribute-staking-rewards": "Add prizes to staking reward #12",
+  "rewards-delete-staking-reward": "Close staking reward #12",
+  "rewards-create-trading-reward": "Open a trading reward on BZE/HONEY · 500 BZE",
+  "rewards-activate-trading-reward": "Start trading reward #4",
+  "rewards-create-denom-reward": "Open the HONEY denom reward",
+  "rewards-create-denom-reward-schedule": "Schedule 20 BZE a day for the HONEY denom reward for 30 days",
+  "rewards-update-denom-reward-schedule": "Extend schedule #2 of the HONEY denom reward by 15 days",
+  "rewards-join-denom-reward": "Lock 1,000 HONEY in the HONEY denom reward",
+  "rewards-exit-denom-reward": "Leave the HONEY denom reward",
+  "rewards-claim-denom-rewards": "Claim the prizes of the HONEY denom reward",
+  "rewards-distribute-denom-rewards": "Add 70 BZE to the HONEY denom reward",
+  "cointrunk-add-article": "Publish an article on CoinTrunk · BZE v8.2 is live",
+  "cointrunk-pay-publisher-respect": "Pay 10 BZE of respect to bze1m3k…9ds4",
   fallback: "Create denom reward",
   "fallback-undecoded": "From the future",
 };
