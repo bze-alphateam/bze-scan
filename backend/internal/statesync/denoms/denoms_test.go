@@ -36,6 +36,10 @@ const (
 	usdc        = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
 	ctlNoSupply = "factory/bze1972aqfzdg29ugjln74edx0xvcg4ehvysjptk77/1000000000"
 	vdlLP       = "ulp_factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl_ubze"
+	usdcLP      = "ulp_" + usdc + "_ubze"
+	photon      = "ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011"
+	photonLP    = "ulp_" + photon + "_ubze" // absent from the hand-written pool list
+	corey       = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey"
 	recorded    = 29 // 28 with supply, plus one with metadata only
 )
 
@@ -66,6 +70,10 @@ type fakeNode struct {
 	halted []string
 	// pages splits TotalSupply in two pages.
 	pages bool
+	// pools answers AllLiquidityPools instead of the hand-written fixture;
+	// noPools answers Unimplemented.
+	pools   []tradebintypes.LiquidityPool
+	noPools bool
 }
 
 func newFakeNode(t *testing.T) *fakeNode { return &fakeNode{t: t, calls: map[string]int{}} }
@@ -161,6 +169,21 @@ func (n *fakeNode) HaltedDenoms(context.Context, *tradebintypes.QueryHaltedDenom
 	return &tradebintypes.QueryHaltedDenomsResponse{Denoms: n.halted}, nil
 }
 
+func (n *fakeNode) AllLiquidityPools(context.Context, *tradebintypes.QueryAllLiquidityPoolsRequest, ...grpc.CallOption) (*tradebintypes.QueryAllLiquidityPoolsResponse, error) {
+	if err := n.count("AllLiquidityPools"); err != nil {
+		return nil, err
+	}
+	if n.noPools {
+		return nil, status.Error(codes.Unimplemented, "unknown method AllLiquidityPools")
+	}
+	if n.pools != nil {
+		return &tradebintypes.QueryAllLiquidityPoolsResponse{List: n.pools}, nil
+	}
+	var resp tradebintypes.QueryAllLiquidityPoolsResponse
+	fakenode.LoadGRPCFixture(n.t, "tradebin", "AllLiquidityPools", "", &resp)
+	return &resp, nil
+}
+
 // fakeStore keeps the snapshots.
 type fakeStore struct {
 	mu    sync.Mutex
@@ -236,9 +259,18 @@ func TestFullResyncMapsTheRecordedDenoms(t *testing.T) {
 	assert.Equal(t, 0, u.Exponent, "the display unit is not listed: 0 until the registry story")
 	assert.Empty(t, u.Creator)
 
-	assert.Equal(t, denoms.KindLP, rows[vdlLP].Kind)
-	assert.Empty(t, rows[vdlLP].Symbol)
-	assert.Equal(t, 6, rows[vdlLP].Exponent)
+	lp := rows[vdlLP]
+	assert.Equal(t, denoms.KindLP, lp.Kind)
+	assert.Equal(t, vdl, lp.LPBase, "the pool's assets")
+	assert.Equal(t, "ubze", lp.LPQuote)
+	assert.Equal(t, "VDL/BZE LP", lp.Symbol, "named after the assets' symbols, as the dapps do")
+	assert.Equal(t, "VDL/BZE LP Shares", lp.Name)
+	assert.Equal(t, 6, lp.Exponent)
+	assert.Equal(t, "UUSDC/BZE LP", rows[usdcLP].Symbol, "the IBC asset's placeholder symbol without a lookup")
+	assert.Equal(t, photon, rows[photonLP].LPBase, "not in the pool list: the legacy denom is split")
+	assert.Equal(t, "ubze", rows[photonLP].LPQuote)
+	assert.Equal(t, "UPHOTON/BZE LP", rows[photonLP].Symbol)
+	assert.Empty(t, u.LPBase, "only LP denoms have a pair")
 
 	assert.Equal(t, "0", rows[ctlNoSupply].Supply, "metadata without supply")
 	for _, d := range snap.Denoms {
@@ -452,11 +484,14 @@ func TestAMultiHopDenomIsFollowedToItsHomeChain(t *testing.T) {
 	assert.Equal(t, "uatone", a.IBCBaseDenom)
 	assert.Equal(t, "ATONE", a.Symbol)
 	assert.Equal(t, 6, a.Exponent)
+	assert.Equal(t, "osmosis-1", a.ViaChainID, "the first hop's chain")
+	assert.Empty(t, rows[usdc].ViaChainID, "one hop: no via chain")
 
 	c := rows[cw20ViaJuno]
 	assert.Equal(t, "osmosis-1", c.OriginChainID, "unresolved: the first hop's chain")
 	assert.Equal(t, "cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l", c.IBCBaseDenom, "and the raw base denom")
 	assert.Contains(t, p.keys, "osmosis-1", "the first hop chain's asset is missing")
+	assert.Equal(t, "osmosis-1", c.ViaChainID, "unresolved, still multi-hop")
 }
 
 func TestAMultiHopDenomWhoseHomeChainIsNotCachedAsksForItByName(t *testing.T) {
@@ -506,4 +541,111 @@ type brokenTrace struct{}
 
 func (brokenTrace) DenomTrace(context.Context, *ibctransfertypes.QueryDenomTraceRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
 	return nil, errors.New("node down")
+}
+
+// withSupply is the recorded bank with coins added to the total supply.
+type withSupply struct {
+	*fakeNode
+	coins []sdk.Coin
+}
+
+func (w withSupply) TotalSupply(ctx context.Context, in *banktypes.QueryTotalSupplyRequest, opts ...grpc.CallOption) (*banktypes.QueryTotalSupplyResponse, error) {
+	resp, err := w.fakeNode.TotalSupply(ctx, in, opts...)
+	if err != nil {
+		return nil, err
+	}
+	resp.Supply = append(resp.Supply, w.coins...)
+	return resp, nil
+}
+
+func TestAHashedLPDenomTakesItsPairFromThePoolOnly(t *testing.T) {
+	coreyLP := tradebintypes.GetLpDenom(corey + "_ubze") // in the hand-written pool list
+	unknownLP := tradebintypes.GetLpDenom("abc_def")     // in no pool
+	n, st := newFakeNode(t), &fakeStore{}
+	bank := withSupply{n, []sdk.Coin{sdk.NewCoin(coreyLP, sdkmath.NewInt(7)), sdk.NewCoin(unknownLP, sdkmath.NewInt(9))}}
+	set := denoms.New(denoms.Deps{Bank: bank, TokenFactory: n, Tradebin: n, Store: st}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	rows := byDenom(st.last(t))
+
+	c := rows[coreyLP]
+	assert.Equal(t, denoms.KindLP, c.Kind)
+	assert.Equal(t, corey, c.LPBase)
+	assert.Equal(t, "ubze", c.LPQuote)
+	assert.Equal(t, "COREY/BZE LP", c.Symbol)
+	assert.Equal(t, "COREY/BZE LP Shares", c.Name)
+
+	u := rows[unknownLP]
+	assert.Empty(t, u.LPBase, "a hash is never split")
+	assert.Empty(t, u.LPQuote)
+	assert.Empty(t, u.Symbol, "no pair: the names stay")
+}
+
+func TestAnLPWhoseAssetHasNoSymbolKeepsItsNames(t *testing.T) {
+	set, n, st := newSet(t)
+	n.pools = []tradebintypes.LiquidityPool{
+		{Base: "factory/bze1nobody/unone", Quote: "ubze", LpDenom: vdlLP}, // an asset the bank does not list
+	}
+	require.NoError(t, set.FullResync(context.Background()))
+	lp := byDenom(st.last(t))[vdlLP]
+	assert.Equal(t, "factory/bze1nobody/unone", lp.LPBase, "the pool wins over the legacy denom")
+	assert.Empty(t, lp.Symbol)
+	assert.Empty(t, lp.Name)
+}
+
+func TestANodeWithoutPoolsSplitsTheLegacyDenoms(t *testing.T) {
+	set, n, st := newSet(t)
+	n.noPools = true
+	require.NoError(t, set.FullResync(context.Background()))
+	lp := byDenom(st.last(t))[vdlLP]
+	assert.Equal(t, vdl, lp.LPBase)
+	assert.Equal(t, "ubze", lp.LPQuote)
+	assert.Equal(t, "VDL/BZE LP", lp.Symbol)
+
+	n.noPools, n.err = false, errors.New("node down")
+	require.ErrorContains(t, set.FullResync(context.Background()), "node down")
+}
+
+func TestTheLegacyFallbackNeedsExactlyTwoAssets(t *testing.T) {
+	odd := "ulp_factory/bze1x/u_a_ubze" // three parts after the prefix
+	n, st := newFakeNode(t), &fakeStore{}
+	n.pools = []tradebintypes.LiquidityPool{}
+	bank := withSupply{n, []sdk.Coin{sdk.NewCoin(odd, sdkmath.NewInt(1))}}
+	set := denoms.New(denoms.Deps{Bank: bank, TokenFactory: n, Tradebin: n, Store: st}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	assert.Empty(t, byDenom(st.last(t))[odd].LPBase)
+}
+
+// listedBank answers the single-denom bank queries from the recorded lists.
+type listedBank struct{ *fakeNode }
+
+func (b listedBank) DenomMetadataByQueryString(ctx context.Context, in *banktypes.QueryDenomMetadataByQueryStringRequest, _ ...grpc.CallOption) (*banktypes.QueryDenomMetadataByQueryStringResponse, error) {
+	all, err := b.DenomsMetadata(ctx, &banktypes.QueryDenomsMetadataRequest{})
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range all.Metadatas {
+		if m.Base == in.Denom {
+			return &banktypes.QueryDenomMetadataByQueryStringResponse{Metadata: m}, nil
+		}
+	}
+	return nil, status.Error(codes.NotFound, "no metadata")
+}
+
+func (b listedBank) SupplyOf(ctx context.Context, in *banktypes.QuerySupplyOfRequest, _ ...grpc.CallOption) (*banktypes.QuerySupplyOfResponse, error) {
+	all, err := b.TotalSupply(ctx, &banktypes.QueryTotalSupplyRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return &banktypes.QuerySupplyOfResponse{Amount: sdk.NewCoin(in.Denom, all.Supply.AmountOf(in.Denom))}, nil
+}
+
+func TestResyncingAnLPAloneResolvesItsAssetsForTheName(t *testing.T) {
+	n, st := newFakeNode(t), &fakeStore{}
+	set := denoms.New(denoms.Deps{Bank: listedBank{n}, TokenFactory: n, Tradebin: n, Store: st}, 0)
+	require.NoError(t, set.ResyncOne(context.Background(), vdlLP))
+	snap := st.last(t)
+	require.Len(t, snap.Denoms, 1, "the assets are read, not saved")
+	assert.Equal(t, "VDL/BZE LP", snap.Denoms[0].Symbol)
+	assert.Equal(t, "VDL/BZE LP Shares", snap.Denoms[0].Name)
+	assert.Equal(t, vdl, snap.Denoms[0].LPBase)
 }

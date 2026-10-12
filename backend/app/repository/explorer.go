@@ -403,6 +403,8 @@ type ValidatorSummary struct {
 	SignedBlocksWindow *int64
 	Jailed             bool
 	Status             string
+	// LogoURL is the Keybase picture of its identity, nil without one.
+	LogoURL *string
 }
 
 // Validators lists the validators of status (every status when nil) in
@@ -416,7 +418,7 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 			         CASE status WHEN 'bonded' THEN 0 WHEN 'unbonding' THEN 1 ELSE 2 END,
 			         tokens DESC, operator_address) AS pos,
 			       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
-			       missed_blocks, signed_blocks_window, jailed, status
+			       missed_blocks, signed_blocks_window, jailed, status, logo_url
 			  FROM explorer.validators
 			 WHERE $1::text IS NULL OR status = $1)
 		SELECT * FROM v WHERE pos > $2 ORDER BY pos LIMIT $3`, status, after, limit)
@@ -428,7 +430,7 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 	for rows.Next() {
 		var v ValidatorSummary
 		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
-			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status); err != nil {
+			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL); err != nil {
 			return nil, fmt.Errorf("validators: %w", err)
 		}
 		out = append(out, v)
@@ -488,14 +490,14 @@ func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDe
 	var v ValidatorDetail
 	v.OperatorAddress = operator
 	err := r.db.QueryRow(ctx, `SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
-			missed_blocks, signed_blocks_window, jailed, status,
+			missed_blocks, signed_blocks_window, jailed, status, logo_url,
 			account_address, consensus_address, consensus_pubkey, identity, website, security_contact, details,
 			tombstoned, jailed_until, delegator_shares::text, commission_max_rate::text,
 			commission_max_change_rate::text, commission_update_time, min_self_delegation::text,
 			self_delegation::text, delegator_count, first_seen_height, first_seen_time, updated_at
 		FROM explorer.validators WHERE operator_address = $1`, operator).Scan(
 		&v.Rank, &v.Moniker, &v.Tokens, &v.VotingPowerPct, &v.CommissionRate,
-		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status,
+		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
 		&v.AccountAddress, &v.ConsensusAddress, &v.ConsensusPubkey, &v.Identity, &v.Website, &v.SecurityContact,
 		&v.Details, &v.Tombstoned, &v.JailedUntil, &v.DelegatorShares, &v.CommissionMaxRate,
 		&v.CommissionMaxChangeRate, &v.CommissionUpdateTime, &v.MinSelfDelegation,

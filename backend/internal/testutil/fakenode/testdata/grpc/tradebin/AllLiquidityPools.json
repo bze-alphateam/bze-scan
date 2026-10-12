@@ -1,0 +1,56 @@
+{
+  "list": [
+    {
+      "id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl_ubze",
+      "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "quote": "ubze",
+      "lp_denom": "ulp_factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl_ubze",
+      "creator": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "fee": "0.003000000000000000",
+      "fee_dest": {
+        "treasury": "0.000000000000000000",
+        "burner": "0.100000000000000000",
+        "providers": "0.900000000000000000"
+      },
+      "reserve_base": "1000000000",
+      "reserve_quote": "2000000000",
+      "stable": false
+    },
+    {
+      "id": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",
+      "base": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "quote": "ubze",
+      "lp_denom": "ulp_ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",
+      "creator": "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l",
+      "fee": "0.003000000000000000",
+      "fee_dest": {
+        "treasury": "0.000000000000000000",
+        "burner": "0.100000000000000000",
+        "providers": "0.900000000000000000"
+      },
+      "reserve_base": "5000000000",
+      "reserve_quote": "900000000000",
+      "stable": false
+    },
+    {
+      "id": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey_ubze",
+      "base": "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+      "quote": "ubze",
+      "lp_denom": "ulp/ACB85D816E5FC1516F2AE65B6BDA9925822F2F16EF1742310C321B2D81DA11A3",
+      "creator": "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw",
+      "fee": "0.003000000000000000",
+      "fee_dest": {
+        "treasury": "0.000000000000000000",
+        "burner": "0.100000000000000000",
+        "providers": "0.900000000000000000"
+      },
+      "reserve_base": "1000000",
+      "reserve_quote": "1000000",
+      "stable": false
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "3"
+  }
+}

@@ -42,8 +42,9 @@ const created = `(SELECT %s FROM explorer.token_events e
 var upsertSQL = `INSERT INTO explorer.denoms (
 		denom, symbol, name, exponent, description, kind, creator, admin, logo_url,
 		supply, halted, markets, metadata, origin_chain_id, ibc_base_denom, ibc_path,
+		via_chain_id, lp_base, lp_quote,
 		created_height, created_tx_hash, created_time, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
 		` + fmt.Sprintf(created, "e.height") + `, ` + fmt.Sprintf(created, "t.hash") + `, ` + fmt.Sprintf(created, "e.time") + `, now())
 	ON CONFLICT (denom) DO UPDATE SET
 		symbol = EXCLUDED.symbol, name = EXCLUDED.name, exponent = EXCLUDED.exponent,
@@ -51,6 +52,7 @@ var upsertSQL = `INSERT INTO explorer.denoms (
 		admin = EXCLUDED.admin, logo_url = EXCLUDED.logo_url, supply = EXCLUDED.supply,
 		halted = EXCLUDED.halted, markets = EXCLUDED.markets, metadata = EXCLUDED.metadata,
 		origin_chain_id = EXCLUDED.origin_chain_id, ibc_base_denom = EXCLUDED.ibc_base_denom, ibc_path = EXCLUDED.ibc_path,
+		via_chain_id = EXCLUDED.via_chain_id, lp_base = EXCLUDED.lp_base, lp_quote = EXCLUDED.lp_quote,
 		created_height = COALESCE(EXCLUDED.created_height, explorer.denoms.created_height),
 		created_tx_hash = COALESCE(EXCLUDED.created_tx_hash, explorer.denoms.created_tx_hash),
 		created_time = COALESCE(EXCLUDED.created_time, explorer.denoms.created_time),
@@ -78,7 +80,8 @@ func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
 		}
 		batch.Queue(upsertSQL, d.Denom, null(d.Symbol), null(d.Name), d.Exponent, null(d.Description), d.Kind,
 			null(d.Creator), null(d.Admin), null(d.LogoURL), d.Supply, d.Halted, d.Markets, metadata,
-			null(d.OriginChainID), null(d.IBCBaseDenom), null(d.IBCPath))
+			null(d.OriginChainID), null(d.IBCBaseDenom), null(d.IBCPath),
+			null(d.ViaChainID), null(d.LPBase), null(d.LPQuote))
 	}
 	if snap.Full {
 		batch.Queue(goneSQL, listed)

@@ -29,6 +29,16 @@ type TokenSummary struct {
 	OriginChainID   *string
 	OriginChainName *string
 	OriginChainLogo *string
+	// IBCPath is an IBC denom's trace path, nil until traced.
+	IBCPath *string
+	// ViaChainID is a multi-hop IBC denom's first hop chain; ViaChainName
+	// and ViaChainLogo as for the origin.
+	ViaChainID   *string
+	ViaChainName *string
+	ViaChainLogo *string
+	// LPBase and LPQuote are an LP denom's pool assets, nil when unknown.
+	LPBase  *string
+	LPQuote *string
 	// CreatedTime is the block time of the denom's first `created` event,
 	// nil for a denom created below the indexed range or not by a message.
 	CreatedTime *time.Time
@@ -44,7 +54,6 @@ type Token struct {
 	TokenSummary
 	Description    *string
 	IBCBaseDenom   *string
-	IBCPath        *string
 	Creator        *string
 	Admin          *string
 	CreatedHeight  *int64
@@ -123,15 +132,18 @@ const sortKey = `lower(coalesce(d.symbol, d.denom))`
 
 const tokenSummaryCols = `d.denom, d.symbol, d.name, d.kind, d.exponent, d.supply::text, d.holders_count,
 		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
-		oc.logo_url, d.created_time, ` + sortKey + `, ` + kindRank
+		oc.logo_url, d.ibc_path, d.via_chain_id, vc.pretty_name, vc.logo_url, d.lp_base, d.lp_quote,
+		d.created_time, ` + sortKey + `, ` + kindRank
 
-// originJoin names the origin chain of the denoms row d.
-const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chain_id`
+// originJoin names the origin and via chains of the denoms row d.
+const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chain_id
+		LEFT JOIN explorer.chains vc ON vc.chain_id = d.via_chain_id`
 
 func tokenSummaryDest(t *TokenSummary) []any {
 	return []any{&t.Denom, &t.Symbol, &t.Name, &t.Kind, &t.Exponent, &t.Supply, &t.HoldersCount,
 		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
-		&t.OriginChainLogo, &t.CreatedTime, &t.SortKey, &t.KindRank}
+		&t.OriginChainLogo, &t.IBCPath, &t.ViaChainID, &t.ViaChainName, &t.ViaChainLogo, &t.LPBase, &t.LPQuote,
+		&t.CreatedTime, &t.SortKey, &t.KindRank}
 }
 
 // Tokens returns up to limit denoms of kind (every kind when nil), by kind
@@ -163,10 +175,10 @@ func (r *Explorer) Tokens(ctx context.Context, kind *string, after *TokenKey, li
 func (r *Explorer) Token(ctx context.Context, denom string) (*Token, error) {
 	var t Token
 	var creatorName, creatorKind, adminName, adminKind *string
-	dest := append(tokenSummaryDest(&t.TokenSummary), &t.Description, &t.IBCBaseDenom, &t.IBCPath,
+	dest := append(tokenSummaryDest(&t.TokenSummary), &t.Description, &t.IBCBaseDenom,
 		&t.Creator, &t.Admin, &t.CreatedHeight, &t.CreatedTxHash, &t.Website, &t.Markets,
 		&t.PriceUpdatedAt, &t.Metadata, &t.UpdatedAt, &creatorName, &creatorKind, &adminName, &adminKind)
-	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.ibc_base_denom, d.ibc_path, d.creator, d.admin, d.created_height, d.created_tx_hash, d.website,
+	err := r.db.QueryRow(ctx, `SELECT `+tokenSummaryCols+`, d.description, d.ibc_base_denom, d.creator, d.admin, d.created_height, d.created_tx_hash, d.website,
 			d.markets, d.price_updated_at, d.metadata, d.updated_at, lc.name, lc.kind, la.name, la.kind
 		FROM explorer.denoms d`+originJoin+`
 		LEFT JOIN explorer.labels lc ON lc.address = d.creator

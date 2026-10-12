@@ -2,6 +2,7 @@ package dto_test
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -55,4 +56,41 @@ func TestNewTokenSummaryCarriesTheFirstSightInUTC(t *testing.T) {
 	require.NotNil(t, tok.CreatedTime)
 	assert.Equal(t, time.Date(2026, 10, 9, 13, 0, 0, 0, time.UTC), *tok.CreatedTime)
 	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "ubze", Kind: "native"}).CreatedTime)
+}
+
+func TestNewTokenSummaryCountsTheIBCHops(t *testing.T) {
+	hops := func(kind string, path *string) *int {
+		return dto.NewTokenSummary(repository.TokenSummary{Denom: "x", Kind: kind, IBCPath: path}).IBCHops
+	}
+	one, two := "transfer/channel-13", "transfer/channel-11/transfer/channel-220"
+	bad, empty := "transfer/channel-11/transfer", ""
+	require.NotNil(t, hops("ibc", &one))
+	assert.Equal(t, 1, *hops("ibc", &one))
+	assert.Equal(t, 2, *hops("ibc", &two))
+	assert.Nil(t, hops("ibc", nil), "not traced yet")
+	assert.Nil(t, hops("ibc", &bad), "not port/channel pairs")
+	assert.Nil(t, hops("ibc", &empty))
+	assert.Nil(t, hops("factory", &one), "only IBC denoms")
+}
+
+func TestNewTokenSummaryCarriesTheViaChainAndTheLPPair(t *testing.T) {
+	via, name, logo := "cosmoshub-4", "Cosmos Hub", "https://x/hub.png"
+	sum := dto.NewTokenSummary(repository.TokenSummary{Denom: "ibc/AB", Kind: "ibc",
+		ViaChainID: &via, ViaChainName: &name, ViaChainLogo: &logo})
+	assert.Equal(t, &dto.OriginChain{ChainID: via, Name: &name, LogoURL: &logo}, sum.ViaChain)
+	assert.Nil(t, sum.LPPair)
+	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "ibc/CD", Kind: "ibc"}).ViaChain, "one hop")
+
+	base, quote := "factory/bze1x/uvdl", "ubze"
+	lp := dto.NewTokenSummary(repository.TokenSummary{Denom: "ulp/AB", Kind: "lp", LPBase: &base, LPQuote: &quote})
+	assert.Equal(t, &dto.LPPair{Base: base, Quote: quote}, lp.LPPair)
+	assert.Nil(t, lp.IBCHops)
+	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "ulp/CD", Kind: "lp"}).LPPair, "pair unknown")
+	assert.Nil(t, dto.NewTokenSummary(repository.TokenSummary{Denom: "x", Kind: "factory", LPBase: &base, LPQuote: &quote}).LPPair)
+
+	raw, err := json.Marshal(dto.NewTokenSummary(repository.TokenSummary{Denom: "ubze", Kind: "native"}))
+	require.NoError(t, err)
+	for _, key := range []string{`"ibc_hops":null`, `"via_chain":null`, `"lp_pair":null`} {
+		assert.Contains(t, string(raw), key, "always present")
+	}
 }

@@ -22,6 +22,13 @@ const (
 	recordedDenoms = 29 // 28 with a supply, one with metadata only
 	vdlDenom       = "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl"
 	usdcDenom      = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+	vdlLPDenom     = "ulp_" + vdlDenom + "_ubze"
+	// atoneViaOsmosis is ATONE over transfer/channel-0/transfer/channel-94814.
+	atoneViaOsmosis = "ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1"
+	// coreyLPDenom is the hashed LP denom (chain v8.2.0+) of the COREY/BZE
+	// pool in the hand-written pool list.
+	coreyLPDenom = "ulp/ACB85D816E5FC1516F2AE65B6BDA9925822F2F16EF1742310C321B2D81DA11A3"
+	coreyDenom   = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey"
 )
 
 // tokenPages reads every page of the tokens list.
@@ -76,7 +83,7 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	require.NoError(t, json.Unmarshal(fetch(t, base+"/api/v1/tokens?limit=100").body, &raw))
 	require.Len(t, raw.Items, recordedDenoms)
 	for _, item := range raw.Items {
-		for _, key := range []string{"denom", "exponent", "logo_url", "origin_chain", "created_time"} {
+		for _, key := range []string{"denom", "exponent", "logo_url", "origin_chain", "created_time", "ibc_hops", "via_chain", "lp_pair"} {
 			assert.Contains(t, item, key)
 		}
 		assert.NotEqual(t, `""`, string(item["denom"]))
@@ -101,6 +108,29 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	assert.Equal(t, "ibc", ibc.Kind)
 	require.NotNil(t, ibc.OriginChainID, "the IBC origin through its channel")
 	assert.Equal(t, "noble-1", *ibc.OriginChainID)
+	require.NotNil(t, ibc.IBCHops)
+	assert.Equal(t, 1, *ibc.IBCHops)
+	assert.Nil(t, ibc.ViaChain, "one hop")
+	assert.Nil(t, ibc.LPPair)
+
+	// ATONE through Osmosis: two hops, Osmosis as the via chain.
+	waitFor(t, 10*time.Second, func() bool {
+		return e.count(t, `SELECT count(*) FROM explorer.denoms WHERE denom = $1 AND via_chain_id IS NOT NULL`, atoneViaOsmosis) == 1
+	}, "the via chain")
+	atone := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(atoneViaOsmosis)))
+	require.NotNil(t, atone.IBCHops)
+	assert.Equal(t, 2, *atone.IBCHops)
+	require.NotNil(t, atone.ViaChain)
+	assert.Equal(t, "osmosis-1", atone.ViaChain.ChainID)
+
+	// A legacy LP denom named after its pool's assets.
+	lp := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(vdlLPDenom)))
+	assert.Equal(t, "lp", lp.Kind)
+	assert.Equal(t, &dto.LPPair{Base: vdlDenom, Quote: "ubze"}, lp.LPPair)
+	require.NotNil(t, lp.Symbol)
+	assert.Equal(t, "VDL/BZE LP", *lp.Symbol)
+	assert.Equal(t, "VDL/BZE LP Shares", *lp.Name)
+	assert.Nil(t, lp.IBCHops)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/api/v1/tokens/"+url.PathEscape("factory/bze1nobody/uzz")).status)
 }
 
@@ -129,6 +159,37 @@ func withoutDenom(t *testing.T, method, list, key, denom string) []byte {
 	out, err := json.Marshal(body)
 	require.NoError(t, err)
 	return out
+}
+
+// withSupply is the recorded TotalSupply answer with coin added.
+func withSupply(t *testing.T, denom, amount string) []byte {
+	t.Helper()
+	var body map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, "bank", "TotalSupply", ""), &body))
+	var items []map[string]any
+	require.NoError(t, json.Unmarshal(body["supply"], &items))
+	items = append(items, map[string]any{"denom": denom, "amount": amount})
+	raw, err := json.Marshal(items)
+	require.NoError(t, err)
+	body["supply"] = raw
+	out, err := json.Marshal(body)
+	require.NoError(t, err)
+	return out
+}
+
+// A hashed LP denom cannot be reversed: its assets come from the pool list.
+func TestAHashedLPDenomIsNamedFromItsPool(t *testing.T) {
+	e := newSyncEnv(t)
+	e.grpc.SetResponse("bank", "TotalSupply", "", withSupply(t, coreyLPDenom, "1000000"))
+	code, _ := e.syncState(t)
+	require.Equal(t, 0, code)
+	assert.Equal(t, []string{coreyDenom + " ubze COREY/BZE LP|COREY/BZE LP Shares"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', lp_base, lp_quote, symbol || '|' || name) FROM explorer.denoms WHERE denom = $1`, coreyLPDenom))
+	assert.Equal(t, []string{"ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011 ubze"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', lp_base, lp_quote) FROM explorer.denoms
+		  WHERE denom = 'ulp_ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011_ubze'`),
+		"a legacy denom missing from the pool list is split")
+	assert.GreaterOrEqual(t, e.grpc.Requests("tradebin", "AllLiquidityPools"), 1)
 }
 
 // A denom the explorer does not hold yet appears within the block that

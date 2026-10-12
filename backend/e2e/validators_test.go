@@ -49,6 +49,8 @@ type syncEnv struct {
 	// ticker jobs' outbound HTTPS.
 	reg *fakeregistry.Registry
 	agg *fakeAggregator
+	// kb stands in for Keybase, the validator logos' outbound HTTPS.
+	kb *fakeKeybase
 }
 
 func newSyncEnv(t *testing.T) *syncEnv {
@@ -56,13 +58,14 @@ func newSyncEnv(t *testing.T) *syncEnv {
 	url := freshDatabase(t, true)
 	migrateUp(t, url)
 	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t),
-		reg: fakeregistry.New(t), agg: newFakeAggregator(t)}
+		reg: fakeregistry.New(t), agg: newFakeAggregator(t), kb: newFakeKeybase(t)}
 }
 
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
 	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL, cfg.AggregatorURL = e.reg.APIURL, e.reg.RawURL, e.agg.URL
 	cfg.PriceChangeMarket = config.DefaultPriceChangeMarket
+	cfg.KeybaseURL = e.kb.URL
 	return cfg
 }
 
@@ -77,6 +80,7 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
 	t.Setenv("AGGREGATOR_URL", e.agg.URL)
+	t.Setenv("KEYBASE_URL", e.kb.URL)
 	t.Setenv("LOG_LEVEL", "warn")
 	root := cli.NewRootCmd()
 	root.SetArgs(append([]string{"sync-state"}, args...))

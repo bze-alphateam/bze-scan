@@ -1,6 +1,7 @@
 // Package validators is the validators set of the state sync: it rewrites
 // explorer.validators (and the validator_owner rows of explorer.labels) from
-// the local node's staking and slashing queries.
+// the local node's staking and slashing queries, and their logos from the
+// Keybase picture of their identity.
 package validators
 
 import (
@@ -21,6 +22,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -42,6 +44,10 @@ const (
 	StatusUnbonded  = "unbonded"
 )
 
+// LogoTTL is how long a validator's logo is kept before its identity is
+// looked up again.
+const LogoTTL = 24 * time.Hour
+
 // Bech32 prefix of consensus addresses, under which signing infos are kept.
 const consPrefix = "bzevalcons"
 
@@ -61,6 +67,22 @@ type Slashing interface {
 	SigningInfo(ctx context.Context, in *slashingtypes.QuerySigningInfoRequest, opts ...grpc.CallOption) (*slashingtypes.QuerySigningInfoResponse, error)
 	SigningInfos(ctx context.Context, in *slashingtypes.QuerySigningInfosRequest, opts ...grpc.CallOption) (*slashingtypes.QuerySigningInfosResponse, error)
 }
+
+// Logos finds a validator's logo by its description identity (a Keybase
+// key suffix); *keybase.Client satisfies it.
+type Logos interface {
+	// PictureURL returns the identity's picture, "" when it has none.
+	PictureURL(ctx context.Context, identity string) (string, error)
+}
+
+// Clock is the set's time source; tests swap it.
+type Clock interface {
+	Now() time.Time
+}
+
+type realClock struct{}
+
+func (realClock) Now() time.Time { return time.Now() }
 
 // Validator is one explorer.validators row as the node describes it; rank,
 // voting power, first sight and updated_at are the store's. Numbers are
@@ -101,6 +123,20 @@ type Standing struct {
 	Jailed           bool
 	Tombstoned       bool
 	ConsensusAddress string // upper-case hex
+	// Identity is the stored description identity and LogoCheckedAt the
+	// last successful lookup of its logo (nil: never, or to redo).
+	Identity      string
+	LogoCheckedAt *time.Time
+}
+
+// Logo is a validator's looked-up logo. Keep leaves the stored URL alone
+// (a failed lookup after the identity changed: CheckedAt is nil so the next
+// run retries); otherwise URL ("" = none) replaces it.
+type Logo struct {
+	Operator  string
+	URL       string
+	Keep      bool
+	CheckedAt *time.Time
 }
 
 // Kinds of the validator_events rows the set writes: the transitions the
@@ -144,6 +180,9 @@ type Snapshot struct {
 	Ranks []Ranking
 	// Changes are the transitions found against the stored rows.
 	Changes []Change
+	// Logos are written after the validators; a validator absent keeps its
+	// logo and logo_checked_at.
+	Logos []Logo
 }
 
 // Store persists the set.
@@ -162,6 +201,11 @@ type Deps struct {
 	// Keys resolves the validators' consensus keys (Any values the query
 	// responses leave packed); the chain codec's interface registry.
 	Keys codectypes.AnyUnpacker
+	// Logos looks the identities' logos up; nil leaves the logos alone.
+	Logos Logos
+	// Log defaults to the standard logger, Clock to the wall clock.
+	Log   log.FieldLogger
+	Clock Clock
 }
 
 // Set is the validators set. Runs are serialised: a single resync reads the
@@ -181,6 +225,12 @@ type Set struct {
 func New(deps Deps, interval time.Duration) *Set {
 	if interval <= 0 {
 		interval = DefaultInterval
+	}
+	if deps.Log == nil {
+		deps.Log = log.StandardLogger()
+	}
+	if deps.Clock == nil {
+		deps.Clock = realClock{}
 	}
 	return &Set{deps: deps, interval: interval}
 }
@@ -302,6 +352,11 @@ func (s *Set) FullResync(ctx context.Context) error {
 		})...)
 	}
 	snap.Ranks = Rank(standings)
+	all := make(map[string]Standing, len(stored))
+	for _, st := range stored {
+		all[st.Operator] = st
+	}
+	snap.Logos = s.logos(ctx, snap.Validators, all)
 	if err := s.deps.Store.Save(ctx, snap); err != nil {
 		return err
 	}
@@ -402,14 +457,50 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	}
 	standings = append(standings, Standing{Operator: row.OperatorAddress, Status: row.Status, Tokens: resp.Validator.Tokens})
 	snap := Snapshot{Validators: []Validator{row}, Ranks: Rank(standings)}
+	stored := map[string]Standing{}
 	if prev != nil {
 		snap.Changes = changes(*prev, row)
+		stored[key] = *prev
 	}
+	snap.Logos = s.logos(ctx, snap.Validators, stored)
 	if err := s.deps.Store.Save(ctx, snap); err != nil {
 		return err
 	}
 	s.learn(false, [2]string{row.ConsensusAddress, row.OperatorAddress})
 	return nil
+}
+
+// logos looks up the logos due among rows, one at a time: a validator
+// without an identity has none; one whose identity changed, that was never
+// checked or was checked LogoTTL ago is looked up. A failed lookup is
+// logged and keeps the stored logo, so it never fails the sync.
+func (s *Set) logos(ctx context.Context, rows []Validator, stored map[string]Standing) []Logo {
+	if s.deps.Logos == nil {
+		return nil
+	}
+	now := s.deps.Clock.Now().UTC()
+	var out []Logo
+	for _, row := range rows {
+		prev, known := stored[row.OperatorAddress]
+		changed := !known || prev.Identity != row.Identity
+		switch {
+		case row.Identity == "":
+			out = append(out, Logo{Operator: row.OperatorAddress})
+			continue
+		case !changed && prev.LogoCheckedAt != nil && now.Sub(*prev.LogoCheckedAt) < LogoTTL:
+			continue
+		}
+		url, err := s.deps.Logos.PictureURL(ctx, row.Identity)
+		if err != nil {
+			s.deps.Log.WithError(err).WithField("validator", row.OperatorAddress).Warn("validator logo lookup failed")
+			if changed {
+				out = append(out, Logo{Operator: row.OperatorAddress, Keep: true})
+			}
+			continue
+		}
+		out = append(out, Logo{Operator: row.OperatorAddress, URL: url, CheckedAt: &now})
+	}
+	return out
 }
 
 func (s *Set) window(ctx context.Context) (int64, error) {
