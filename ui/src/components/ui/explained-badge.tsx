@@ -10,7 +10,7 @@ import type { ExplainedBadge as Explained } from "@/render/badges";
  */
 export function ExplainedBadge({ badge, size = "sm" }: { badge: Explained; size?: "sm" | "md" }) {
   return (
-    <Popover.Root positioning={{ placement: "top" }}>
+    <Popover.Root positioning={{ placement: "top" }} lazyMount unmountOnExit>
       <Popover.Trigger asChild>
         <Badge
           as="button"
