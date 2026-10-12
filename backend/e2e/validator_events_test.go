@@ -164,7 +164,7 @@ func TestTheValidatorPageAndProposerNames(t *testing.T) {
 	op, moniker := proposerOf(hSlash)
 	r := fetch(t, fmt.Sprintf("%s/blocks/%d", base, hSlash))
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
-	assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
 	assert.Equal(t, &dto.Proposer{OperatorAddress: op, Moniker: moniker}, into[dto.Block](t, r).Proposer)
 	page := into[dto.List[dto.BlockSummary]](t, fetch(t, base+"/blocks?limit=1"))
 	require.Len(t, page.Items, 1)

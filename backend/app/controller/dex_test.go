@@ -151,7 +151,7 @@ func TestTxCarriesItsOrderOutcome(t *testing.T) {
 	e := newAPI(f)
 	rec := get(t, e, "/txs/"+hashUpper)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl))
 	got := decode[dto.Tx](t, rec)
 	require.NotNil(t, got.Dex)
 	require.Len(t, got.Dex.Placed, 1)

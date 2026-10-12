@@ -209,7 +209,7 @@ func testBlockDetailMatchesTheIndex(t *testing.T, base string, ix *indexer) {
 func testTxDetailMatchesTheIndex(t *testing.T, base string, ix *indexer) {
 	r := fetch(t, base+"/txs/"+strings.ToLower(sendHash))
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
-	assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
 	tx := into[dto.Tx](t, r)
 	assert.Equal(t, sendHash, tx.Hash)
 	assert.Equal(t, hSend, tx.Height)
@@ -388,7 +388,7 @@ func testBlockTransfersListEveryRow(t *testing.T, base string, ix *indexer) {
 	for {
 		r := fetch(t, url)
 		require.Equal(t, http.StatusOK, r.status, string(r.body))
-		assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+		assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
 		page := into[dto.List[dto.BlockTransfer]](t, r)
 		pages++
 		for _, x := range page.Items {

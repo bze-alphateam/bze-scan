@@ -24,11 +24,14 @@ const (
 	MaxLimit     = 100
 )
 
-// Cache-Control values. Lists, search and errors change with every block;
-// a block by height and a found transaction never change (finality is
-// instant).
+// Cache-Control values. Lists, search and errors change with every block.
+// What the chain stored at a height never changes (finality is instant), but
+// a block or a transaction as served also joins what syncs later: denom
+// symbols, labels, the counterparty chain, a block time. Those are cached for
+// the state sync's minute, never for good.
 const (
 	CacheNoStore   = "no-store"
+	CacheIndexed   = "public, max-age=60"
 	CacheImmutable = "public, max-age=31536000, immutable"
 )
 
@@ -186,9 +189,8 @@ func (h *ExplorerController) Block(c *echo.Context) error {
 		next := dto.EncodeCursor(events[len(events)-1].Seq)
 		eventsNext = &next
 	}
-	// The proposer's name is the one field of a block that can still
-	// change: it is null until the state sync knows the validator.
-	cache := CacheImmutable
+	// The proposer's name is null until the state sync knows the validator.
+	cache := CacheIndexed
 	if b.ProposerConsAddress != nil && b.Proposer == nil {
 		cache = CacheNoStore
 	}
@@ -241,8 +243,7 @@ func (h *ExplorerController) BlockEvents(c *echo.Context) error {
 
 // BlockTransfers serves GET /api/v1/blocks/{height}/transfers?cursor&limit:
 // every transfer of the block, its own (tx_index -1) first, then the
-// transactions' in index and seq order. An indexed block's transfers never
-// change.
+// transactions' in index and seq order. Their symbols and labels sync later.
 func (h *ExplorerController) BlockTransfers(c *echo.Context) error {
 	height, err := parseHeight(c.Param("height"))
 	if err != nil {
@@ -281,7 +282,7 @@ func (h *ExplorerController) BlockTransfers(c *echo.Context) error {
 		}
 		resp.Items = append(resp.Items, dto.NewBlockTransfer(x))
 	}
-	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheIndexed)
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -365,8 +366,8 @@ func (h *ExplorerController) Txs(c *echo.Context) error {
 // Tx serves GET /api/v1/txs/{hash}: every column of the transaction, its
 // messages, its transfers and the order book outcome of its order
 // messages. A well-formed hash that is not indexed is a 404, which the UI
-// shows as pending. The answer is immutable unless an order outcome is
-// still pending.
+// shows as pending. The answer is cached for a minute unless an order or
+// cross-chain outcome is still pending.
 func (h *ExplorerController) Tx(c *echo.Context) error {
 	hash, ok := normaliseHash(c.Param("hash"))
 	if !ok {
@@ -393,7 +394,7 @@ func (h *ExplorerController) Tx(c *echo.Context) error {
 		return err
 	}
 	// The outcome of a pending order or cross-chain transfer lands later.
-	cache := CacheImmutable
+	cache := CacheIndexed
 	if dex != nil && dex.Pending || slices.ContainsFunc(ibc, func(r repository.IBCTransfer) bool { return r.Status == "pending" }) {
 		cache = CacheNoStore
 	}

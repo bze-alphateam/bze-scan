@@ -66,7 +66,7 @@ func TestTxCarriesItsCrossChainTransfers(t *testing.T) {
 	delivered.Status, delivered.ResultHeight, delivered.ResultTxHash, delivered.ResultTime = "delivered", &h, str("ACK"), &ibcAt
 	f.ibc[hashUpper] = []repository.IBCTransfer{delivered}
 	rec = get(t, e, "/txs/"+hashUpper)
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl), "settled for good")
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl), "settled: cached like any transaction")
 
 	delete(f.ibc, hashUpper)
 	rec = get(t, e, "/txs/"+hashUpper)

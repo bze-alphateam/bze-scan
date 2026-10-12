@@ -265,7 +265,7 @@ func TestDexOutcomesInEitherDirection(t *testing.T) {
 		return into[dto.Tx](t, r), r
 	}
 	created, r := tx(1)
-	assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"))
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
 	require.NotNil(t, created.Dex)
 	require.Len(t, created.Dex.Placed, 1)
 	assert.Equal(t, oid(20), created.Dex.Placed[0].OrderID)
