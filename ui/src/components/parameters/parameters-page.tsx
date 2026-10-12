@@ -167,7 +167,7 @@ function GroupHeader({ g }: { g: Omit<ParamGroupView, "rows" | "changedBy"> & { 
   return (
     <Stack gap="1">
       <HStack gap="3" wrap="wrap" align="baseline">
-        <Heading as="h2" size="lg">
+        <Heading as="h2" size="lg" id={`${g.group}-title`}>
           {g.label}
         </Heading>
         <Text fontSize="sm" fontFamily="mono" color="fg.subtle">
@@ -268,9 +268,17 @@ function RawValues({ params }: { params: ChainParams }) {
 const INTRO =
   "The rules the chain runs by, read live from the chain. Nobody can edit them by hand: a value changes only when a proposal passes, and the proposal that last changed it is linked next to it.";
 
-/** The page once loaded: every group from the live values. */
+/**
+ * The page once loaded: every group from the live values. A `#group` in the
+ * URL is scrolled to again once the groups render, because the browser
+ * scrolled to the skeleton's (shorter) section before the data arrived.
+ */
 export function ParametersView({ params, stats }: { params: ChainParams; stats: Stats | null }) {
   const groups = parameterGroups(params, stats);
+  useEffect(() => {
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (id) document.getElementById(id)?.scrollIntoView();
+  }, []);
   return (
     <Stack gap={{ base: "8", md: "10" }}>
       <Stack gap="3">

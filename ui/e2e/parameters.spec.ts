@@ -27,8 +27,15 @@ test.describe("chain parameters", () => {
 
   test("the anchor nav scrolls to a group", async ({ page }) => {
     await page.goto("/parameters");
+    await expect(page.getByTestId("param-group")).toHaveCount(10);
     await page.getByTestId("param-nav").getByRole("link", { name: "CoinTrunk" }).click();
     await expect(page).toHaveURL(/#cointrunk$/);
+    await expect(page.locator("section#cointrunk")).toBeInViewport();
+  });
+
+  test("a group in the URL is scrolled to once the values load", async ({ page }) => {
+    await page.goto("/parameters#cointrunk");
+    await expect(page.getByTestId("param-group")).toHaveCount(10);
     await expect(page.locator("section#cointrunk")).toBeInViewport();
   });
 

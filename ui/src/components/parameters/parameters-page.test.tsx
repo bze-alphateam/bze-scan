@@ -94,6 +94,23 @@ describe("ParametersPage", () => {
     expect(screen.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", expect.stringMatching(/\/params$/));
   });
 
+  it("scrolls to the group in the URL once the values load, not to the skeleton's", async () => {
+    const scrolled: string[] = [];
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolled.push(this.id);
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true });
+    window.history.replaceState(null, "", "#gov");
+    try {
+      renderWithProviders(<ParametersPage />, { api: api() });
+      await screen.findAllByTestId("param-group");
+      expect(scrolled).toEqual(["gov"]);
+      expect(scrollIntoView.mock.contexts[0]).toHaveAttribute("data-testid", "param-group");
+    } finally {
+      window.history.replaceState(null, "", "#");
+    }
+  });
+
   it("offers a retry when the API fails", async () => {
     const fail = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<ParametersPage />, { api: api({ params: fail }) });
