@@ -2,7 +2,8 @@
 // production process: HTTP API, status checker, live indexer, state sync and
 // backfill), migrate (the database schema), backfill (the history
 // backfill standalone), reindex (the repair tool), sync-state (one full
-// state resync) and version (the build commit). It lives outside cmd/ so tests run the commands as users do.
+// state resync), snapshots (past state from the archive) and version (the
+// build commit). It lives outside cmd/ so tests run the commands as users do.
 package cli
 
 import (
@@ -25,7 +26,7 @@ func NewRootCmd(opts ...Option) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
-	rootCmd.AddCommand(newServeCmd(), newMigrateCmd(), newBackfillCmd(), newReindexCmd(), newSyncStateCmd(), newVersionCmd(o.version))
+	rootCmd.AddCommand(newServeCmd(), newMigrateCmd(), newBackfillCmd(), newReindexCmd(), newSyncStateCmd(), newSnapshotsCmd(), newVersionCmd(o.version))
 	return rootCmd
 }
 

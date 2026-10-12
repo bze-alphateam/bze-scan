@@ -61,17 +61,19 @@ type proposalVoteRow struct {
 
 // proposalVotesSQL keeps each voter's latest vote: an earlier one (the
 // backfill walks down) never replaces it, the same one written again (a
-// reindex) only when it differs.
+// reindex) only when it differs. A vote the snapshots command read from the
+// archive (source archive, at the resolution's height - 1) gives way to its
+// transaction once the backfill indexes it.
 const proposalVotesSQL = `INSERT INTO explorer.proposal_votes AS v (proposal_id, voter, options, option, height, tx_index, time)
 	SELECT r.proposal_id, r.voter, r.options, r.option, r.height, r.tx_index, r.time
 	  FROM jsonb_to_recordset($1::jsonb) AS r(proposal_id bigint, voter text, options jsonb, option text,
 		height bigint, tx_index integer, time timestamptz)
 	ON CONFLICT (proposal_id, voter) DO UPDATE SET
 		options = EXCLUDED.options, option = EXCLUDED.option, height = EXCLUDED.height,
-		tx_index = EXCLUDED.tx_index, time = EXCLUDED.time
-	WHERE (EXCLUDED.height, EXCLUDED.tx_index) >= (v.height, v.tx_index)
-	  AND (v.options, v.option, v.height, v.tx_index, v.time) IS DISTINCT FROM
-	      (EXCLUDED.options, EXCLUDED.option, EXCLUDED.height, EXCLUDED.tx_index, EXCLUDED.time)`
+		tx_index = EXCLUDED.tx_index, time = EXCLUDED.time, source = 'event'
+	WHERE (v.source = 'archive' OR (EXCLUDED.height, EXCLUDED.tx_index) >= (v.height, v.tx_index))
+	  AND (v.options, v.option, v.height, v.tx_index, v.time, v.source) IS DISTINCT FROM
+	      (EXCLUDED.options, EXCLUDED.option, EXCLUDED.height, EXCLUDED.tx_index, EXCLUDED.time, 'event')`
 
 // proposalStatusRow is the JSON shape of the status update.
 type proposalStatusRow struct {

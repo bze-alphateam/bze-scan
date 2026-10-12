@@ -90,8 +90,9 @@ func TestOnlyTheLatestVoteOfAVoterIsWritten(t *testing.T) {
 	assert.Equal(t, "no", rows[0]["option"], "height 101 beats height 100")
 	assert.Equal(t, "bze1w", rows[1]["voter"])
 	assert.Equal(t, "abstain", rows[1]["option"], "the later message of the same transaction")
-	assert.Contains(t, st.sql, "WHERE (EXCLUDED.height, EXCLUDED.tx_index) >= (v.height, v.tx_index)",
+	assert.Contains(t, st.sql, "(EXCLUDED.height, EXCLUDED.tx_index) >= (v.height, v.tx_index)",
 		"an earlier vote written later (the backfill walks down) never replaces a stored one")
+	assert.Contains(t, st.sql, "v.source = 'archive' OR", "except a vote the snapshots read from the archive")
 	assert.Contains(t, st.sql, "IS DISTINCT FROM", "the same vote written again changes nothing")
 }
 

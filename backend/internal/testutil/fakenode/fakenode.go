@@ -10,7 +10,12 @@
 //	<height>/block.json           /block?height=<height>
 //	<height>/block_results.json   /block_results?height=<height>
 //	<height>/commit.json          /commit?height=<height>
+//	                              (a height may hold only some of the three)
+//	abci/<height>/<file>          /abci_query?path="/<svc>/<Method>"&data=0x<hex>&height=<height>,
+//	                              <file> = <svc>.<Method>.<hex>.json (scripts/record-fixtures.sh, ABCI)
 //
+// An /abci_query without a recorded answer answers code 1 ("no fixture"), so
+// a test sees which query it lacks.
 // A height without a fixture answers above_tip.json with HTTP 500, as a real
 // node does. SetEarliestHeight makes the node behave as a pruned one: /status
 // reports that earliest_block_height and every height below it answers the
@@ -20,6 +25,7 @@ package fakenode
 
 import (
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -28,6 +34,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -38,6 +45,7 @@ const (
 	RouteBlock        = "/block"
 	RouteBlockResults = "/block_results"
 	RouteCommit       = "/commit"
+	RouteABCIQuery    = "/abci_query"
 )
 
 var byHeightFiles = map[string]string{
@@ -153,7 +161,9 @@ func (n *Node) RequestsAt(route string, height int64) int {
 	return n.heightCounts[route+"?"+strconv.FormatInt(height, 10)]
 }
 
-// FixtureHeights lists the heights with recorded fixtures, ascending.
+// FixtureHeights lists the heights recorded in full (block, block_results
+// and commit), ascending. Heights with only some of them (the snapshots
+// command's block times and resolutions) are served but not listed.
 func (n *Node) FixtureHeights() []int64 {
 	entries, err := fs.ReadDir(n.fixtures, ".")
 	if err != nil {
@@ -164,12 +174,23 @@ func (n *Node) FixtureHeights() []int64 {
 		if !e.IsDir() {
 			continue
 		}
-		if h, err := strconv.ParseInt(e.Name(), 10, 64); err == nil {
-			heights = append(heights, h)
+		h, err := strconv.ParseInt(e.Name(), 10, 64)
+		if err != nil || !n.complete(e.Name()) {
+			continue
 		}
+		heights = append(heights, h)
 	}
 	sort.Slice(heights, func(i, j int) bool { return heights[i] < heights[j] })
 	return heights
+}
+
+func (n *Node) complete(dir string) bool {
+	for _, file := range byHeightFiles {
+		if _, err := fs.Stat(n.fixtures, path.Join(dir, file)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // Fixture returns the recorded body of route at height, for byte-for-byte
@@ -228,6 +249,11 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if route == RouteABCIQuery {
+		n.serveABCI(w, r)
+		return
+	}
+
 	file, ok := byHeightFiles[route]
 	if !ok {
 		http.NotFound(w, r)
@@ -257,6 +283,43 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := fs.ReadFile(n.fixtures, path.Join(strconv.FormatInt(height, 10), file))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, n.aboveTip)
+		return
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+// ABCIFile is the fixture file of an abci_query: abci/<height>/<svc>.<Method>.<hex>.json.
+func ABCIFile(queryPath string, data []byte, height int64) string {
+	return path.Join("abci", strconv.FormatInt(height, 10),
+		strings.ReplaceAll(strings.TrimPrefix(queryPath, "/"), "/", ".")+"."+hex.EncodeToString(data)+".json")
+}
+
+func (n *Node) serveABCI(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	queryPath, err := strconv.Unquote(q.Get("path"))
+	if err != nil {
+		http.Error(w, "path must be a quoted string", http.StatusBadRequest)
+		return
+	}
+	data, err := hex.DecodeString(strings.TrimPrefix(strings.ToLower(q.Get("data")), "0x"))
+	if err != nil {
+		http.Error(w, "data must be 0x-prefixed hex", http.StatusBadRequest)
+		return
+	}
+	height, err := strconv.ParseInt(q.Get("height"), 10, 64)
+	if err != nil || height <= 0 {
+		http.Error(w, "height must be a positive integer", http.StatusBadRequest)
+		return
+	}
+	n.mu.Lock()
+	n.heightCounts[RouteABCIQuery+"?"+strconv.FormatInt(height, 10)]++
+	n.mu.Unlock()
+
+	body, err := fs.ReadFile(n.fixtures, ABCIFile(queryPath, data, height))
+	if err != nil {
+		writeJSON(w, http.StatusOK, []byte(fmt.Sprintf(
+			`{"jsonrpc":"2.0","id":-1,"result":{"response":{"code":1,"log":"no fixture for %s at %d","info":"","index":"0","key":null,"value":null,"proofOps":null,"height":"%d","codespace":"fakenode"}}}`,
+			queryPath, height, height)))
 		return
 	}
 	writeJSON(w, http.StatusOK, body)

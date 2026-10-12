@@ -17,16 +17,33 @@
 #
 # HEIGHTS lists heights and inclusive ranges a..b, separated by spaces.
 #
+# BLOCKS lists heights whose /block alone is recorded (the snapshots
+# command's search for a proposal's resolution reads only block times).
+#
+# ABCI lists proposals as <id>@<resolved height H>, the set the snapshots
+# command reads (BFE-121). For each, at H - 1: the abci_query answers of bank
+# Balance of the bonded_tokens_pool in ubze, gov v1 Votes and gov v1 Deposits
+# (one page of 1000), into testdata/abci/<H-1>/<svc>.<Method>.<hex request>.json
+# (see fakenode.ABCIFile), plus /block at H - 1 and /block_results at H. The
+# requests are encoded here by hand and must stay byte for byte what the Go
+# code marshals.
+#
 # Usage: HEIGHTS="24998316 24998321..24998330" scripts/record-fixtures.sh
-#        (or: make fixtures HEIGHTS="...")
+#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [ABCI="47@23821225"])
 set -euo pipefail
 
 ARCHIVE_RPC="${ARCHIVE_RPC:-https://rpc.getbze.com}"
 ARCHIVE_RPC="${ARCHIVE_RPC%/}"
 HEIGHTS="${HEIGHTS:-}"
+BLOCKS="${BLOCKS:-}"
+ABCI="${ABCI:-}"
 
-if [[ -z "${HEIGHTS}" ]]; then
-  echo "HEIGHTS is required, e.g. HEIGHTS=\"24998316\"" >&2
+# bonded_tokens_pool, whose ubze balance is the bonded tokens at any height.
+BONDED_POOL="bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
+PAGE_LIMIT=1000
+
+if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}" ]]; then
+  echo "HEIGHTS, BLOCKS or ABCI is required, e.g. HEIGHTS=\"24998316\"" >&2
   exit 2
 fi
 
@@ -72,6 +89,63 @@ for h in ${expanded}; do
   for route in block block_results commit; do
     fetch "${route}?height=${h}" "${OUT}/${h}/${route}.json" 200
   done
+done
+
+for h in ${BLOCKS}; do
+  if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "invalid height: ${h}" >&2
+    exit 2
+  fi
+  mkdir -p "${OUT}/${h}"
+  fetch "block?height=${h}" "${OUT}/${h}/block.json" 200
+done
+
+# Protobuf encoding of the few requests the snapshots command sends, as hex.
+varint() {
+  local n="$1" out=""
+  while (( n >= 128 )); do
+    out+="$(printf '%02x' $(( (n & 127) | 128 )))"
+    n=$(( n >> 7 ))
+  done
+  printf '%s%02x' "${out}" "${n}"
+}
+# field <number> <hex payload>: a length-delimited field.
+field() {
+  local payload="$2"
+  printf '%02x%s%s' $(( ($1 << 3) | 2 )) "$(varint $(( ${#payload} / 2 )))" "${payload}"
+}
+text() { printf '%s' "$1" | od -An -tx1 -v | tr -d ' \n'; }
+# QueryBalanceRequest{address, denom}
+balance_req() { printf '%s%s' "$(field 1 "$(text "$1")")" "$(field 2 "$(text "$2")")"; }
+# Query{Votes,Deposits}Request{proposal_id, pagination: {limit}}
+by_proposal_req() { printf '08%s%s' "$(varint "$1")" "$(field 2 "18$(varint "${PAGE_LIMIT}")")"; }
+
+# abci <query path> <hex request> <height>
+abci() {
+  local qpath="$1" data="$2" h="$3" file
+  file="${qpath#/}"
+  file="${file//\//.}"
+  mkdir -p "${OUT}/abci/${h}"
+  fetch "abci_query?path=%22${qpath}%22&data=0x${data}&height=${h}" "${OUT}/abci/${h}/${file}.${data}.json" 200
+  if grep -q '"code":[1-9]' "${OUT}/abci/${h}/${file}.${data}.json"; then
+    echo "abci_query ${qpath} at ${h} answered an error" >&2
+    exit 1
+  fi
+}
+
+for item in ${ABCI}; do
+  if ! [[ "${item}" =~ ^([1-9][0-9]*)@([1-9][0-9]*)$ ]]; then
+    echo "invalid ABCI item (want <id>@<resolved height>): ${item}" >&2
+    exit 2
+  fi
+  id="${BASH_REMATCH[1]}" h="${BASH_REMATCH[2]}"
+  at=$(( h - 1 ))
+  abci /cosmos.bank.v1beta1.Query/Balance "$(balance_req "${BONDED_POOL}" ubze)" "${at}"
+  abci /cosmos.gov.v1.Query/Votes "$(by_proposal_req "${id}")" "${at}"
+  abci /cosmos.gov.v1.Query/Deposits "$(by_proposal_req "${id}")" "${at}"
+  mkdir -p "${OUT}/${at}" "${OUT}/${h}"
+  fetch "block?height=${at}" "${OUT}/${at}/block.json" 200
+  fetch "block_results?height=${h}" "${OUT}/${h}/block_results.json" 200
 done
 
 fetch "status" "${OUT}/status.json" 200

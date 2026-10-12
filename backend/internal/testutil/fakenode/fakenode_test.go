@@ -1,7 +1,9 @@
 package fakenode_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,9 +12,11 @@ import (
 	"strconv"
 	"testing"
 
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
@@ -191,4 +195,21 @@ func TestUnknownRouteIsNotFound(t *testing.T) {
 	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, 1, n.Requests("/tx_search"))
+}
+
+func TestABCIQueryAnswersTheRecordedState(t *testing.T) {
+	n := fakenode.New(t)
+	c := node.New(n.URL)
+	req := &banktypes.QueryBalanceRequest{Address: "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq", Denom: "ubze"}
+	var resp banktypes.QueryBalanceResponse
+	require.NoError(t, c.Query(context.Background(), "/cosmos.bank.v1beta1.Query/Balance", req, &resp, 23821224))
+	assert.Equal(t, "131537493190125", resp.Balance.Amount.String(), "the bonded tokens before proposal 47's tally")
+	assert.Equal(t, 1, n.RequestsAt(fakenode.RouteABCIQuery, 23821224))
+
+	// A query without a recording answers an application error.
+	err := c.Query(context.Background(), "/cosmos.bank.v1beta1.Query/Balance", req, &resp, 23821225)
+	abciErr, ok := errors.AsType[*node.ABCIError](err)
+	require.True(t, ok, err)
+	assert.Equal(t, uint32(1), abciErr.Code)
+	assert.Contains(t, abciErr.Log, "no fixture")
 }

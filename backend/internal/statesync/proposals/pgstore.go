@@ -36,13 +36,16 @@ const frozen = `(p.resolved_height IS NOT NULL AND EXCLUDED.status IN ('deposit_
 
 // upsertSQL writes one proposal. Submit height and transaction are the
 // transformer's; messages the node cleared (a failed proposal's) keep the
-// stored ones; a tally the node did not give keeps the stored one.
+// stored ones; a tally the node did not give keeps the stored one. Bonded
+// tokens written here are the sync's (tally_source 'sync'); a resolved
+// proposal's are never given, so the snapshots command's stay.
 var upsertSQL = `INSERT INTO explorer.proposals AS p (
 		id, title, summary, metadata, proposer, kind, message_types, messages, status, expedited,
 		submit_time, deposit_end_time, voting_start_time, voting_end_time, total_deposit,
-		tally_yes, tally_no, tally_abstain, tally_veto, tally_bonded_tokens, tally_updated_at,
+		tally_yes, tally_no, tally_abstain, tally_veto, tally_bonded_tokens, tally_source, tally_updated_at,
 		resolved_height, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+		CASE WHEN $20::numeric IS NOT NULL THEN 'sync' END, $21,
 		CASE WHEN $9::text IN ('passed', 'rejected', 'failed') THEN ` + resolvedAt + ` END, now())
 	ON CONFLICT (id) DO UPDATE SET
 		title = EXCLUDED.title, summary = EXCLUDED.summary, metadata = EXCLUDED.metadata,
@@ -60,6 +63,8 @@ var upsertSQL = `INSERT INTO explorer.proposals AS p (
 		tally_veto = CASE WHEN ` + frozen + ` THEN p.tally_veto ELSE COALESCE(EXCLUDED.tally_veto, p.tally_veto) END,
 		tally_bonded_tokens = CASE WHEN ` + frozen + ` THEN p.tally_bonded_tokens
 			ELSE COALESCE(EXCLUDED.tally_bonded_tokens, p.tally_bonded_tokens) END,
+		tally_source = CASE WHEN ` + frozen + ` THEN p.tally_source
+			ELSE COALESCE(EXCLUDED.tally_source, p.tally_source) END,
 		tally_updated_at = CASE WHEN ` + frozen + ` THEN p.tally_updated_at
 			ELSE COALESCE(EXCLUDED.tally_updated_at, p.tally_updated_at) END,
 		resolved_height = COALESCE(p.resolved_height, EXCLUDED.resolved_height),
