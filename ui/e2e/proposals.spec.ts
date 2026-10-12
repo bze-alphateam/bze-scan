@@ -83,7 +83,7 @@ test.describe("proposal page", () => {
     await expect(who.getByTestId("validator-vote").getByRole("link", { name: "historical" })).toHaveAttribute("href", "/blocks/17131436");
     await who.getByRole("tab", { name: "Everyone · 27" }).click();
     await expect(who.getByTestId("vote-row")).toHaveCount(3);
-    await expect(who.getByTestId("historical-vote")).toHaveCount(3);
+    await expect(who.getByTestId("vote-row").getByTestId("historical-vote")).toHaveCount(3);
     await expect(who.getByTestId("vote-row").filter({ hasText: "ago" })).toHaveCount(0);
 
     await page.getByRole("button", { name: /More details/ }).click();
