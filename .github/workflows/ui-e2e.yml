@@ -1,11 +1,9 @@
 name: UI e2e tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "ui/**"
-      - ".github/workflows/ui-e2e.yml"
+  # On main these run from ui-image.yml, which publishes the image only after
+  # both pass.
+  workflow_call:
   pull_request:
     paths:
       - "ui/**"
@@ -14,8 +12,10 @@ on:
 permissions:
   contents: read
 
+# The group is spelled out: called from ui-image.yml, github.workflow would
+# name the caller and share its group.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ui-e2e-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

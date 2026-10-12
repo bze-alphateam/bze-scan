@@ -49,6 +49,7 @@ MIT, see `LICENSE`.
 
 - Go 1.26 for `backend/` (see `backend/README.md`).
 - Node 24 for `ui/` (see `ui/README.md`).
-- `docker/README.md` describes the local PostgreSQL setup, the backend image
-  (`ghcr.io/bze-alphateam/bze-scan-backend`) and the compose profile that runs
-  it.
+- `docker/README.md` describes the local PostgreSQL setup, the two images
+  (`ghcr.io/bze-alphateam/bze-scan-backend` and
+  `ghcr.io/bze-alphateam/bze-scan-ui`, each published on merges to `main` as
+  `:<sha8>` and `:latest`) and the compose profile that runs them.

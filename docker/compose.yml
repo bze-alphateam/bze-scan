@@ -1,7 +1,7 @@
 # Local development and acceptance tests.
 #
-# `make e2e` (in backend/) starts only the postgres service. The backend sits
-# behind the `full` profile, so it starts only when asked for:
+# `make e2e` (in backend/) starts only the postgres service. The backend and
+# the UI sit behind the `full` profile, so they start only when asked for:
 #
 #   docker compose -f docker/compose.yml --profile full up -d --build
 #   docker compose -f docker/compose.yml --profile full run --rm backend migrate up
@@ -61,3 +61,34 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  # The UI image built from this checkout (docker/ui.Dockerfile), with
+  # ui/.env (copy ui/.env.dist) as its build env: the browser calls the
+  # backend published on localhost:8080. The Next.js server reaches it on the
+  # compose network instead.
+  ui:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: docker/ui.Dockerfile
+      secrets:
+        - build_env
+    image: bze-scan-ui:local
+    environment:
+      API_URL: http://backend:8080/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+secrets:
+  build_env:
+    file: ../ui/.env
