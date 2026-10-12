@@ -24,6 +24,8 @@ type ProposalSummary struct {
 	// The tally columns are nil until the state sync fills them.
 	TallyYes, TallyNo, TallyAbstain, TallyVeto *string
 	TallyBondedTokens                          *string
+	// TallySource is where the bonded tokens come from: sync or archive.
+	TallySource *string
 }
 
 // Proposal is a whole proposals row, with how many bonded validators voted.
@@ -64,6 +66,9 @@ type ProposalVote struct {
 	ValidatorMoniker  *string
 	ValidatorOperator *string
 	VotingPowerPct    *string
+	// Source is event, or archive for a vote read from the state before
+	// the tally (no transaction).
+	Source string
 }
 
 // VoteKey is the keyset position of a proposal's votes, newest first.
@@ -83,6 +88,9 @@ type ProposalDeposit struct {
 	TxIndex        int64
 	TxHash         *string
 	Time           time.Time
+	// Source is event, or archive for a depositor's total read from the
+	// state before the tally (no transaction).
+	Source string
 }
 
 // DepositKey is the keyset position of a proposal's deposits, newest first.
@@ -94,11 +102,11 @@ type DepositKey struct {
 
 const proposalSummaryCols = `p.id, p.title, p.kind, p.status, p.expedited, p.submit_time, p.deposit_end_time,
 		p.voting_start_time, p.voting_end_time, p.tally_yes::text, p.tally_no::text, p.tally_abstain::text,
-		p.tally_veto::text, p.tally_bonded_tokens::text`
+		p.tally_veto::text, p.tally_bonded_tokens::text, p.tally_source`
 
 func proposalSummaryDest(p *ProposalSummary) []any {
 	return []any{&p.ID, &p.Title, &p.Kind, &p.Status, &p.Expedited, &p.SubmitTime, &p.DepositEndTime,
-		&p.VotingStartTime, &p.VotingEndTime, &p.TallyYes, &p.TallyNo, &p.TallyAbstain, &p.TallyVeto, &p.TallyBondedTokens}
+		&p.VotingStartTime, &p.VotingEndTime, &p.TallyYes, &p.TallyNo, &p.TallyAbstain, &p.TallyVeto, &p.TallyBondedTokens, &p.TallySource}
 }
 
 // Proposals returns up to limit proposals with status (every status when
@@ -160,7 +168,7 @@ func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, 
 		keyset = ` AND (pv.height, pv.tx_index, pv.voter) < ($5, $6, $7)`
 	}
 	rows, err := r.db.Query(ctx, `SELECT pv.voter, l.name, l.kind, pv.option, pv.options, pv.height, pv.tx_index,
-			t.hash, pv.time, v.moniker, v.operator_address, v.voting_power_pct::text
+			t.hash, pv.time, v.moniker, v.operator_address, v.voting_power_pct::text, pv.source
 		FROM explorer.proposal_votes pv
 		LEFT JOIN explorer.transactions t ON t.height = pv.height AND t.tx_index = pv.tx_index
 		LEFT JOIN explorer.labels l ON l.address = pv.voter
@@ -177,7 +185,7 @@ func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, 
 		var v ProposalVote
 		var name, kind *string
 		err := row.Scan(&v.Voter, &name, &kind, &v.Option, &v.Options, &v.Height, &v.TxIndex, &v.TxHash, &v.Time,
-			&v.ValidatorMoniker, &v.ValidatorOperator, &v.VotingPowerPct)
+			&v.ValidatorMoniker, &v.ValidatorOperator, &v.VotingPowerPct, &v.Source)
 		v.VoterLabel = label(&v.Voter, name, kind)
 		return v, err
 	})
@@ -188,7 +196,8 @@ func (r *Explorer) ProposalVotes(ctx context.Context, id int64, option *string, 
 }
 
 // ProposalDeposits returns up to limit deposits on proposal id, newest
-// first, before the key before (from the newest when nil).
+// first, before the key before (from the newest when nil). A depositor's
+// archive total is left out once its transactions are indexed.
 func (r *Explorer) ProposalDeposits(ctx context.Context, id int64, before *DepositKey, limit int) ([]ProposalDeposit, error) {
 	args := []any{id, limit}
 	keyset := ""
@@ -196,11 +205,13 @@ func (r *Explorer) ProposalDeposits(ctx context.Context, id int64, before *Depos
 		args = append(args, before.Height, before.TxIndex, before.Depositor)
 		keyset = ` AND (d.height, d.tx_index, d.depositor) < ($3, $4, $5)`
 	}
-	rows, err := r.db.Query(ctx, `SELECT d.depositor, l.name, l.kind, d.amount, d.height, d.tx_index, t.hash, d.time
+	rows, err := r.db.Query(ctx, `SELECT d.depositor, l.name, l.kind, d.amount, d.height, d.tx_index, t.hash, d.time, d.source
 		FROM explorer.proposal_deposits d
 		LEFT JOIN explorer.transactions t ON t.height = d.height AND t.tx_index = d.tx_index
 		LEFT JOIN explorer.labels l ON l.address = d.depositor
-		WHERE d.proposal_id = $1`+keyset+`
+		WHERE d.proposal_id = $1
+		  AND (d.source = 'event' OR NOT EXISTS (SELECT 1 FROM explorer.proposal_deposits e
+		       WHERE e.proposal_id = d.proposal_id AND e.depositor = d.depositor AND e.source = 'event'))`+keyset+`
 		ORDER BY d.height DESC, d.tx_index DESC, d.depositor DESC LIMIT $2`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("proposal %d deposits: %w", id, err)
@@ -208,7 +219,7 @@ func (r *Explorer) ProposalDeposits(ctx context.Context, id int64, before *Depos
 	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ProposalDeposit, error) {
 		var d ProposalDeposit
 		var name, kind *string
-		err := row.Scan(&d.Depositor, &name, &kind, &d.Amount, &d.Height, &d.TxIndex, &d.TxHash, &d.Time)
+		err := row.Scan(&d.Depositor, &name, &kind, &d.Amount, &d.Height, &d.TxIndex, &d.TxHash, &d.Time, &d.Source)
 		d.DepositorLabel = label(&d.Depositor, name, kind)
 		return d, err
 	})

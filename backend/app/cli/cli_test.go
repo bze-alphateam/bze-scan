@@ -28,6 +28,7 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "backfill")
 	assert.Contains(t, out.String(), "reindex")
 	assert.Contains(t, out.String(), "sync-state")
+	assert.Contains(t, out.String(), "snapshots")
 	assert.Contains(t, out.String(), "version")
 }
 
@@ -79,7 +80,7 @@ func TestDatabaseCommandsRequireDatabaseURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", "")
 
-	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}, {"sync-state"}} {
+	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}, {"sync-state"}, {"snapshots"}} {
 		root := cli.NewRootCmd()
 		root.SetArgs(args)
 		root.SetOut(&bytes.Buffer{})
@@ -89,6 +90,16 @@ func TestDatabaseCommandsRequireDatabaseURL(t *testing.T) {
 		require.Error(t, err, args)
 		assert.Contains(t, err.Error(), "DATABASE_URL is required", args)
 	}
+}
+
+func TestSnapshotsRejectsNegativeWorkers(t *testing.T) {
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"snapshots", "--workers", "-1"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--workers must be positive")
 }
 
 func TestSyncStateRejectsABadDayRange(t *testing.T) {

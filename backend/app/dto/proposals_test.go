@@ -58,10 +58,33 @@ func TestVoteAndDepositCursorsRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &d, gotD)
 
-	for _, bad := range []string{"!!", dto.EncodeCursor(1), "e30", dto.EncodeVoteCursor(repository.VoteKey{Height: -1, Voter: "x"})} {
+	// An archive row has no transaction: tx_index -1.
+	archive := repository.VoteKey{Height: 23821224, TxIndex: -1, Voter: "bze1a"}
+	got, err = dto.DecodeVoteCursor(dto.EncodeVoteCursor(archive))
+	require.NoError(t, err)
+	assert.Equal(t, &archive, got)
+	archiveD := repository.DepositKey{Height: 23821224, TxIndex: -1, Depositor: "bze1p"}
+	gotD, err = dto.DecodeDepositCursor(dto.EncodeDepositCursor(archiveD))
+	require.NoError(t, err)
+	assert.Equal(t, &archiveD, gotD)
+
+	for _, bad := range []string{"!!", dto.EncodeCursor(1), "e30", dto.EncodeVoteCursor(repository.VoteKey{Height: -1, Voter: "x"}),
+		dto.EncodeVoteCursor(repository.VoteKey{Height: 1, TxIndex: -2, Voter: "x"})} {
 		_, err := dto.DecodeVoteCursor(bad)
 		assert.ErrorIs(t, err, dto.ErrInvalidCursor, bad)
 	}
+}
+
+func TestSourcesAreMapped(t *testing.T) {
+	archive := "archive"
+	p := dto.NewProposalSummary(repository.ProposalSummary{ID: 43, TallySource: &archive})
+	assert.Equal(t, &archive, p.TallySource)
+	assert.Nil(t, dto.NewProposalSummary(repository.ProposalSummary{ID: 1}).TallySource, "no bonded tokens, no source")
+	v := dto.NewProposalVote(repository.ProposalVote{Voter: "bze1a", Height: 9, TxIndex: -1, Source: "archive"})
+	assert.Equal(t, "archive", v.Source)
+	assert.Nil(t, v.TxHash)
+	d := dto.NewProposalDeposit(repository.ProposalDeposit{Depositor: "bze1p", TxIndex: -1, Source: "archive"})
+	assert.Equal(t, "archive", d.Source)
 }
 
 func TestNewProposalSummaryNeedsTheWholeTally(t *testing.T) {

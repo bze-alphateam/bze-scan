@@ -22,7 +22,9 @@ type Tally struct {
 // ProposalSummary is an item of GET /api/v1/proposals. Tally is null until
 // the state sync tallies the proposal; TurnoutPct is the share of the bonded
 // tokens that voted, in percent with five decimals, null without a tally or
-// its bonded tokens.
+// its bonded tokens. TallySource says where the bonded tokens come from:
+// "sync" (read while the proposal voted), "archive" (read by the snapshots
+// command from the state at the voting end: historical), null without them.
 type ProposalSummary struct {
 	ID              int64      `json:"id"`
 	Title           string     `json:"title"`
@@ -35,6 +37,7 @@ type ProposalSummary struct {
 	VotingEndTime   *time.Time `json:"voting_end_time"`
 	Tally           *Tally     `json:"tally"`
 	TurnoutPct      *string    `json:"turnout_pct"`
+	TallySource     *string    `json:"tally_source"`
 }
 
 // ValidatorsVoted is how many of the bonded validators have an owner that
@@ -69,7 +72,9 @@ type Proposal struct {
 // ProposalVote is an item of GET /api/v1/proposals/{id}/votes. Option is
 // null for a split vote (Options holds the weights). Validator,
 // ValidatorOperator and VotingPowerPct name the validator the voter owns,
-// with its current share; null for other voters.
+// with its current share; null for other voters. Source is "event", or
+// "archive" for a vote read from the state before the tally: historical, no
+// transaction (tx_index -1, tx_hash null).
 type ProposalVote struct {
 	Voter             string          `json:"voter"`
 	VoterLabel        *Label          `json:"voter_label"`
@@ -82,9 +87,12 @@ type ProposalVote struct {
 	Validator         *string         `json:"validator"`
 	ValidatorOperator *string         `json:"validator_operator"`
 	VotingPowerPct    *string         `json:"voting_power_pct"`
+	Source            string          `json:"source"`
 }
 
-// ProposalDeposit is an item of GET /api/v1/proposals/{id}/deposits.
+// ProposalDeposit is an item of GET /api/v1/proposals/{id}/deposits. Source
+// is "event", or "archive" for a depositor's total read from the state
+// before the tally: historical, no transaction (tx_index -1, tx_hash null).
 type ProposalDeposit struct {
 	Depositor      string          `json:"depositor"`
 	DepositorLabel *Label          `json:"depositor_label"`
@@ -93,6 +101,7 @@ type ProposalDeposit struct {
 	TxIndex        int64           `json:"tx_index"`
 	TxHash         *string         `json:"tx_hash"`
 	Time           time.Time       `json:"time"`
+	Source         string          `json:"source"`
 }
 
 // NewProposalSummary maps a proposals list row.
@@ -100,7 +109,7 @@ func NewProposalSummary(p repository.ProposalSummary) ProposalSummary {
 	out := ProposalSummary{
 		ID: p.ID, Title: p.Title, Kind: p.Kind, Status: p.Status, Expedited: p.Expedited,
 		SubmitTime: p.SubmitTime.UTC(), DepositEndTime: utc(p.DepositEndTime), VotingStartTime: utc(p.VotingStartTime),
-		VotingEndTime: utc(p.VotingEndTime),
+		VotingEndTime: utc(p.VotingEndTime), TallySource: p.TallySource,
 	}
 	if p.TallyYes != nil && p.TallyNo != nil && p.TallyAbstain != nil && p.TallyVeto != nil {
 		out.Tally = &Tally{Yes: *p.TallyYes, No: *p.TallyNo, Abstain: *p.TallyAbstain, NoWithVeto: *p.TallyVeto}
@@ -129,6 +138,7 @@ func NewProposalVote(v repository.ProposalVote) ProposalVote {
 		Voter: v.Voter, VoterLabel: newLabel(v.VoterLabel), Option: v.Option, Options: jsonOrNull(v.Options),
 		Height: v.Height, TxIndex: v.TxIndex, TxHash: v.TxHash, Time: v.Time.UTC(),
 		Validator: v.ValidatorMoniker, ValidatorOperator: v.ValidatorOperator, VotingPowerPct: v.VotingPowerPct,
+		Source: v.Source,
 	}
 }
 
@@ -136,7 +146,7 @@ func NewProposalVote(v repository.ProposalVote) ProposalVote {
 func NewProposalDeposit(d repository.ProposalDeposit) ProposalDeposit {
 	return ProposalDeposit{
 		Depositor: d.Depositor, DepositorLabel: newLabel(d.DepositorLabel), Amount: jsonOrNull(d.Amount),
-		Height: d.Height, TxIndex: d.TxIndex, TxHash: d.TxHash, Time: d.Time.UTC(),
+		Height: d.Height, TxIndex: d.TxIndex, TxHash: d.TxHash, Time: d.Time.UTC(), Source: d.Source,
 	}
 }
 
@@ -194,7 +204,8 @@ func decodeTextCursor(cursor string) (textCursor, error) {
 		return textCursor{}, ErrInvalidCursor
 	}
 	var c textCursor
-	if err := json.Unmarshal(raw, &c); err != nil || c.Address == "" || c.Height < 0 || c.TxIndex < 0 {
+	// tx_index -1: an archive row, which has no transaction.
+	if err := json.Unmarshal(raw, &c); err != nil || c.Address == "" || c.Height < 0 || c.TxIndex < -1 {
 		return textCursor{}, ErrInvalidCursor
 	}
 	return c, nil

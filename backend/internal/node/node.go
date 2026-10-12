@@ -1,6 +1,7 @@
 // Package node is the CometBFT RPC client of the backend. It calls the
-// by-height routes only (/status, /block, /block_results, /commit), in the
-// GET URI form, and never /tx, /tx_search or /block_search.
+// by-height routes only (/status, /block, /block_results, /commit, and
+// /abci_query at a height), in the GET URI form, and never /tx, /tx_search or
+// /block_search.
 //
 // Every call returns the parsed response and the raw response body: the raw
 // bytes are what the raw-JSON cache serves later.
@@ -263,9 +264,18 @@ func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, err
 // call GETs route (with ?height= when height > 0), decodes the JSON-RPC
 // envelope's result into out and returns the raw body.
 func (c *Client) call(ctx context.Context, route string, height int64, out any) ([]byte, error) {
-	u := c.base + "/" + route
+	q := url.Values{}
 	if height > 0 {
-		u += "?" + url.Values{"height": {strconv.FormatInt(height, 10)}}.Encode()
+		q.Set("height", strconv.FormatInt(height, 10))
+	}
+	return c.callQuery(ctx, route, height, q, out)
+}
+
+// callQuery is call with the query string q.
+func (c *Client) callQuery(ctx context.Context, route string, height int64, q url.Values, out any) ([]byte, error) {
+	u := c.base + "/" + route
+	if len(q) > 0 {
+		u += "?" + q.Encode()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

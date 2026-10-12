@@ -91,6 +91,8 @@ func TestProposalsVotesAndTheFrozenTally(t *testing.T) {
 	assert.Equal(t, hSubmit, *p.SubmitHeight, "from the indexed submission")
 	assert.NotEmpty(t, *p.SubmitTxHash)
 	assert.Equal(t, "147027371221650", *p.TallyBondedTokens)
+	require.NotNil(t, p.TallySource)
+	assert.Equal(t, "sync", *p.TallySource, "the bonded tokens of the running tally")
 	assert.Equal(t, []string{"/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"}, p.MessageTypes)
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100000000000"}]`, string(p.TotalDeposit))
 	assert.Equal(t, 1, p.ValidatorsVoted.Voted, "one of the two voters owns a bonded validator")
