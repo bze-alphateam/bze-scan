@@ -98,16 +98,17 @@ type blockRow struct {
 	Signers             []string        `json:"signers"`
 }
 
-// blockTimesSQL sets block_time_ms of the rows in [$1, $2] whose previous
-// block is indexed, where it is missing or (after a reindex changed a time)
-// wrong. The backfill walks downward, so a block's predecessor usually
-// arrives in a later flush: $2 is one above the flush's highest height, which
-// completes the block written by the previous flush (and the live floor's
-// block on the first one).
+// blockTimesSQL sets block_time_ms of the rows at the heights $1 whose
+// previous block is indexed, where it is missing or (after a reindex changed
+// a time) wrong. $1 is every height of the flush and the one above each: the
+// backfill walks downward, so a block's predecessor usually arrives in a
+// later flush, and its successor is completed then (the live floor's block
+// on the first flush). A list, not a range: a reindex of far-apart heights
+// would otherwise rewrite every row between them.
 const blockTimesSQL = `UPDATE explorer.blocks b
 		SET block_time_ms = (EXTRACT(EPOCH FROM (b.time - p.time)) * 1000)::integer
 		FROM explorer.blocks p
-		WHERE b.height BETWEEN $1 AND $2 AND p.height = b.height - 1
+		WHERE b.height = ANY($1::bigint[]) AND p.height = b.height - 1
 		  AND b.block_time_ms IS DISTINCT FROM (EXTRACT(EPOCH FROM (b.time - p.time)) * 1000)::integer`
 
 // resolveFailuresSQL marks the open failures of the heights a reindex
@@ -187,12 +188,14 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		return err
 	}
 	stmts = append(stmts, blockStmts...)
-	stmts = append(stmts, statement{table: "block times", sql: blockTimesSQL, args: []any{lo, hi + 1}})
+	heights := make([]int64, len(all.Blocks))
+	timed := make([]int64, 0, 2*len(all.Blocks))
+	for i, b := range all.Blocks {
+		heights[i] = b.Height
+		timed = append(timed, b.Height, b.Height+1)
+	}
+	stmts = append(stmts, statement{table: "block times", sql: blockTimesSQL, args: []any{timed}})
 	if mode == ModeUpdate {
-		heights := make([]int64, len(all.Blocks))
-		for i, b := range all.Blocks {
-			heights[i] = b.Height
-		}
 		stmts = append(stmts, statement{table: "failures", sql: resolveFailuresSQL, args: []any{heights}})
 	}
 

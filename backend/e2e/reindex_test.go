@@ -211,3 +211,20 @@ func TestReindexOverwritesRowsThatDiffer(t *testing.T) {
 	require.Equal(t, 0, run.code, run.stderr)
 	assert.Equal(t, withoutVersions(before), withoutVersions(e.rows(t)), "every column back to the transformer's output")
 }
+
+// Far-apart heights in one flush: block_time_ms is recomputed at each height
+// and the one above it, never across the range between them (which, on the
+// real chain, is tens of millions of rows).
+func TestReindexOfFarApartHeightsTouchesOnlyTheirBlockTimes(t *testing.T) {
+	e := newReindexEnv(t)
+	_, err := e.db.Exec(`UPDATE explorer.blocks SET block_time_ms = 1 WHERE height IN (24998319, 24998323, 24998329)`)
+	require.NoError(t, err)
+
+	run := e.reindex(t, "--heights", "24998318,24998328")
+	require.Equal(t, 0, run.code, run.stderr)
+
+	assert.Equal(t, []string{"24998323 1"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', height, block_time_ms) FROM explorer.blocks
+		  WHERE height IN (24998319, 24998323, 24998329) AND block_time_ms = 1`),
+		"the successors of the reindexed heights corrected, the height between them untouched")
+}

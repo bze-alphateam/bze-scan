@@ -41,8 +41,8 @@ func TestBatchWriteIsOneTransactionOfOneBatch(t *testing.T) {
 	assert.Nil(t, blocks[0]["fees_distributed"])
 	assert.Contains(t, tx.stmts[8].sql, "NULLIF(fees_distributed, 'null'::jsonb)")
 	assert.Contains(t, tx.stmts[8].sql, "ON CONFLICT (height) DO NOTHING")
-	assert.Equal(t, []any{int64(102), int64(105)}, tx.stmts[9].args,
-		"block times from the lowest height to one above the highest")
+	assert.Equal(t, []any{[]int64{104, 105, 103, 104, 102, 103}}, tx.stmts[9].args,
+		"block times of every height and the one above it, never a range")
 }
 
 func TestBatchWriteChunksLargeInserts(t *testing.T) {
