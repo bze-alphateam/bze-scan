@@ -176,11 +176,15 @@ const MEANINGS: [string, string][] = [
 
 function Votes({ p, c, denoms }: { p: Proposal; c: Checks | null; denoms?: Map<string, TokenSummary> }) {
   const voting = p.status === "voting_period";
-  if (p.status === "deposit_period" || p.status === "canceled") {
+  if (p.status === "deposit_period" || p.status === "canceled" || p.status === "dropped") {
     return (
       <Card title="Votes">
         <Text fontSize="sm" color="fg.muted">
-          {p.status === "canceled" ? "The proposer withdrew this proposal before voting ended." : "Voting opens once the deposit is reached."}
+          {p.status === "canceled"
+            ? "The proposer withdrew this proposal before voting ended."
+            : p.status === "dropped"
+              ? "The deposit was not reached in time, so voting never opened."
+              : "Voting opens once the deposit is reached."}
         </Text>
       </Card>
     );

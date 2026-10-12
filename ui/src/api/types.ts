@@ -519,7 +519,7 @@ export type ProposalKind =
   | "text"
   | "other";
 
-export type ProposalStatus = "deposit_period" | "voting_period" | "passed" | "rejected" | "failed" | "canceled";
+export type ProposalStatus = "deposit_period" | "voting_period" | "passed" | "rejected" | "failed" | "canceled" | "dropped";
 
 export interface ProposalListParams extends PageParams {
   status?: ProposalStatus;
