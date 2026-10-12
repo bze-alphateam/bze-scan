@@ -417,7 +417,7 @@ func TestBlockByHeight(t *testing.T) {
 	}
 	rec := get(t, newAPI(f), "/blocks/25000894")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl))
 	assert.JSONEq(t, `{
 		"height": 25000894, "time": "2026-10-07T12:00:00Z", "hash": "BH", "tx_count": 1, "tx_failed_count": 0,
 		"proposer_cons_address": null, "block_time_ms": null, "size_bytes": null, "proposer": null,
@@ -450,7 +450,7 @@ func TestBlockTransfersPageOwnRowsFirst(t *testing.T) {
 
 	rec := get(t, e, "/blocks/50/transfers?limit=2")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl))
 	assert.Nil(t, f.gotTransferKey)
 	assert.Equal(t, 3, f.gotLimit, "one more than the page, to know whether another follows")
 	page := decode[dto.List[dto.BlockTransfer]](t, rec)
@@ -630,7 +630,7 @@ func TestTxByHash(t *testing.T) {
 	rec := get(t, e, "/txs/"+strings.ToLower(hashUpper))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, hashUpper, f.gotHash, "hashes are normalised to upper case")
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl))
 	tx := decode[dto.Tx](t, rec)
 	assert.Equal(t, []string{account}, tx.Signers)
 	require.Len(t, tx.Messages, 1)

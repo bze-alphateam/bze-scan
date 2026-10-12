@@ -137,7 +137,7 @@ func TestIBCChannelsAndEndpoints(t *testing.T) {
 
 	r := fetch(t, base+"/txs/"+sendHash)
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
-	assert.Equal(t, "public, max-age=31536000, immutable", r.header.Get("Cache-Control"), "delivered for good")
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"), "delivered: cached like any transaction")
 	sent := into[dto.Tx](t, r)
 	require.Len(t, sent.IBCTransfers, 1)
 	tr := sent.IBCTransfers[0]

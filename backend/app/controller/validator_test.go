@@ -177,7 +177,7 @@ func TestBlockNamesItsProposer(t *testing.T) {
 	e := newAPI(f)
 	rec := get(t, e, "/blocks/42")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl))
 	assert.Equal(t, &dto.Proposer{OperatorAddress: valoper, Moniker: "ChainTools"}, decode[dto.Block](t, rec).Proposer)
 
 	// Unknown until the state sync knows the validator: not cached.
