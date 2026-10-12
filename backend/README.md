@@ -323,7 +323,7 @@ every later route follows:
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `created_time` (the block time of its `created` token event, null without one); another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
@@ -926,7 +926,8 @@ an unreadable address or key asks for one too.
 
 **Denoms.** A full resync reads bank `TotalSupply` and `DenomsMetadata`
 (1,000 per page; a denom is listed when it has either), tradebin `AllMarkets`
-and `HaltedDenoms`, and per factory denom tokenfactory `DenomAuthority`.
+`HaltedDenoms` and `AllLiquidityPools`, and per factory denom tokenfactory
+`DenomAuthority`.
 Supply and metadata always come from the node, never from events. `kind` is
 the denom's shape: `native` for `ubze`, `factory` for `factory/…`, `ibc` for
 `ibc/…`, `lp` for tradebin pool shares (`ulp/<hash>` since chain v8.2.0,
@@ -941,7 +942,16 @@ denom's `creator` is the address in it and `admin` the tokenfactory admin
 the denom trades in; `halted` is the tradebin halt (a node before v8.2.0
 answers `HaltedDenoms` with Unimplemented: nothing is halted). First sight
 (`created_*`) is the denom's earliest `created` token event, filled at the
-next resync once the event is indexed. A denom the bank no longer lists keeps
+next resync once the event is indexed. An LP denom's `lp_base`/`lp_quote`
+are its pool's assets, from the pool whose stored `lp_denom` it is (a
+`ulp/<hash>` denom is the SHA-256 of the pool id and cannot be reversed);
+only a legacy `ulp_<base>_<quote>` missing from the pool list falls back to
+splitting it on `_` (exactly two assets). The LP row is then named after the
+assets' symbols as resolved in the same run, `<BASE>/<QUOTE> LP` and
+`<BASE>/<QUOTE> LP Shares` like the BZE dapps (an LP resynced alone resolves
+its two assets for that, without saving them); when a side has no symbol the
+row keeps the bank's. A node without the AMM (`AllLiquidityPools`
+Unimplemented) leaves only the fallback. A denom the bank no longer lists keeps
 its row with a zero supply. The holders and prices columns are left to their
 own jobs.
 
@@ -955,7 +965,9 @@ multi-hop denom (`transfer/channel-0/transfer/channel-94814/uatone`) is
 followed through the first hop chain's asset for the rest of the path
 (`ibc/` + SHA-256 of it) and its earliest IBC trace to the home chain, which
 becomes the origin; when that fails the first hop's chain and the raw base
-denom stay. A chain or an asset the registry cache misses is published to
+denom stay. A multi-hop denom keeps its first hop's chain as `via_chain_id`
+(null for one hop), so two vouchers of one asset arriving by different
+routes can be told apart. A chain or an asset the registry cache misses is published to
 the chain_registry set (by chain id, or `name:<registry name>` for a trace's
 chain).
 

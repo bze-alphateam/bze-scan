@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -15,7 +16,11 @@ import (
 // 24-hour change is the native denom's only (from the BZE/USDC pool). The
 // origin chain is an IBC denom's, null for the others and until the IBC
 // channel is known. CreatedTime is the denom's first sight (its `created`
-// token event), null when the explorer did not index one.
+// token event), null when the explorer did not index one. IBCHops is an
+// IBC denom's number of hops (port/channel pairs of its path), null for
+// other denoms and until traced; ViaChain is a multi-hop denom's first hop
+// chain (the counterparty of the BZE channel), null for one hop. LPPair is
+// an LP denom's pool assets, null for other denoms and when unknown.
 type TokenSummary struct {
 	Denom             string       `json:"denom"`
 	Symbol            *string      `json:"symbol"`
@@ -29,7 +34,16 @@ type TokenSummary struct {
 	Halted            bool         `json:"halted"`
 	LogoURL           *string      `json:"logo_url"`
 	OriginChain       *OriginChain `json:"origin_chain"`
+	IBCHops           *int         `json:"ibc_hops"`
+	ViaChain          *OriginChain `json:"via_chain"`
+	LPPair            *LPPair      `json:"lp_pair"`
 	CreatedTime       *time.Time   `json:"created_time"`
+}
+
+// LPPair is the two pool assets of an LP denom.
+type LPPair struct {
+	Base  string `json:"base"`
+	Quote string `json:"quote"`
 }
 
 // OriginChain is where an IBC denom comes from. Name and LogoURL are the
@@ -120,7 +134,27 @@ func NewTokenSummary(t repository.TokenSummary) TokenSummary {
 	if t.OriginChainID != nil {
 		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo}
 	}
+	if t.Kind == "ibc" && t.IBCPath != nil {
+		out.IBCHops = ibcHops(*t.IBCPath)
+	}
+	if t.ViaChainID != nil {
+		out.ViaChain = &OriginChain{ChainID: *t.ViaChainID, Name: t.ViaChainName, LogoURL: t.ViaChainLogo}
+	}
+	if t.Kind == "lp" && t.LPBase != nil && t.LPQuote != nil {
+		out.LPPair = &LPPair{Base: *t.LPBase, Quote: *t.LPQuote}
+	}
 	return out
+}
+
+// ibcHops counts the port/channel pairs of an IBC path; nil for a path that
+// is not pairs.
+func ibcHops(path string) *int {
+	parts := strings.Split(path, "/")
+	if path == "" || len(parts)%2 != 0 {
+		return nil
+	}
+	n := len(parts) / 2
+	return &n
 }
 
 // NewTokenHolder maps a holders row of a denom whose supply is supply.
