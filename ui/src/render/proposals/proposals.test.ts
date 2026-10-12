@@ -279,6 +279,7 @@ describe("the proposer's text", () => {
     expect(excerpt("short", 240)).toBe("short");
     expect(excerpt("one two three four five", 12)).toBe("one two…");
     expect(excerpt(null, 10)).toBe("");
+    expect(excerpt("## Why\n\nThis **halts** [USDC.n](https://x.example).", 240)).toBe("Why This halts USDC.n.");
   });
 
   it("links a URL metadata and keeps text as text", () => {
