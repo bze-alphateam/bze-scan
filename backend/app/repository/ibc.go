@@ -54,8 +54,10 @@ type IBCChannel struct {
 	ConnectionID          *string
 	CounterpartyChannelID *string
 	State                 *string
-	UpdatedAt             time.Time
-	Counterparty          Chain
+	// ClientStatus is the light client's status: active, expired, frozen.
+	ClientStatus *string
+	UpdatedAt    time.Time
+	Counterparty Chain
 }
 
 // IBCKey is the keyset position of a transfer in an account's list: its
@@ -165,7 +167,7 @@ func (r *Explorer) AccountIBCTransfers(ctx context.Context, address, direction s
 // number.
 func (r *Explorer) IBCChannels(ctx context.Context) ([]IBCChannel, error) {
 	rows, err := r.db.Query(ctx, `SELECT t.channel_id, t.port_id, t.client_id, t.connection_id,
-			t.counterparty_channel_id, t.state, t.updated_at,
+			t.counterparty_channel_id, t.state, t.client_status, t.updated_at,
 			t.counterparty_chain_id, ch.pretty_name, ch.logo_url, ch.explorer_account_url, ch.explorer_tx_url
 		FROM explorer.ibc_channels t LEFT JOIN explorer.chains ch ON ch.chain_id = t.counterparty_chain_id
 		ORDER BY `+ibcChannelNumber+`, t.port_id`)
@@ -176,7 +178,7 @@ func (r *Explorer) IBCChannels(ctx context.Context) ([]IBCChannel, error) {
 		var c IBCChannel
 		cp := &c.Counterparty
 		err := row.Scan(&c.ChannelID, &c.PortID, &c.ClientID, &c.ConnectionID, &c.CounterpartyChannelID, &c.State,
-			&c.UpdatedAt, &cp.ChainID, &cp.PrettyName, &cp.LogoURL, &cp.ExplorerAccountURL, &cp.ExplorerTxURL)
+			&c.ClientStatus, &c.UpdatedAt, &cp.ChainID, &cp.PrettyName, &cp.LogoURL, &cp.ExplorerAccountURL, &cp.ExplorerTxURL)
 		return c, err
 	})
 	if err != nil {

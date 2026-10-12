@@ -50,7 +50,8 @@
 #   channels (the IBC channels sync):
 #     channel/Channels.json (every channel, one page), and per transfer channel
 #     channel/ChannelClientState.transfer.<channel>.json (the light client
-#     naming the counterparty chain)
+#     naming the counterparty chain) and client/ClientStatus.<client>.json
+#     (whether that client is active or expired)
 #   orders (the open orders' reconciliation), per address in OWNERS:
 #     tradebin/UserMarketOrders.<address>.json, the owner's order references
 #     in every market (one page of 1000)
@@ -79,7 +80,7 @@ OWNERS="${OWNERS:-}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel mint rewards burner cointrunk txfeecollector; do
+for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel client mint rewards burner cointrunk txfeecollector; do
   mkdir -p "${OUT}/${d}"
 done
 
@@ -205,6 +206,8 @@ if has channels; then
   fetch "ibc/core/channel/v1/channels?pagination.limit=200" channel/Channels.json
   for ch in $(jq -r '.channels[] | select(.port_id == "transfer") | .channel_id' "${OUT}/channel/Channels.json"); do
     fetch "ibc/core/channel/v1/channels/${ch}/ports/transfer/client_state" "channel/ChannelClientState.transfer.${ch}.json"
+    client="$(jq -r '.identified_client_state.client_id' "${OUT}/channel/ChannelClientState.transfer.${ch}.json")"
+    fetch "ibc/core/client/v1/client_status/${client}" "client/ClientStatus.${client}.json"
   done
 fi
 

@@ -343,3 +343,34 @@ func TestANodeDownKeepsTheRows(t *testing.T) {
 	}
 	assert.True(t, logged, "the failure is logged")
 }
+
+// The validators list counts each validator's votes, whatever the option, on
+// the last ten proposals whose voting ended: what the UI's Hall of Fame reads.
+func TestValidatorsCountTheirVotesOnTheLastTenProposals(t *testing.T) {
+	e := newSyncEnv(t)
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+	closed := queryStrings(t, e.db, `SELECT id::text FROM explorer.proposals WHERE voting_end_time <= now()`)
+	require.GreaterOrEqual(t, len(closed), 11, "the recorded proposals")
+	// ChainTools' account votes on the eleven latest closed proposals: the
+	// oldest of them falls outside the ten.
+	_, err := e.db.Exec(`INSERT INTO explorer.proposal_votes (proposal_id, voter, options, option, height, tx_index, time)
+		SELECT id, $1, '[]', CASE WHEN id % 2 = 0 THEN 'yes' ELSE 'abstain' END, 1, 0, now()
+		  FROM (SELECT id FROM explorer.proposals WHERE voting_end_time <= now() ORDER BY id DESC LIMIT 11) p
+		ON CONFLICT (proposal_id, voter) DO NOTHING`, chainToolsOwner)
+	require.NoError(t, err)
+
+	base := e.serve(t, h316)
+	byOperator := map[string]dto.Validator{}
+	for _, v := range getValidators(t, base, "?limit=100").Items {
+		byOperator[v.OperatorAddress] = v
+	}
+	ct := byOperator[chainTools]
+	assert.Equal(t, dto.RecentVotes{Voted: 10, Of: 10}, ct.RecentVotes)
+	require.NotNil(t, ct.MissedBlocks)
+	require.NotNil(t, ct.SignedBlocksWindow)
+	assert.Equal(t, int64(10000), *ct.SignedBlocksWindow)
+	for op, v := range byOperator {
+		assert.Equal(t, int64(10), v.RecentVotes.Of, op)
+	}
+}

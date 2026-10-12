@@ -19,13 +19,25 @@ import (
 )
 
 // fakeChannel serves channels in pages of two and a Tendermint client per
-// channel naming chainOf[channel].
+// channel naming chainOf[channel], Active unless its status says otherwise.
 type fakeChannel struct {
-	channels []*channeltypes.IdentifiedChannel
-	chainOf  map[string]string
-	solo     map[string]bool // channel → a non-Tendermint client
-	fail     map[string]bool // channel → its client state fails
-	pages    int
+	channels   []*channeltypes.IdentifiedChannel
+	chainOf    map[string]string
+	solo       map[string]bool   // channel → a non-Tendermint client
+	fail       map[string]bool   // channel → its client state fails
+	status     map[string]string // client → its status
+	statusFail map[string]bool   // client → its status query fails
+	pages      int
+}
+
+func (f *fakeChannel) ClientStatus(_ context.Context, in *clienttypes.QueryClientStatusRequest, _ ...grpc.CallOption) (*clienttypes.QueryClientStatusResponse, error) {
+	if f.statusFail[in.ClientId] {
+		return nil, errors.New("unavailable")
+	}
+	if s, ok := f.status[in.ClientId]; ok {
+		return &clienttypes.QueryClientStatusResponse{Status: s}, nil
+	}
+	return &clienttypes.QueryClientStatusResponse{Status: "Active"}, nil
 }
 
 func (f *fakeChannel) Channels(_ context.Context, in *channeltypes.QueryChannelsRequest, _ ...grpc.CallOption) (*channeltypes.QueryChannelsResponse, error) {
@@ -101,25 +113,26 @@ func TestFullResyncWritesTheTransferChannels(t *testing.T) {
 		},
 		chainOf: map[string]string{"channel-0": "osmosis-1", "channel-2": "cosmoshub-4", "channel-3": "noble-1"},
 		solo:    map[string]bool{"channel-4": true},
+		status:  map[string]string{"07-tendermint-channel-2": "Expired"},
 	}
 	store := &fakeStore{known: map[string]bool{"osmosis-1": true}}
 	misses := &publisher{}
-	set := channels.New(channels.Deps{Channel: ch, Store: store, Misses: misses}, 0)
+	set := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store, Misses: misses}, 0)
 
 	require.NoError(t, set.FullResync(context.Background()))
 	assert.Equal(t, 3, ch.pages, "every page, two channels each")
 	assert.Equal(t, []channels.Row{
 		{ChannelID: "channel-0", PortID: "transfer", ClientID: "07-tendermint-channel-0", ConnectionID: "connection-0",
 			CounterpartyChainID: "osmosis-1", CounterpartyChannelID: "channel-340", State: "open",
-			Escrow: "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee"},
+			ClientStatus: "active", Escrow: "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee"},
 		{ChannelID: "channel-2", PortID: "transfer", ClientID: "07-tendermint-channel-2", ConnectionID: "connection-2",
 			CounterpartyChainID: "cosmoshub-4", CounterpartyChannelID: "channel-147", State: "closed",
-			Escrow: store.saved[1].Escrow},
+			ClientStatus: "expired", Escrow: store.saved[1].Escrow},
 		{ChannelID: "channel-3", PortID: "transfer", ClientID: "07-tendermint-channel-3", ConnectionID: "connection-3",
 			CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-95", State: "open",
-			Escrow: store.saved[2].Escrow},
+			ClientStatus: "active", Escrow: store.saved[2].Escrow},
 		{ChannelID: "channel-4", PortID: "transfer", ClientID: "07-tendermint-channel-4", ConnectionID: "connection-4",
-			CounterpartyChannelID: "channel-1", State: "tryopen", Escrow: store.saved[3].Escrow},
+			CounterpartyChannelID: "channel-1", State: "tryopen", ClientStatus: "active", Escrow: store.saved[3].Escrow},
 	}, store.saved, "transfer port only; a non-Tendermint client names no chain")
 	assert.NotEqual(t, store.saved[1].Escrow, store.saved[2].Escrow)
 
@@ -142,12 +155,32 @@ func TestAFailingClientStateKeepsTheOthers(t *testing.T) {
 	}
 	store := &fakeStore{known: map[string]bool{"noble-1": true}}
 	misses := &publisher{}
-	err := channels.New(channels.Deps{Channel: ch, Store: store, Misses: misses}, 0).FullResync(context.Background())
+	err := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store, Misses: misses}, 0).FullResync(context.Background())
 	require.ErrorContains(t, err, "channel-0 client state")
 	require.Len(t, store.saved, 2)
 	assert.Empty(t, store.saved[0].CounterpartyChainID)
 	assert.Equal(t, "noble-1", store.saved[1].CounterpartyChainID)
 	assert.Empty(t, misses.got, "every chain is known")
+}
+
+// A client whose status query fails is saved without a status (the store
+// keeps the stored one); the failure is returned.
+func TestAFailingClientStatusKeepsTheChannel(t *testing.T) {
+	ch := &fakeChannel{
+		channels: []*channeltypes.IdentifiedChannel{
+			channel("transfer", "channel-1", "channel-0", "connection-1", channeltypes.OPEN),
+			channel("transfer", "channel-3", "channel-95", "connection-3", channeltypes.OPEN),
+		},
+		chainOf:    map[string]string{"channel-1": "vidulum-1", "channel-3": "noble-1"},
+		statusFail: map[string]bool{"07-tendermint-channel-1": true},
+	}
+	store := &fakeStore{known: map[string]bool{"vidulum-1": true, "noble-1": true}}
+	err := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store}, 0).FullResync(context.Background())
+	require.ErrorContains(t, err, "client 07-tendermint-channel-1 status")
+	require.Len(t, store.saved, 2)
+	assert.Equal(t, "vidulum-1", store.saved[0].CounterpartyChainID)
+	assert.Empty(t, store.saved[0].ClientStatus)
+	assert.Equal(t, "active", store.saved[1].ClientStatus)
 }
 
 func TestAFailingSaveFailsTheRun(t *testing.T) {
@@ -156,7 +189,7 @@ func TestAFailingSaveFailsTheRun(t *testing.T) {
 	}, chainOf: map[string]string{"channel-0": "osmosis-1"}}
 	store := &fakeStore{err: errors.New("db down")}
 	misses := &publisher{}
-	set := channels.New(channels.Deps{Channel: ch, Store: store, Misses: misses}, 0)
+	set := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store, Misses: misses}, 0)
 	require.ErrorContains(t, set.ResyncOne(context.Background(), statesync.All), "db down")
 	assert.Empty(t, misses.got)
 	assert.Equal(t, statesync.Channels, set.Name())

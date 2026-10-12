@@ -112,6 +112,11 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 	assert.Equal(t, 1, *ibc.IBCHops)
 	assert.Nil(t, ibc.ViaChain, "one hop")
 	assert.Nil(t, ibc.LPPair)
+	// Noble's channel-3 has an active client: USDC.n is not stranded.
+	require.NotNil(t, ibc.IBCChannel)
+	assert.Equal(t, "channel-3", ibc.IBCChannel.ChannelID)
+	assert.Equal(t, "active", *ibc.IBCChannel.ClientStatus)
+	assert.False(t, ibc.Stranded)
 
 	// ATONE through Osmosis: two hops, Osmosis as the via chain.
 	waitFor(t, 10*time.Second, func() bool {

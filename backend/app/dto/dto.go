@@ -227,6 +227,20 @@ type Validator struct {
 	Jailed          bool    `json:"jailed"`
 	Status          string  `json:"status"`
 	LogoURL         *string `json:"logo_url"`
+	// MissedBlocks and SignedBlocksWindow are the slashing module's signing
+	// info: blocks missed in the last SignedBlocksWindow blocks; null until
+	// known.
+	MissedBlocks       *int64      `json:"missed_blocks"`
+	SignedBlocksWindow *int64      `json:"signed_blocks_window"`
+	RecentVotes        RecentVotes `json:"recent_votes"`
+}
+
+// RecentVotes is how many (Voted) of the last Of proposals whose voting
+// ended (ten, fewer while the chain has fewer) the validator voted on,
+// whatever the option.
+type RecentVotes struct {
+	Voted int64 `json:"voted"`
+	Of    int64 `json:"of"`
 }
 
 // NewValidator maps a validator list row. Uptime is 1 − missed / window,
@@ -236,6 +250,8 @@ func NewValidator(v repository.ValidatorSummary) Validator {
 		Rank: v.Rank, Moniker: v.Moniker, OperatorAddress: v.OperatorAddress, Tokens: v.Tokens,
 		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
 		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow), LogoURL: v.LogoURL,
+		MissedBlocks: v.MissedBlocks, SignedBlocksWindow: v.SignedBlocksWindow,
+		RecentVotes: RecentVotes{Voted: v.RecentVotes, Of: v.RecentProposals},
 	}
 }
 

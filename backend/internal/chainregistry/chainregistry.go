@@ -57,6 +57,9 @@ type Chain struct {
 	NetworkType  string
 	Bech32Prefix string
 	LogoURL      string
+	// Status is the registry's status of the chain: live, upcoming or
+	// killed (its network was shut down); empty when the registry has none.
+	Status string
 	// ExplorerTxURL and ExplorerAccountURL are the first explorer's
 	// templates (${txHash}, ${accountAddress}); empty without explorers.
 	ExplorerTxURL      string
@@ -212,6 +215,7 @@ func ParseChain(raw []byte) (*Chain, error) {
 		PrettyName   string     `json:"pretty_name"`
 		NetworkType  string     `json:"network_type"`
 		Bech32Prefix string     `json:"bech32_prefix"`
+		Status       string     `json:"status"`
 		LogoURIs     *logoURIs  `json:"logo_URIs"`
 		Images       []logoURIs `json:"images"`
 		Explorers    []struct {
@@ -227,7 +231,7 @@ func ParseChain(raw []byte) (*Chain, error) {
 	}
 	out := &Chain{
 		ChainID: c.ChainID, Name: c.ChainName, PrettyName: c.PrettyName, NetworkType: c.NetworkType,
-		Bech32Prefix: c.Bech32Prefix, LogoURL: c.LogoURIs.url(),
+		Bech32Prefix: c.Bech32Prefix, LogoURL: c.LogoURIs.url(), Status: c.Status,
 	}
 	if out.LogoURL == "" && len(c.Images) > 0 {
 		out.LogoURL = c.Images[0].url()

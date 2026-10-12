@@ -1,6 +1,7 @@
 // Package channels is the channels set of the state sync: it rewrites
 // explorer.ibc_channels from the local node's IBC channel queries (the
-// transfer channels and the chain id of each one's light client), names
+// transfer channels, the chain id of each one's light client and whether
+// that client is still active or expired), names
 // each channel's ICS-20 escrow account in explorer.labels, and fills the
 // counterparty chain of the cross-chain transfers stored before their
 // channel was known. A counterparty chain absent from the registry cache is
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cosmos/gogoproto/proto"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 	"google.golang.org/grpc"
@@ -43,6 +45,12 @@ type Channel interface {
 	ChannelClientState(ctx context.Context, in *channeltypes.QueryChannelClientStateRequest, opts ...grpc.CallOption) (*channeltypes.QueryChannelClientStateResponse, error)
 }
 
+// Client is the part of the IBC client query client the set uses;
+// clienttypes.QueryClient satisfies it.
+type Client interface {
+	ClientStatus(ctx context.Context, in *clienttypes.QueryClientStatusRequest, opts ...grpc.CallOption) (*clienttypes.QueryClientStatusResponse, error)
+}
+
 // Row is one explorer.ibc_channels row; empty strings are stored as NULL.
 type Row struct {
 	ChannelID             string
@@ -54,6 +62,9 @@ type Row struct {
 	// State is the channel state without its STATE_ prefix, lower case:
 	// open, closed, init, tryopen…
 	State string
+	// ClientStatus is the light client's status, lower case: active,
+	// expired, frozen…; empty when unknown (the stored one is kept).
+	ClientStatus string
 	// Escrow is the channel's ICS-20 escrow account.
 	Escrow string
 }
@@ -73,6 +84,7 @@ type Store interface {
 // Deps of the set.
 type Deps struct {
 	Channel Channel
+	Client  Client
 	Store   Store
 	// Misses receives the counterparty chains the registry cache lacks.
 	Misses statesync.Publisher
@@ -104,8 +116,9 @@ func (s *Set) Interval() time.Duration { return s.interval }
 func (s *Set) ResyncOne(ctx context.Context, _ string) error { return s.FullResync(ctx) }
 
 // FullResync rewrites every transfer channel. A channel whose client state
-// fails is saved without its counterparty chain (the stored one is kept);
-// the failures are returned joined.
+// or client status fails is saved without its counterparty chain or client
+// status (the stored ones are kept); the failures are returned joined. The
+// hourly run is what notices a client expiring: no event marks it.
 func (s *Set) FullResync(ctx context.Context) error {
 	var channels []*channeltypes.IdentifiedChannel
 	req := &channeltypes.QueryChannelsRequest{Pagination: &query.PageRequest{Limit: PageLimit}}
@@ -141,6 +154,13 @@ func (s *Set) FullResync(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 		row.ClientID, row.CounterpartyChainID = clientID, chainID
+		if clientID != "" {
+			status, err := s.status(ctx, clientID)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			row.ClientStatus = status
+		}
 		if chainID != "" {
 			chains[chainID] = true
 		}
@@ -187,4 +207,13 @@ func (s *Set) client(ctx context.Context, port, channel string) (clientID, chain
 		return cs.ClientId, "", fmt.Errorf("channel %s client state: %w", channel, err)
 	}
 	return cs.ClientId, tm.ChainId, nil
+}
+
+// status returns the light client's status, lower case.
+func (s *Set) status(ctx context.Context, clientID string) (string, error) {
+	res, err := s.deps.Client.ClientStatus(ctx, &clienttypes.QueryClientStatusRequest{ClientId: clientID})
+	if err != nil {
+		return "", fmt.Errorf("client %s status: %w", clientID, err)
+	}
+	return strings.ToLower(res.Status), nil
 }

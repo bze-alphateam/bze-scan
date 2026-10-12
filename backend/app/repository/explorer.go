@@ -405,7 +405,23 @@ type ValidatorSummary struct {
 	Status             string
 	// LogoURL is the Keybase picture of its identity, nil without one.
 	LogoURL *string
+	// RecentVotes is how many of the RecentProposals (the last 10
+	// proposals whose voting ended, fewer while the chain has fewer) the
+	// validator's account voted on, whatever the option.
+	RecentVotes     int64
+	RecentProposals int64
 }
+
+// recentProposals is the CTE of the last RecentProposalsCount (10)
+// proposals whose voting period ended.
+const recentProposals = `recent AS (SELECT id FROM explorer.proposals WHERE voting_end_time <= now()
+		ORDER BY id DESC LIMIT 10)`
+
+// recentVoteCols counts a validators row's votes on the recent proposals,
+// then the recent proposals.
+const recentVoteCols = `(SELECT count(*) FROM explorer.proposal_votes pv
+		  WHERE pv.voter = account_address AND pv.proposal_id IN (SELECT id FROM recent)),
+		(SELECT count(*) FROM recent)`
 
 // Validators lists the validators of status (every status when nil) in
 // rank order: the bonded ones by rank, then the others by tokens. after is
@@ -413,12 +429,12 @@ type ValidatorSummary struct {
 // table holds tens of rows, so the position is the keyset.
 func (r *Explorer) Validators(ctx context.Context, status *string, after int64, limit int) ([]ValidatorSummary, error) {
 	rows, err := r.db.Query(ctx, `
-		WITH v AS (
+		WITH `+recentProposals+`, v AS (
 			SELECT row_number() OVER (ORDER BY rank NULLS LAST,
 			         CASE status WHEN 'bonded' THEN 0 WHEN 'unbonding' THEN 1 ELSE 2 END,
 			         tokens DESC, operator_address) AS pos,
 			       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
-			       missed_blocks, signed_blocks_window, jailed, status, logo_url
+			       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
 			  FROM explorer.validators
 			 WHERE $1::text IS NULL OR status = $1)
 		SELECT * FROM v WHERE pos > $2 ORDER BY pos LIMIT $3`, status, after, limit)
@@ -430,7 +446,8 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 	for rows.Next() {
 		var v ValidatorSummary
 		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
-			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL); err != nil {
+			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
+			&v.RecentVotes, &v.RecentProposals); err != nil {
 			return nil, fmt.Errorf("validators: %w", err)
 		}
 		out = append(out, v)
@@ -489,15 +506,16 @@ type ValidatorVote struct {
 func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDetail, error) {
 	var v ValidatorDetail
 	v.OperatorAddress = operator
-	err := r.db.QueryRow(ctx, `SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
-			missed_blocks, signed_blocks_window, jailed, status, logo_url,
+	err := r.db.QueryRow(ctx, `WITH `+recentProposals+`
+		SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
+			missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`,
 			account_address, consensus_address, consensus_pubkey, identity, website, security_contact, details,
 			tombstoned, jailed_until, delegator_shares::text, commission_max_rate::text,
 			commission_max_change_rate::text, commission_update_time, min_self_delegation::text,
 			self_delegation::text, delegator_count, first_seen_height, first_seen_time, updated_at
 		FROM explorer.validators WHERE operator_address = $1`, operator).Scan(
 		&v.Rank, &v.Moniker, &v.Tokens, &v.VotingPowerPct, &v.CommissionRate,
-		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
+		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL, &v.RecentVotes, &v.RecentProposals,
 		&v.AccountAddress, &v.ConsensusAddress, &v.ConsensusPubkey, &v.Identity, &v.Website, &v.SecurityContact,
 		&v.Details, &v.Tombstoned, &v.JailedUntil, &v.DelegatorShares, &v.CommissionMaxRate,
 		&v.CommissionMaxChangeRate, &v.CommissionUpdateTime, &v.MinSelfDelegation,

@@ -66,6 +66,7 @@ type IBCChannel struct {
 	ChannelID             string    `json:"channel_id"`
 	PortID                string    `json:"port_id"`
 	State                 *string   `json:"state"`
+	ClientStatus          *string   `json:"client_status"`
 	ClientID              *string   `json:"client_id"`
 	ConnectionID          *string   `json:"connection_id"`
 	CounterpartyChannelID *string   `json:"counterparty_channel_id"`
@@ -106,7 +107,7 @@ func NewTxIBCTransfers(rows []repository.IBCTransfer) []IBCTransfer {
 // NewIBCChannel maps an ibc_channels row.
 func NewIBCChannel(c repository.IBCChannel) IBCChannel {
 	return IBCChannel{
-		ChannelID: c.ChannelID, PortID: c.PortID, State: c.State, ClientID: c.ClientID, ConnectionID: c.ConnectionID,
+		ChannelID: c.ChannelID, PortID: c.PortID, State: c.State, ClientStatus: c.ClientStatus, ClientID: c.ClientID, ConnectionID: c.ConnectionID,
 		CounterpartyChannelID: c.CounterpartyChannelID, Counterparty: newChain(c.Counterparty),
 		EscrowAddress: chain.EscrowAddress(c.PortID, c.ChannelID), UpdatedAt: c.UpdatedAt.UTC(),
 	}

@@ -13,6 +13,7 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
@@ -99,6 +100,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		}, 0),
 		channels.New(channels.Deps{
 			Channel: channeltypes.NewQueryClient(conn),
+			Client:  clienttypes.NewQueryClient(conn),
 			Store:   channels.NewPGStore(pool),
 			Misses:  resyncs,
 		}, 0),

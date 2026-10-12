@@ -173,6 +173,12 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, "Cosmos Hub", *tokens[atomDenom].OriginChain.Name)
 	assert.NotNil(t, tokens[atomDenom].OriginChain.LogoURL)
 	assert.Equal(t, &dto.OriginChain{ChainID: "omniflixhub-1"}, tokens[flixDenom].OriginChain)
+	// FLIX came over channel-5, whose light client has expired: stranded.
+	require.NotNil(t, tokens[flixDenom].IBCChannel)
+	assert.Equal(t, "channel-5", tokens[flixDenom].IBCChannel.ChannelID)
+	assert.Equal(t, "expired", *tokens[flixDenom].IBCChannel.ClientStatus)
+	assert.True(t, tokens[flixDenom].Stranded)
+	assert.False(t, tokens[ggeDenom].Stranded, "not an IBC denom")
 	assert.Nil(t, tokens[ggeDenom].OriginChain)
 
 	r := fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")
