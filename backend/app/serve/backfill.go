@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
@@ -116,18 +117,41 @@ func RunBackfill(ctx context.Context, cfg *config.Config, opts Options) error {
 	return nil
 }
 
+// defaultBackfillLockRetry is how often serve tries again for the backfill's
+// lock while another process holds it.
+const defaultBackfillLockRetry = 30 * time.Second
+
 // backfillComponent runs the main job inside serve. It never stops the
-// process: a job that is locked elsewhere, fails or finishes just ends, and
-// the next start resumes it.
-func backfillComponent(h *history, cfg *config.Config) component {
+// process: a job that fails or finishes just ends, and the next start
+// resumes it. A lock held elsewhere is waited for, since that holder may be
+// the previous process still shutting down (a restart, or a blue/green
+// deploy that starts the new container first): the job runs once the lock is
+// free. retry is the wait between attempts, the default when zero.
+func backfillComponent(h *history, cfg *config.Config, retry time.Duration) component {
+	if retry <= 0 {
+		retry = defaultBackfillLockRetry
+	}
 	return component{name: "backfill", run: func(ctx context.Context) error {
-		_, err := h.mainJob(cfg).Run(ctx)
-		switch {
-		case errors.Is(err, backfill.ErrLocked):
-			log.Info("backfill: another process runs it, skipping")
-		case err != nil && ctx.Err() == nil:
-			log.WithError(err).Error("backfill stopped; it resumes at the next start")
+		waiting := false
+		for {
+			_, err := h.mainJob(cfg).Run(ctx)
+			if !errors.Is(err, backfill.ErrLocked) {
+				if err != nil && ctx.Err() == nil {
+					log.WithError(err).Error("backfill stopped; it resumes at the next start")
+				}
+				return nil
+			}
+			if !waiting {
+				log.WithField("retry_every", retry.String()).Info("backfill: another process holds its lock, waiting")
+				waiting = true
+			}
+			t := time.NewTimer(retry)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return nil
+			case <-t.C:
+			}
 		}
-		return nil
 	}}
 }

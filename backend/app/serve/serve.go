@@ -44,6 +44,9 @@ type Options struct {
 	// BackfillUnavailableMin overrides the backfill's first wait while the
 	// archive is unreachable.
 	BackfillUnavailableMin time.Duration
+	// BackfillLockRetry overrides how often serve tries again for the
+	// backfill's lock while another process holds it.
+	BackfillLockRetry time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -207,7 +210,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			components = append(components, component{name: "live indexer", run: ix.Run})
 		}
 		if cfg.BackfillEnabled {
-			components = append(components, backfillComponent(hist, cfg))
+			components = append(components, backfillComponent(hist, cfg, opts.BackfillLockRetry))
 		}
 	}
 	if !cfg.IndexerEnabled {
