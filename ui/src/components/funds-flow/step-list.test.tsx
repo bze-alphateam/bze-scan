@@ -99,6 +99,26 @@ describe("StepList", () => {
     expect(steps[1]).toHaveTextContent("burned");
   });
 
+  it("keeps the given order of several transactions' steps and shows their own line", () => {
+    // Two transactions both start at seq 0: the keys and order come from the caller.
+    const rows = [t(0, 0, ME, YOU, "1000000", { tx_index: 2 } as Partial<Transfer>), t(0, 0, YOU, ME, "2000000", { tx_index: 5 } as Partial<Transfer>)];
+    renderWithProviders(
+      <StepList
+        transfers={rows}
+        collapsed={false}
+        inOrder
+        keyOf={(x) => `${(x as Transfer & { tx_index: number }).tx_index}:${x.seq}`}
+        describe={(x) => `in tx ${(x as Transfer & { tx_index: number }).tx_index}`}
+      />,
+    );
+    const steps = screen.getAllByTestId("flow-step");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toHaveTextContent("1 BZE");
+    expect(steps[0]).toHaveTextContent("in tx 2");
+    expect(steps[1]).toHaveTextContent("in tx 5");
+    expect(steps[1]).not.toHaveTextContent("transaction fee");
+  });
+
   it("says when no funds moved", () => {
     renderWithProviders(<StepList transfers={[]} reasonOf={() => ""} collapsed />);
     expect(screen.getByText("No funds moved.")).toBeInTheDocument();

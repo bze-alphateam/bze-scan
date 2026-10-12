@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": -1,
+  "result": {
+    "block_id": {
+      "hash": "A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F90"
+    },
+    "block": {
+      "header": {
+        "chain_id": "beezee-1",
+        "height": "25120440",
+        "time": "2026-10-11T09:15:02Z"
+      },
+      "data": {
+        "txs": []
+      }
+    }
+  }
+}

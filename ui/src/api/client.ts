@@ -4,6 +4,7 @@ import type {
   ChainParams,
   BlockEvent,
   BlockSummary,
+  BlockTransfer,
   ErrorBody,
   Page,
   PageParams,
@@ -43,6 +44,7 @@ export interface ExplorerApi {
   blocks(params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
   block(height: number, signal?: AbortSignal): Promise<Block>;
   blockEvents(height: number, params: PageParams, signal?: AbortSignal): Promise<Page<BlockEvent>>;
+  blockTransfers(height: number, params: PageParams, signal?: AbortSignal): Promise<Page<BlockTransfer>>;
 
   transactions(params: TxListParams, signal?: AbortSignal): Promise<Page<TxSummary>>;
   transaction(hash: string, signal?: AbortSignal): Promise<Tx>;
@@ -151,6 +153,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     blocks: (params, signal) => get("/blocks", page(params), signal),
     block: (height, signal) => get(`/blocks/${seg(String(height))}`, {}, signal),
     blockEvents: (height, params, signal) => get(`/blocks/${seg(String(height))}/events`, page(params), signal),
+    blockTransfers: (height, params, signal) => get(`/blocks/${seg(String(height))}/transfers`, page(params), signal),
 
     transactions: (params, signal) => get("/txs", { ...page(params), status: params.status }, signal),
     transaction: (hash, signal) => get(`/txs/${seg(hash)}`, {}, signal),

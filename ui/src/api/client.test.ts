@@ -39,6 +39,7 @@ describe("createHttpApi", () => {
     await api.blocks({});
     await api.block(5);
     await api.blockEvents(5, { cursor: "abc" });
+    await api.blockTransfers(5, { limit: 100, cursor: "t" });
     await api.transaction("ABCD");
     await api.validators({ status: "all" });
     await api.validator("bzevaloper1x");
@@ -65,6 +66,7 @@ describe("createHttpApi", () => {
       "/v1/blocks",
       "/v1/blocks/5",
       "/v1/blocks/5/events?cursor=abc",
+      "/v1/blocks/5/transfers?cursor=t&limit=100",
       "/v1/txs/ABCD",
       "/v1/validators?status=all",
       "/v1/validators/bzevaloper1x",

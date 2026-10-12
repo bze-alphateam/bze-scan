@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { isNotFound } from "./client";
@@ -8,6 +8,8 @@ import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WIND
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
 import type {
+  BlockSummary,
+  BlockTransfer,
   Page,
   PageParams,
   Proposal,
@@ -26,8 +28,9 @@ import type {
 /** Query keys, one tuple per route and its arguments. */
 export const queryKeys = {
   status: () => ["status"] as const,
-  blocks: (p: PageParams) => ["blocks", p] as const,
+  blocks: () => ["blocks"] as const,
   block: (height: number) => ["block", height] as const,
+  blockTransfers: (height: number) => ["block-transfers", height] as const,
   blockEvents: (height: number, p: PageParams) => ["block-events", height, p] as const,
   transactions: (p: TxListParams) => ["txs", p] as const,
   transaction: (hash: string) => ["tx", hash.toUpperCase()] as const,
@@ -67,18 +70,72 @@ export function useStatus() {
   return useQuery({ queryKey: queryKeys.status(), queryFn: ({ signal }) => api.status(signal), ...status });
 }
 
-export function useBlocks(params: PageParams = {}) {
+/**
+ * The blocks list, newest first, 25 a page. The first page is live; once an
+ * older page is loaded the list is a snapshot, never refetched, until
+ * `latest()` drops the older pages and polls again.
+ */
+export function useBlocks() {
   const api = useApi();
-  return useQuery({
-    queryKey: queryKeys.blocks(params),
-    queryFn: ({ signal }) => api.blocks(params, signal),
-    ...listPolicy(params),
+  const client = useQueryClient();
+  const query = useInfiniteQuery({
+    queryKey: queryKeys.blocks(),
+    queryFn: ({ pageParam, signal }) => api.blocks(pageParam, signal),
+    initialPageParam: firstPage(25),
+    getNextPageParam: nextPage(25),
+    ...live,
+    refetchInterval: (q) => (isSnapshot(q.state.data) ? false : live.refetchInterval),
+    staleTime: (q) => (isSnapshot(q.state.data) ? Infinity : live.staleTime),
   });
+  const latest = () => {
+    client.setQueryData<InfiniteData<Page<BlockSummary>, PageParams>>(queryKeys.blocks(), (d) =>
+      d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) },
+    );
+    void query.refetch();
+  };
+  return { ...query, snapshot: isSnapshot(query.data), latest };
 }
 
-export function useBlock(height: number) {
+const isSnapshot = (d: InfiniteData<unknown> | undefined) => (d?.pages.length ?? 0) > 1;
+
+/** Sets `expired` once `active` has held for the pending window (two minutes). */
+function usePendingWindow(active: boolean, setExpired: (expired: boolean) => void) {
+  useEffect(() => {
+    if (!active) return;
+    const id = setTimeout(() => setExpired(true), TX_PENDING_WINDOW_MS);
+    return () => clearTimeout(id);
+  }, [active, setExpired]);
+}
+
+/**
+ * A block: immutable once found. With `waitForIt` (a height above the
+ * explorer's latest block) a 404 is asked for again every 7 s for the pending
+ * window, as a pending transaction is; `expired` says the window is over.
+ * Mount it under a `key` of the height so the window restarts per height.
+ */
+export function useBlock(height: number, { waitForIt = false }: { waitForIt?: boolean } = {}) {
   const api = useApi();
-  return useQuery({ queryKey: queryKeys.block(height), queryFn: ({ signal }) => api.block(height, signal), ...immutable });
+  const [expired, setExpired] = useState(false);
+  const query = useQuery({
+    queryKey: queryKeys.block(height),
+    queryFn: ({ signal }) => api.block(height, signal),
+    ...immutable,
+    refetchInterval: (q) => (waitForIt && isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false),
+  });
+  usePendingWindow(waitForIt && isNotFound(query.error), setExpired);
+  return { ...query, expired };
+}
+
+/** Every transfer at a height, pages of 100 followed to the last; fetched once. */
+export function useBlockTransfers(height: number, enabled = true) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.blockTransfers(height),
+    queryFn: ({ signal }): Promise<BlockTransfer[]> =>
+      allPages((cursor) => api.blockTransfers(height, { limit: 100, cursor }, signal)),
+    enabled,
+    ...immutable,
+  });
 }
 
 export function useBlockEvents(height: number, params: PageParams = {}) {
@@ -121,12 +178,7 @@ export function useTransaction(hash: string) {
     refetchInterval: (q) => (isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false),
   });
   const notFound = isNotFound(query.error);
-
-  useEffect(() => {
-    if (!notFound) return;
-    const id = setTimeout(() => setExpired(true), TX_PENDING_WINDOW_MS);
-    return () => clearTimeout(id);
-  }, [notFound]);
+  usePendingWindow(notFound, setExpired);
 
   const pending: PendingState = notFound ? (expired ? "not_found" : "looking") : null;
   return { ...query, pending };
