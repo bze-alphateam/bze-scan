@@ -48,7 +48,7 @@ func TestDispatchFollowsTheSourceOrder(t *testing.T) {
 	assert.True(t, res.Complete)
 	assert.Equal(t, heights(10, 1), e.archive.blockCalls())
 	assert.Equal(t, [][]int64{heights(10, 1)}, e.writer.flushes(), "arrival order, one flush on close")
-	assert.Equal(t, backfill.Progress{Lowest: 1, Highest: 10, Dispatched: 10, Written: 10}, res.Progress)
+	assert.Equal(t, backfill.Progress{Lowest: 1, Highest: 10, Dispatched: 10, Written: 10, Resume: 1}, res.Progress)
 }
 
 func TestSemaphoreBoundsTheHeightsInFlight(t *testing.T) {
@@ -166,6 +166,7 @@ func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	assert.Equal(t, int64(4), res.Written)
 	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
 	assert.Equal(t, []int64{3, 3, 3}, e.retry.blockCalls(), "three retries, all on the retry node")
+	assert.Equal(t, int64(1), res.Resume, "a recorded height is settled")
 }
 
 func TestARetryOnTheRetryNodeSucceeds(t *testing.T) {
@@ -233,6 +234,7 @@ func TestACancelDuringAnOutageRecordsNothing(t *testing.T) {
 	assert.False(t, res.Complete)
 	assert.Empty(t, e.writer.written())
 	assert.Empty(t, e.writer.recorded())
+	assert.Equal(t, int64(3), res.Resume, "the heights dropped by the stop stay pending")
 }
 
 func TestTheRateLimiterPacesEveryRequest(t *testing.T) {

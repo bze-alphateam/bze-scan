@@ -25,7 +25,8 @@ func blockTime(h int64) time.Time {
 // mockNode serves every height. fail makes the next len(errs) requests of a
 // height fail; gate, when set, holds every Block call until it is closed;
 // down > 0 is an outage: every Block call fails unavailable, and it ends
-// after down /status calls (each failing).
+// after down /status calls (each failing); a held height's Block call
+// answers only when ctx is cancelled.
 type mockNode struct {
 	mu       sync.Mutex
 	down     int
@@ -36,10 +37,17 @@ type mockNode struct {
 	inFlight int
 	maxIn    int
 	gate     chan struct{}
+	held     map[int64]bool
 }
 
 func newMockNode() *mockNode {
-	return &mockNode{fails: map[int64][]error{}}
+	return &mockNode{fails: map[int64][]error{}, held: map[int64]bool{}}
+}
+
+func (n *mockNode) hold(h int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.held[h] = true
 }
 
 func (n *mockNode) fail(h int64, errs ...error) {
@@ -86,6 +94,9 @@ func (n *mockNode) Block(ctx context.Context, h int64) (*node.Block, []byte, err
 	n.inFlight++
 	n.maxIn = max(n.maxIn, n.inFlight)
 	gate := n.gate
+	if n.held[h] {
+		gate = make(chan struct{})
+	}
 	n.mu.Unlock()
 	defer func() {
 		n.mu.Lock()

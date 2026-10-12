@@ -113,7 +113,7 @@ Check every few hours, and note the time of every check:
 | Status | `curl -s localhost:8080/api/v1/status \| jq` | `live_fill.healthy` true throughout except around a restart; `back_fill.status` `in_progress`, then `finished` |
 | Lag | `db_height` against `node_height` and `archive_height` in the status | within 5 blocks; note the maximum |
 | Failures | `SELECT source, count(*) FROM explorer.index_failures WHERE resolved_at IS NULL GROUP BY 1;` | 0, or a fixed set that never grows; every row explained |
-| Backfill | `SELECT status, lowest_dispatched, floor_height, blocks_done, updated_at FROM explorer.backfill_checkpoints WHERE job = 'main';` | `blocks_done` growing at about `BACKFILL_RATE_LIMIT / 3` heights per second (20 requests/s: about 6.7) until `done` |
+| Backfill | `SELECT status, lowest_dispatched, resume_height, floor_height, blocks_done, updated_at FROM explorer.backfill_checkpoints WHERE job = 'main';` | `blocks_done` growing at about `BACKFILL_RATE_LIMIT / 3` heights per second (20 requests/s: about 6.7) until `done` |
 | Memory | `ps -o rss= -p "$(pgrep -f 'bze-scan serve')"` (KiB) | flat once the backfill is done; note min and max |
 | Goroutines | `curl -s 127.0.0.1:6060/debug/pprof/goroutine?debug=1 \| head -1` | flat; a steady climb is a leak (save `curl -s -o goroutines.txt '127.0.0.1:6060/debug/pprof/goroutine?debug=2'`) |
 | Heap | `go tool pprof -top http://127.0.0.1:6060/debug/pprof/heap` | no type growing between checks |
@@ -133,8 +133,8 @@ docker compose -f ../docker/compose.yml -f ../docker/compose.soak.yml exec postg
   indexer finishes the height in flight, the backfill flushes what it holds
   and saves its checkpoint. Then stop the node the same way.
 - Restart in the reverse order: `SOAK=1 make node-start`, then
-  `build/bze-scan serve`. Check that the backfill resumes near its
-  `lowest_dispatched` (the log says where it starts) and that the live
+  `build/bze-scan serve`. Check that the backfill resumes at its
+  `resume_height` (the log says where it starts) and that the live
   indexer catches up the blocks the node produced meanwhile without new
   `index_failures`. Record each restart, planned or not.
 - `make soak-db-down` stops the database and keeps its volume.

@@ -62,9 +62,9 @@ func (s *PGStore) PresentHeights(ctx context.Context, lo, hi int64) ([]int64, er
 func (s *PGStore) Checkpoint(ctx context.Context, job string) (Checkpoint, bool, error) {
 	cp := Checkpoint{Job: job}
 	var lastError *string
-	err := s.db.QueryRow(ctx, `SELECT ceiling_height, floor_height, lowest_dispatched, blocks_done, status, last_error
-		FROM explorer.backfill_checkpoints WHERE job = $1`, job).
-		Scan(&cp.Ceiling, &cp.Floor, &cp.LowestDispatched, &cp.BlocksDone, &cp.Status, &lastError)
+	err := s.db.QueryRow(ctx, `SELECT ceiling_height, floor_height, lowest_dispatched, resume_height, blocks_done, status,
+		last_error FROM explorer.backfill_checkpoints WHERE job = $1`, job).
+		Scan(&cp.Ceiling, &cp.Floor, &cp.LowestDispatched, &cp.ResumeHeight, &cp.BlocksDone, &cp.Status, &lastError)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Checkpoint{}, false, nil
 	}
@@ -84,13 +84,15 @@ func (s *PGStore) SaveCheckpoint(ctx context.Context, cp Checkpoint) error {
 		lastError = &cp.LastError
 	}
 	_, err := s.db.Exec(ctx, `INSERT INTO explorer.backfill_checkpoints (
-			job, ceiling_height, floor_height, lowest_dispatched, blocks_done, status, last_error, started_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+			job, ceiling_height, floor_height, lowest_dispatched, resume_height, blocks_done, status, last_error,
+			started_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
 		ON CONFLICT (job) DO UPDATE SET
 			ceiling_height = EXCLUDED.ceiling_height, floor_height = EXCLUDED.floor_height,
-			lowest_dispatched = EXCLUDED.lowest_dispatched, blocks_done = EXCLUDED.blocks_done,
+			lowest_dispatched = EXCLUDED.lowest_dispatched, resume_height = EXCLUDED.resume_height,
+			blocks_done = EXCLUDED.blocks_done,
 			status = EXCLUDED.status, last_error = EXCLUDED.last_error, updated_at = now()`,
-		cp.Job, cp.Ceiling, cp.Floor, cp.LowestDispatched, cp.BlocksDone, cp.Status, lastError)
+		cp.Job, cp.Ceiling, cp.Floor, cp.LowestDispatched, cp.ResumeHeight, cp.BlocksDone, cp.Status, lastError)
 	if err != nil {
 		return fmt.Errorf("save checkpoint %s: %w", cp.Job, err)
 	}

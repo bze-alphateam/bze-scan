@@ -85,8 +85,8 @@ func TestDailyStatsFollowTheBackfill(t *testing.T) {
 	e := newSyncEnv(t)
 	e.index(t, hAfterMidnight)
 	_, err := e.db.Exec(`INSERT INTO explorer.backfill_checkpoints
-		(job, ceiling_height, floor_height, lowest_dispatched, status, started_at, updated_at)
-		VALUES ('main', $1, 1, $1, 'running', now(), now())`, hAfterMidnight)
+		(job, ceiling_height, floor_height, lowest_dispatched, resume_height, status, started_at, updated_at)
+		VALUES ('main', $1, 1, $1, $1, 'running', now(), now())`, hAfterMidnight)
 	require.NoError(t, err)
 	code, out := e.syncState(t, "--job", "daily_stats")
 	require.Equal(t, 0, code, out)

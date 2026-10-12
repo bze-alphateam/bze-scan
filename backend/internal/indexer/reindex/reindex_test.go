@@ -304,9 +304,9 @@ func TestARunOverwritesAndEndsDone(t *testing.T) {
 	assert.Equal(t, "reindex done heights=8 failed=0 duration=1.5s", res.Summary())
 
 	first, last := e.store.saves[0], e.store.last()
-	assert.Equal(t, backfill.Checkpoint{Job: res.Job, Ceiling: 107, Floor: 100, LowestDispatched: 108,
+	assert.Equal(t, backfill.Checkpoint{Job: res.Job, Ceiling: 107, Floor: 100, LowestDispatched: 108, ResumeHeight: 107,
 		Status: backfill.StatusRunning}, first)
-	assert.Equal(t, backfill.Checkpoint{Job: res.Job, Ceiling: 107, Floor: 100, LowestDispatched: 100,
+	assert.Equal(t, backfill.Checkpoint{Job: res.Job, Ceiling: 107, Floor: 100, LowestDispatched: 100, ResumeHeight: 100,
 		BlocksDone: 8, Status: backfill.StatusDone}, last)
 	assert.Greater(t, len(e.store.saves), 3, "saved at every flush")
 }

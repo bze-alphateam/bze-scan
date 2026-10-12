@@ -40,9 +40,12 @@ type Checkpoint struct {
 	// LowestDispatched is the lowest height handed to a worker; Ceiling+1
 	// before the first dispatch.
 	LowestDispatched int64
-	BlocksDone       int64
-	Status           string
-	LastError        string
+	// ResumeHeight is where the next run starts: every height above it was
+	// written or recorded as failed. The ceiling before the first dispatch.
+	ResumeHeight int64
+	BlocksDone   int64
+	Status       string
+	LastError    string
 }
 
 // Store is the main job's database access.
@@ -113,14 +116,13 @@ func NewMainJob(cfg JobConfig, deps JobDeps) *MainJob {
 }
 
 // ResumeFrom is the height a run starts at: the ceiling on a first run,
-// otherwise workers+batch heights above the checkpoint's lowest dispatched
-// height (the heights that may have been in flight or held unflushed when
-// the previous run stopped), never above the ceiling.
-func ResumeFrom(ceiling int64, cp Checkpoint, hasCheckpoint bool, workers, batch int) int64 {
+// otherwise the checkpoint's resume height, never above the ceiling. The
+// heights at or below it that are already indexed are skipped.
+func ResumeFrom(ceiling int64, cp Checkpoint, hasCheckpoint bool) int64 {
 	if !hasCheckpoint {
 		return ceiling
 	}
-	return min(ceiling, cp.LowestDispatched+int64(workers)+int64(batch))
+	return min(ceiling, cp.ResumeHeight)
 }
 
 // Run takes the lock, waits for the live floor, and walks down from the
@@ -148,26 +150,29 @@ func (j *MainJob) Run(ctx context.Context) (string, error) {
 	}
 	floor, err := ResolveFloor(ctx, j.cfg.Floor, j.deps.Pipeline.Archive, j.deps.Pipeline.ArchiveRetry, ceiling)
 	if err != nil {
-		return j.fail(ctx, Checkpoint{Job: JobMain, Ceiling: ceiling, LowestDispatched: ceiling + 1}, err)
+		return j.fail(ctx, Checkpoint{Job: JobMain, Ceiling: ceiling, LowestDispatched: ceiling + 1,
+			ResumeHeight: ceiling}, err)
 	}
 
 	prev, has, err := j.deps.Store.Checkpoint(ctx, JobMain)
 	if err != nil {
 		return StatusError, err
 	}
-	cp := Checkpoint{Job: JobMain, Ceiling: ceiling, Floor: floor, LowestDispatched: ceiling + 1, Status: StatusRunning}
+	cp := Checkpoint{Job: JobMain, Ceiling: ceiling, Floor: floor, LowestDispatched: ceiling + 1,
+		ResumeHeight: ceiling, Status: StatusRunning}
 	if has {
 		cp.LowestDispatched, cp.BlocksDone = prev.LowestDispatched, prev.BlocksDone
+		cp.ResumeHeight = min(ceiling, prev.ResumeHeight)
 		if prev.Status == StatusDone && prev.Floor <= floor {
 			lg.WithField("floor", prev.Floor).Info("backfill: already done")
 			return StatusDone, nil
 		}
 	}
 	if ceiling < floor {
-		cp.Status, cp.LowestDispatched = StatusDone, floor
+		cp.Status, cp.LowestDispatched, cp.ResumeHeight = StatusDone, floor, floor
 		return j.finish(ctx, cp)
 	}
-	start := ResumeFrom(ceiling, prev, has, j.cfg.Pipeline.Workers, j.cfg.Pipeline.Batch)
+	start := ResumeFrom(ceiling, prev, has)
 	if err := j.deps.Store.SaveCheckpoint(ctx, cp); err != nil {
 		return StatusError, err
 	}
@@ -182,6 +187,10 @@ func (j *MainJob) Run(ctx context.Context) (string, error) {
 		defer mu.Unlock()
 		if p.Dispatched > 0 {
 			cp.LowestDispatched = min(cp.LowestDispatched, p.Lowest)
+			// Never raised: an older snapshot saved late must not move the
+			// resume point back up, nor a later one past an unsettled height
+			// (the walk is descending, so Resume only goes down).
+			cp.ResumeHeight = min(cp.ResumeHeight, p.Resume)
 		}
 		cp.BlocksDone = baseDone + p.Written
 		if err := j.deps.Store.SaveCheckpoint(context.WithoutCancel(ctx), cp); err != nil {
@@ -218,11 +227,12 @@ func (j *MainJob) Run(ctx context.Context) (string, error) {
 	case res.Err != nil:
 		return j.fail(ctx, cp, res.Err)
 	case res.Complete:
-		cp.Status, cp.LowestDispatched = StatusDone, floor
+		cp.Status, cp.LowestDispatched, cp.ResumeHeight = StatusDone, floor, floor
 		lg.WithFields(log.Fields{"floor": floor, "written": res.Written, "failed": res.Failed}).Info("backfill done")
 		return j.finish(ctx, cp)
 	default:
-		lg.WithField("lowest_dispatched", cp.LowestDispatched).Info("backfill stopped, resumes at the next start")
+		lg.WithFields(log.Fields{"lowest_dispatched": cp.LowestDispatched, "resume_height": cp.ResumeHeight}).
+			Info("backfill stopped, resumes at the next start")
 		return StatusRunning, ctx.Err()
 	}
 }
