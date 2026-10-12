@@ -18,6 +18,8 @@ import {
   changeText,
   filterTokens,
   hopsExplainer,
+  isObsolete,
+  OBSOLETE_EXPLAINER,
   listOriginTag,
   noPriceText,
   priceText,
@@ -175,6 +177,11 @@ function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSum
         <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
           {listOriginTag(t)}
         </Badge>
+        {isObsolete(t.denom) && (
+          <Badge colorPalette="gray" variant="outline" size="sm" title={OBSOLETE_EXPLAINER} data-testid="obsolete-tag">
+            Obsolete
+          </Badge>
+        )}
         {hop && (
           <Badge colorPalette="orange" variant="subtle" size="sm" title={hopsExplainer(t) ?? undefined} data-testid="hops-tag">
             {hop.hops} hops

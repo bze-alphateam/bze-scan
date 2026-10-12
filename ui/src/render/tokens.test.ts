@@ -21,6 +21,7 @@ import {
   hopsExplainer,
   hopsText,
   ibcRoute,
+  isObsolete,
   listOriginTag,
   mergeEvents,
   mintBurnText,
@@ -154,6 +155,12 @@ describe("token page", () => {
     expect(headerChips(usdc).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Trading on the DEX"]);
     expect(headerChips({ ...usdc, halted: true }).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Halted on the DEX"]);
     expect(headerChips({ ...honey, kind: "native", markets: [] }).map((c) => c.text)).toEqual(["Native"]);
+    const corey = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey";
+    const obsolete = headerChips({ ...honey, denom: corey });
+    expect(obsolete.map((c) => c.text)).toEqual(["Created on Factory", "Obsolete", "Trading on the DEX"]);
+    expect(obsolete[1].title).toContain("no longer list this token");
+    expect(isObsolete(corey)).toBe(true);
+    expect(isObsolete(honey.denom)).toBe(false);
     const twoHop = headerChips({ ...usdc, ibc_hops: 2, via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: "o.png" } });
     expect(twoHop.map((c) => c.text)).toEqual(["Cross-chain from Noble", "2 hops via Osmosis", "Trading on the DEX"]);
     expect(twoHop[1]).toMatchObject({ tone: "orange", logoUrl: "o.png" });

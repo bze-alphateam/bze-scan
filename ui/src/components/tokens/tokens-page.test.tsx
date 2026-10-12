@@ -22,6 +22,18 @@ afterEach(() => {
 });
 
 describe("TokensPage", () => {
+  it("marks a token the BZE apps no longer list as obsolete", async () => {
+    const items = (list as Page<TokenSummary>).items;
+    const corey = { ...items[1], denom: "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey", symbol: "COREY" };
+    renderWithProviders(<TokensPage />, { api: api(() => Promise.resolve({ items: [...items, corey], next_cursor: null })) });
+    await screen.findAllByTestId("token-list-row");
+    const rows = screen.getAllByTestId("token-list-row");
+    expect(rows).toHaveLength(7);
+    expect(screen.getAllByTestId("obsolete-tag")).toHaveLength(1);
+    expect(within(rows[6]).getByTestId("obsolete-tag")).toHaveTextContent("Obsolete");
+    expect(within(rows[6]).getByTestId("obsolete-tag")).toHaveAttribute("title", expect.stringContaining("no longer list"));
+  });
+
   it("marks a multi-hop token and pairs a pool share's two logos", async () => {
     const items = (list as Page<TokenSummary>).items;
     const twoHop = {

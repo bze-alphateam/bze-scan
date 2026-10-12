@@ -95,6 +95,22 @@ export function ibcRoute(
   return { chains: [...outward].reverse(), hops };
 }
 
+/**
+ * Denoms the BZE apps no longer list (the dapps' `EXCLUDED_ASSETS`, kept in
+ * step by hand): superseded duplicates and retired tokens. The explorer keeps
+ * showing them, marked obsolete.
+ */
+export const OBSOLETE_DENOMS: ReadonlySet<string> = new Set([
+  "factory/bze1972aqfzdg29ugjln74edx0xvcg4ehvysjptk77/1000000000", // the first CTL, replaced by …/CTL
+  "ibc/689DD6F80E4DBCE14877462B182504037FAEAD0699D5804A7F5CB328D33ED24B", // VDL over IBC, replaced by the Factory VDL
+  "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey",
+]);
+
+export const OBSOLETE_EXPLAINER =
+  "The BZE apps no longer list this token: it was replaced or retired. It still exists on chain, so its history and balances stay here.";
+
+export const isObsolete = (denom: string) => OBSOLETE_DENOMS.has(denom);
+
 /** The one short tag of a list row; "Other" for a kind the explorer does not know (the raw denom stays in More details). */
 export function listOriginTag(t: TokenSummary): string {
   return originTag(t, "Other");
@@ -212,6 +228,7 @@ export function headerChips(t: Token): HeaderChip[] {
       chips.push({ text: "DEX pool share", tone: "gray" });
       break;
   }
+  if (isObsolete(t.denom)) chips.push({ text: "Obsolete", tone: "gray", title: OBSOLETE_EXPLAINER });
   if (t.halted) chips.push({ text: "Halted on the DEX", tone: "red" });
   else if (t.markets.length > 0) chips.push({ text: "Trading on the DEX", tone: "green" });
   return chips;
