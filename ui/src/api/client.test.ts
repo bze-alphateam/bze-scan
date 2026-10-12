@@ -49,6 +49,12 @@ describe("createHttpApi", () => {
     await api.tokenEvents("ubze", { cursor: "c" });
     await api.tokenHolders("ubze", { limit: 10 });
     await api.tokenTransfers("ubze", {});
+    await api.proposals({ status: "voting_period", limit: 20 });
+    await api.proposal(48);
+    await api.proposalVotes(48, { voter: "validators", limit: 100 });
+    await api.proposalVotes(48, { option: "no_with_veto", cursor: "v" });
+    await api.proposalDeposits(48, { limit: 100 });
+    await api.stats();
     await api.params();
     await api.rawBlock(7);
     await api.rawBlockResults(7);
@@ -69,6 +75,12 @@ describe("createHttpApi", () => {
       "/v1/tokens/ubze/events?cursor=c",
       "/v1/tokens/ubze/holders?limit=10",
       "/v1/tokens/ubze/transfers",
+      "/v1/proposals?limit=20&status=voting_period",
+      "/v1/proposals/48",
+      "/v1/proposals/48/votes?limit=100&voter=validators",
+      "/v1/proposals/48/votes?cursor=v&option=no_with_veto",
+      "/v1/proposals/48/deposits?limit=100",
+      "/v1/stats",
       "/v1/params",
       "/v1/raw/block/7",
       "/v1/raw/block_results/7",

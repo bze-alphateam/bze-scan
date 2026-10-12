@@ -62,6 +62,7 @@ type Proposal struct {
 	SubmitTxHash      *string         `json:"submit_tx_hash"`
 	ResolvedHeight    *int64          `json:"resolved_height"`
 	ValidatorsVoted   ValidatorsVoted `json:"validators_voted"`
+	VotesCount        int             `json:"votes_count"`
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
@@ -117,6 +118,7 @@ func NewProposal(p *repository.Proposal) Proposal {
 		TallyBondedTokens: p.TallyBondedTokens, TallyUpdatedAt: utc(p.TallyUpdatedAt),
 		SubmitHeight: p.SubmitHeight, SubmitTxHash: p.SubmitTxHash, ResolvedHeight: p.ResolvedHeight,
 		ValidatorsVoted: ValidatorsVoted{Voted: p.ValidatorsVoted, Total: p.ValidatorsTotal},
+		VotesCount:      p.VotesCount,
 		UpdatedAt:       p.UpdatedAt.UTC(),
 	}
 }

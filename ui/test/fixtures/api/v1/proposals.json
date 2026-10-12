@@ -1,0 +1,90 @@
+{
+  "items": [
+    {
+      "id": 49,
+      "title": "Fund the explorer's hosting for a year",
+      "kind": "community_pool_spend",
+      "status": "deposit_period",
+      "expedited": false,
+      "submit_time": "2099-10-10T08:00:00Z",
+      "deposit_end_time": "2099-10-12T08:00:00Z",
+      "voting_start_time": null,
+      "voting_end_time": null,
+      "tally": null,
+      "turnout_pct": null
+    },
+    {
+      "id": 48,
+      "title": "Upgrade network to v8.2.0",
+      "kind": "software_upgrade",
+      "status": "voting_period",
+      "expedited": false,
+      "submit_time": "2099-10-09T10:00:00Z",
+      "deposit_end_time": "2099-10-11T10:00:00Z",
+      "voting_start_time": "2099-10-09T10:00:00Z",
+      "voting_end_time": "2099-10-14T14:00:00Z",
+      "tally": {
+        "yes": "300000000000000",
+        "no": "20000000000000",
+        "abstain": "10000000000000",
+        "no_with_veto": "5000000000000"
+      },
+      "turnout_pct": "82.71605"
+    },
+    {
+      "id": 47,
+      "title": "Upgrade network to v8.1.1",
+      "kind": "software_upgrade",
+      "status": "passed",
+      "expedited": false,
+      "submit_time": "2026-07-16T10:28:03Z",
+      "deposit_end_time": "2026-07-18T10:28:03Z",
+      "voting_start_time": "2026-07-16T10:28:03Z",
+      "voting_end_time": "2026-07-21T10:28:03Z",
+      "tally": {
+        "yes": "106584798486204",
+        "no": "0",
+        "abstain": "0",
+        "no_with_veto": "0"
+      },
+      "turnout_pct": "72.49317"
+    },
+    {
+      "id": 46,
+      "title": "Change maximum number of validators to 100",
+      "kind": "parameter_change",
+      "status": "rejected",
+      "expedited": false,
+      "submit_time": "2026-05-02T09:00:00Z",
+      "deposit_end_time": "2026-05-04T09:00:00Z",
+      "voting_start_time": "2026-05-02T09:00:00Z",
+      "voting_end_time": "2026-05-07T09:00:00Z",
+      "tally": {
+        "yes": "20000000000000",
+        "no": "60000000000000",
+        "abstain": "5000000000000",
+        "no_with_veto": "0"
+      },
+      "turnout_pct": "58.62069"
+    },
+    {
+      "id": 45,
+      "title": "Fund Liquidity Pools",
+      "kind": "community_pool_spend",
+      "status": "passed",
+      "expedited": false,
+      "submit_time": "2025-12-08T10:20:36Z",
+      "deposit_end_time": "2025-12-10T10:20:36Z",
+      "voting_start_time": "2025-12-08T10:21:17Z",
+      "voting_end_time": "2025-12-13T10:21:17Z",
+      "tally": {
+        "yes": "103512603744251",
+        "no": "0",
+        "abstain": "0",
+        "no_with_veto": "0"
+      },
+      "turnout_pct": "70.41289"
+    }
+  ],
+  "next_cursor": null
+}

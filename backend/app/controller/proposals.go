@@ -27,7 +27,7 @@ var voteOptions = []string{"yes", "no", "abstain", "no_with_veto", "weighted"}
 type ProposalReader interface {
 	Proposals(ctx context.Context, status *string, before *int64, limit int) ([]repository.ProposalSummary, error)
 	Proposal(ctx context.Context, id int64) (*repository.Proposal, error)
-	ProposalVotes(ctx context.Context, id int64, option *string, before *repository.VoteKey, limit int) ([]repository.ProposalVote, error)
+	ProposalVotes(ctx context.Context, id int64, option *string, validators bool, before *repository.VoteKey, limit int) ([]repository.ProposalVote, error)
 	ProposalDeposits(ctx context.Context, id int64, before *repository.DepositKey, limit int) ([]repository.ProposalDeposit, error)
 }
 
@@ -91,9 +91,9 @@ func (h *ProposalController) Proposal(c *echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewProposal(p))
 }
 
-// ProposalVotes serves GET /api/v1/proposals/{id}/votes?option&cursor&limit,
+// ProposalVotes serves GET /api/v1/proposals/{id}/votes?option&voter&cursor&limit,
 // newest first: the explorer keeps every vote, the chain deletes them once
-// tallied.
+// tallied. voter=validators keeps the votes of validator owners.
 func (h *ProposalController) ProposalVotes(c *echo.Context) error {
 	id, limit, err := h.page(c)
 	if err != nil {
@@ -103,13 +103,17 @@ func (h *ProposalController) ProposalVotes(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	voter, err := oneOf(c, "voter", []string{"validators"})
+	if err != nil {
+		return err
+	}
 	var before *repository.VoteKey
 	if s := c.QueryParam("cursor"); s != "" {
 		if before, err = dto.DecodeVoteCursor(s); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
 		}
 	}
-	rows, err := h.repo.ProposalVotes(c.Request().Context(), id, option, before, limit+1)
+	rows, err := h.repo.ProposalVotes(c.Request().Context(), id, option, voter != nil, before, limit+1)
 	if err != nil {
 		return err
 	}

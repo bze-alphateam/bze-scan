@@ -350,7 +350,7 @@ func (noProposals) Proposal(_ context.Context, id int64) (*repository.Proposal, 
 	return &repository.Proposal{ProposalSummary: repository.ProposalSummary{ID: id}}, nil
 }
 
-func (noProposals) ProposalVotes(context.Context, int64, *string, *repository.VoteKey, int) ([]repository.ProposalVote, error) {
+func (noProposals) ProposalVotes(context.Context, int64, *string, bool, *repository.VoteKey, int) ([]repository.ProposalVote, error) {
 	return nil, nil
 }
 

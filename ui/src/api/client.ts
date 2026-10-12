@@ -7,9 +7,15 @@ import type {
   ErrorBody,
   Page,
   PageParams,
+  Proposal,
+  ProposalDeposit,
+  ProposalListParams,
+  ProposalSummary,
+  ProposalVote,
   RawRpcResponse,
   RawTx,
   SearchResponse,
+  Stats,
   Status,
   Tx,
   TxListParams,
@@ -23,6 +29,7 @@ import type {
   ValidatorDetail,
   ValidatorList,
   ValidatorListParams,
+  VoteListParams,
 } from "./types";
 
 /**
@@ -52,8 +59,14 @@ export interface ExplorerApi {
   tokenHolders(denom: string, params: PageParams, signal?: AbortSignal): Promise<Page<TokenHolder>>;
   tokenTransfers(denom: string, params: PageParams, signal?: AbortSignal): Promise<Page<TokenTransfer>>;
 
+  proposals(params: ProposalListParams, signal?: AbortSignal): Promise<Page<ProposalSummary>>;
+  proposal(id: number, signal?: AbortSignal): Promise<Proposal>;
+  proposalVotes(id: number, params: VoteListParams, signal?: AbortSignal): Promise<Page<ProposalVote>>;
+  proposalDeposits(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalDeposit>>;
+
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
+  stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -154,8 +167,15 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     tokenHolders: (denom, params, signal) => byDenom(denom, "/holders", page(params), signal),
     tokenTransfers: (denom, params, signal) => byDenom(denom, "/transfers", page(params), signal),
 
+    proposals: (params, signal) => get("/proposals", { ...page(params), status: params.status }, signal),
+    proposal: (id, signal) => get(`/proposals/${seg(String(id))}`, {}, signal),
+    proposalVotes: (id, params, signal) =>
+      get(`/proposals/${seg(String(id))}/votes`, { ...page(params), option: params.option, voter: params.voter }, signal),
+    proposalDeposits: (id, params, signal) => get(`/proposals/${seg(String(id))}/deposits`, page(params), signal),
+
     search: (q, signal) => get("/search", { q }, signal),
 
+    stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),
 
     rawBlock: (height, signal) => get(`/raw/block/${seg(String(height))}`, {}, signal),

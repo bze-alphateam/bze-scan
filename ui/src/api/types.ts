@@ -447,6 +447,139 @@ export interface TokenTransfer extends Transfer {
   time: string;
 }
 
+// Proposals
+
+export type ProposalKind =
+  | "software_upgrade"
+  | "community_pool_spend"
+  | "parameter_change"
+  | "cointrunk_publisher"
+  | "ibc_client_update"
+  | "text"
+  | "other";
+
+export type ProposalStatus = "deposit_period" | "voting_period" | "passed" | "rejected" | "failed" | "canceled";
+
+export interface ProposalListParams extends PageParams {
+  status?: ProposalStatus;
+}
+
+/** A proposal's vote count in base units of the bond denom. */
+export interface Tally {
+  yes: string;
+  no: string;
+  abstain: string;
+  no_with_veto: string;
+}
+
+export interface ProposalSummary {
+  id: number;
+  title: string;
+  kind: ProposalKind | (string & {});
+  status: ProposalStatus;
+  expedited: boolean;
+  submit_time: string;
+  deposit_end_time: string | null;
+  voting_start_time: string | null;
+  voting_end_time: string | null;
+  /** Null until the state sync tallies the proposal. */
+  tally: Tally | null;
+  /** The share of the bonded tokens that voted, percent with five decimals. */
+  turnout_pct: string | null;
+}
+
+export interface Proposal extends ProposalSummary {
+  summary: string | null;
+  metadata: string | null;
+  proposer: string | null;
+  proposer_label: Label | null;
+  message_types: string[];
+  /** Proto JSON; a legacy content inside its `MsgExecLegacyContent`. */
+  messages: Record<string, unknown>[] | null;
+  total_deposit: Coin[] | null;
+  tally_bonded_tokens: string | null;
+  tally_updated_at: string | null;
+  submit_height: number | null;
+  submit_tx_hash: string | null;
+  resolved_height: number | null;
+  /** Bonded validators whose owner voted, of all bonded validators. */
+  validators_voted: { voted: number; total: number };
+  /** The accounts that voted (one vote each, the latest). */
+  votes_count: number;
+  updated_at: string;
+}
+
+export type VoteOption = "yes" | "no" | "abstain" | "no_with_veto";
+
+export interface VoteListParams extends PageParams {
+  /** A single option, or `weighted` for the split votes. */
+  option?: VoteOption | "weighted";
+  /** `validators`: the votes of accounts owning a validator. */
+  voter?: "validators";
+}
+
+export interface ProposalVote {
+  voter: string;
+  voter_label: Label | null;
+  /** Null for a split vote (`options` holds the weights). */
+  option: VoteOption | null;
+  options: unknown;
+  height: number;
+  tx_index: number;
+  tx_hash: string | null;
+  time: string;
+  /** The validator the voter owns, with its current share; null for other voters. */
+  validator: string | null;
+  validator_operator: string | null;
+  voting_power_pct: string | null;
+}
+
+export interface ProposalDeposit {
+  depositor: string;
+  depositor_label: Label | null;
+  amount: Coin[] | null;
+  height: number;
+  tx_index: number;
+  tx_hash: string | null;
+  time: string;
+}
+
+// Statistics
+
+/** One stored UTC day of `/stats`. */
+export interface StatsDay {
+  day: string;
+  blocks: number;
+  txs: number;
+  txs_failed: number;
+  active_addresses: number;
+  new_addresses: number;
+  transfers: number;
+  fees: string;
+  avg_block_time_ms: number | null;
+}
+
+/** `GET /stats`: the home tiles; every chain-state field is null until its row exists. */
+export interface Stats {
+  latest_height: number | null;
+  latest_time: string | null;
+  avg_block_time_ms: number | null;
+  txs_24h: number | null;
+  bonded_tokens: string | null;
+  supply: string | null;
+  community_pool: string | null;
+  staked_share: string | null;
+  inflation: string | null;
+  reward_rate: string | null;
+  validators: { active: number; total: number } | null;
+  max_validators: number | null;
+  unbonding_period: number | null;
+  price_usd: string | null;
+  price_change_24h_pct: string | null;
+  daily: StatsDay[];
+  today: StatsDay | null;
+}
+
 // Search
 
 export interface SearchResult {

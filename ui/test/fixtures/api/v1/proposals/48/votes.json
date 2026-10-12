@@ -1,0 +1,105 @@
+{
+  "items": [
+    {
+      "voter": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "voter_label": null,
+      "option": null,
+      "options": [
+        {
+          "option": 1,
+          "weight": "0.5"
+        },
+        {
+          "option": 3,
+          "weight": "0.5"
+        }
+      ],
+      "height": 25120400,
+      "tx_index": 0,
+      "tx_hash": "00000000000000000000000000000000000000000000000000000000017F4E90",
+      "time": "2099-10-11T09:55:00Z",
+      "validator": null,
+      "validator_operator": null,
+      "voting_power_pct": null
+    },
+    {
+      "voter": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "voter_label": null,
+      "option": "no",
+      "options": [
+        {
+          "option": 3,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 25110000,
+      "tx_index": 0,
+      "tx_hash": "00000000000000000000000000000000000000000000000000000000017F25F0",
+      "time": "2099-10-10T18:00:00Z",
+      "validator": null,
+      "validator_operator": null,
+      "voting_power_pct": null
+    },
+    {
+      "voter": "bze1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3eqv0l7",
+      "voter_label": {
+        "name": "Thamar Node",
+        "kind": "validator_owner"
+      },
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 25100000,
+      "tx_index": 0,
+      "tx_hash": "00000000000000000000000000000000000000000000000000000000017EFEE0",
+      "time": "2099-10-10T02:00:00Z",
+      "validator": "Thamar Node",
+      "validator_operator": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "voting_power_pct": "10.39506"
+    },
+    {
+      "voter": "bze1kfsu5pkqmhz8k2fw9a3rjdvy5ltcd4nqx3e7w2",
+      "voter_label": null,
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 25095000,
+      "tx_index": 0,
+      "tx_hash": "00000000000000000000000000000000000000000000000000000000017EEB58",
+      "time": "2099-10-09T20:00:00Z",
+      "validator": null,
+      "validator_operator": null,
+      "voting_power_pct": null
+    },
+    {
+      "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "voter_label": {
+        "name": "Honeycomb",
+        "kind": "validator_owner"
+      },
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 25090000,
+      "tx_index": 0,
+      "tx_hash": "00000000000000000000000000000000000000000000000000000000017ED7D0",
+      "time": "2099-10-09T12:00:00Z",
+      "validator": "Honeycomb",
+      "validator_operator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "voting_power_pct": "12.34567"
+    }
+  ],
+  "next_cursor": null
+}

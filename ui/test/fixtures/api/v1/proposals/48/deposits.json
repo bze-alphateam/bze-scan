@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "depositor": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "depositor_label": {
+        "name": "Honeycomb",
+        "kind": "validator_owner"
+      },
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "height": 25080000,
+      "tx_index": 0,
+      "tx_hash": "4C2F8E1A9B7D6C5E4F3A2B1C0D9E8F7A6B5C4D3E2F1A0B9C8D7E6F5A4B3C2D1E",
+      "time": "2099-10-09T10:00:00Z"
+    }
+  ],
+  "next_cursor": null
+}

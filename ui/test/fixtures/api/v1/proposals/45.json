@@ -1,0 +1,55 @@
+{
+  "id": 45,
+  "title": "Fund Liquidity Pools",
+  "kind": "community_pool_spend",
+  "status": "passed",
+  "expedited": false,
+  "submit_time": "2025-12-08T10:20:36Z",
+  "deposit_end_time": "2025-12-10T10:20:36Z",
+  "voting_start_time": "2025-12-08T10:21:17Z",
+  "voting_end_time": "2025-12-13T10:21:17Z",
+  "tally": {
+    "yes": "103512603744251",
+    "no": "0",
+    "abstain": "0",
+    "no_with_veto": "0"
+  },
+  "turnout_pct": "70.41289",
+  "summary": "### Fund BZE Liquidity Pools\n\nIf this proposal passes, we will spend 3M BZE from the community pool to improve liquidity on BeeZee DEX.",
+  "metadata": "",
+  "proposer": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+  "proposer_label": null,
+  "message_types": [
+    "/cosmos.distribution.v1beta1.MsgCommunityPoolSpend"
+  ],
+  "messages": [
+    {
+      "@type": "/cosmos.distribution.v1beta1.MsgCommunityPoolSpend",
+      "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+      "recipient": "bze1jx4x3kn8mlz2s03zdpf2a38x9gl66llvjqdd55",
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "3000000000000"
+        }
+      ]
+    }
+  ],
+  "total_deposit": [
+    {
+      "denom": "ubze",
+      "amount": "100000000000"
+    }
+  ],
+  "tally_bonded_tokens": "147006041227802",
+  "tally_updated_at": "2025-12-13T10:22:00Z",
+  "submit_height": null,
+  "submit_tx_hash": null,
+  "resolved_height": 21512345,
+  "validators_voted": {
+    "voted": 1,
+    "total": 3
+  },
+  "votes_count": 3,
+  "updated_at": "2025-12-13T10:22:00Z"
+}

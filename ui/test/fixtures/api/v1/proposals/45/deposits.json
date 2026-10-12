@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "depositor": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "depositor_label": null,
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "100000000000"
+        }
+      ],
+      "height": 21440000,
+      "tx_index": 1,
+      "tx_hash": null,
+      "time": "2025-12-08T10:20:36Z"
+    }
+  ],
+  "next_cursor": null
+}
