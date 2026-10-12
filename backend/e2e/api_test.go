@@ -82,6 +82,7 @@ func TestAPI(t *testing.T) {
 		"search":                        testSearchResolvesEachKind,
 		"cors":                          testCORSHeadersWhenConfigured,
 		"partition pruning":             testListQueriesPrunePartitions,
+		"failed txs index":              testFailedTxsUseTheirIndex,
 	} {
 		t.Run(name, func(t *testing.T) { test(t, base, ix) })
 	}
@@ -332,7 +333,51 @@ func scannedRelations(t *testing.T, pool *pgxpool.Pool, sql string, args []any) 
 
 type planNode struct {
 	Relation string     `json:"Relation Name"`
+	Index    string     `json:"Index Name"`
 	Plans    []planNode `json:"Plans"`
+}
+
+// The failed-transactions list reads the partial index, not the primary key
+// filtered on success, which on mainnet walks most of the table. Sequential
+// scans are off: on the small fixture they would win either way.
+func testFailedTxsUseTheirIndex(t *testing.T, _ string, ix *indexer) {
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, ix.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	rec := &recordingDB{Pool: pool}
+	failed := false
+	_, err = repository.NewExplorer(rec).Txs(ctx, nil, &failed, 26)
+	require.NoError(t, err)
+
+	conn, err := pool.Acquire(ctx)
+	require.NoError(t, err)
+	defer conn.Release()
+	_, err = conn.Exec(ctx, `SET enable_seqscan = off`)
+	require.NoError(t, err)
+	var plan []struct {
+		Plan planNode `json:"Plan"`
+	}
+	require.NoError(t, conn.QueryRow(ctx, "EXPLAIN (FORMAT JSON) "+rec.sql, rec.args...).Scan(&plan))
+
+	partial := queryStrings(t, ix.db, `SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+		WHERE i.inhparent = 'explorer.idx_transactions_failed'::regclass`)
+	require.NotEmpty(t, partial, "an index on every transactions partition")
+	var used []string
+	var walk func(n planNode)
+	walk = func(n planNode) {
+		if strings.HasPrefix(n.Relation, "transactions") {
+			used = append(used, n.Index)
+		}
+		for _, c := range n.Plans {
+			walk(c)
+		}
+	}
+	walk(plan[0].Plan)
+	require.NotEmpty(t, used)
+	for _, idx := range used {
+		assert.Contains(t, partial, idx)
+	}
 }
 
 func testListQueriesPrunePartitions(t *testing.T, _ string, ix *indexer) {

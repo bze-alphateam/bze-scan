@@ -30,7 +30,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 13
+const latestVersion = 14
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -321,7 +321,7 @@ func TestMigrateDropsTheProposalsThatNeverReachedAVote(t *testing.T) {
 	db := connect(t, dbURL)
 	migrateUp(t, dbURL)
 	mg := openMigrator(t, dbURL)
-	_, err := mg.Down(1)
+	_, err := mg.Down(latestVersion - 12) // back to before 000013
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO explorer.proposals (id, title, kind, status, submit_time, voting_start_time, updated_at)
 		VALUES (1, 'spam', 'text', 'rejected', now(), NULL, now()),

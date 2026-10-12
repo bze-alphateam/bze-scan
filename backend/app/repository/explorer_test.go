@@ -61,14 +61,21 @@ func TestTxsBindsCursorAndStatus(t *testing.T) {
 
 	_, err := r.Txs(context.Background(), &repository.TxKey{Height: 24999004, TxIndex: 2}, &failed, 11)
 	assert.ErrorIs(t, err, errDB)
-	assert.Contains(t, db.sql[0], "t.height <= $1 AND (t.height, t.tx_index) < ($1, $2) AND t.success = $3")
-	assert.Contains(t, db.sql[0], "ORDER BY t.height DESC, t.tx_index DESC LIMIT $4")
-	assert.Equal(t, []any{int64(24999004), int64(2), false, 11}, db.args[0])
+	assert.Contains(t, db.sql[0], "t.height <= $1 AND (t.height, t.tx_index) < ($1, $2) AND NOT t.success")
+	assert.Contains(t, db.sql[0], "ORDER BY t.height DESC, t.tx_index DESC LIMIT $3")
+	assert.Equal(t, []any{int64(24999004), int64(2), 11}, db.args[0])
 
 	_, err = r.Txs(context.Background(), nil, nil, 5)
 	assert.ErrorIs(t, err, errDB)
 	assert.NotContains(t, db.sql[1], "$2")
+	assert.Contains(t, db.sql[1], "WHERE true ORDER BY")
 	assert.Equal(t, []any{5}, db.args[1])
+
+	succeeded := true
+	_, err = r.Txs(context.Background(), nil, &succeeded, 5)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[2], "WHERE true AND t.success ORDER BY")
+	assert.Equal(t, []any{5}, db.args[2])
 }
 
 func TestTxListsJoinTheFirstMessageWithinTheHeightBound(t *testing.T) {
