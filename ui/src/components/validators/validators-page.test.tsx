@@ -75,6 +75,15 @@ describe("ValidatorsPage", () => {
     expect(old).toHaveTextContent("—");
   });
 
+  it("shows each validator's picture, else its initials", async () => {
+    const withLogo = { ...list, items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/v.jpg" } : v)) };
+    renderWithProviders(<ValidatorsPage />, { api: api({ validators: () => Promise.resolve(withLogo as ValidatorList) }) });
+    await screen.findAllByTestId("validator-row");
+    const [first, second] = screen.getAllByTestId("validator-row");
+    expect(within(first).getByTestId("avatar-image")).toHaveAttribute("src", "https://pictures.example/v.jpg");
+    expect(within(second).queryByTestId("avatar-image")).not.toBeInTheDocument();
+  });
+
   it("narrows the rows by moniker", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     const input = await screen.findByRole("textbox", { name: "Find a validator" });

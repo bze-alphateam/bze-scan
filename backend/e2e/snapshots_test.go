@@ -77,6 +77,11 @@ func TestSnapshotsFillTheHistoryOfResolvedProposals(t *testing.T) {
 
 	assert.Equal(t, votesBefore43, e.count(t, `SELECT count(*) FROM explorer.proposal_votes WHERE proposal_id = 43 AND source = 'archive'
 		AND height = $1 AND tx_index = -1`, hResolve43-1))
+	// 43's votes predate v0.47: state holds their weights in the legacy Dec's
+	// wire form (10^18 for a whole vote), read as plain decimals, so a vote
+	// for one option is that option, not a split.
+	assert.Zero(t, e.count(t, `SELECT count(*) FROM explorer.proposal_votes WHERE proposal_id = 43
+		AND (option IS NULL OR EXISTS (SELECT 1 FROM jsonb_array_elements(options) o WHERE o->>'weight' NOT LIKE '%.%'))`))
 	assert.Equal(t, votesBefore47, e.count(t, `SELECT count(*) FROM explorer.proposal_votes WHERE proposal_id = 47`))
 	assert.Equal(t, []string{
 		"23745061 0 event yes " + alphaOwner,

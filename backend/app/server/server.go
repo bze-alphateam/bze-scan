@@ -93,6 +93,7 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
 	api.GET("/ibc/channels", explorer.IBCChannels)
+	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/:operator", explorer.Validator)
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)

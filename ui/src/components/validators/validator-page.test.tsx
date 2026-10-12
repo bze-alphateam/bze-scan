@@ -81,7 +81,9 @@ describe("ValidatorPage", () => {
     expect(screen.getByText("Never jailed, never penalised since Apr 17, 2022")).toBeInTheDocument();
 
     const votes = screen.getByTestId("validator-votes");
-    expect(votes).toHaveTextContent("Last votes: Yes on #14 Raise the block size, Split vote on #12 Community call");
+    const rows = within(votes).getAllByTestId("validator-vote");
+    expect(rows.map((r) => r.textContent)).toEqual(["Yes#14 Raise the block size", "Split vote#12 Community call"]);
+    expect(within(rows[0]).getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
     expect(within(votes).getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
   });
 

@@ -359,6 +359,9 @@ func VoteOptions(raw string) (json.RawMessage, string, error) {
 	if len(opts) == 0 {
 		return nil, "", fmt.Errorf("vote option %q is not readable", raw)
 	}
+	for i := range opts {
+		opts[i].Weight = decWeight(opts[i].Weight)
+	}
 	out, err := json.Marshal(opts)
 	if err != nil {
 		return nil, "", err
@@ -370,6 +373,22 @@ func VoteOptions(raw string) (json.RawMessage, string, error) {
 		}
 	}
 	return out, single, nil
+}
+
+// decWeight writes a weight as a decimal. Votes cast before v0.47 sit in
+// state with the weight in the legacy Dec's wire form, its value times 10^18
+// without a decimal point ("1000000000000000000" for a whole vote), which the
+// archive returns as is. A weight is at most 1, so an integer above 1 is that
+// form; anything else is kept as written.
+func decWeight(w string) string {
+	if strings.Contains(w, ".") {
+		return w
+	}
+	n, ok := sdkmath.NewIntFromString(w)
+	if !ok || !n.GT(sdkmath.OneInt()) {
+		return w
+	}
+	return sdkmath.LegacyNewDecFromBigIntWithPrec(n.BigInt(), sdkmath.LegacyPrecision).String()
 }
 
 // optionOf reads an option given by number or by name.

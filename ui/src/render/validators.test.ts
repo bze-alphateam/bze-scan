@@ -22,6 +22,7 @@ import {
   uptimeDetail,
   uptimeText,
   voteOption,
+  voteTone,
 } from "./validators";
 
 const v = detail as unknown as ValidatorDetail;
@@ -141,5 +142,12 @@ describe("history", () => {
     expect(voteOption({ option: "yes" })).toBe("Yes");
     expect(voteOption({ option: "no_with_veto" })).toBe("No with veto");
     expect(voteOption({ option: null })).toBe("Split vote");
+    expect(["yes", "no", "abstain", "no_with_veto", null].map((option) => voteTone({ option }))).toEqual([
+      "green",
+      "red",
+      "gray",
+      "orange",
+      "purple",
+    ]);
   });
 });

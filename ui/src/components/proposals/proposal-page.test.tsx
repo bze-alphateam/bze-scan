@@ -72,6 +72,22 @@ afterEach(() => {
 });
 
 describe("ProposalPage", () => {
+  it("renders the proposer's text as Markdown, folded when long, with no HTML", async () => {
+    const summary = `## Why\n\nThis **halts** USDC.n. <script>window.pwned = true</script>\n\n${"More words. ".repeat(80)}`;
+    renderWithProviders(<ProposalPage id={48} />, { api: api({ ...p48, summary }) });
+    const from = await screen.findByTestId("from-proposer");
+    expect(within(from).getByRole("heading", { name: "Why" })).toBeInTheDocument();
+    expect(within(from).getByText("halts").tagName).toBe("STRONG");
+    expect(from.querySelector("script")).toBeNull();
+    expect((window as { pwned?: boolean }).pwned).toBeUndefined();
+
+    const text = within(from).getByTestId("proposer-text");
+    expect(text).toHaveAttribute("data-folded");
+    await userEvent.click(within(from).getByRole("button", { name: "Read the full text" }));
+    expect(text).not.toHaveAttribute("data-folded");
+    expect(within(from).getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("shows the header, the card, four tally bars and the who-voted rows as skeletons on the first load", () => {
     renderWithProviders(<ProposalPage id={48} />, { api: pendingApi() });
     expect(screen.getByTestId("proposal-skeleton")).toBeInTheDocument();

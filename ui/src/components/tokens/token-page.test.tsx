@@ -3,12 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { Page, Token, TokenEvent, TokenHolder, TokenTransfer } from "@/api/types";
+import type { Page, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import honeyJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
 import holdersJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/holders.json";
 import transfersJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/transfers.json";
+import list from "../../../test/fixtures/api/v1/tokens.json";
 import usdcJson from "../../../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
 
 import { TokenPage } from "./token-page";
@@ -43,6 +44,47 @@ describe("TokenPage", () => {
     expect(screen.getAllByTestId("tile-skeleton")).toHaveLength(4);
     expect(screen.getByTestId("card-skeleton")).toBeInTheDocument();
     expect(screen.getAllByTestId("list-skeleton-row")).toHaveLength(10);
+  });
+
+  it("explains a multi-hop token and names a pool share's two assets", async () => {
+    const twoHop = {
+      ...usdc,
+      ibc_path: "transfer/channel-1/transfer/channel-750",
+      ibc_hops: 2,
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+    };
+    const { unmount } = renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(twoHop) });
+    expect(await screen.findByTestId("hops-explainer")).toHaveTextContent(
+      "This USDC came to BZE through Osmosis (2 hops), not straight from Noble.",
+    );
+    expect(screen.getByTestId("token-chips")).toHaveTextContent("2 hops via Osmosis");
+    const about = screen.getByTestId("token-about");
+    expect(within(about).getByTestId("ibc-route")).toHaveTextContent("NobleOsmosisBZE");
+    expect(within(about).getByTestId("ibc-path")).toHaveTextContent(
+      "transfer/channel-1 on BZE, to Osmosistransfer/channel-750 on Osmosis, to Noble",
+    );
+    expect(about).toHaveTextContent("Origin chainNoble· 2 hops via Osmosis");
+    expect(screen.getByText(/minted on Noble and reached BZE through Osmosis\./)).toBeInTheDocument();
+    unmount();
+
+    const lp = {
+      ...usdc,
+      denom: "ulp/7E2E1C1A9E41C35A4F3B0CBA6A5F1C0E8D9B6A1F4C3E2D1B0A9F8E7D6C5B4A39",
+      symbol: "BZE/USDC LP",
+      kind: "lp",
+      origin_chain: null,
+      ibc_hops: null,
+      lp_pair: { base: "ubze", quote: usdc.denom },
+    };
+    renderWithProviders(<TokenPage denom={lp.denom} />, {
+      api: api(lp, { tokens: () => Promise.resolve(list as Page<TokenSummary>) }),
+    });
+    const pair = await screen.findByTestId("pool-pair");
+    expect(screen.queryByTestId("hops-explainer")).not.toBeInTheDocument();
+    await within(pair).findByRole("link", { name: "BZE" });
+    expect(pair).toHaveTextContent("A share of the DEX pool of BZE and USDC.");
+    expect(within(pair).getByRole("link", { name: "USDC" })).toHaveAttribute("href", `/tokens/${encodeURIComponent(usdc.denom)}`);
+    expect(screen.getByTestId("lp-logo")).toBeInTheDocument();
   });
 
   it("renders a Factory token whose admin can change the supply", async () => {

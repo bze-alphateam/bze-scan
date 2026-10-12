@@ -1,6 +1,7 @@
 import type { ChainParams, Coin, Proposal, ProposalStatus, ProposalSummary, ProposalVote, Tally, TokenSummary, Validator, VoteOption } from "@/api/types";
 import { formatAmount, formatDate, formatPct } from "@/lib/format";
 import { compareDecimals, percentOf, sumAmounts } from "@/lib/math";
+import { markdownToText } from "@/lib/markdown";
 
 // The governance pages in plain words: kinds, statuses, the tally and the
 // three checks a proposal must pass, dates and the timeline. Pure functions;
@@ -224,7 +225,7 @@ export function votesSummary(validatorVotes: Pick<ProposalVote, "option">[], not
 
 /** The first `max` characters of the summary, cut at a word, with an ellipsis. */
 export function excerpt(summary: string | null, max: number): string {
-  const s = (summary ?? "").replace(/\s+/g, " ").trim();
+  const s = markdownToText(summary ?? "");
   if (s.length <= max) return s;
   const cut = s.slice(0, max);
   const space = cut.lastIndexOf(" ");

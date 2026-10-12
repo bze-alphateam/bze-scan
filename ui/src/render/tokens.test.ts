@@ -18,6 +18,10 @@ import {
   eventLine,
   filterTokens,
   headerChips,
+  hopsExplainer,
+  hopsText,
+  ibcRoute,
+  isObsolete,
   listOriginTag,
   mergeEvents,
   mintBurnText,
@@ -63,6 +67,56 @@ describe("tokens list", () => {
     expect(listOriginTag({ ...tokens[0], kind: "unknown" })).toBe("Other");
   });
 
+  it("tells a multi-hop token from the one sent straight from home", () => {
+    const osmosis = { chain_id: "osmosis-1", name: "Osmosis", logo_url: null };
+    const direct = bySymbol("ATOM");
+    const twoHop = { ...direct, ibc_hops: 2, via_chain: osmosis };
+    expect(listOriginTag(direct)).toBe("Cross-chain · Cosmos Hub");
+    expect(listOriginTag(twoHop)).toBe("Cross-chain · Cosmos Hub via Osmosis");
+    expect(hopsText({ hops: 2, via: "Osmosis" })).toBe("2 hops via Osmosis");
+    expect(hopsText({ hops: 3, via: null })).toBe("3 hops");
+    expect(hopsExplainer(direct)).toBeNull();
+    expect(hopsExplainer(twoHop)).toBe(
+      "This ATOM came to BZE through Osmosis (2 hops), not straight from Cosmos Hub. " +
+        "It is a different token from the ATOM sent directly from Cosmos Hub: the two are not interchangeable on BZE. " +
+        "To swap one for the other, send it back the way it came.",
+    );
+    expect(hopsExplainer({ ...twoHop, via_chain: null })).toContain("through another chain (2 hops)");
+  });
+
+  it("traces an IBC token's route from its home chain to BZE", () => {
+    const injective = { chain_id: "injective-1", name: "Injective", logo_url: "inj.png" };
+    const hub = { chain_id: "cosmoshub-4", name: "Cosmos Hub", logo_url: "hub.png" };
+    const base = { kind: "ibc", origin_chain: injective, origin_chain_id: "injective-1", via_chain: null };
+    expect(ibcRoute({ ...base, ibc_path: "transfer/channel-13" })).toEqual({
+      chains: [
+        { name: "Injective", logoUrl: "inj.png" },
+        { name: "BZE", logoUrl: null },
+      ],
+      hops: [{ channel: "transfer/channel-13", on: "BZE", toward: "Injective" }],
+    });
+    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-11/transfer/channel-220" })).toEqual({
+      chains: [
+        { name: "Injective", logoUrl: "inj.png" },
+        { name: "Cosmos Hub", logoUrl: "hub.png" },
+        { name: "BZE", logoUrl: null },
+      ],
+      hops: [
+        { channel: "transfer/channel-11", on: "BZE", toward: "Cosmos Hub" },
+        { channel: "transfer/channel-220", on: "Cosmos Hub", toward: "Injective" },
+      ],
+    });
+    // Beyond the first hop the explorer knows only the home chain.
+    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-1/transfer/channel-2/transfer/channel-3" })?.hops).toEqual([
+      { channel: "transfer/channel-1", on: "BZE", toward: "Cosmos Hub" },
+      { channel: "transfer/channel-2", on: "Cosmos Hub", toward: "another chain" },
+      { channel: "transfer/channel-3", on: "another chain", toward: "Injective" },
+    ]);
+    expect(ibcRoute({ ...base, ibc_path: null })).toBeNull();
+    expect(ibcRoute({ ...base, ibc_path: "transfer" })).toBeNull();
+    expect(ibcRoute({ ...base, kind: "factory", ibc_path: "transfer/channel-1" })).toBeNull();
+  });
+
   it("filters by chip, then on symbol or name", () => {
     const symbols = (rows: TokenSummary[]) => rows.map((t) => t.symbol);
     expect(symbols(filterTokens(tokens, "factory", ""))).toEqual(["HONEY", "VDL"]);
@@ -101,6 +155,16 @@ describe("token page", () => {
     expect(headerChips(usdc).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Trading on the DEX"]);
     expect(headerChips({ ...usdc, halted: true }).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Halted on the DEX"]);
     expect(headerChips({ ...honey, kind: "native", markets: [] }).map((c) => c.text)).toEqual(["Native"]);
+    const corey = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey";
+    const obsolete = headerChips({ ...honey, denom: corey });
+    expect(obsolete.map((c) => c.text)).toEqual(["Created on Factory", "Obsolete", "Trading on the DEX"]);
+    expect(obsolete[1].title).toContain("no longer list this token");
+    expect(isObsolete(corey)).toBe(true);
+    expect(isObsolete(honey.denom)).toBe(false);
+    const twoHop = headerChips({ ...usdc, ibc_hops: 2, via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: "o.png" } });
+    expect(twoHop.map((c) => c.text)).toEqual(["Cross-chain from Noble", "2 hops via Osmosis", "Trading on the DEX"]);
+    expect(twoHop[1]).toMatchObject({ tone: "orange", logoUrl: "o.png" });
+    expect(twoHop[1].title).toContain("not interchangeable");
   });
 
   it("says whether the supply can change", () => {

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { Account, Activity, IbcTransfer, Page, TokenSummary, ValidatorList } from "@/api/types";
+import type { Account, Activity, IbcTransfer, ModuleAccount, Page, TokenSummary, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import plain from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
@@ -11,11 +11,17 @@ import activity from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wy
 import ibc from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4/ibc.json";
 import nodeDown from "../../../test/fixtures/api/v1/accounts/bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
+import modules from "../../../test/fixtures/api/v1/modules.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 
 import { AccountPage } from "./account-page";
 
 const ADDR = plain.address;
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
 function api(account: unknown = plain, extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
@@ -33,6 +39,7 @@ const tiles = () => screen.getAllByTestId("tile").map((t) => t.textContent?.trim
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: new Date("2099-10-11T10:00:00Z") });
   window.history.replaceState(null, "", "/accounts/" + ADDR);
+  push.mockReset();
 });
 
 afterEach(() => {
@@ -86,6 +93,40 @@ describe("AccountPage", () => {
     expect(screen.getByTestId("label-chip")).toHaveStyle({ borderStyle: "dashed" });
     expect(await screen.findByText("This account stakes with no validator.")).toBeInTheDocument();
     expect(screen.getAllByTestId("tile")[3]).toHaveTextContent("Unstakingnone");
+  });
+
+  it("lets a module account move to the chain's other module accounts", async () => {
+    const dex = { ...nodeDown, address: modules.items[2].address, label: { name: "DEX", kind: "module" } };
+    renderWithProviders(<AccountPage address={dex.address} />, {
+      api: api(dex, { modules: () => Promise.resolve(modules as { items: ModuleAccount[] }) }),
+    });
+    const select = await screen.findByTestId("module-switcher");
+    expect(select).toHaveValue(dex.address);
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Burner", "Community pool", "DEX"]);
+
+    await userEvent.selectOptions(select, "Burner");
+    expect(push).toHaveBeenCalledWith("/accounts/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun");
+  });
+
+  it("offers no module menu on an account that is not a module", async () => {
+    const modulesCall = vi.fn(() => Promise.resolve(modules as { items: ModuleAccount[] }));
+    renderWithProviders(<AccountPage address={ADDR} />, { api: api(plain, { modules: modulesCall }) });
+    await screen.findByRole("heading", { level: 1, name: "Account" });
+    expect(screen.queryByTestId("module-switcher")).not.toBeInTheDocument();
+    expect(modulesCall).not.toHaveBeenCalled();
+  });
+
+  it("shows a validator owner's validator picture", async () => {
+    const withLogo = {
+      ...list,
+      items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/honeycomb.jpg" } : v)),
+    };
+    renderWithProviders(<AccountPage address={ADDR} />, {
+      api: api({ ...plain, label: { name: "Honeycomb", kind: "validator_owner" } }, {
+        validators: () => Promise.resolve(withLogo as ValidatorList),
+      }),
+    });
+    expect(await screen.findByTestId("avatar-image")).toHaveAttribute("src", "https://pictures.example/honeycomb.jpg");
   });
 
   it("links a validator owner to its validator", async () => {

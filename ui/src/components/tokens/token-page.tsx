@@ -3,11 +3,11 @@
 import { Badge, Box, Button, Grid, Heading, HStack, Image, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { LuArrowRight, LuExternalLink } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
-import type { Token, TokenEvent } from "@/api/types";
+import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
+import type { LpPair, Token, TokenEvent } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -18,7 +18,7 @@ import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
 import { externalLinks, websiteLink } from "@/lib/links";
-import { dexAssetUrl } from "@/render/account";
+import { dexAssetUrl, multiHop } from "@/render/account";
 import {
   activityItems,
   adminNote,
@@ -27,6 +27,9 @@ import {
   eventLine,
   headerChips,
   holdersSub,
+  hopsExplainer,
+  hopsText,
+  ibcRoute,
   mergeEvents,
   mintBurnText,
   onDex,
@@ -34,6 +37,7 @@ import {
   supplyState,
   supplyText,
   supplyTileSub,
+  tokenHref,
   tokenSymbol,
   topHoldersText,
   transferLine,
@@ -63,7 +67,26 @@ function Chip({ party }: { party: Party }) {
   return <AccountChip address={party.address} label={party.label} />;
 }
 
+/** An LP token's two pool assets, each linking to its page. */
+function PoolPair({ pair }: { pair: LpPair }) {
+  const denoms = useDenoms();
+  const side = (denom: string) => {
+    const t = denoms.data?.get(denom);
+    return (
+      <Link asChild>
+        <NextLink href={tokenHref(denom)}>{t ? tokenSymbol(t) : denom}</NextLink>
+      </Link>
+    );
+  };
+  return (
+    <Text fontSize="sm" color="fg.muted" data-testid="pool-pair">
+      A share of the DEX pool of {side(pair.base)} and {side(pair.quote)}.
+    </Text>
+  );
+}
+
 function Header({ t }: { t: Token }) {
+  const denoms = useDenoms();
   const site = websiteLink(t.website);
   const symbol = tokenSymbol(t);
   return (
@@ -71,7 +94,7 @@ function Header({ t }: { t: Token }) {
       <Breadcrumb name={symbol} />
       <HStack gap="4" align="start" wrap="wrap" justify="space-between">
         <HStack gap="3" minW="0" align="start">
-          <TokenLogo t={t} size="12" />
+          <TokenLogo t={t} denoms={denoms.data} size="12" />
           <Stack gap="1.5" minW="0">
             <HStack gap="2" wrap="wrap" align="baseline">
               <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
@@ -85,7 +108,7 @@ function Header({ t }: { t: Token }) {
             </HStack>
             <HStack gap="2" wrap="wrap" data-testid="token-chips">
               {headerChips(t).map((c) => (
-                <Badge key={c.text} colorPalette={c.tone} variant="subtle" size="md" rounded="full">
+                <Badge key={c.text} colorPalette={c.tone} variant="subtle" size="md" rounded="full" title={c.title}>
                   {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="4" rounded="full" />}
                   {c.text}
                 </Badge>
@@ -96,6 +119,12 @@ function Header({ t }: { t: Token }) {
                 </Link>
               )}
             </HStack>
+            {hopsExplainer(t) && (
+              <Text fontSize="sm" color="fg.muted" maxW="2xl" data-testid="hops-explainer">
+                {hopsExplainer(t)}
+              </Text>
+            )}
+            {t.lp_pair && <PoolPair pair={t.lp_pair} />}
             {t.kind === "factory" && t.creator && (
               <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted" data-testid="token-created">
                 <Text as="span">{t.created_time ? `Created ${formatDate(t.created_time)} by` : "Created by"}</Text>
@@ -166,6 +195,7 @@ function SupplyBox({ t, events, complete }: { t: Token; events: TokenEvent[]; co
   if (!state) return null;
   const symbol = tokenSymbol(t);
   const chain = t.origin_chain?.name || t.origin_chain?.chain_id || "its own chain";
+  const via = multiHop(t)?.via;
   let body: ReactNode;
   switch (state) {
     case "admin":
@@ -193,7 +223,8 @@ function SupplyBox({ t, events, complete }: { t: Token; events: TokenEvent[]; co
         <>
           <Text fontWeight="semibold">The supply of {symbol} is fixed on BZE</Text>
           <Text>
-            {symbol} is minted on {chain}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the
+            {symbol} is minted on {chain}
+            {via ? ` and reached BZE through ${via}` : ""}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the
             same way.
           </Text>
         </>
@@ -257,6 +288,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function About({ t }: { t: Token }) {
+  const route = ibcRoute(t);
+  const hop = multiHop(t);
   return (
     <Card title="About">
       <Stack gap="0" data-testid="token-about">
@@ -293,16 +326,50 @@ function About({ t }: { t: Token }) {
         {t.kind === "ibc" && (
           <>
             <Row label="Origin chain">
-              <HStack gap="1.5">
+              <HStack gap="1.5" wrap="wrap">
                 {t.origin_chain?.logo_url && <Image src={t.origin_chain.logo_url} alt="" boxSize="5" rounded="full" />}
                 <Text as="span">{t.origin_chain?.name || t.origin_chain?.chain_id || t.origin_chain_id || "not known yet"}</Text>
+                {hop && (
+                  <Text as="span" color="fg.muted">
+                    · {hopsText(hop)}
+                  </Text>
+                )}
               </HStack>
             </Row>
+            {route && route.hops.length > 1 && (
+              <Row label="Route">
+                <HStack gap="1.5" wrap="wrap" data-testid="ibc-route">
+                  {route.chains.map((c, i) => (
+                    <HStack key={i} gap="1.5" as="span">
+                      {i > 0 && <LuArrowRight aria-label="then" />}
+                      {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="5" rounded="full" />}
+                      <Text as="span">{c.name}</Text>
+                    </HStack>
+                  ))}
+                </HStack>
+              </Row>
+            )}
             <Row label="Base denom there">
               <Text fontFamily="mono">{t.ibc_base_denom ?? "—"}</Text>
             </Row>
             <Row label="Path">
-              <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
+              {route ? (
+                <Stack gap="1" data-testid="ibc-path">
+                  {route.hops.map((h) => (
+                    <Text key={h.channel}>
+                      <Text as="span" fontFamily="mono">
+                        {h.channel}
+                      </Text>
+                      <Text as="span" color="fg.muted">
+                        {" "}
+                        on {h.on}, to {h.toward}
+                      </Text>
+                    </Text>
+                  ))}
+                </Stack>
+              ) : (
+                <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
+              )}
             </Row>
           </>
         )}

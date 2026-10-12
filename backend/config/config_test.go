@@ -17,7 +17,7 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
-	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR"}
+	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -44,7 +44,8 @@ func TestLoadDefaults(t *testing.T) {
 		BackfillRateLimit:   20,
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
-		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
+		PriceChangeMarket:   config.DefaultPriceChangeMarket,
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -64,7 +65,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 		BackfillRateLimit:   20,
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
-		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
+		PriceChangeMarket:   config.DefaultPriceChangeMarket,
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -154,7 +156,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 		BackfillRateLimit:   20,
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
-		PriceChangeMarket:   config.DefaultPriceChangeMarket}, cfg)
+		PriceChangeMarket:   config.DefaultPriceChangeMarket,
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -366,16 +369,18 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	t.Setenv("CHAIN_REGISTRY_API_URL", "http://127.0.0.1:9000/api/")
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", "http://127.0.0.1:9000/raw")
 	t.Setenv("PRICE_CHANGE_MARKET", "ulp/0A1B")
+	t.Setenv("KEYBASE_URL", "http://127.0.0.1:9001/lookup.json")
 	cfg, err = config.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "https://getbze.com", cfg.AggregatorURL)
 	assert.Equal(t, "http://127.0.0.1:9000/api", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "http://127.0.0.1:9000/raw", cfg.ChainRegistryRawURL)
 	assert.Equal(t, "ulp/0A1B", cfg.PriceChangeMarket)
+	assert.Equal(t, "http://127.0.0.1:9001/lookup.json", cfg.KeybaseURL)
 }
 
 func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {
-	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR"} {
+	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL"} {
 		t.Run(key, func(t *testing.T) {
 			isolate(t)
 			t.Setenv(key, "getbze.com")

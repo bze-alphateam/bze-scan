@@ -1,22 +1,25 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Image, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Badge, Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { LuExternalLink, LuSearch } from "react-icons/lu";
 
 import { useAllTokens } from "@/api/hooks";
-import type { TokenSummary } from "@/api/types";
+import type { LpPair, TokenSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
-import { dexAssetUrl } from "@/render/account";
+import { BOND_DENOM, dexAssetUrl, multiHop } from "@/render/account";
 import {
   changeText,
   filterTokens,
+  hopsExplainer,
+  isObsolete,
+  OBSOLETE_EXPLAINER,
   listOriginTag,
   noPriceText,
   priceText,
@@ -42,10 +45,45 @@ function PhoneLabel({ children }: { children: string }) {
   );
 }
 
-/** A token's logo, else its avatar. */
-export function TokenLogo({ t, size = "9" }: { t: Pick<TokenSummary, "logo_url" | "symbol" | "denom">; size?: string }) {
-  if (t.logo_url) return <Image src={t.logo_url} alt="" boxSize={size} rounded="full" flexShrink={0} />;
-  return <Avatar name={tokenSymbol(t)} size={size} />;
+type LogoToken = Pick<TokenSummary, "logo_url" | "symbol" | "denom"> & { lp_pair?: LpPair | null };
+
+/**
+ * A token's logo, else its avatar; a pool share shows its two assets' logos,
+ * one over the other's corner, looked up in `denoms` (the caller's tokens).
+ */
+export function TokenLogo({ t, denoms, size = "9" }: { t: LogoToken; denoms?: Map<string, TokenSummary>; size?: string }) {
+  if (t.lp_pair) {
+    const side = (denom: string) => denoms?.get(denom) ?? { denom, symbol: null, logo_url: null };
+    return (
+      <Box position="relative" boxSize={size} flexShrink={0} data-testid="lp-logo">
+        <Box position="absolute" top="0" left="0" w="70%" h="70%">
+          <SingleLogo t={side(t.lp_pair.base)} size="full" />
+        </Box>
+        <Box position="absolute" bottom="0" right="0" w="70%" h="70%" rounded="full" outline="2px solid" outlineColor="bg">
+          <SingleLogo t={side(t.lp_pair.quote)} size="full" />
+        </Box>
+      </Box>
+    );
+  }
+  return <SingleLogo t={t} size={size} />;
+}
+
+/** What a token without a logo shows: the DEX's placeholder. */
+export const TOKEN_LOGO_PLACEHOLDER = "/images/token.svg";
+
+/** BZE's own logo, the one the DEX shows, over the registry's. */
+export const BZE_LOGO = "/images/bze_alternative_512x512.png";
+
+function SingleLogo({ t, size }: { t: Pick<TokenSummary, "logo_url" | "symbol" | "denom">; size: string }) {
+  return (
+    <Avatar
+      name={tokenSymbol(t)}
+      src={t.denom === BOND_DENOM ? BZE_LOGO : t.logo_url}
+      fallbackSrc={TOKEN_LOGO_PLACEHOLDER}
+      size={size}
+      fontSize={size === "full" ? "2xs" : undefined}
+    />
+  );
 }
 
 function Tiles({ tokens }: { tokens: TokenSummary[] }) {
@@ -105,7 +143,8 @@ function PriceCell({ t }: { t: TokenSummary }) {
   );
 }
 
-function TokenRow({ t }: { t: TokenSummary }) {
+function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSummary> }) {
+  const hop = multiHop(t);
   return (
     <Grid
       role="listitem"
@@ -120,7 +159,7 @@ function TokenRow({ t }: { t: TokenSummary }) {
       data-testid="token-list-row"
     >
       <HStack gap="3" minW="0">
-        <TokenLogo t={t} />
+        <TokenLogo t={t} denoms={denoms} />
         <Stack gap="0" minW="0">
           <Link asChild fontWeight="medium" truncate>
             <NextLink href={tokenHref(t.denom)} data-testid="token-link">
@@ -134,11 +173,21 @@ function TokenRow({ t }: { t: TokenSummary }) {
           )}
         </Stack>
       </HStack>
-      <Box minW="0">
-        <Badge variant="subtle" size="sm" maxW="full" truncate data-testid="origin-tag">
+      <HStack gap="1" minW="0" wrap="wrap">
+        <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
           {listOriginTag(t)}
         </Badge>
-      </Box>
+        {isObsolete(t.denom) && (
+          <Badge colorPalette="gray" variant="outline" size="sm" title={OBSOLETE_EXPLAINER} data-testid="obsolete-tag">
+            Obsolete
+          </Badge>
+        )}
+        {hop && (
+          <Badge colorPalette="orange" variant="subtle" size="sm" title={hopsExplainer(t) ?? undefined} data-testid="hops-tag">
+            {hop.hops} hops
+          </Badge>
+        )}
+      </HStack>
       <Text fontSize="sm" wordBreak="break-word">
         <PhoneLabel>Supply</PhoneLabel>
         {supplyText(t) ?? "—"}
@@ -159,7 +208,7 @@ function TokenRow({ t }: { t: TokenSummary }) {
   );
 }
 
-function TokenTable({ rows, empty }: { rows: TokenSummary[]; empty: string }) {
+function TokenTable({ rows, denoms, empty }: { rows: TokenSummary[]; denoms: Map<string, TokenSummary>; empty: string }) {
   return (
     <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
       <Grid
@@ -184,7 +233,7 @@ function TokenTable({ rows, empty }: { rows: TokenSummary[]; empty: string }) {
       </Grid>
       <Box role="list" aria-label="Tokens">
         {rows.map((t) => (
-          <TokenRow key={t.denom} t={t} />
+          <TokenRow key={t.denom} t={t} denoms={denoms} />
         ))}
       </Box>
       {rows.length === 0 && (
@@ -201,6 +250,7 @@ export function TokensView({ tokens }: { tokens: TokenSummary[] }) {
   const [filter, setFilter] = useState<TokenFilter>("all");
   const [query, setQuery] = useState("");
   const rows = filterTokens(tokens, filter, query);
+  const denoms = useMemo(() => new Map(tokens.map((t) => [t.denom, t])), [tokens]);
   return (
     <Stack gap={{ base: "6", md: "8" }}>
       <Text color="fg.muted" maxW="3xl">
@@ -245,7 +295,7 @@ export function TokensView({ tokens }: { tokens: TokenSummary[] }) {
             />
           </HStack>
         </HStack>
-        <TokenTable rows={rows} empty={query ? "No token has that name." : "No tokens of this kind yet."} />
+        <TokenTable rows={rows} denoms={denoms} empty={query ? "No token has that name." : "No tokens of this kind yet."} />
         <Text fontSize="sm" color="fg.muted">
           Raw names (factory/…, ibc/…) are in each token&apos;s More details.
         </Text>

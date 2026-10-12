@@ -106,6 +106,7 @@ documented template with the defaults:
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.n pool, `ibc/6490…8AF4_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves (the USDC.n → USDC.inj migration); empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
+| `KEYBASE_URL` | `https://keybase.io/_/api/1.0/user/lookup.json` | the Keybase user lookup the validators set reads validator logos from (`?key_suffix=<identity>&fields=pictures`), at most once a day per validator, 10 s per call |
 | `DEBUG_ADDR` | empty | `host:port` on which `serve` exposes `net/http/pprof` under `/debug/pprof/`, on a server of its own; keep it on localhost (`127.0.0.1:6060`). Empty exposes nothing |
 
 Invalid values stop the process at startup with every problem listed.
@@ -238,6 +239,7 @@ internal/chainregistry/
                    raw files)
 internal/aggregator/
                    the BZE aggregator's /api/prices reader
+internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
@@ -315,15 +317,16 @@ every later route follows:
 | `GET /api/v1/txs/{hash}` | every column of the transaction (with `first_message` as on the list) plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled) and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, else cached for a minute). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
 | `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
 | `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
-| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status. `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
+| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status, `logo_url` (the Keybase picture of its identity, null without an identity or a picture). `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
+| `GET /api/v1/modules` | `{"items": [{"address", "name", "module"}]}`: every module account the labels seed names (`labels` of kind `module`), by name; no pages. Cached `public, max-age=60`: only a migration's seed changes them |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
 | `GET /api/v1/accounts/{address}/activity?category=&cursor&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list |
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `created_time` (the block time of its `created` token event, null without one); another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url}`, name and logo from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
@@ -912,6 +915,20 @@ source are never overwritten). A dirty validator is resynced alone (staking
 `Validator`, slashing `SigningInfo`) and every bonded validator is re-ranked
 over the stored standings.
 
+A validator's `logo_url` is the Keybase picture of its description
+`identity` (a Keybase key suffix): `GET KEYBASE_URL?key_suffix=<identity>&fields=pictures`,
+`them[0].pictures.primary.url`, as the BZE staking dapp does. Both resyncs
+look a validator up, one after the other, only when its `logo_checked_at` is
+null, older than 24 hours, or its identity changed; a validator without an
+identity has a NULL logo. An identity that is not a key suffix (16 hex
+digits; validators set placeholders such as `0` or `URI_VALIDATOR`) is never
+sent and counts as a lookup with no picture, as does Keybase's `INPUT_ERROR`
+answer. A successful lookup writes the URL (NULL when the
+user has no picture) and `logo_checked_at`. A failed one is logged and never
+fails the sync: the stored logo stays and `logo_checked_at` is not bumped
+(after an identity change it is cleared, so the next run retries). The
+validator upsert never writes the logo columns.
+
 A block marks a validator dirty on `delegate`, `unbond`, `redelegate` (both
 validators), `create_validator` and `cancel_unbonding_delegation` events and
 on `MsgEditValidator` / `MsgUnjail` by operator address, and on `slash` and
@@ -926,7 +943,8 @@ an unreadable address or key asks for one too.
 
 **Denoms.** A full resync reads bank `TotalSupply` and `DenomsMetadata`
 (1,000 per page; a denom is listed when it has either), tradebin `AllMarkets`
-and `HaltedDenoms`, and per factory denom tokenfactory `DenomAuthority`.
+`HaltedDenoms` and `AllLiquidityPools`, and per factory denom tokenfactory
+`DenomAuthority`.
 Supply and metadata always come from the node, never from events. `kind` is
 the denom's shape: `native` for `ubze`, `factory` for `factory/…`, `ibc` for
 `ibc/…`, `lp` for tradebin pool shares (`ulp/<hash>` since chain v8.2.0,
@@ -941,9 +959,22 @@ denom's `creator` is the address in it and `admin` the tokenfactory admin
 the denom trades in; `halted` is the tradebin halt (a node before v8.2.0
 answers `HaltedDenoms` with Unimplemented: nothing is halted). First sight
 (`created_*`) is the denom's earliest `created` token event, filled at the
-next resync once the event is indexed. A denom the bank no longer lists keeps
+next resync once the event is indexed. An LP denom's `lp_base`/`lp_quote`
+are its pool's assets, from the pool whose stored `lp_denom` it is (a
+`ulp/<hash>` denom is the SHA-256 of the pool id and cannot be reversed);
+only a legacy `ulp_<base>_<quote>` missing from the pool list falls back to
+splitting it on `_` (exactly two assets). The LP row is then named after the
+assets' symbols as resolved in the same run, `<BASE>/<QUOTE> LP` and
+`<BASE>/<QUOTE> LP Shares` like the BZE dapps (an LP resynced alone resolves
+its two assets for that, without saving them); when a side has no symbol the
+row keeps the bank's. A node without the AMM (`AllLiquidityPools`
+Unimplemented) leaves only the fallback. A denom the bank no longer lists keeps
 its row with a zero supply. The holders and prices columns are left to their
 own jobs.
+
+A native or Factory denom whose bank metadata has no logo (none has one on
+mainnet) takes the logo of its asset in the registry of the explorer's own
+chain (`CHAIN_ID`), when the registry lists it.
 
 An IBC denom is traced with transfer `DenomTrace` (`ibc_path`,
 `ibc_base_denom`). Its `origin_chain_id` is the counterparty chain of the
@@ -955,7 +986,9 @@ multi-hop denom (`transfer/channel-0/transfer/channel-94814/uatone`) is
 followed through the first hop chain's asset for the rest of the path
 (`ibc/` + SHA-256 of it) and its earliest IBC trace to the home chain, which
 becomes the origin; when that fails the first hop's chain and the raw base
-denom stay. A chain or an asset the registry cache misses is published to
+denom stay. A multi-hop denom keeps its first hop's chain as `via_chain_id`
+(null for one hop), so two vouchers of one asset arriving by different
+routes can be told apart. A chain or an asset the registry cache misses is published to
 the chain_registry set (by chain id, or `name:<registry name>` for a trace's
 chain).
 
@@ -1355,6 +1388,10 @@ tokenfactory `AllDenomBranding` and tradebin `HaltedDenoms` are recorded only
 from a gateway that serves them (chain v8.2.0 and later); mainnet runs v8.1.1
 (recorded 2026-10-09: 28 denoms with a supply, 28 with metadata, 12 markets),
 so they are absent and answer Unimplemented like the node.
+`tradebin/AllLiquidityPools.json` is hand-written, not recorded: the
+`ulp_` pools of VDL/BZE and USDC.n/BZE (the third legacy LP, PHOTON/BZE, is
+left out to exercise the fallback) and a hashed `ulp/<hash>` COREY/BZE pool
+of chain v8.2.0+, whose denom only a test adds to the supply.
 `make grpc-fixtures SETS=holders HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2`
 records the holders set: `bank/DenomOwners.json`, the answer for a denom
 nobody holds (the fallback for every other denom), and every page of each
@@ -1408,4 +1445,6 @@ make registry-fixtures CHAINS="beezee cosmoshub noble mirage"
 to CoinGecko ids; `mirage` is a chain without explorers). The e2e harness
 starts one with every sync environment, next to a fake aggregator answering
 `/api/prices` as getbze.com did on 2026-10-09, and points `sync-state` and
-`serve` at both, so no test reaches GitHub or getbze.com.
+`serve` at both, so no test reaches GitHub or getbze.com. A fake Keybase
+lookup (`e2e/logos_test.go`) gives ChainTools' identity a picture and every
+other identity none; `sync-state` and `serve` point `KEYBASE_URL` at it.

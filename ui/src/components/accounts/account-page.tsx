@@ -1,16 +1,32 @@
 "use client";
 
-import { Badge, Box, Button, Heading, HStack, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Tabs, Text } from "@chakra-ui/react";
+import {
+  Badge,
+  Box,
+  Button,
+  Heading,
+  HStack,
+  Link,
+  NativeSelect,
+  SimpleGrid,
+  Skeleton,
+  SkeletonCircle,
+  Stack,
+  Tabs,
+  Text,
+} from "@chakra-ui/react";
 import NextLink from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { LuExternalLink } from "react-icons/lu";
 
 import { ApiError, isNotFound } from "@/api/client";
-import { useAccount, useAllValidators, useDenoms } from "@/api/hooks";
+import { useAccount, useAllValidators, useDenoms, useModules } from "@/api/hooks";
 import type { Account, ActivityCategory } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { addressHref } from "@/components/ui/links";
 import { TileSkeleton } from "@/components/ui/skeleton";
 import { Tile } from "@/components/ui/tile";
 import { formatCount, formatUsd } from "@/lib/format";
@@ -44,7 +60,7 @@ function Header({ a }: { a: Account }) {
   return (
     <Stack gap="3">
       <HStack gap="3" align="start" minW="0">
-        <Avatar name={a.address} size="12" fontSize="md" />
+        <Avatar name={a.address} src={owned?.logo_url} size="12" fontSize="md" />
         <Stack gap="1" minW="0">
           <HStack gap="2" wrap="wrap">
             <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
@@ -81,7 +97,37 @@ function Header({ a }: { a: Account }) {
         </Text>
         <CopyButton value={a.address} label="Copy address" />
       </HStack>
+      {a.label?.kind === "module" && <ModuleSwitcher address={a.address} />}
     </Stack>
+  );
+}
+
+/** On a module account: a menu of the chain's other module accounts, to move between them. */
+function ModuleSwitcher({ address }: { address: string }) {
+  const router = useRouter();
+  const modules = useModules();
+  if (!modules.data || modules.data.length < 2) return null;
+  return (
+    <HStack gap="2" maxW="sm">
+      <Text asChild fontSize="sm" color="fg.muted" flexShrink={0}>
+        <label htmlFor="module-switcher">Module account</label>
+      </Text>
+      <NativeSelect.Root size="sm">
+        <NativeSelect.Field
+          id="module-switcher"
+          data-testid="module-switcher"
+          value={address}
+          onChange={(e) => router.push(addressHref(e.currentTarget.value))}
+        >
+          {modules.data.map((m) => (
+            <option key={m.address} value={m.address}>
+              {m.name}
+            </option>
+          ))}
+        </NativeSelect.Field>
+        <NativeSelect.Indicator />
+      </NativeSelect.Root>
+    </HStack>
   );
 }
 

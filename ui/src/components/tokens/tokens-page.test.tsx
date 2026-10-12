@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +22,50 @@ afterEach(() => {
 });
 
 describe("TokensPage", () => {
+  it("marks a token the BZE apps no longer list as obsolete", async () => {
+    const items = (list as Page<TokenSummary>).items;
+    const corey = { ...items[1], denom: "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey", symbol: "COREY" };
+    renderWithProviders(<TokensPage />, { api: api(() => Promise.resolve({ items: [...items, corey], next_cursor: null })) });
+    await screen.findAllByTestId("token-list-row");
+    const rows = screen.getAllByTestId("token-list-row");
+    expect(rows).toHaveLength(7);
+    expect(screen.getAllByTestId("obsolete-tag")).toHaveLength(1);
+    expect(within(rows[6]).getByTestId("obsolete-tag")).toHaveTextContent("Obsolete");
+    expect(within(rows[6]).getByTestId("obsolete-tag")).toHaveAttribute("title", expect.stringContaining("no longer list"));
+  });
+
+  it("marks a multi-hop token and pairs a pool share's two logos", async () => {
+    const items = (list as Page<TokenSummary>).items;
+    const twoHop = {
+      ...items[3],
+      denom: "ibc/0000000000000000000000000000000000000000000000000000000000000002",
+      ibc_hops: 2,
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+    };
+    const logos = items.map((t) => (t.symbol === "BZE" ? { ...t, logo_url: "https://registry.example/bze.png" } : t));
+    renderWithProviders(<TokensPage />, {
+      api: api(() => Promise.resolve({ items: [...logos, twoHop], next_cursor: null })),
+    });
+    await screen.findAllByTestId("token-list-row");
+    const rows = screen.getAllByTestId("token-list-row");
+    const direct = rows[3];
+    const hop = rows[6];
+    expect(within(direct).queryByTestId("hops-tag")).not.toBeInTheDocument();
+    expect(within(hop).getByTestId("origin-tag")).toHaveTextContent("Cross-chain · Cosmos Hub via Osmosis");
+    expect(within(hop).getByTestId("hops-tag")).toHaveTextContent("2 hops");
+    expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
+
+    const lp = within(rows[5]).getByTestId("lp-logo");
+    // BZE's own logo (the DEX's, not the registry's) over the top-left corner, the DEX's placeholder for USDC
+    // (no logo) under the bottom-right one.
+    await waitFor(() =>
+      expect([...lp.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual([
+        "/images/bze_alternative_512x512.png",
+        "/images/token.svg",
+      ]),
+    );
+  });
+
   it("shows four tile skeletons and ten row skeletons on the first load", () => {
     renderWithProviders(<TokensPage />, { api: pendingApi() });
     expect(screen.getAllByTestId("tile-skeleton")).toHaveLength(4);

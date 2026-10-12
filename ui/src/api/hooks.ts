@@ -66,6 +66,7 @@ export const queryKeys = {
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
+  modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
   rawCommit: (height: number) => ["raw", "commit", height] as const,
@@ -537,6 +538,16 @@ export function useParams({ poll = false }: { poll?: boolean } = {}) {
     queryKey: queryKeys.params(),
     queryFn: ({ signal }) => api.params(signal),
     ...(poll ? status : reference),
+  });
+}
+
+/** The chain's module accounts by name, for moving between them on an account page. */
+export function useModules() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.modules(),
+    queryFn: async ({ signal }) => (await api.modules(signal)).items,
+    ...reference,
   });
 }
 

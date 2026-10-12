@@ -1,8 +1,11 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { renderWithProviders } from "@/test/render";
+import type { ValidatorList } from "@/api/types";
+import { fakeApi, renderWithProviders } from "@/test/render";
+
+import list from "../../../test/fixtures/api/v1/validators.json";
 
 import { Amount } from "./amount";
 import { Avatar } from "./avatar";
@@ -11,6 +14,7 @@ import { JsonBlock } from "./json-block";
 import { AddressLink, HashLink } from "./links";
 import { MoreDetails } from "./more-details";
 import { TimeAgo } from "./time-ago";
+import { ValidatorChip } from "./validator-chip";
 
 const ADDRESS = "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a";
 
@@ -115,5 +119,47 @@ describe("other atoms", () => {
     renderWithProviders(<JsonBlock value={{ a: 1 }} />);
     expect(screen.getByText(/"a": 1/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy JSON" })).toBeInTheDocument();
+  });
+});
+
+describe("pictures", () => {
+  it("shows a picture, and the initials when it fails to load", () => {
+    renderWithProviders(<Avatar name="Honeycomb" src="https://pictures.example/h.jpg" />);
+    const img = screen.getByTestId("avatar-image");
+    expect(img).toHaveAttribute("src", "https://pictures.example/h.jpg");
+    fireEvent.error(img);
+    expect(screen.queryByTestId("avatar-image")).not.toBeInTheDocument();
+    expect(screen.getByText("HO")).toBeInTheDocument();
+  });
+
+  it("tries the picture, then the fallback picture, then the initials", () => {
+    renderWithProviders(<Avatar name="Honey" src="https://logos.example/h.png" fallbackSrc="/images/token.svg" />);
+    fireEvent.error(screen.getByTestId("avatar-image"));
+    expect(screen.getByTestId("avatar-image")).toHaveAttribute("src", "/images/token.svg");
+    fireEvent.error(screen.getByTestId("avatar-image"));
+    expect(screen.queryByTestId("avatar-image")).not.toBeInTheDocument();
+    expect(screen.getByText("HO")).toBeInTheDocument();
+  });
+
+  it("shows the fallback picture when there is no picture", () => {
+    renderWithProviders(<Avatar name="Honey" src={null} fallbackSrc="/images/token.svg" />);
+    expect(screen.getByTestId("avatar-image")).toHaveAttribute("src", "/images/token.svg");
+  });
+
+  it("gives a validator chip the validator's picture from the validators list", async () => {
+    const op = list.items[0].operator_address;
+    const withLogo = { ...list, items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/v.jpg" } : v)) };
+    renderWithProviders(<ValidatorChip operator={op} moniker="Honeycomb" />, {
+      api: fakeApi({ validators: () => Promise.resolve(withLogo as ValidatorList) }),
+    });
+    expect(await screen.findByTestId("avatar-image")).toHaveAttribute("src", "https://pictures.example/v.jpg");
+  });
+
+  it("keeps the initials of a validator without a picture", async () => {
+    renderWithProviders(<ValidatorChip operator={list.items[1].operator_address} moniker="Bee Node" />, {
+      api: fakeApi({ validators: () => Promise.resolve(list as ValidatorList) }),
+    });
+    expect(await screen.findByText("BN")).toBeInTheDocument();
+    expect(screen.queryByTestId("avatar-image")).not.toBeInTheDocument();
   });
 });

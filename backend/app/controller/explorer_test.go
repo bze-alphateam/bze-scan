@@ -53,6 +53,7 @@ func zeroAddress(prefix string) string {
 // fakeReader is an in-memory ExplorerReader that records the arguments of
 // the list calls.
 type fakeReader struct {
+	modules  []repository.ModuleAccount
 	blocks   []repository.BlockSummary
 	txs      []repository.TxSummary
 	block    *repository.Block
@@ -137,6 +138,10 @@ func (f *fakeReader) TxIBCTransfers(_ context.Context, hash string) ([]repositor
 
 func (f *fakeReader) IBCChannels(context.Context) ([]repository.IBCChannel, error) {
 	return f.channels, f.ibcErr
+}
+
+func (f *fakeReader) ModuleAccounts(context.Context) ([]repository.ModuleAccount, error) {
+	return f.modules, f.err
 }
 
 func (f *fakeReader) TxDex(_ context.Context, _, _ int64, hash string) (*repository.TxDex, error) {
@@ -299,6 +304,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/txs/:hash", h.Tx)
 	e.GET("/orders/:id", h.Order)
 	e.GET("/ibc/channels", h.IBCChannels)
+	e.GET("/modules", h.Modules)
 	e.GET("/validators", h.Validators)
 	e.GET("/validators/:operator", h.Validator)
 	e.GET("/validators/:operator/blocks", h.ValidatorBlocks)
@@ -788,9 +794,10 @@ func TestValidatorsPaginatesInRankOrder(t *testing.T) {
 	body := decodeRaw(t, get(t, e, "/validators"))
 	var items []map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(body["items"], &items))
-	for _, k := range []string{"rank", "moniker", "operator_address", "tokens", "voting_power_pct", "commission_rate", "uptime", "jailed", "status"} {
+	for _, k := range []string{"rank", "moniker", "operator_address", "tokens", "voting_power_pct", "commission_rate", "uptime", "jailed", "status", "logo_url"} {
 		assert.Contains(t, items[0], k)
 	}
+	assert.JSONEq(t, `null`, string(items[0]["logo_url"]), "no logo looked up")
 }
 
 func TestValidatorsStatusFilter(t *testing.T) {

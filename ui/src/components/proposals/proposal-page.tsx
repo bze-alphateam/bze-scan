@@ -21,6 +21,7 @@ import type { Proposal, ProposalVote, TokenSummary, VoteOption } from "@/api/typ
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { JsonBlock } from "@/components/ui/json-block";
+import { Markdown } from "@/components/ui/markdown";
 import { MoreDetails } from "@/components/ui/more-details";
 import { CardSkeleton, ListSkeleton } from "@/components/ui/skeleton";
 import { TimeAgo } from "@/components/ui/time-ago";
@@ -128,9 +129,19 @@ function FromProposer({ p }: { p: Proposal }) {
         From the proposer
       </Heading>
       {summary && (
-        <Text fontSize="sm" whiteSpace="pre-line" wordBreak="break-word">
-          {long && !open ? `${summary.slice(0, SUMMARY_FOLD).trimEnd()}…` : summary}
-        </Text>
+        // Folded by height, not by cutting the text, so the Markdown stays whole.
+        <Box
+          position="relative"
+          maxH={long && !open ? "48" : undefined}
+          overflow="hidden"
+          data-testid="proposer-text"
+          data-folded={long && !open ? "" : undefined}
+        >
+          <Markdown text={summary} />
+          {long && !open && (
+            <Box position="absolute" insetX="0" bottom="0" h="12" bgGradient="to-b" gradientFrom="transparent" gradientTo="bg.panel" />
+          )}
+        </Box>
       )}
       {long && (
         <Button variant="ghost" size="sm" minH="44px" alignSelf="start" aria-expanded={open} onClick={() => setOpen((o) => !o)}>

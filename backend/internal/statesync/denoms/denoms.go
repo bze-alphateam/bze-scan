@@ -11,7 +11,13 @@
 // denom upper-cased as symbol). A multi-hop denom is followed through the
 // first hop chain's registry asset and its traces to its home chain; when
 // that fails, the first hop's chain and the raw base denom stay. A chain or
-// an asset missing from the cache is asked of the chain_registry set.
+// an asset missing from the cache is asked of the chain_registry set. A
+// multi-hop denom also keeps its first hop's chain as the via chain.
+//
+// An LP denom is mapped to its pool's two assets through the tradebin pool
+// list (a ulp/<hash> denom, chain v8.2.0+, is the hash of the pool id and
+// cannot be reversed); a legacy ulp_<base>_<quote> missing from the list is
+// split. It is named after the two assets' symbols, as the BZE dapps do.
 package denoms
 
 import (
@@ -108,6 +114,7 @@ type TokenFactory interface {
 type Tradebin interface {
 	AllMarkets(ctx context.Context, in *tradebintypes.QueryAllMarketsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryAllMarketsResponse, error)
 	HaltedDenoms(ctx context.Context, in *tradebintypes.QueryHaltedDenomsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryHaltedDenomsResponse, error)
+	AllLiquidityPools(ctx context.Context, in *tradebintypes.QueryAllLiquidityPoolsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryAllLiquidityPoolsResponse, error)
 }
 
 // Transfer is the part of the IBC transfer query client the set uses;
@@ -153,6 +160,12 @@ type Denom struct {
 	OriginChainID string
 	IBCBaseDenom  string
 	IBCPath       string
+	// ViaChainID is a multi-hop IBC denom's first hop chain (the
+	// counterparty of the BZE channel); empty for one hop.
+	ViaChainID string
+	// LPBase and LPQuote are an LP denom's pool assets; empty when unknown.
+	LPBase  string
+	LPQuote string
 	// Creator is the address in a factory denom.
 	Creator string
 	// Admin is the factory denom's admin; empty once renounced.
@@ -196,6 +209,10 @@ type Deps struct {
 	// Misses is told the chains whose registry cache an IBC denom missed;
 	// nil drops them.
 	Misses statesync.Publisher
+	// ChainID is the explorer's own chain in the registry: a native or
+	// Factory denom without a logo in its metadata takes its registry
+	// asset's. Empty leaves them without.
+	ChainID string
 }
 
 // Set is the denoms set.
@@ -317,6 +334,10 @@ func (s *Set) FullResync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	pools, err := s.pools(ctx)
+	if err != nil {
+		return err
+	}
 
 	origins, err := s.origins(ctx)
 	if err != nil {
@@ -331,12 +352,18 @@ func (s *Set) FullResync(ctx context.Context) error {
 	}
 	slices.Sort(all)
 	snap := Snapshot{Full: true}
+	symbols := map[string]string{}
 	for _, d := range all {
-		row, err := s.row(ctx, d, metadata[d], supply[d], markets, halted, origins)
+		row, err := s.row(ctx, d, metadata[d], supply[d], markets, halted, pools, origins)
 		if err != nil {
 			return err
 		}
+		symbols[d] = row.Symbol
 		snap.Denoms = append(snap.Denoms, row)
+	}
+	// LP rows last: their names need the symbols of both assets.
+	for i := range snap.Denoms {
+		nameLP(&snap.Denoms[i], symbols)
 	}
 	if err := s.deps.Store.Save(ctx, snap); err != nil {
 		return err
@@ -357,14 +384,9 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var md *banktypes.Metadata
-	resp, err := s.deps.Bank.DenomMetadataByQueryString(ctx, &banktypes.QueryDenomMetadataByQueryStringRequest{Denom: key})
-	switch {
-	case status.Code(err) == codes.NotFound:
-	case err != nil:
-		return fmt.Errorf("bank DenomMetadata %s: %w", key, err)
-	default:
-		md = &resp.Metadata
+	md, err := s.metadata(ctx, key)
+	if err != nil {
+		return err
 	}
 	sup, err := s.deps.Bank.SupplyOf(ctx, &banktypes.QuerySupplyOfRequest{Denom: key})
 	if err != nil {
@@ -378,13 +400,34 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+	pools, err := s.pools(ctx)
+	if err != nil {
+		return err
+	}
 	origins, err := s.origins(ctx)
 	if err != nil {
 		return err
 	}
-	row, err := s.row(ctx, key, md, sup.Amount.Amount.String(), markets, halted, origins)
+	row, err := s.row(ctx, key, md, sup.Amount.Amount.String(), markets, halted, pools, origins)
 	if err != nil {
 		return err
+	}
+	if row.LPBase != "" {
+		// The assets are not resynced with it: resolve them for their
+		// symbols only.
+		symbols := map[string]string{}
+		for _, side := range []string{row.LPBase, row.LPQuote} {
+			sideMD, err := s.metadata(ctx, side)
+			if err != nil {
+				return err
+			}
+			r, err := s.row(ctx, side, sideMD, "", markets, halted, pools, origins)
+			if err != nil {
+				return err
+			}
+			symbols[side] = r.Symbol
+		}
+		nameLP(&row, symbols)
 	}
 	if err := s.deps.Store.Save(ctx, Snapshot{Denoms: []Denom{row}}); err != nil {
 		return err
@@ -392,6 +435,18 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	s.learn(false, key)
 	origins.publish(s.deps.Misses)
 	return nil
+}
+
+// metadata returns the bank metadata of denom; nil when the bank has none.
+func (s *Set) metadata(ctx context.Context, denom string) (*banktypes.Metadata, error) {
+	resp, err := s.deps.Bank.DenomMetadataByQueryString(ctx, &banktypes.QueryDenomMetadataByQueryStringRequest{Denom: denom})
+	switch {
+	case status.Code(err) == codes.NotFound:
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("bank DenomMetadata %s: %w", denom, err)
+	}
+	return &resp.Metadata, nil
 }
 
 // markets returns the tradebin market ids (base/quote) by denom, sorted.
@@ -447,10 +502,70 @@ func (s *Set) halted(ctx context.Context) (map[string]bool, error) {
 	}
 }
 
+// pools returns the two assets of every tradebin pool by its LP denom. A
+// node without the AMM answers Unimplemented: no pools.
+func (s *Set) pools(ctx context.Context) (map[string][2]string, error) {
+	out := map[string][2]string{}
+	var next []byte
+	for {
+		resp, err := s.deps.Tradebin.AllLiquidityPools(ctx, &tradebintypes.QueryAllLiquidityPoolsRequest{
+			Pagination: &query.PageRequest{Key: next, Limit: PageLimit},
+		})
+		if status.Code(err) == codes.Unimplemented {
+			return out, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("tradebin AllLiquidityPools: %w", err)
+		}
+		for _, p := range resp.List {
+			if p.LpDenom != "" && p.Base != "" && p.Quote != "" {
+				out[p.LpDenom] = [2]string{p.Base, p.Quote}
+			}
+		}
+		if resp.Pagination == nil || len(resp.Pagination.NextKey) == 0 {
+			return out, nil
+		}
+		next = resp.Pagination.NextKey
+	}
+}
+
+// lpPair returns the pool assets of an LP denom: the pool's, else, for a
+// legacy ulp_<base>_<quote> denom only, its two parts. A ulp/<hash> denom
+// missing from pools has none (the hash cannot be reversed).
+func lpPair(denom string, pools map[string][2]string) (base, quote string, ok bool) {
+	if p, found := pools[denom]; found {
+		return p[0], p[1], true
+	}
+	rest, legacy := strings.CutPrefix(denom, "ulp_")
+	if !legacy {
+		return "", "", false
+	}
+	parts := strings.Split(rest, "_")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+// nameLP names an LP row after its assets' symbols (BASE/QUOTE LP, BASE/QUOTE
+// LP Shares); a row whose assets are unknown or lack a symbol keeps its
+// names.
+func nameLP(row *Denom, symbols map[string]string) {
+	if row.LPBase == "" {
+		return
+	}
+	base, quote := symbols[row.LPBase], symbols[row.LPQuote]
+	if base == "" || quote == "" {
+		return
+	}
+	row.Symbol = base + "/" + quote + " LP"
+	row.Name = base + "/" + quote + " LP Shares"
+}
+
 // row maps one denom, querying the admin of a factory denom and the trace
 // of an IBC denom.
 func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, supply string,
-	markets map[string][]string, halted map[string]bool, origins *origins) (Denom, error) {
+	markets map[string][]string, halted map[string]bool, pools map[string][2]string, origins *origins) (Denom, error) {
 	row := Denom{
 		Denom:   denom,
 		Kind:    Kind(denom),
@@ -486,6 +601,18 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 		case resp.DenomAuthority != nil:
 			row.Admin = resp.DenomAuthority.Admin
 		}
+	}
+	if (row.Kind == KindNative || row.Kind == KindFactory) && row.LogoURL == "" && origins != nil && s.deps.ChainID != "" {
+		asset, err := origins.lookup.Asset(ctx, s.deps.ChainID, denom)
+		if err != nil {
+			return Denom{}, fmt.Errorf("denom %s: registry asset: %w", denom, err)
+		}
+		if asset != nil {
+			row.LogoURL = asset.LogoURL
+		}
+	}
+	if row.Kind == KindLP {
+		row.LPBase, row.LPQuote, _ = lpPair(denom, pools)
 	}
 	if row.Kind == KindIBC && s.deps.Transfer != nil {
 		if err := s.ibc(ctx, &row, origins); err != nil {
@@ -554,6 +681,9 @@ func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) error {
 		return nil // the channel's chain is not known until the channels sync fills it
 	}
 	row.OriginChainID = first
+	if len(hops) > 1 {
+		row.ViaChainID = first
+	}
 	asset, err := s.originAsset(ctx, row, trace, first, o)
 	if err != nil || asset == nil {
 		return err

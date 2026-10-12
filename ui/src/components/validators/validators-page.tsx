@@ -105,7 +105,7 @@ function ValidatorRow({ v }: { v: Validator }) {
         {v.status === "bonded" ? v.rank ?? "—" : inactiveLabel(v.status)}
       </Text>
       <HStack gap="3" minW="0">
-        <Avatar name={v.moniker} />
+        <Avatar name={v.moniker} src={v.logo_url} />
         <Stack gap="0.5" minW="0">
           <HStack gap="2" minW="0">
             <Link asChild fontWeight="medium" truncate>
