@@ -31,6 +31,9 @@
 #     tokenfactory AllDenomBranding and tradebin HaltedDenoms are recorded only
 #     from a gateway that serves them (chain v8.2.0 and later): an older node
 #     answers 501, and with no file the fake answers Unimplemented the same way.
+#     tradebin/AllLiquidityPools.json is hand-written, not recorded: two of the
+#     three legacy ulp_ pools (the third tests the fallback) and one hashed
+#     ulp/<hash> pool (chain v8.2.0+).
 #   Denoms in file names are path-escaped (factory%2Fbze1…%2Fuvdl).
 #     per ibc denom: transfer/DenomTrace.<hash>.json (path and base denom)
 #   holders (the holders snapshot):
