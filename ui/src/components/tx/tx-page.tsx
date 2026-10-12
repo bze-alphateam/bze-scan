@@ -128,14 +128,23 @@ export function TxView({ tx }: { tx: Tx }) {
   const tokens = useTokenDirectory();
   const validators = useValidatorDirectory();
   const ctx = useMemo(
-    () => createRenderContext({ transfers: tx.transfers, tokens: tokens.data, validators: validators.data }),
-    [tx.transfers, tokens.data, validators.data],
+    () =>
+      createRenderContext({
+        transfers: tx.transfers,
+        tokens: tokens.data,
+        validators: validators.data,
+        dex: tx.dex,
+        ibcTransfers: tx.ibc_transfers,
+      }),
+    [tx.transfers, tokens.data, validators.data, tx.dex, tx.ibc_transfers],
   );
 
   // A failed transaction only paid its fee.
   const transfers = tx.success ? tx.transfers : tx.transfers.filter((t) => t.msg_index === null);
   const simple = isSimple(tx.messages.length, transfers.length);
   const signer = tx.signers[0] ?? tx.fee_payer;
+  // A DEX transaction always shows its steps and what the signer gained and gave.
+  const collapsed = simple && !tx.messages.some((m) => m.type_url.startsWith("/bze.tradebin."));
 
   const reasonOf = (t: Transfer) => {
     const m = tx.messages.find((x) => x.msg_index === t.msg_index);
@@ -158,7 +167,7 @@ export function TxView({ tx }: { tx: Tx }) {
       </Section>
       <Section title="Where the funds went">
         <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" px={{ base: "4", md: "5" }} py="3">
-          <StepList transfers={transfers} reasonOf={reasonOf} collapsed={simple} netOf={simple ? null : signer} />
+          <StepList transfers={transfers} reasonOf={reasonOf} collapsed={collapsed} netOf={collapsed ? null : signer} />
         </Box>
       </Section>
       <Overview tx={tx} ctx={ctx} />

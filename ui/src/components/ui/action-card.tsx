@@ -1,16 +1,29 @@
 import { Badge, Box, Circle, HStack, Heading, Stack, Text } from "@chakra-ui/react";
 import type { ReactNode } from "react";
 import type { IconType } from "react-icons";
-import { LuArrowLeftRight, LuCoins, LuLandmark, LuSend, LuShapes } from "react-icons/lu";
+import { LuArrowLeftRight, LuChartCandlestick, LuCoins, LuFlame, LuGift, LuLandmark, LuSend, LuShapes, LuSparkles } from "react-icons/lu";
 
 /** What kind of action a message is, for its icon and label. */
-export type ActionCategory = "send" | "staking" | "governance" | "cross_chain" | "other";
+export type ActionCategory =
+  | "send"
+  | "staking"
+  | "governance"
+  | "cross_chain"
+  | "dex"
+  | "burner"
+  | "tokens"
+  | "rewards"
+  | "other";
 
 const CATEGORIES: Record<ActionCategory, { icon: IconType; label: string; palette: string }> = {
   send: { icon: LuSend, label: "Send", palette: "blue" },
   staking: { icon: LuCoins, label: "Staking", palette: "purple" },
   governance: { icon: LuLandmark, label: "Governance", palette: "orange" },
   cross_chain: { icon: LuArrowLeftRight, label: "Cross-chain", palette: "teal" },
+  dex: { icon: LuChartCandlestick, label: "DEX", palette: "cyan" },
+  burner: { icon: LuFlame, label: "Burner", palette: "red" },
+  tokens: { icon: LuSparkles, label: "Tokens", palette: "pink" },
+  rewards: { icon: LuGift, label: "Rewards", palette: "yellow" },
   other: { icon: LuShapes, label: "Other", palette: "gray" },
 };
 

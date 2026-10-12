@@ -1,0 +1,30 @@
+{
+  "type_url": "/bze.tokenfactory.MsgSetDenomMetadata",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "metadata": {
+      "description": "The honey of the hive",
+      "denom_units": [
+        {
+          "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+          "exponent": 0,
+          "aliases": []
+        },
+        {
+          "denom": "HONEY",
+          "exponent": 6,
+          "aliases": []
+        }
+      ],
+      "base": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+      "display": "HONEY",
+      "name": "Honey",
+      "symbol": "HONEY",
+      "uri": "",
+      "uri_hash": ""
+    }
+  },
+  "events": []
+}

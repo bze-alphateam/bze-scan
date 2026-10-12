@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.rewards.MsgClaimDenomRewards",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney"
+  },
+  "events": []
+}

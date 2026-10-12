@@ -1,0 +1,13 @@
+{
+  "type_url": "/bze.tradebin.MsgRemoveLiquidity",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "pool_id": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",
+    "lp_tokens": "5000000",
+    "min_base": "1",
+    "min_quote": "1"
+  },
+  "events": []
+}

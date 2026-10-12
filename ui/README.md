@@ -31,7 +31,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/render/messages` | the plain-word message registry (below) |
 | `src/render/errors.ts` | why a failed transaction failed, from its codespace and code |
 | `src/render/blocks.ts`, `src/render/block-flow.ts` | the blocks pages' words and numbers: why a height is not found, fee and gas sums; the block's transfers grouped by the label names the backend seeds (Fees, DEX, Staking, Rewards programs, Burner, Cross-chain, Governance, Payments, Other) with each group's line |
-| `src/render/txs.ts` | a transaction in one line (its first message's registry title, "+ N more actions") and its counterparty (a renderer's `counterparty`, "Burner" for a burner fund) |
+| `src/render/txs.ts` | a transaction in one line (its first message's registry title, "+ N more actions") and its counterparty (its renderer's `counterparty`) |
 | `src/render/home.ts` | the home tiles' words and the price change's sign and colour |
 | `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
 | `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
@@ -108,7 +108,9 @@ follows every page of a block's transfers. `useSearch` is never polled.
 A transaction the API answers 404 for is pending, never failed:
 `useTransaction` asks again every 7 s for the pending window
 (`TX_PENDING_WINDOW_MS`, two minutes), then reports `not_found`; once found it
-is `immutable`.
+is `immutable`, except while `isUnsettled`: the order book has not processed
+its DEX messages (`dex.pending`) or a cross-chain transfer it created is
+`pending` and not expired. It is then refetched every 7 s (`live`).
 
 `useAllValidators` follows `next_cursor` to the last page (100 per page, all
 statuses) and keeps the first page's `summary`; the list and the validator
@@ -156,7 +158,7 @@ keys with `describeParam` and link to the module's group (`groupOfModule`).
 
 `src/render/messages/registry.ts` maps a type URL to a `MessageRenderer`:
 `category` (the action card's icon and label: `send`, `staking`,
-`governance`, `cross_chain`, `other`), `title(msg, ctx)` (the card's
+`governance`, `cross_chain`, `dex`, `burner`, `tokens`, `rewards`, `other`), `title(msg, ctx)` (the card's
 heading, also the page description), `summary(msg, ctx)` (one line for lists,
 the title by default), `Body` (the card's content) and an optional
 `reasonFor(transfer, msg, ctx)` (why one of its transfers happened, for the
@@ -169,11 +171,34 @@ Renderers read the API's proto JSON body (snake_case) and the message's
 events, and look everything else up in the `RenderContext` from
 `createRenderContext`: the transaction's transfers, denoms (symbol and
 exponent from the transfers, then the tokens list, with its USD price),
-validator monikers and the transfers' labels. They decode nothing
+validator monikers, the transfers' labels, and on the transaction page the
+API's `dex` outcome and `ibc_transfers` (empty in lists). They decode nothing
 themselves, and a missing field never throws. One file per module family
-(`bank`, `staking`, `distribution`, `gov`, `ibc`, `authz`); a new renderer
+(`bank`, `staking`, `distribution`, `gov`, `ibc`, `authz`, and BZE's
+`tradebin`, `burner`, `tokenfactory`, `rewards`, `cointrunk`); a new renderer
 adds a fixture in `test/fixtures/messages` and its expected title in
-`registry.test.tsx`.
+`registry.test.tsx`. Every BZE type the backend classifies
+(`backend/internal/classify/classify.go`) must have a renderer:
+`bze.test.tsx` reads that file and fails on one that falls back.
+
+BZE specifics:
+
+- DEX (`dex.ts`): a market id `base/quote` is split by denom kind (`ibc/…`
+  two parts, `factory/…` three); a price is quote base units per base base
+  unit, shown × 10^(base exponent − quote exponent); links go to
+  `dex.getbze.com/exchange/market?id=`. `outcomeOf` picks the part of `dex`
+  that belongs to a message by the queue message ids of its
+  `OrderCreateMessageEvent`/`OrderCancelMessageEvent` (chain v8.2.0+), by
+  market and owner before that; `DexOutcome` shows pending (amber, never
+  failed), the fills, the remainder on the book and cancels. The order's
+  held funds are the signer's largest transfer to the DEX in the denom it
+  spends; its other transfers to and through the DEX are the order fee. A DEX
+  transaction always opens its funds flow with the net box.
+- Cross-chain (`ibc-status.tsx`): `ibcRowFor` matches a `MsgTransfer` by its
+  source channel and `send_packet` sequence, a relay message by the packet in
+  its body; `IbcStatus` is the chip (Pending, Expired, Delivered, Refunded,
+  Received, Rejected), the settling transaction and the other chain's
+  explorer from the registry's `${accountAddress}` template (https only).
 
 ## Loading states
 

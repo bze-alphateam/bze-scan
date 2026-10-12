@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-import type { Label, MessageEvent, Transfer } from "@/api/types";
+import type { IbcTransfer, Label, MessageEvent, Transfer, TxDex } from "@/api/types";
 import type { ActionCategory } from "@/components/ui/action-card";
 
 /**
@@ -43,6 +43,10 @@ export interface RenderContext {
   label(address: string): Label | null;
   /** The renderer of a type URL, the fallback for an unknown one (for `MsgExec`'s nested messages). */
   rendererFor(typeUrl: string): MessageRenderer;
+  /** The transaction's DEX outcome from the API; null when it has none (or in a list). */
+  dex: TxDex | null;
+  /** The cross-chain transfers the transaction created or settled; empty when none (or in a list). */
+  ibcTransfers: IbcTransfer[];
 }
 
 export interface BodyProps {

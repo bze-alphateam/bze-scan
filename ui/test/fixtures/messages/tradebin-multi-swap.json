@@ -1,0 +1,20 @@
+{
+  "type_url": "/bze.tradebin.MsgMultiSwap",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "routes": [
+      "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
+    ],
+    "input": {
+      "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "amount": "50000000"
+    },
+    "min_output": {
+      "denom": "ubze",
+      "amount": "3900000000"
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,16 @@
+{
+  "type_url": "/bze.tradebin.MsgCreateLiquidityPool",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "base": "ubze",
+    "quote": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "fee": "0.003",
+    "fee_dest": "",
+    "stable": false,
+    "initial_base": "1000000000",
+    "initial_quote": "5000000000"
+  },
+  "events": []
+}

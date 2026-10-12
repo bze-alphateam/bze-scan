@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.tokenfactory.MsgChangeAdmin",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "newAdmin": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4"
+  },
+  "events": []
+}

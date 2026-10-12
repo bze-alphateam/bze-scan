@@ -1,0 +1,15 @@
+{
+  "type_url": "/bze.rewards.MsgCreateStakingReward",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "prize_amount": "100000000",
+    "prize_denom": "ubze",
+    "staking_denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "duration": "30",
+    "min_stake": "0",
+    "lock": "7"
+  },
+  "events": []
+}

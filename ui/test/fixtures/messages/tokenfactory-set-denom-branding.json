@@ -1,0 +1,25 @@
+{
+  "type_url": "/bze.tokenfactory.MsgSetDenomBranding",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "branding": {
+      "font": "Inter",
+      "light": {
+        "background": "#fff8e1",
+        "text": "#1a1a1a",
+        "primary": "#f5a623",
+        "secondary": "#8b5e00"
+      },
+      "dark": {
+        "background": "#1a1300",
+        "text": "#fdf6e3",
+        "primary": "#f5a623",
+        "secondary": "#ffd27f"
+      }
+    }
+  },
+  "events": []
+}

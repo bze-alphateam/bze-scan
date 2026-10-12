@@ -1,5 +1,5 @@
 {
-  "type_url": "/bze.rewards.MsgCreateDenomReward",
+  "type_url": "/bze.future.MsgCreateDenomReward",
   "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
   "module": "rewards",
   "body": {

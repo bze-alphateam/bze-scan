@@ -1,0 +1,13 @@
+{
+  "type_url": "/bze.rewards.MsgCreateDenomRewardSchedule",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "rewards",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "prize_denom": "ubze",
+    "daily_amount": "20000000",
+    "duration": "30"
+  },
+  "events": []
+}

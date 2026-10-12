@@ -1,12 +1,17 @@
-import type { Label, Transfer } from "@/api/types";
+import type { IbcTransfer, Label, Transfer, TxDex } from "@/api/types";
 
 import { authzRenderers } from "./authz";
 import { bankRenderers } from "./bank";
+import { burnerRenderers } from "./burner";
+import { cointrunkRenderers } from "./cointrunk";
 import { distributionRenderers } from "./distribution";
 import { fallbackRenderer } from "./fallback";
 import { govRenderers } from "./gov";
 import { ibcRenderers } from "./ibc";
+import { rewardsRenderers } from "./rewards";
 import { stakingRenderers } from "./staking";
+import { tokenfactoryRenderers } from "./tokenfactory";
+import { tradebinRenderers } from "./tradebin";
 import type { DenomInfo, MessageRenderer, RenderContext } from "./types";
 
 /** Every message type the explorer reads in plain words, by type URL. */
@@ -18,6 +23,11 @@ export const registry: ReadonlyMap<string, MessageRenderer> = new Map(
     ...govRenderers,
     ...ibcRenderers,
     ...authzRenderers,
+    ...tradebinRenderers,
+    ...burnerRenderers,
+    ...tokenfactoryRenderers,
+    ...rewardsRenderers,
+    ...cointrunkRenderers,
   }),
 );
 
@@ -32,13 +42,17 @@ export interface ContextSources {
   tokens?: ReadonlyMap<string, { symbol: string | null; exponent: number; price_usd: string | null }>;
   /** The validators list by operator address. */
   validators?: ReadonlyMap<string, { moniker: string }>;
+  /** The transaction's DEX outcome (`dex` of the transaction response). */
+  dex?: TxDex | null;
+  /** The transaction's cross-chain transfers (`ibc_transfers` of the transaction response). */
+  ibcTransfers?: IbcTransfer[] | null;
 }
 
 /**
  * The renderers' context: denoms from the transaction's own transfers first
  * (the API resolved them), then the tokens list; labels from the transfers.
  */
-export function createRenderContext({ transfers, tokens, validators }: ContextSources): RenderContext {
+export function createRenderContext({ transfers, tokens, validators, dex, ibcTransfers }: ContextSources): RenderContext {
   const denoms = new Map<string, DenomInfo>();
   const labels = new Map<string, Label>();
   for (const t of transfers) {
@@ -62,5 +76,7 @@ export function createRenderContext({ transfers, tokens, validators }: ContextSo
     validator: (operator) => validators?.get(operator)?.moniker ?? null,
     label: (address) => labels.get(address) ?? null,
     rendererFor,
+    dex: dex ?? null,
+    ibcTransfers: ibcTransfers ?? [],
   };
 }

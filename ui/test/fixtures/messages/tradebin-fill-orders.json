@@ -1,0 +1,21 @@
+{
+  "type_url": "/bze.tradebin.MsgFillOrders",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+    "order_type": "sell",
+    "orders": [
+      {
+        "price": "0.0124",
+        "amount": "200000000"
+      },
+      {
+        "price": "0.0125",
+        "amount": "300000000"
+      }
+    ]
+  },
+  "events": []
+}

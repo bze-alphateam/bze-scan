@@ -1,5 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
+import { noHorizontalScroll } from "./layout";
+
+import dexTx from "../test/fixtures/api/v1/txs/5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60.json";
+import ibcTx from "../test/fixtures/api/v1/txs/9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E.json";
 import failedTx from "../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0.json";
 import sendTx from "../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
 
@@ -87,5 +91,84 @@ test.describe("transaction page on a phone", () => {
     expect(from && to && to.y > from.y).toBe(true);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
+
+/**
+ * Answers the transaction route with `first` until `switchTo()` is called,
+ * then with `then` (the mock API serves one fixture per hash).
+ */
+async function changingTx(page: Page, hash: string, first: unknown, then: unknown) {
+  let switched = false;
+  await page.route(`**/api/v1/txs/${hash}`, (route) =>
+    route.fulfill({ json: switched ? then : first, headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } }),
+  );
+  return () => {
+    switched = true;
+  };
+}
+
+test.describe("transaction page with BZE actions", () => {
+  test("renders a DEX order and a claim with the outcome, the reasons and the net", async ({ page }) => {
+    await page.goto(`/txs/${dexTx.hash}`);
+    const actions = page.getByTestId("action-card");
+    await expect(actions).toHaveCount(2);
+    await expect(actions.first().getByRole("heading", { name: "Buy order · 1,000 BZE at 0.0125 USDC" })).toBeVisible();
+    await expect(actions.first().getByTestId("dex-fills")).toContainText("Filled right away: 600 BZE for 7.5 USDC");
+    await expect(actions.first().getByTestId("dex-placed")).toContainText("400 BZE still waiting on the order book");
+    await expect(actions.first().getByTestId("dex-filled")).toHaveText("60% filled");
+    await expect(actions.nth(1).getByRole("heading", { name: "Claim staking-reward prizes · 1.5 BZE" })).toBeVisible();
+
+    const steps = page.getByTestId("flow-step");
+    await expect(steps).toHaveCount(5);
+    await expect(steps.nth(1)).toContainText("DEX fee");
+    await expect(steps.nth(3)).toContainText("held for the buy order");
+    await expect(steps.nth(4)).toContainText("staking-reward prize");
+    await expect(page.getByTestId("net-box")).toBeVisible();
+  });
+
+  test("shows a pending order, then its outcome once the order book processed it", async ({ page }) => {
+    const pending = { ...dexTx, dex: { placed: [], fills: [], cancelled: [], pending: true } };
+    const resolve = await changingTx(page, dexTx.hash, pending, dexTx);
+    await page.goto(`/txs/${dexTx.hash}`);
+    await expect(page.getByTestId("dex-pending")).toContainText("The order book processes this at the end of the block");
+    resolve();
+    await expect(page.getByTestId("dex-fills")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("dex-pending")).toHaveCount(0);
+  });
+
+  test("shows a cross-chain transfer pending, then delivered", async ({ page }) => {
+    const row = ibcTx.ibc_transfers[0];
+    const delivered = {
+      ...ibcTx,
+      ibc_transfers: [{ ...row, status: "delivered", result_height: 25120452, result_tx_hash: "CD".repeat(32), result_time: "2026-10-11T09:16:00Z" }],
+    };
+    const deliver = await changingTx(page, ibcTx.hash, ibcTx, delivered);
+    await page.goto(`/txs/${ibcTx.hash}`);
+    await expect(page.getByRole("heading", { name: "Cross-chain transfer to Cosmos Hub · 2 ATOM" })).toBeVisible();
+    const status = page.getByTestId("ibc-status");
+    await expect(status).toContainText("Pending");
+    await expect(status).toContainText("waiting for Cosmos Hub to confirm");
+    await expect(status.getByRole("link", { name: /See on Cosmos Hub's explorer/ })).toHaveAttribute(
+      "href",
+      `https://www.mintscan.io/cosmos/address/${row.receiver}`,
+    );
+    deliver();
+    await expect(status).toContainText("Delivered", { timeout: 15_000 });
+    await expect(status.getByRole("link", { name: "CDCD…CDCD" })).toHaveAttribute("href", `/txs/${"CD".repeat(32)}`);
+  });
+});
+
+test.describe("BZE actions on a phone", () => {
+  test.skip(({ isMobile }) => !isMobile, "phone layout");
+
+  test("keeps the DEX outcome, the steps and the net within the screen", async ({ page }) => {
+    await page.goto(`/txs/${dexTx.hash}`);
+    await expect(page.getByTestId("flow-step")).toHaveCount(5);
+    await expect(page.getByTestId("dex-fills")).toBeVisible();
+    await noHorizontalScroll(page);
+    await page.goto(`/txs/${ibcTx.hash}`);
+    await expect(page.getByTestId("ibc-status")).toBeVisible();
+    await noHorizontalScroll(page);
   });
 });

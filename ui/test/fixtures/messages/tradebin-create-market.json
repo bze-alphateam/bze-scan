@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.tradebin.MsgCreateMarket",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "base": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "quote": "ubze"
+  },
+  "events": []
+}

@@ -38,11 +38,12 @@ describe("txCounterparty", () => {
     expect(txCounterparty(delegate, ctx)).toEqual({ kind: "validator", operator: delegate.first_message!.body!.validator_address });
   });
 
-  it("names the burner for a burner fund and the community pool for a pool fund", () => {
+  it("names the module a BZE action deals with, and the community pool for a pool fund", () => {
     expect(txCounterparty(withFirst("/bze.burner.MsgFundBurner", { creator: "bze1x", amount: "5ubze" }), ctx)).toEqual({
       kind: "name",
       name: "Burner",
     });
+    expect(txCounterparty(withFirst("/bze.tradebin.MsgCreateOrder", null), ctx)).toEqual({ kind: "name", name: "DEX" });
     expect(txCounterparty(withFirst("/cosmos.distribution.v1beta1.MsgFundCommunityPool", { amount: [] }), ctx)).toEqual({
       kind: "name",
       name: "Community pool",
@@ -51,7 +52,7 @@ describe("txCounterparty", () => {
 
   it("names nobody for a message without another side, an unknown one or an unreadable body", () => {
     expect(txCounterparty(withFirst("/cosmos.gov.v1.MsgVote", { proposal_id: "4", option: "VOTE_OPTION_YES" }), ctx)).toBeNull();
-    expect(txCounterparty(withFirst("/bze.tradebin.MsgCreateOrder", null), ctx)).toBeNull();
+    expect(txCounterparty(withFirst("/bze.future.MsgSomethingNew", { creator: "bze1x" }), ctx)).toBeNull();
     expect(txCounterparty(withFirst("/cosmos.bank.v1beta1.MsgSend", null), ctx)).toBeNull();
     expect(txCounterparty({ ...send, msg_types: [], first_message: null }, ctx)).toBeNull();
   });

@@ -1,0 +1,12 @@
+{
+  "type_url": "/bze.cointrunk.MsgAddArticle",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "cointrunk",
+  "body": {
+    "publisher": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "title": "BZE v8.2 is live",
+    "url": "https://getbze.com/news/v8-2",
+    "picture": ""
+  },
+  "events": []
+}
