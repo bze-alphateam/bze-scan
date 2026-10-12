@@ -10,6 +10,7 @@ import type {
   ErrorBody,
   IbcListParams,
   IbcTransfer,
+  ModuleAccount,
   Page,
   PageParams,
   Proposal,
@@ -76,6 +77,7 @@ export interface ExplorerApi {
 
   stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
+  modules(signal?: AbortSignal): Promise<{ items: ModuleAccount[] }>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
   rawBlockResults(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -190,6 +192,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
 
     stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),
+    modules: (signal) => get("/modules", {}, signal),
 
     rawBlock: (height, signal) => get(`/raw/block/${seg(String(height))}`, {}, signal),
     rawBlockResults: (height, signal) => get(`/raw/block_results/${seg(String(height))}`, {}, signal),

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +22,33 @@ afterEach(() => {
 });
 
 describe("TokensPage", () => {
+  it("marks a multi-hop token and pairs a pool share's two logos", async () => {
+    const items = (list as Page<TokenSummary>).items;
+    const twoHop = {
+      ...items[3],
+      denom: "ibc/0000000000000000000000000000000000000000000000000000000000000002",
+      ibc_hops: 2,
+      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null },
+    };
+    const logos = items.map((t) => (t.symbol === "BZE" ? { ...t, logo_url: "https://logos.example/bze.png" } : t));
+    renderWithProviders(<TokensPage />, {
+      api: api(() => Promise.resolve({ items: [...logos, twoHop], next_cursor: null })),
+    });
+    await screen.findAllByTestId("token-list-row");
+    const rows = screen.getAllByTestId("token-list-row");
+    const direct = rows[3];
+    const hop = rows[6];
+    expect(within(direct).queryByTestId("hops-tag")).not.toBeInTheDocument();
+    expect(within(hop).getByTestId("origin-tag")).toHaveTextContent("Cross-chain · Cosmos Hub via Osmosis");
+    expect(within(hop).getByTestId("hops-tag")).toHaveTextContent("2 hops");
+    expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
+
+    const lp = within(rows[5]).getByTestId("lp-logo");
+    // BZE's logo over the top-left corner, USDC's initials under the bottom-right one.
+    await waitFor(() => expect(lp.querySelector("img")).toHaveAttribute("src", "https://logos.example/bze.png"));
+    expect(lp).toHaveTextContent("US");
+  });
+
   it("shows four tile skeletons and ten row skeletons on the first load", () => {
     renderWithProviders(<TokensPage />, { api: pendingApi() });
     expect(screen.getAllByTestId("tile-skeleton")).toHaveLength(4);

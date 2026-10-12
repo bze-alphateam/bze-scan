@@ -9,7 +9,8 @@
       "commission_rate": "0.05",
       "uptime": "99.99000",
       "jailed": false,
-      "status": "bonded"
+      "status": "bonded",
+      "logo_url": null
     },
     {
       "rank": 2,
@@ -20,7 +21,8 @@
       "commission_rate": "0.045",
       "uptime": "100.00000",
       "jailed": false,
-      "status": "bonded"
+      "status": "bonded",
+      "logo_url": null
     },
     {
       "rank": 3,
@@ -31,7 +33,8 @@
       "commission_rate": "0.10",
       "uptime": "98.40000",
       "jailed": false,
-      "status": "bonded"
+      "status": "bonded",
+      "logo_url": null
     },
     {
       "rank": null,
@@ -42,7 +45,8 @@
       "commission_rate": "0.05",
       "uptime": "61.20000",
       "jailed": true,
-      "status": "unbonding"
+      "status": "unbonding",
+      "logo_url": null
     },
     {
       "rank": null,
@@ -53,7 +57,8 @@
       "commission_rate": "0.20",
       "uptime": null,
       "jailed": false,
-      "status": "unbonded"
+      "status": "unbonded",
+      "logo_url": null
     }
   ],
   "next_cursor": null,

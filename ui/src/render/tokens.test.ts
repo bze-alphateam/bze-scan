@@ -18,6 +18,8 @@ import {
   eventLine,
   filterTokens,
   headerChips,
+  hopsExplainer,
+  hopsText,
   listOriginTag,
   mergeEvents,
   mintBurnText,
@@ -63,6 +65,23 @@ describe("tokens list", () => {
     expect(listOriginTag({ ...tokens[0], kind: "unknown" })).toBe("Other");
   });
 
+  it("tells a multi-hop token from the one sent straight from home", () => {
+    const osmosis = { chain_id: "osmosis-1", name: "Osmosis", logo_url: null };
+    const direct = bySymbol("ATOM");
+    const twoHop = { ...direct, ibc_hops: 2, via_chain: osmosis };
+    expect(listOriginTag(direct)).toBe("Cross-chain · Cosmos Hub");
+    expect(listOriginTag(twoHop)).toBe("Cross-chain · Cosmos Hub via Osmosis");
+    expect(hopsText({ hops: 2, via: "Osmosis" })).toBe("2 hops via Osmosis");
+    expect(hopsText({ hops: 3, via: null })).toBe("3 hops");
+    expect(hopsExplainer(direct)).toBeNull();
+    expect(hopsExplainer(twoHop)).toBe(
+      "This ATOM came to BZE through Osmosis (2 hops), not straight from Cosmos Hub. " +
+        "It is a different token from the ATOM sent directly from Cosmos Hub: the two are not interchangeable on BZE. " +
+        "To swap one for the other, send it back the way it came.",
+    );
+    expect(hopsExplainer({ ...twoHop, via_chain: null })).toContain("through another chain (2 hops)");
+  });
+
   it("filters by chip, then on symbol or name", () => {
     const symbols = (rows: TokenSummary[]) => rows.map((t) => t.symbol);
     expect(symbols(filterTokens(tokens, "factory", ""))).toEqual(["HONEY", "VDL"]);
@@ -101,6 +120,10 @@ describe("token page", () => {
     expect(headerChips(usdc).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Trading on the DEX"]);
     expect(headerChips({ ...usdc, halted: true }).map((c) => c.text)).toEqual(["Cross-chain from Noble", "Halted on the DEX"]);
     expect(headerChips({ ...honey, kind: "native", markets: [] }).map((c) => c.text)).toEqual(["Native"]);
+    const twoHop = headerChips({ ...usdc, ibc_hops: 2, via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: "o.png" } });
+    expect(twoHop.map((c) => c.text)).toEqual(["Cross-chain from Noble", "2 hops via Osmosis", "Trading on the DEX"]);
+    expect(twoHop[1]).toMatchObject({ tone: "orange", logoUrl: "o.png" });
+    expect(twoHop[1].title).toContain("not interchangeable");
   });
 
   it("says whether the supply can change", () => {

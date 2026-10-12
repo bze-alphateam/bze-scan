@@ -256,6 +256,8 @@ export interface Validator {
   uptime: string | null;
   jailed: boolean;
   status: ValidatorStatus;
+  /** The Keybase picture of the validator's identity; null without one. */
+  logo_url: string | null;
 }
 
 export interface ValidatorsSummary {
@@ -433,6 +435,24 @@ export interface TokenSummary {
   origin_chain: OriginChain | null;
   /** The block time of the denom's `created` token event; null without one. */
   created_time: string | null;
+  /** The port/channel pairs of an IBC denom's path; null for the other kinds. */
+  ibc_hops: number | null;
+  /** The chain of the first hop of a multi-hop IBC denom (it came through it); null otherwise. */
+  via_chain: OriginChain | null;
+  /** The two assets of a liquidity-pool share; null for the other kinds. */
+  lp_pair: LpPair | null;
+}
+
+export interface LpPair {
+  base: string;
+  quote: string;
+}
+
+/** A module account: GET /api/v1/modules. */
+export interface ModuleAccount {
+  address: string;
+  name: string;
+  module: string;
 }
 
 /** What moved of a denom in a window: `amount` summed in base units. */

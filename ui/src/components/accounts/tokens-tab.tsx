@@ -1,14 +1,14 @@
 "use client";
 
-import { Badge, Box, Button, ButtonGroup, Grid, HStack, Image, Link, Stack, Text } from "@chakra-ui/react";
+import { Badge, Box, Button, ButtonGroup, Grid, HStack, Link, Stack, Text } from "@chakra-ui/react";
 import { useState } from "react";
 import { LuExternalLink } from "react-icons/lu";
 
 import { useDenoms } from "@/api/hooks";
 import type { Account } from "@/api/types";
 import { Amount } from "@/components/ui/amount";
-import { Avatar } from "@/components/ui/avatar";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { TokenLogo } from "@/components/tokens/tokens-page";
 import { formatCount, formatUsd } from "@/lib/format";
 import { sumAmounts } from "@/lib/math";
 import { BOND_DENOM, dexAssetUrl, tokenRows, tokensTotalUsd, type TokenRow, type TokenSort } from "@/render/account";
@@ -25,11 +25,9 @@ function PhoneLabel({ children }: { children: string }) {
   );
 }
 
-function TokenLogo({ row }: { row: TokenRow }) {
-  if (row.logoUrl) {
-    return <Image src={row.logoUrl} alt="" boxSize="9" rounded="full" flexShrink={0} />;
-  }
-  return <Avatar name={row.symbol ?? row.denom} />;
+function RowLogo({ row }: { row: TokenRow }) {
+  const denoms = useDenoms();
+  return <TokenLogo t={{ denom: row.denom, symbol: row.symbol, logo_url: row.logoUrl, lp_pair: row.lpPair }} denoms={denoms.data} />;
 }
 
 function Row({ row, a }: { row: TokenRow; a: Account }) {
@@ -49,7 +47,7 @@ function Row({ row, a }: { row: TokenRow; a: Account }) {
       data-testid="token-row"
     >
       <HStack gap="3" minW="0">
-        <TokenLogo row={row} />
+        <RowLogo row={row} />
         <Stack gap="0" minW="0">
           <Text fontWeight="medium" truncate title={row.denom} data-testid="token-symbol">
             {row.symbol ?? row.denom}

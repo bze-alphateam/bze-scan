@@ -121,5 +121,8 @@
   "transfers_24h": {
     "count": 14,
     "amount": "125000000000"
-  }
+  },
+  "ibc_hops": null,
+  "via_chain": null,
+  "lp_pair": null
 }

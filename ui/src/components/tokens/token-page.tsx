@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
 import { LuExternalLink } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
-import type { Token, TokenEvent } from "@/api/types";
+import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
+import type { LpPair, Token, TokenEvent } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -27,6 +27,7 @@ import {
   eventLine,
   headerChips,
   holdersSub,
+  hopsExplainer,
   mergeEvents,
   mintBurnText,
   onDex,
@@ -34,6 +35,7 @@ import {
   supplyState,
   supplyText,
   supplyTileSub,
+  tokenHref,
   tokenSymbol,
   topHoldersText,
   transferLine,
@@ -63,7 +65,26 @@ function Chip({ party }: { party: Party }) {
   return <AccountChip address={party.address} label={party.label} />;
 }
 
+/** An LP token's two pool assets, each linking to its page. */
+function PoolPair({ pair }: { pair: LpPair }) {
+  const denoms = useDenoms();
+  const side = (denom: string) => {
+    const t = denoms.data?.get(denom);
+    return (
+      <Link asChild>
+        <NextLink href={tokenHref(denom)}>{t ? tokenSymbol(t) : denom}</NextLink>
+      </Link>
+    );
+  };
+  return (
+    <Text fontSize="sm" color="fg.muted" data-testid="pool-pair">
+      A share of the DEX pool of {side(pair.base)} and {side(pair.quote)}.
+    </Text>
+  );
+}
+
 function Header({ t }: { t: Token }) {
+  const denoms = useDenoms();
   const site = websiteLink(t.website);
   const symbol = tokenSymbol(t);
   return (
@@ -71,7 +92,7 @@ function Header({ t }: { t: Token }) {
       <Breadcrumb name={symbol} />
       <HStack gap="4" align="start" wrap="wrap" justify="space-between">
         <HStack gap="3" minW="0" align="start">
-          <TokenLogo t={t} size="12" />
+          <TokenLogo t={t} denoms={denoms.data} size="12" />
           <Stack gap="1.5" minW="0">
             <HStack gap="2" wrap="wrap" align="baseline">
               <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
@@ -85,7 +106,7 @@ function Header({ t }: { t: Token }) {
             </HStack>
             <HStack gap="2" wrap="wrap" data-testid="token-chips">
               {headerChips(t).map((c) => (
-                <Badge key={c.text} colorPalette={c.tone} variant="subtle" size="md" rounded="full">
+                <Badge key={c.text} colorPalette={c.tone} variant="subtle" size="md" rounded="full" title={c.title}>
                   {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="4" rounded="full" />}
                   {c.text}
                 </Badge>
@@ -96,6 +117,12 @@ function Header({ t }: { t: Token }) {
                 </Link>
               )}
             </HStack>
+            {hopsExplainer(t) && (
+              <Text fontSize="sm" color="fg.muted" maxW="2xl" data-testid="hops-explainer">
+                {hopsExplainer(t)}
+              </Text>
+            )}
+            {t.lp_pair && <PoolPair pair={t.lp_pair} />}
             {t.kind === "factory" && t.creator && (
               <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted" data-testid="token-created">
                 <Text as="span">{t.created_time ? `Created ${formatDate(t.created_time)} by` : "Created by"}</Text>

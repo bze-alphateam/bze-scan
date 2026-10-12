@@ -2,7 +2,7 @@ import type { Label, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer
 import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
-import { originTag } from "./account";
+import { multiHop, originTag } from "./account";
 
 // The tokens pages' words and numbers, kept pure so they are tested without
 // rendering. Amounts stay in base units until formatted.
@@ -30,6 +30,28 @@ export function denomFromSegments(segments: string | string[]): string | null {
 
 /** The name a token goes by: its symbol, else its denom. */
 export const tokenSymbol = (t: Pick<TokenSummary, "symbol" | "denom">) => t.symbol ?? t.denom;
+
+/** "2 hops via Osmosis": the chains a multi-hop token crossed to reach BZE. */
+export function hopsText(hop: { hops: number; via: string | null }): string {
+  return `${hop.hops} hops${hop.via ? ` via ${hop.via}` : ""}`;
+}
+
+/**
+ * Why a multi-hop token is a token of its own: it reached BZE through another
+ * chain, so it is a different denom from the same asset sent straight from
+ * home. Null for a one-hop token and the other kinds.
+ */
+export function hopsExplainer(t: Pick<TokenSummary, "ibc_hops" | "via_chain" | "origin_chain" | "symbol" | "denom">): string | null {
+  const hop = multiHop(t);
+  if (!hop) return null;
+  const home = t.origin_chain?.name || t.origin_chain?.chain_id || "its home chain";
+  const via = hop.via ?? "another chain";
+  return (
+    `This ${tokenSymbol(t)} came to BZE through ${via} (${hop.hops} hops), not straight from ${home}. ` +
+    `It is a different token from the ${tokenSymbol(t)} sent directly from ${home}: the two are not interchangeable on BZE. ` +
+    `To swap one for the other, send it back the way it came.`
+  );
+}
 
 /** The one short tag of a list row; "Other" for a kind the explorer does not know (the raw denom stays in More details). */
 export function listOriginTag(t: TokenSummary): string {
@@ -121,7 +143,9 @@ export function supplyText(t: Pick<TokenSummary, "supply" | "exponent" | "symbol
 
 export interface HeaderChip {
   text: string;
-  tone: "blue" | "purple" | "teal" | "gray" | "green" | "red";
+  tone: "blue" | "purple" | "teal" | "gray" | "green" | "red" | "orange";
+  /** A tooltip that explains the chip. */
+  title?: string;
   logoUrl?: string | null;
 }
 
@@ -138,6 +162,8 @@ export function headerChips(t: Token): HeaderChip[] {
     case "ibc": {
       const chain = t.origin_chain?.name || t.origin_chain?.chain_id;
       chips.push({ text: chain ? `Cross-chain from ${chain}` : "Cross-chain", tone: "teal", logoUrl: t.origin_chain?.logo_url });
+      const hop = multiHop(t);
+      if (hop) chips.push({ text: hopsText(hop), tone: "orange", logoUrl: t.via_chain?.logo_url, title: hopsExplainer(t) ?? undefined });
       break;
     }
     case "lp":

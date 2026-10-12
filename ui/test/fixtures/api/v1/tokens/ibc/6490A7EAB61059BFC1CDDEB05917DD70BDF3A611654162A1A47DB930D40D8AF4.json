@@ -38,5 +38,8 @@
   "transfers_24h": {
     "count": 0,
     "amount": "0"
-  }
+  },
+  "ibc_hops": 1,
+  "via_chain": null,
+  "lp_pair": null
 }

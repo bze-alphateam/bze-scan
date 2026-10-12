@@ -21,6 +21,9 @@ test.describe("tokens list", () => {
     await expect(page.getByTestId("tile").first()).toContainText("1 native · 2 Factory · 2 cross-chain");
     await expect(rows(page)).toHaveCount(6);
     await expect(rows(page).nth(3)).toContainText("Halted on the DEX");
+    // The pool share shows its two assets' logos; a one-hop token has no hops tag.
+    await expect(rows(page).nth(5).getByTestId("lp-logo")).toBeVisible();
+    await expect(page.getByTestId("hops-tag")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Cross-chain", exact: true }).click();
     await expect(rows(page)).toHaveCount(2);

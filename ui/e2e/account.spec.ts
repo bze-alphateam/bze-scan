@@ -13,6 +13,21 @@ import nodeDown from "../test/fixtures/api/v1/accounts/bze1q8f7z6x5c4v3d2n0mlkjh
 const ADDR = plain.address;
 
 test.describe("account page", () => {
+  test("a module account moves to another module account from its menu", async ({ page }) => {
+    await page.goto("/accounts/bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp");
+    await expect(page.getByRole("heading", { level: 1, name: "DEX" })).toBeVisible();
+    const menu = page.getByLabel("Module account");
+    await expect(menu).toHaveValue("bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp");
+    await menu.selectOption({ label: "Burner" });
+    await expect(page).toHaveURL(/\/accounts\/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun$/);
+  });
+
+  test("a plain account has no module menu", async ({ page }) => {
+    await page.goto(`/accounts/${ADDR}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Account" })).toBeVisible();
+    await expect(page.getByLabel("Module account")).toHaveCount(0);
+  });
+
   test("renders the tiles and the three tabs, keeping the tab in the URL", async ({ page }) => {
     await page.goto(`/accounts/${ADDR}`);
     await expect(page).toHaveTitle("Account bze1m3k…9ds4 · BZE Explorer");

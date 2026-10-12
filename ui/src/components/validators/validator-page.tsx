@@ -66,7 +66,7 @@ function Header({ v, activeCount }: { v: ValidatorDetail; activeCount: number | 
       <Breadcrumb name={v.moniker} />
       <HStack gap="4" align="start" wrap="wrap" justify="space-between">
         <HStack gap="3" minW="0">
-          <Avatar name={v.moniker} size="12" fontSize="md" />
+          <Avatar name={v.moniker} src={v.logo_url} size="12" fontSize="md" />
           <Stack gap="1" minW="0">
             <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
               {v.moniker}

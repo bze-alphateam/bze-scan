@@ -1,4 +1,4 @@
-import type { Account, AccountUnbonding, Balance, Coin, Label, TokenSummary, Validator } from "@/api/types";
+import type { Account, AccountUnbonding, Balance, Coin, Label, LpPair, TokenSummary, Validator } from "@/api/types";
 import { formatCount, formatDateTime, formatPct, shortAddress } from "@/lib/format";
 import { compareDecimals, isAboveZero, percentOf, sumAmounts, usdValue } from "@/lib/math";
 
@@ -81,6 +81,16 @@ export function unlockText(e: AccountUnbonding, now: Date): string {
 }
 
 /** Where a token comes from, by its kind; the raw denom for one the explorer does not know. */
+/**
+ * A multi-hop IBC token: how many chains it crossed and the one it came
+ * through. It is not the same token as the one sent straight from its home
+ * chain, whatever their symbols say. Null for one hop and the other kinds.
+ */
+export function multiHop(token: Pick<TokenSummary, "ibc_hops" | "via_chain">): { hops: number; via: string | null } | null {
+  if (token.ibc_hops == null || token.ibc_hops < 2) return null;
+  return { hops: token.ibc_hops, via: token.via_chain?.name || token.via_chain?.chain_id || null };
+}
+
 export function originTag(token: TokenSummary | undefined, denom: string): string {
   switch (token?.kind) {
     case "native":
@@ -89,7 +99,9 @@ export function originTag(token: TokenSummary | undefined, denom: string): strin
       return "Factory";
     case "ibc": {
       const chain = token.origin_chain?.name || token.origin_chain?.chain_id;
-      return chain ? `Cross-chain · ${chain}` : "Cross-chain";
+      const hop = multiHop(token);
+      const via = hop?.via ? ` via ${hop.via}` : "";
+      return chain ? `Cross-chain · ${chain}${via}` : "Cross-chain";
     }
     case "lp":
       return "DEX pool share";
@@ -111,6 +123,8 @@ export interface TokenRow {
   exponent: number | null;
   name: string | null;
   logoUrl: string | null;
+  /** A pool share's two assets, for its paired logo. */
+  lpPair: LpPair | null;
   origin: string;
   /** The balance in USD; null without a price. */
   valueUsd: string | null;
@@ -138,6 +152,7 @@ export function tokenRows(balances: Balance[], denoms: Map<string, TokenSummary>
         exponent,
         name: t?.name ?? null,
         logoUrl: t?.logo_url ?? null,
+        lpPair: t?.lp_pair ?? null,
         origin: originTag(t, b.denom),
         valueUsd: exponent != null ? usdValue(b.amount, exponent, t?.price_usd) : null,
       };
