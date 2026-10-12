@@ -209,6 +209,10 @@ type Deps struct {
 	// Misses is told the chains whose registry cache an IBC denom missed;
 	// nil drops them.
 	Misses statesync.Publisher
+	// ChainID is the explorer's own chain in the registry: a native or
+	// Factory denom without a logo in its metadata takes its registry
+	// asset's. Empty leaves them without.
+	ChainID string
 }
 
 // Set is the denoms set.
@@ -596,6 +600,15 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 			return Denom{}, fmt.Errorf("tokenfactory DenomAuthority %s: %w", denom, err)
 		case resp.DenomAuthority != nil:
 			row.Admin = resp.DenomAuthority.Admin
+		}
+	}
+	if (row.Kind == KindNative || row.Kind == KindFactory) && row.LogoURL == "" && origins != nil && s.deps.ChainID != "" {
+		asset, err := origins.lookup.Asset(ctx, s.deps.ChainID, denom)
+		if err != nil {
+			return Denom{}, fmt.Errorf("denom %s: registry asset: %w", denom, err)
+		}
+		if asset != nil {
+			row.LogoURL = asset.LogoURL
 		}
 	}
 	if row.Kind == KindLP {

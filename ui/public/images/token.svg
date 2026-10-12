@@ -1,0 +1,67 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle with gradient -->
+    <defs>
+        <!-- Light mode gradients -->
+        <linearGradient id="bgGradientLight" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#f7fafc;stop-opacity:1" />
+        </linearGradient>
+        <linearGradient id="iconGradientLight" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#3182ce;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#2c5aa0;stop-opacity:1" />
+        </linearGradient>
+
+        <!-- Dark mode gradients -->
+        <linearGradient id="bgGradientDark" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#2d3748;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#1a202c;stop-opacity:1" />
+        </linearGradient>
+        <linearGradient id="iconGradientDark" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#63b3ed;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#4299e1;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+
+    <!-- Define styles for light and dark modes -->
+    <style>
+        .token-placeholder { color-scheme: light dark; }
+
+        /* Light mode (default) */
+        .bg-circle { fill: url(#bgGradientLight); stroke: #e2e8f0; }
+        .token-icon { stroke: url(#iconGradientLight); }
+        .token-text { fill: url(#iconGradientLight); }
+        .label-text { fill: #4a5568; }
+        .border-highlight { stroke: rgba(255, 255, 255, 0.8); }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+        .bg-circle { fill: url(#bgGradientDark); stroke: #4a5568; }
+        .token-icon { stroke: url(#iconGradientDark); }
+        .token-text { fill: url(#iconGradientDark); }
+        .label-text { fill: #a0aec0; }
+        .border-highlight { stroke: rgba(255, 255, 255, 0.1); }
+        }
+
+        /* Class-based dark mode (for next-themes) */
+        :global(.dark) .bg-circle { fill: url(#bgGradientDark); stroke: #4a5568; }
+        :global(.dark) .token-icon { stroke: url(#iconGradientDark); }
+        :global(.dark) .token-text { fill: url(#iconGradientDark); }
+        :global(.dark) .label-text { fill: #a0aec0; }
+        :global(.dark) .border-highlight { stroke: rgba(255, 255, 255, 0.1); }
+    </style>
+
+    <g class="token-placeholder">
+        <!-- Main circle background - full size -->
+        <circle cx="100" cy="100" r="95" class="bg-circle" stroke-width="3"/>
+
+        <!-- Token icon - large coin design -->
+        <circle cx="100" cy="100" r="70" fill="none" class="token-icon" stroke-width="4"/>
+        <circle cx="100" cy="100" r="50" fill="none" class="token-icon" stroke-width="3"/>
+
+        <!-- Large question mark -->
+        <text x="100" y="120" font-family="var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif" font-size="60" font-weight="bold" text-anchor="middle" class="token-text">?</text>
+
+        <!-- Subtle border highlight -->
+        <circle cx="100" cy="100" r="92" fill="none" class="border-highlight" stroke-width="1"/>
+    </g>
+</svg>

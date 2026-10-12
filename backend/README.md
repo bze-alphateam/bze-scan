@@ -972,6 +972,10 @@ Unimplemented) leaves only the fallback. A denom the bank no longer lists keeps
 its row with a zero supply. The holders and prices columns are left to their
 own jobs.
 
+A native or Factory denom whose bank metadata has no logo (none has one on
+mainnet) takes the logo of its asset in the registry of the explorer's own
+chain (`CHAIN_ID`), when the registry lists it.
+
 An IBC denom is traced with transfer `DenomTrace` (`ibc_path`,
 `ibc_base_denom`). Its `origin_chain_id` is the counterparty chain of the
 path's first channel in `explorer.ibc_channels` (null until the IBC channels

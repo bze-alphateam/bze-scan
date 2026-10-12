@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Image, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Badge, Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo, useState } from "react";
 import { LuExternalLink, LuSearch } from "react-icons/lu";
@@ -66,9 +66,19 @@ export function TokenLogo({ t, denoms, size = "9" }: { t: LogoToken; denoms?: Ma
   return <SingleLogo t={t} size={size} />;
 }
 
+/** What a token without a logo shows: the DEX's placeholder. */
+export const TOKEN_LOGO_PLACEHOLDER = "/images/token.svg";
+
 function SingleLogo({ t, size }: { t: Pick<TokenSummary, "logo_url" | "symbol" | "denom">; size: string }) {
-  if (t.logo_url) return <Image src={t.logo_url} alt="" boxSize={size} rounded="full" flexShrink={0} />;
-  return <Avatar name={tokenSymbol(t)} size={size} fontSize={size === "full" ? "2xs" : undefined} />;
+  return (
+    <Avatar
+      name={tokenSymbol(t)}
+      src={t.logo_url}
+      fallbackSrc={TOKEN_LOGO_PLACEHOLDER}
+      size={size}
+      fontSize={size === "full" ? "2xs" : undefined}
+    />
+  );
 }
 
 function Tiles({ tokens }: { tokens: TokenSummary[] }) {

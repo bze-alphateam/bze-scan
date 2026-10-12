@@ -44,9 +44,13 @@ describe("TokensPage", () => {
     expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
 
     const lp = within(rows[5]).getByTestId("lp-logo");
-    // BZE's logo over the top-left corner, USDC's initials under the bottom-right one.
-    await waitFor(() => expect(lp.querySelector("img")).toHaveAttribute("src", "https://logos.example/bze.png"));
-    expect(lp).toHaveTextContent("US");
+    // BZE's logo over the top-left corner, the DEX's placeholder for USDC (no logo) under the bottom-right one.
+    await waitFor(() =>
+      expect([...lp.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual([
+        "https://logos.example/bze.png",
+        "/images/token.svg",
+      ]),
+    );
   });
 
   it("shows four tile skeletons and ten row skeletons on the first load", () => {

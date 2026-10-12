@@ -120,6 +120,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Transfer:     ibctransfertypes.NewQueryClient(conn),
 			Lookup:       denomStore,
 			Misses:       resyncs,
+			ChainID:      cfg.ChainID,
 		}, 0),
 		proposals.New(proposals.Deps{
 			Gov:     govv1.NewQueryClient(conn),

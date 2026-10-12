@@ -649,3 +649,27 @@ func TestResyncingAnLPAloneResolvesItsAssetsForTheName(t *testing.T) {
 	assert.Equal(t, "VDL/BZE LP Shares", snap.Denoms[0].Name)
 	assert.Equal(t, vdl, snap.Denoms[0].LPBase)
 }
+
+// Native and Factory denoms carry no logo in their bank metadata on mainnet:
+// they take their asset's in the registry of the explorer's own chain.
+func TestNativeAndFactoryDenomsTakeTheirChainsRegistryLogo(t *testing.T) {
+	l := &fakeLookup{assets: map[string]*denoms.RegistryAsset{
+		"beezee-1|ubze":   {Symbol: "BZE", LogoURL: "https://x/bze.png"},
+		"beezee-1|" + vdl: {Symbol: "VDL", LogoURL: "https://x/vdl.png"},
+		"noble-1|ubze":    {LogoURL: "https://x/wrong.png"},
+	}}
+	n, st := newFakeNode(t), &fakeStore{}
+	set := denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: n, Lookup: l, ChainID: "beezee-1"}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	rows := byDenom(st.last(t))
+	assert.Equal(t, "https://x/bze.png", rows["ubze"].LogoURL)
+	assert.Equal(t, "BZE", rows["ubze"].Symbol, "only the logo is taken")
+	assert.Equal(t, "https://x/vdl.png", rows[vdl].LogoURL)
+	assert.Empty(t, rows[corey].LogoURL, "not in the registry")
+
+	// Without the chain id nothing is looked up.
+	st = &fakeStore{}
+	require.NoError(t, denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: n, Lookup: l}, 0).
+		FullResync(context.Background()))
+	assert.Empty(t, byDenom(st.last(t))["ubze"].LogoURL)
+}

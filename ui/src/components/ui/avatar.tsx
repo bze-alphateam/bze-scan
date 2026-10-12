@@ -10,21 +10,24 @@ interface AvatarProps extends Omit<SquareProps, "children"> {
   name: string;
   /** A picture (a validator's Keybase one); the initials stand in without it or when it fails to load. */
   src?: string | null;
+  /** A picture tried when `src` is missing or fails to load (the token placeholder), before the initials. */
+  fallbackSrc?: string;
 }
 
-/** A picture, else two-letter initials on a hue derived from the name. */
-export function Avatar({ name, src, size = "9", ...props }: AvatarProps) {
-  const [failed, setFailed] = useState<string | null>(null);
-  if (src && failed !== src) {
+/** A picture, else the fallback picture, else two-letter initials on a hue derived from the name. */
+export function Avatar({ name, src, fallbackSrc, size = "9", ...props }: AvatarProps) {
+  const [failed, setFailed] = useState<string[]>([]);
+  const shown = [src, fallbackSrc].find((u): u is string => !!u && !failed.includes(u));
+  if (shown) {
     return (
       <Image
-        src={src}
+        src={shown}
         alt=""
         boxSize={size}
         rounded="full"
         flexShrink={0}
         objectFit="cover"
-        onError={() => setFailed(src)}
+        onError={() => setFailed((f) => [...f, shown])}
         data-testid="avatar-image"
       />
     );

@@ -132,6 +132,20 @@ describe("pictures", () => {
     expect(screen.getByText("HO")).toBeInTheDocument();
   });
 
+  it("tries the picture, then the fallback picture, then the initials", () => {
+    renderWithProviders(<Avatar name="Honey" src="https://logos.example/h.png" fallbackSrc="/images/token.svg" />);
+    fireEvent.error(screen.getByTestId("avatar-image"));
+    expect(screen.getByTestId("avatar-image")).toHaveAttribute("src", "/images/token.svg");
+    fireEvent.error(screen.getByTestId("avatar-image"));
+    expect(screen.queryByTestId("avatar-image")).not.toBeInTheDocument();
+    expect(screen.getByText("HO")).toBeInTheDocument();
+  });
+
+  it("shows the fallback picture when there is no picture", () => {
+    renderWithProviders(<Avatar name="Honey" src={null} fallbackSrc="/images/token.svg" />);
+    expect(screen.getByTestId("avatar-image")).toHaveAttribute("src", "/images/token.svg");
+  });
+
   it("gives a validator chip the validator's picture from the validators list", async () => {
     const op = list.items[0].operator_address;
     const withLogo = { ...list, items: list.items.map((v, i) => (i === 0 ? { ...v, logo_url: "https://pictures.example/v.jpg" } : v)) };
