@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"slices"
@@ -321,4 +322,51 @@ func TestDexOutcomesInEitherDirection(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/orders/999").status)
 	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/accounts/"+dexOwner+"/orders?status=partial").status)
+}
+
+// indexScans sums the scans of every partition of the partitioned index.
+func indexScans(t *testing.T, db *sql.DB, index string) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, db.QueryRow(`SELECT coalesce(sum(s.idx_scan), 0) FROM pg_inherits i
+		JOIN pg_stat_user_indexes s ON s.indexrelid = i.inhrelid WHERE i.inhparent = $1::regclass`, index).Scan(&n))
+	return n
+}
+
+// The orders insert finds each order's cancel through the cancel index. A
+// plain index on the id made the planner walk the whole partition backwards
+// on its primary key for the newest cancel, once per order, which took the
+// backfill's single writer from milliseconds to seconds per batch.
+func TestTheOrdersInsertFindsCancelsThroughTheirIndex(t *testing.T) {
+	url := freshDatabase(t, true)
+	migrateUp(t, url)
+	db := connect(t, url)
+	const events, orders = 40_000, 50
+	_, err := db.Exec(`INSERT INTO explorer.block_events (height, seq, type, attrs)
+		SELECT $1 + n / 20, n % 20,
+		       CASE WHEN n % 2 = 0 THEN 'bze.tradebin.OrderCanceledEvent' ELSE 'bze.tradebin.OrderSavedEvent' END,
+		       jsonb_build_object('id', lpad(n::text, 24, '0'))
+		  FROM generate_series(1, $2) AS n`, dexH-events, events)
+	require.NoError(t, err)
+	_, err = db.Exec(`ANALYZE explorer.block_events`)
+	require.NoError(t, err)
+
+	at := dexBlock(dexH)
+	for i := range orders {
+		// Every other order was cancelled.
+		at.Orders = append(at.Orders, savedOrder(dexH, 1+i, dexOwner, "10", 0, ""))
+	}
+	before := indexScans(t, db, "explorer.block_events_pkey")
+	pool, err := pgxpool.New(context.Background(), url)
+	require.NoError(t, err)
+	err = writer.NewBatchWriter(pool).Write(context.Background(), []*transform.Entities{at}, writer.ModeInsert)
+	pool.Close() // a closing connection reports its statistics at once
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return indexScans(t, db, "explorer.idx_block_events_order_cancel") > 0
+	}, 10*time.Second, 50*time.Millisecond, "the cancel lookups use the cancel index")
+	assert.Equal(t, before, indexScans(t, db, "explorer.block_events_pkey"), "no walk of a partition's primary key")
+	assert.Equal(t, []string{fmt.Sprint(orders / 2)},
+		queryStrings(t, db, `SELECT count(*) FROM explorer.orders WHERE status = 'cancelled'`))
 }
