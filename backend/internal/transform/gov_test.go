@@ -204,6 +204,11 @@ func TestVoteOptions(t *testing.T) {
 		{"split", `[{"option":2,"weight":"0.3"},{"option":4,"weight":"0.7"}]`, `[{"option":2,"weight":"0.3"},{"option":4,"weight":"0.7"}]`, ""},
 		{"sdk 0.45", "option: VOTE_OPTION_ABSTAIN\nweight: \"1.000000000000000000\"", `[{"option":2,"weight":"1.000000000000000000"}]`, "abstain"},
 		{"bare name", "VOTE_OPTION_NO_WITH_VETO", `[{"option":4,"weight":"1.000000000000000000"}]`, "no_with_veto"},
+		// Votes cast before v0.47, read from state: the legacy Dec's wire form.
+		{"state, whole", `[{"option":1,"weight":"1000000000000000000"}]`, `[{"option":1,"weight":"1.000000000000000000"}]`, "yes"},
+		{"state, split", `[{"option":1,"weight":"700000000000000000"},{"option":3,"weight":"300000000000000000"}]`,
+			`[{"option":1,"weight":"0.700000000000000000"},{"option":3,"weight":"0.300000000000000000"}]`, ""},
+		{"integer one", `[{"option":3,"weight":"1"}]`, `[{"option":3,"weight":"1"}]`, "no"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			options, option, err := transform.VoteOptions(tc.raw)
