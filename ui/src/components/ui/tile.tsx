@@ -9,18 +9,16 @@ interface TileProps {
   sub?: ReactNode;
 }
 
-/** A summary tile: a label, a large value and a sub-line; `TileSkeleton` is its twin. */
+/** A summary tile: a small upper-case label, a large mono value and a sub-line; `TileSkeleton` is its twin. */
 export function Tile({ label, value, sub }: TileProps) {
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" p="4" minH="108px" data-testid="tile">
-      <Text fontSize="sm" color="fg.muted">
-        {label}
-      </Text>
-      <Text fontSize="2xl" fontWeight="semibold" mt="1" lineHeight="short">
+    <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" px="4" py="14px" minH="108px" data-testid="tile">
+      <Text textStyle="tileLabel">{label}</Text>
+      <Text textStyle="tileValue" mt="6px">
         {value ?? "—"}
       </Text>
       {sub && (
-        <Text fontSize="sm" color="fg.muted" mt="1">
+        <Text fontSize="12px" color="fg.muted" mt="1">
           {sub}
         </Text>
       )}

@@ -8,7 +8,7 @@ distributions, raffles).
 
 Status: the backend indexes the chain live and from the archive, keeps the
 chain state in sync and serves the read API (`backend/README.md`). The UI has
-its shell (header, search box, footer with the status light), the API client
+its shell (header, search box, footer with the health pill), the API client
 and the test harness (`ui/README.md`); its pages come next.
 
 ## Layout

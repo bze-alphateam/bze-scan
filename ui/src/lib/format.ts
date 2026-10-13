@@ -188,11 +188,14 @@ export function initials(value: string): string {
   return (Array.from(words[0])[0] + Array.from(words[1])[0]).toUpperCase();
 }
 
-/** A hue (0–359) derived from the string, the same for the same string. */
-export function avatarHue(value: string): number {
+/** The number of colours in the avatar palette (the `avatar.0`…`avatar.7` tokens). */
+export const AVATAR_COLORS = 8;
+
+/** An avatar palette index (0–7) derived from the string, the same for the same string. */
+export function avatarIndex(value: string): number {
   let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  for (const c of value) {
+    hash = (hash * 31 + c.codePointAt(0)!) >>> 0;
   }
-  return Math.abs(hash) % 360;
+  return hash % AVATAR_COLORS;
 }

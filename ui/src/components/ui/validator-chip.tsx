@@ -14,29 +14,16 @@ interface ValidatorChipProps extends StackProps {
   moniker?: string | null;
 }
 
-/** A validator as a chip: an avatar and its moniker, linking to its page. */
+/** A validator as a chip: a 20px avatar and its moniker, linking to its page, the operator address on hover. */
 export function ValidatorChip({ operator, moniker, ...props }: ValidatorChipProps) {
   const name = moniker || shortAddress(operator);
   const logo = useValidatorDirectory().data?.get(operator)?.logo_url;
   return (
-    <Link asChild _hover={{ textDecoration: "none", bg: "bg.muted" }} rounded="full" maxW="full">
+    <Link asChild maxW="full" color="accent.fg">
       <NextLink href={`/validators/${encodeURIComponent(operator)}`} title={operator} aria-label={name}>
-        <HStack
-          as="span"
-          gap="1.5"
-          display="inline-flex"
-          minW="0"
-          maxW="full"
-          ps="0.5"
-          pe="2.5"
-          py="0.5"
-          borderWidth="1px"
-          borderColor="border.panel"
-          rounded="full"
-          {...props}
-        >
-          <Avatar name={moniker || operator} src={logo} size="5" fontSize="2xs" />
-          <Text as="span" fontSize="sm" truncate fontFamily={moniker ? undefined : "mono"}>
+        <HStack as="span" gap="2" display="inline-flex" minW="0" maxW="full" {...props}>
+          <Avatar name={moniker || operator} src={logo} size="5" />
+          <Text as="span" truncate fontFamily={moniker ? undefined : "mono"}>
             {name}
           </Text>
         </HStack>

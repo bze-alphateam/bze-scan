@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, HStack, Skeleton, SkeletonCircle, SkeletonText, Stack } from "@chakra-ui/react";
+import { Box, HStack, Skeleton, SkeletonText, Stack } from "@chakra-ui/react";
 
 // Skeleton twins of the page atoms (UI Design, "Loading states"): each takes
 // the size of what it stands in for, so nothing shifts when the data lands.
@@ -78,7 +78,7 @@ export function ListSkeleton({ rows }: { rows: number }) {
           borderColor="border.panel"
           data-testid="list-skeleton-row"
         >
-          <SkeletonCircle size="9" />
+          <Skeleton boxSize="8" rounded="l2" />
           <Stack flex="1" gap="2">
             <Skeleton h="4" w="60%" />
             <Skeleton h="3" w="40%" />

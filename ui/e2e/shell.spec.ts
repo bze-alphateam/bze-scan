@@ -15,7 +15,7 @@ test.describe("site shell", () => {
       "https://explorer.getbze.com/beezee",
     );
     await expect(footer.getByRole("link", { name: "Parameters" })).toHaveAttribute("href", "/parameters");
-    await expect(footer.getByRole("button", { name: /^Explorer status/ })).toBeVisible();
+    await expect(footer.getByRole("button", { name: /^Explorer health/ })).toBeVisible();
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
@@ -34,6 +34,19 @@ test.describe("site shell", () => {
   });
 });
 
+test.describe("network strip", () => {
+  test("shows the network and the chain's figures above the header", async ({ page, isMobile }) => {
+    await page.goto("/");
+    const strip = page.getByRole("complementary", { name: "Network summary" });
+    await expect(strip.getByText("Mainnet")).toBeVisible();
+    await expect(strip.getByText("25,120,450")).toBeVisible();
+    await expect(strip.getByText("5.9s")).toBeVisible();
+    // Below 820px the day's transactions and staking leave; below 1180px the reward rate and validators.
+    await expect(strip.getByText("1,840")).toBeVisible({ visible: !isMobile });
+    await expect(strip.getByText("3/40")).toBeVisible({ visible: !isMobile });
+  });
+});
+
 test.describe("desktop header", () => {
   test.skip(({ isMobile }) => isMobile, "desktop layout");
 
@@ -43,7 +56,6 @@ test.describe("desktop header", () => {
     const nav = header.getByRole("navigation", { name: "Explorer" });
     await expect(nav.getByRole("link")).toHaveText(["Blocks", "Transactions", "Validators", "Tokens", "Proposals", "Parameters"]);
     await expect(header.getByRole("combobox", { name: "Search the explorer" })).toBeVisible();
-    await expect(header.getByText("Mainnet")).toBeVisible();
     await expect(header.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Open menu" })).toBeHidden();
 

@@ -54,7 +54,7 @@ function TxRow({ tx, ctx }: { tx: TxSummary; ctx: RenderContext }) {
     >
       <HashLink hash={tx.hash} noCopy />
       <Box gridRow={{ base: "1", md: "auto" }} gridColumn={{ base: "2", md: "4" }} justifySelf={{ base: "end", md: "start" }}>
-        <StatusPill success={tx.success} size="sm" />
+        <StatusPill success={tx.success} />
       </Box>
       <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "2" }} gridRow={{ md: "1" }} data-testid="tx-what">
         {txOneLine(tx, ctx)}

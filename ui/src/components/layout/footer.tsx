@@ -18,26 +18,29 @@ const FOOTER_LINKS = [
 
 export function Footer() {
   return (
-    <Box as="footer" bg="bg.panel" borderTopWidth="1px" borderColor="border.panel" mt="auto">
-      <Container maxW="7xl" px={{ base: "4", md: "6" }} py="4">
-        <Flex direction={{ base: "column", md: "row" }} gap="3" align={{ base: "flex-start", md: "center" }}>
-          <Text fontSize="sm" color="fg.muted">
-            BZE Explorer · chain {env.chainId}
+    <Box as="footer" bg="bg.panel" borderTopWidth="1px" borderColor="border.panel" mt="10">
+      <Container maxW="7xl" px={{ base: "4", md: "6" }}>
+        <Flex wrap="wrap" columnGap="6" rowGap="3" align="center" minH="64px" py="3" fontSize="12px">
+          <Text color="fg.muted">
+            BZE Explorer · chain{" "}
+            <Text as="span" fontFamily="mono">
+              {env.chainId}
+            </Text>
           </Text>
-          <HStack as="nav" aria-label="Footer" gap="0" flexWrap="wrap" fontSize="sm">
+          <HStack as="nav" aria-label="Footer" columnGap="18px" rowGap="1" flexWrap="wrap">
             {FOOTER_LINKS.map((l) =>
               l.internal ? (
-                <Link key={l.label} asChild px="2" minH="44px" color="fg.muted">
+                <Link key={l.label} asChild minH="32px" color="fg.muted" _hover={{ color: "fg" }}>
                   <NextLink href={l.href}>{l.label}</NextLink>
                 </Link>
               ) : (
-                <Link key={l.label} href={l.href} px="2" minH="44px" color="fg.muted">
+                <Link key={l.label} href={l.href} minH="32px" color="fg.muted" _hover={{ color: "fg" }}>
                   {l.label}
                 </Link>
               ),
             )}
           </HStack>
-          <Box ms={{ md: "auto" }}>
+          <Box ms="auto">
             <StatusLight />
           </Box>
         </Flex>

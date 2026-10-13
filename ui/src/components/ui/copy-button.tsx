@@ -10,7 +10,7 @@ interface CopyButtonProps extends Omit<IconButtonProps, "aria-label" | "onClick"
   label?: string;
 }
 
-/** Copies `value` to the clipboard and shows a check for two seconds. */
+/** A small square button that copies `value` to the clipboard and shows a check for two seconds. */
 export function CopyButton({ value, label = "Copy", ...props }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
@@ -22,8 +22,15 @@ export function CopyButton({ value, label = "Copy", ...props }: CopyButtonProps)
 
   return (
     <IconButton
-      variant="ghost"
+      variant="outline"
       size="xs"
+      boxSize="24px"
+      minW="24px"
+      h="24px"
+      rounded="l1"
+      color="fg.muted"
+      borderColor="border.panel"
+      _hover={{ color: "accent.fg", borderColor: "accent.fg", bg: "transparent" }}
       aria-label={copied ? "Copied" : label}
       title={copied ? "Copied" : label}
       onClick={async () => {

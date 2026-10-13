@@ -4,28 +4,31 @@ import behind from "../test/fixtures/variants/status-behind.json";
 
 import { mockApi, networkError } from "./mock-api";
 
-const light = (page: Page) => page.getByRole("button", { name: /^Explorer status/ });
+const light = (page: Page) => page.getByRole("button", { name: /^Explorer health/ });
 
-test.describe("status light", () => {
-  test("is green when the explorer keeps up", async ({ page }) => {
+test.describe("health pill", () => {
+  test("is Healthy when the explorer keeps up", async ({ page }) => {
     await page.goto("/");
     await expect(light(page)).toHaveAttribute("data-light", "green");
-    await expect(light(page)).toHaveText("Up to date");
+    await expect(light(page)).toHaveText("Healthy");
 
     await light(page).click();
-    const popover = page.getByRole("dialog");
-    await expect(popover).toContainText("Explorer height25,120,450");
-    await expect(popover).toContainText("History from block 24,998,316, older blocks still loading");
+    const popover = page.getByRole("dialog", { name: "Explorer health" });
+    await expect(popover).toContainText("Live indexer25,120,450");
+    await expect(popover).toContainText("History from block24,998,316");
+    await expect(popover).toContainText("BackfillRunning");
+    await expect(popover).toContainText("The explorer keeps up with the chain.");
   });
 
-  test("is red when the explorer is behind", async ({ page }) => {
+  test("is Stalled when the explorer is behind", async ({ page }) => {
     await mockApi(page, { "v1/status": behind });
     await page.goto("/");
     await expect(light(page)).toHaveAttribute("data-light", "red");
-    await expect(light(page)).toHaveText("Behind");
+    await expect(light(page)).toHaveText("Stalled");
 
     await light(page).click();
-    await expect(page.getByRole("dialog")).toContainText("Archive height—");
+    await expect(page.getByRole("dialog")).toContainText("Live indexer25,120,100 · 351 blocks behind");
+    await expect(page.getByRole("dialog")).toContainText("Archive—");
   });
 
   test("is grey when the status cannot be read", async ({ page }) => {

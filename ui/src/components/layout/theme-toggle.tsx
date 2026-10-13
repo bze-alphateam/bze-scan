@@ -8,7 +8,7 @@ import { useColorMode } from "@/components/ui/color-mode";
 /** Switches between dark (the default) and light; next-themes remembers the choice. */
 export function ThemeToggle() {
   return (
-    <ClientOnly fallback={<Skeleton boxSize="11" rounded="l2" />}>
+    <ClientOnly fallback={<Skeleton boxSize="10" rounded="l2" />}>
       <Toggle />
     </ClientOnly>
   );
@@ -19,10 +19,8 @@ function Toggle() {
   const dark = colorMode === "dark";
   return (
     <IconButton
-      variant="ghost"
+      variant="outline"
       size="md"
-      minW="44px"
-      minH="44px"
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       onClick={toggleColorMode}
     >
