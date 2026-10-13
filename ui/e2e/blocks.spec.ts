@@ -115,11 +115,30 @@ test.describe("blocks on a phone", () => {
     await page.goto("/blocks");
     await expect(page.getByTestId("block-row")).toHaveCount(10);
     await noHorizontalScroll(page);
+    // The page box wraps under the arrows, so it drops the divider it has beside them.
+    await expect(page.getByTestId("pager-jump")).toHaveCSS("border-left-width", "0px");
+    await expect(page.getByTestId("pager-jump")).toHaveCSS("margin-left", "0px");
 
     await page.goto(`/blocks/${block.height}`);
     await expect(page.getByTestId("block-tx")).toHaveCount(3);
     await page.locator("[data-testid=flow-group][data-group=fees]").getByRole("button", { name: /Show/ }).click();
     await expect(page.getByTestId("flow-step")).toHaveCount(4);
+    await noHorizontalScroll(page);
+
+    // The raw JSON tabs stay on one line each; Ping.pub moves under the JSON.
+    await page.getByRole("button", { name: /More details/ }).click();
+    const heights = await page.getByRole("tab").evaluateAll((tabs) => tabs.map((t) => t.getBoundingClientRect().height));
+    expect(heights).toHaveLength(3);
+    expect(new Set(heights).size).toBe(1);
+    expect(heights[0]).toBeLessThan(48);
+    const ping = page.getByRole("link", { name: /Open on Ping.pub/ });
+    await expect(ping).toHaveCount(1);
+    // One line: its height without the padding stays under two lines of 12px text.
+    const lineBox = await ping.evaluate((el) => {
+      const css = getComputedStyle(el);
+      return el.getBoundingClientRect().height - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
+    });
+    expect(lineBox).toBeLessThan(24);
     await noHorizontalScroll(page);
   });
 });

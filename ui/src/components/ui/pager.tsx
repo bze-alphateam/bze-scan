@@ -20,6 +20,11 @@ const square = {
   color: "fg",
 } as const;
 
+// The page box's divider from the arrows: from c2 up only, since on phones it wraps under them.
+// (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
+const JUMP_INDENT = { base: "0", c2: "3" };
+const JUMP_LINE = { base: "0", c2: "1px" };
+
 /** One pager square: a link, or a dimmed span when there is nowhere to go. */
 function Pg({ href, label, children }: { href: string | null; label: string; children: ReactNode }) {
   if (href == null) {
@@ -131,10 +136,11 @@ export function Pager({ children, page, last, hasNext, href, firstHref }: PagerP
         <HStack
           as="form"
           gap="6px"
-          ms="3"
-          ps="3"
-          borderLeftWidth="1px"
+          ms={JUMP_INDENT}
+          ps={JUMP_INDENT}
+          borderLeftWidth={JUMP_LINE}
           borderColor="border.panel"
+          data-testid="pager-jump"
           onSubmit={(e) => {
             e.preventDefault();
             const n = Number.parseInt(typed, 10);

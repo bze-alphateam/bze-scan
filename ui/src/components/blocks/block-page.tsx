@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, HStack, IconButton, Link, Skeleton, Stack, Tabs, Text } from "@chakra-ui/react";
+import { Box, Button, HStack, IconButton, Link, Skeleton, Stack, Tabs, Text, type LinkProps } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo } from "react";
 import { LuChevronLeft, LuChevronRight, LuClock, LuTriangleAlert } from "react-icons/lu";
@@ -268,6 +268,15 @@ function Signatures({ block }: { block: Block }) {
   );
 }
 
+/** "Open on Ping.pub ↗": on the tab bar from c2 up, under the JSON on phones where the tabs fill the bar. */
+function PingPubOpen({ height, ...props }: { height: number } & Omit<LinkProps, "href" | "children">) {
+  return (
+    <Link href={pingPubBlockUrl(height)} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub ↗
+    </Link>
+  );
+}
+
 /** The content of "More details": gas, signatures, the raw JSON tabs and Ping.pub. */
 function BlockDetails({ block }: { block: Block }) {
   const gas = blockGas(block);
@@ -292,19 +301,17 @@ function BlockDetails({ block }: { block: Block }) {
       </DetailList>
       <Tabs.Root defaultValue="block" variant="line" lazyMount>
         <Tabs.List px="2" borderTopWidth="1px" borderColor="border.panel" alignItems="center">
-          <Tabs.Trigger value="block" fontSize="13px">
+          <Tabs.Trigger value="block" fontSize="13px" px="2.5" whiteSpace="nowrap">
             Raw block
           </Tabs.Trigger>
-          <Tabs.Trigger value="results" fontSize="13px">
+          <Tabs.Trigger value="results" fontSize="13px" px="2.5" whiteSpace="nowrap">
             Block results
           </Tabs.Trigger>
-          <Tabs.Trigger value="commit" fontSize="13px">
+          <Tabs.Trigger value="commit" fontSize="13px" px="2.5" whiteSpace="nowrap">
             Commit
           </Tabs.Trigger>
           <Box flex="1" />
-          <Link href={pingPubBlockUrl(block.height)} target="_blank" rel="noopener noreferrer" fontSize="12px" px="2" color="accent.fg">
-            Open on Ping.pub ↗
-          </Link>
+          <PingPubOpen height={block.height} hideBelow="c2" px="2" />
         </Tabs.List>
         <Tabs.Content value="block" p="4" pt="3">
           <RawBlockTab height={block.height} />
@@ -316,6 +323,7 @@ function BlockDetails({ block }: { block: Block }) {
           <RawCommitTab height={block.height} />
         </Tabs.Content>
       </Tabs.Root>
+      <PingPubOpen height={block.height} hideFrom="c2" display="inline-block" px="4" pb="4" />
     </ListPanel>
   );
 }

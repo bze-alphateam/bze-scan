@@ -146,7 +146,10 @@ describe("BlockPage", () => {
     await user.click(screen.getByRole("tab", { name: "Block results" }));
     expect(await screen.findByText(/"app_hash": "RESULTS"/)).toBeInTheDocument();
     expect(results).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", expect.stringMatching(/\/block\/25120440$/));
+    // One on the tab bar (from c2), one under the JSON (phones).
+    const ping = screen.getAllByRole("link", { name: /Open on Ping.pub/ });
+    expect(ping).toHaveLength(2);
+    for (const l of ping) expect(l).toHaveAttribute("href", expect.stringMatching(/\/block\/25120440$/));
   });
 
   it("waits for a height not produced yet, polling every 7 s for the pending window", async () => {
