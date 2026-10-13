@@ -60,7 +60,10 @@ test.describe("chain parameters on a phone", () => {
     await page.goto("/parameters?group=burner");
     await expect(page.getByTestId("param-group")).toHaveAttribute("id", "burner");
     await expect(page.getByTestId("param-nav-item")).toHaveCount(10);
-    await expect(page.getByTestId("module-account-address").first()).toHaveText("bze1v7u…5qun");
+    // Below c3 the short form shows; the full address stays hidden (and in the title).
+    const address = page.getByTestId("module-account-address").first();
+    await expect(address.getByText("bze1v7u…5qun")).toBeVisible();
+    await expect(address.getByText("bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun")).toBeHidden();
     await noHorizontalScroll(page);
   });
 });
