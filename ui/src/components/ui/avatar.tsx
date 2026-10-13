@@ -47,6 +47,9 @@ export function Avatar({ name, src, fallbackSrc, size, variant = "default", ring
       rounded={rounded}
       flexShrink={0}
       objectFit="cover"
+      // Inside the gold ring a round logo would leave the ring's corners floating:
+      // the other theme's page colour fills them. Elsewhere nothing shows behind it.
+      bg={ring ? "bg.inverse" : "transparent"}
       onError={() => setFailed((f) => [...f, shown])}
       data-testid="avatar-image"
       {...(ring ? {} : props)}

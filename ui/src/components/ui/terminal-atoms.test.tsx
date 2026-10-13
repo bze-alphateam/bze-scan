@@ -93,6 +93,18 @@ describe("Avatar variants", () => {
     expect(screen.getByText("TN").parentElement).toHaveAttribute("data-ring", "gold");
     expect(screen.getByTestId("avatar-image").parentElement).toHaveAttribute("data-ring", "gold");
   });
+
+  it("backs a ringed picture with the other theme's page colour, and nothing else", () => {
+    renderWithProviders(
+      <>
+        <Avatar name="Honeycomb" src="https://pictures.example/h.jpg" ring="gold" />
+        <Avatar name="Thamar Node" src="https://pictures.example/t.jpg" />
+      </>,
+    );
+    const [ringed, plain] = screen.getAllByTestId("avatar-image");
+    expect(ringed).toHaveStyle({ background: "var(--chakra-colors-bg-inverse)" });
+    expect(plain).toHaveStyle({ background: "var(--chakra-colors-transparent)" });
+  });
 });
 
 describe("AccountChip", () => {
