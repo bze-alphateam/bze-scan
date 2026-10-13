@@ -12,6 +12,7 @@ import { useListRenderContext } from "@/components/txs/list-context";
 import { AccountChip } from "@/components/ui/account-chip";
 import { HashLink } from "@/components/ui/links";
 import { ListPanel } from "@/components/ui/list";
+import { SectionHead } from "@/components/ui/page-head";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
@@ -19,18 +20,6 @@ import { formatCount } from "@/lib/format";
 import { appLinks } from "@/lib/links";
 import type { Counterparty, RenderContext } from "@/render/messages/types";
 import { txCounterparty, txOneLine } from "@/render/txs";
-
-/** A section's head: the small upper-case label, and an optional link on the right. */
-function SectionHead({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
-  return (
-    <HStack justify="space-between" gap="3" mb="10px">
-      <Heading as="h2" textStyle="label" id={id}>
-        {title}
-      </Heading>
-      {children}
-    </HStack>
-  );
-}
 
 /** A home list: its head with "View all →" and its rows. */
 function Latest({ title, href, id, children }: { title: string; href: string; id: string; children: ReactNode }) {

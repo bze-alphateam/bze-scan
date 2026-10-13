@@ -53,3 +53,41 @@ export function blockTimeText(ms: number | null): string {
 export function sizeText(bytes: number | null): string {
   return bytes == null ? "—" : `${formatCount((bytes / 1024).toFixed(1)).replace(/\.0$/, "")} KB`;
 }
+
+/** Blocks a list page holds. */
+export const BLOCKS_PER_PAGE = 25;
+
+/** The list's place: the live newest page (`top` null), or page `page` pinned to the height `top`. */
+export interface BlocksPlace {
+  top: number | null;
+  page: number;
+}
+
+const positive = (raw: string | string[] | undefined): number | null => {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v == null || !/^[1-9]\d{0,15}$/.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) ? n : null;
+};
+
+/** `/blocks?top=&page=`: pinned when `top` is a height (page 1 by default), else the live list. */
+export function parseBlocksPlace(query: Record<string, string | string[] | undefined>): BlocksPlace {
+  const top = positive(query.top);
+  return top == null ? { top: null, page: 1 } : { top, page: positive(query.page) ?? 1 };
+}
+
+/** The link to a place: `/blocks` for the live list. */
+export function blocksHref({ top, page }: BlocksPlace): string {
+  return top == null ? "/blocks" : `/blocks?top=${top}&page=${page}`;
+}
+
+/** The `before` of page p pinned to `top`: its heights run from top−(p−1)·25 down to top−p·25+1. */
+export function blocksPageBefore(top: number, page: number): number {
+  return top - (page - 1) * BLOCKS_PER_PAGE + 1;
+}
+
+/** The last page pinned to `top` with the history starting at `oldest`; null while the start is unknown. */
+export function blocksLastPage(top: number, oldest: number | null): number | null {
+  if (oldest == null) return null;
+  return Math.max(1, Math.ceil((top - oldest + 1) / BLOCKS_PER_PAGE));
+}

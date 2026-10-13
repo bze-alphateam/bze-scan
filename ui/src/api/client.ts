@@ -3,6 +3,7 @@ import type {
   Activity,
   ActivityParams,
   Block,
+  BlockListParams,
   ChainParams,
   BlockEvent,
   BlockSummary,
@@ -47,7 +48,7 @@ import type {
 export interface ExplorerApi {
   status(signal?: AbortSignal): Promise<Status>;
 
-  blocks(params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
+  blocks(params: BlockListParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
   block(height: number, signal?: AbortSignal): Promise<Block>;
   blockEvents(height: number, params: PageParams, signal?: AbortSignal): Promise<Page<BlockEvent>>;
   blockTransfers(height: number, params: PageParams, signal?: AbortSignal): Promise<Page<BlockTransfer>>;
@@ -160,7 +161,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
   return {
     status: (signal) => get("/status", {}, signal),
 
-    blocks: (params, signal) => get("/blocks", page(params), signal),
+    blocks: (params, signal) => get("/blocks", { ...page(params), before: params.before }, signal),
     block: (height, signal) => get(`/blocks/${seg(String(height))}`, {}, signal),
     blockEvents: (height, params, signal) => get(`/blocks/${seg(String(height))}/events`, page(params), signal),
     blockTransfers: (height, params, signal) => get(`/blocks/${seg(String(height))}/transfers`, page(params), signal),
