@@ -2,7 +2,7 @@
 
 import { Box, Button, HStack, Link, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { LuTriangleAlert } from "react-icons/lu";
+import { LuClock, LuTriangleAlert } from "react-icons/lu";
 
 import { useBlocks, useStats, useStatus } from "@/api/hooks";
 import type { BlockSummary } from "@/api/types";
@@ -113,7 +113,13 @@ export function BlocksPage({ top, page }: BlocksPlace) {
       <PageTitle
         title="Blocks"
         intro="A new block every few seconds, each proposed by a validator and holding the transactions of that moment."
-      />
+      >
+        <Button asChild variant="outline" size="sm">
+          <NextLink href="/blocks/future">
+            <LuClock /> Future block
+          </NextLink>
+        </Button>
+      </PageTitle>
       {!blocks.data ? (
         blocks.error ? (
           <LoadError onRetry={() => void blocks.refetch()} />

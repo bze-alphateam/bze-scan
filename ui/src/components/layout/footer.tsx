@@ -6,12 +6,13 @@ import { externalLinks } from "@/lib/links";
 
 import { StatusLight } from "./status-light";
 
-// Parameters is the explorer's own page; the others leave the site.
+// Future block and Parameters are the explorer's own pages; the others leave the site.
 const FOOTER_LINKS = [
   { label: "Website", href: externalLinks.website },
   { label: "Docs", href: externalLinks.docs },
   { label: "DEX", href: externalLinks.dex },
   { label: "Staking", href: externalLinks.staking },
+  { label: "Future block", href: "/blocks/future", internal: true },
   { label: "Parameters", href: "/parameters", internal: true },
   { label: "Ping.pub explorer", href: externalLinks.pingPub },
 ];

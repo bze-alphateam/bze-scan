@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { isNotFound } from "./client";
@@ -464,6 +464,20 @@ export function useProposal(id: number) {
     ...live,
     refetchInterval: (q) => (resolved(q.state.data) ? false : live.refetchInterval),
     staleTime: (q) => (resolved(q.state.data) ? Infinity : live.staleTime),
+  });
+}
+
+/** Several proposals at once (the upgrades the Future block page lists), each cached as `useProposal`'s. */
+export function useProposalList(ids: number[]) {
+  const api = useApi();
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.proposal(id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => api.proposal(id, signal),
+      ...live,
+      refetchInterval: (q: { state: { data: Proposal | undefined } }) => (resolved(q.state.data) ? false : live.refetchInterval),
+      staleTime: (q: { state: { data: Proposal | undefined } }) => (resolved(q.state.data) ? Infinity : live.staleTime),
+    })),
   });
 }
 

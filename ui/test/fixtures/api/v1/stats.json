@@ -2,6 +2,28 @@
   "latest_height": 25120450,
   "latest_time": "2026-10-11T12:00:00Z",
   "avg_block_time_ms": 5900,
+  "block_time_windows": [
+    {
+      "blocks": 10000,
+      "from_height": 25110450,
+      "avg_block_time_ms": 5810
+    },
+    {
+      "blocks": 30000,
+      "from_height": 25090450,
+      "avg_block_time_ms": 5800
+    },
+    {
+      "blocks": 50000,
+      "from_height": 25070450,
+      "avg_block_time_ms": 5790
+    },
+    {
+      "blocks": 100000,
+      "from_height": 25020450,
+      "avg_block_time_ms": 5800
+    }
+  ],
   "txs_24h": 1840,
   "bonded_tokens": "405000000000000",
   "supply": "661300000000000",

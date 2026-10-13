@@ -696,11 +696,20 @@ export interface StatsDay {
   avg_block_time_ms: number | null;
 }
 
+/** The average block time from `from_height` to the latest indexed block; null when `from_height` is not indexed. */
+export interface BlockTimeWindow {
+  blocks: number;
+  from_height: number;
+  avg_block_time_ms: number | null;
+}
+
 /** `GET /stats`: the home tiles; every chain-state field is null until its row exists. */
 export interface Stats {
   latest_height: number | null;
   latest_time: string | null;
   avg_block_time_ms: number | null;
+  /** Over the last 10k, 30k, 50k and 100k blocks, in this order; empty before the first block. */
+  block_time_windows: BlockTimeWindow[];
   txs_24h: number | null;
   bonded_tokens: string | null;
   supply: string | null;

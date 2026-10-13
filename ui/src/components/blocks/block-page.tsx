@@ -2,7 +2,7 @@
 
 import { Box, Button, HStack, IconButton, Link, Skeleton, Stack, Tabs, Text, type LinkProps } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { LuChevronLeft, LuChevronRight, LuClock, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
@@ -40,13 +40,14 @@ import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext } from "@/render/messages/types";
 
 import { BlockFlow, FlowSkeleton } from "./block-flow";
+import { FutureBlockEstimator } from "./future-block";
 
 export function pingPubBlockUrl(height: number): string {
   return `${externalLinks.pingPub}/block/${height}`;
 }
 
 /** "Blocks / 25,120,440", "Block 25,120,440" and the square arrows to the previous and next blocks. */
-function Head({ height }: { height: number }) {
+function Head({ height, tag }: { height: number; tag?: ReactNode }) {
   return (
     <>
       <Breadcrumb path={[{ label: "Blocks", href: "/blocks" }]} current={formatCount(height)} mono />
@@ -64,6 +65,7 @@ function Head({ height }: { height: number }) {
           {height > 1 && <Arrow href={`/blocks/${height - 1}`} label="Previous block" icon={<LuChevronLeft size={14} />} />}
           <Arrow href={`/blocks/${height + 1}`} label="Next block" icon={<LuChevronRight size={14} />} />
         </HStack>
+        {tag}
       </DetailTitle>
     </>
   );
@@ -389,7 +391,8 @@ function PingPubLookup({ height }: { height: number }) {
   );
 }
 
-function NotFoundBox({ height, kind, oldest, expired }: { height: number; kind: BlockNotFound; oldest: number | null; expired: boolean }) {
+/** Why the explorer has no block at a height it has passed. */
+function NotFoundBox({ height, kind, oldest }: { height: number; kind: Exclude<BlockNotFound, "not_produced">; oldest: number | null }) {
   if (kind === "too_old") {
     return (
       <StateBox
@@ -412,39 +415,47 @@ function NotFoundBox({ height, kind, oldest, expired }: { height: number; kind: 
       </StateBox>
     );
   }
-  if (kind === "missing") {
-    return (
-      <StateBox
-        tone="warn"
-        icon={<GapIcon />}
-        title="Not indexed: this height is missing from the explorer"
-        actions={<PingPubLookup height={height} />}
-        data-testid="block-missing"
-      />
-    );
-  }
-  // Not produced yet: unchanged until the Future block page replaces it.
   return (
-    <Card data-testid="block-not_produced">
-      <Stack gap="2" role={expired ? undefined : "status"}>
-        <Text fontWeight="semibold">Not produced yet</Text>
-        <Text color="fg.muted" fontSize="sm">
-          {expired
-            ? "The chain has not reached this height yet. Reload the page to look again."
-            : "The chain has not reached this height yet. This page shows it as soon as it is produced."}
-        </Text>
-      </Stack>
-    </Card>
+    <StateBox
+      tone="warn"
+      icon={<GapIcon />}
+      title="Not indexed: this height is missing from the explorer"
+      actions={<PingPubLookup height={height} />}
+      data-testid="block-missing"
+    />
   );
 }
 
 function NotFound(props: { height: number; kind: BlockNotFound; oldest: number | null; expired: boolean }) {
+  if (props.kind === "not_produced") return <NotProduced height={props.height} expired={props.expired} />;
   return (
     <Box>
       <Head height={props.height} />
       <Box mt="6">
-        <NotFoundBox {...props} />
+        <NotFoundBox height={props.height} kind={props.kind} oldest={props.oldest} />
       </Box>
+    </Box>
+  );
+}
+
+/** A height above the chain's: the Future block estimator in place, while the page keeps asking for the block. */
+function NotProduced({ height, expired }: { height: number; expired: boolean }) {
+  return (
+    <Box data-testid="block-not_produced">
+      <Head
+        height={height}
+        tag={
+          <Tag tone="accent">
+            Not produced yet
+          </Tag>
+        }
+      />
+      <Text mt="2" fontSize="13px" color="fg.muted" role={expired ? undefined : "status"}>
+        {expired
+          ? "The chain has not reached this height yet. Reload the page to look again."
+          : "The chain has not reached this height yet. This page shows the block as soon as it is produced."}
+      </Text>
+      <FutureBlockEstimator height={formatCount(height)} />
     </Box>
   );
 }
