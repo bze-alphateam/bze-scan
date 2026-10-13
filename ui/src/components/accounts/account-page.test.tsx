@@ -238,7 +238,7 @@ describe("Module account", () => {
     const select = await screen.findByTestId("module-switcher");
     expect(screen.getByLabelText("Other module accounts")).toBe(select);
     expect(select).toHaveValue(dex.address);
-    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Burner", "Community pool", "DEX"]);
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(modules.items.map((m) => m.name));
 
     await userEvent.selectOptions(select, "Burner");
     expect(push).toHaveBeenCalledWith("/accounts/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun");

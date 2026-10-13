@@ -13,7 +13,6 @@ import {
   formatParam,
   formatUbze,
   groupOfModule,
-  latestChange,
   PARAM_GROUPS,
   PARAMETERS,
   parameterGroups,
@@ -222,19 +221,6 @@ describe("changes", () => {
       burner: null,
       cointrunk: null,
     });
-  });
-
-  it("finds the latest change and the groups it touched", () => {
-    expect(latestChange(params)).toEqual({
-      proposalId: 44,
-      time: "2025-11-24T09:00:00Z",
-      height: 20250000,
-      groups: ["DEX", "Rewards programs"],
-    });
-    expect(latestChange({ burner: { params: {}, last_change: null } })).toBeNull();
-    expect(
-      latestChange({ burner: { params: {}, last_change: { height: 9, time: "2026-01-01T00:00:00Z", proposal_id: null } } }),
-    ).toEqual({ proposalId: null, time: "2026-01-01T00:00:00Z", height: 9, groups: ["Burner"] });
   });
 
   it("describes a proposal's changed key in plain words", () => {

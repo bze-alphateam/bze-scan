@@ -7,13 +7,73 @@
     },
     {
       "address": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
-      "name": "Community pool",
+      "name": "Distribution",
       "module": "distribution"
     },
     {
       "address": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
       "name": "DEX",
       "module": "tradebin"
+    },
+    {
+      "address": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
+      "name": "Fee collector",
+      "module": "fee_collector"
+    },
+    {
+      "address": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h",
+      "name": "Mint",
+      "module": "mint"
+    },
+    {
+      "address": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq",
+      "name": "Bonded tokens pool",
+      "module": "bonded_tokens_pool"
+    },
+    {
+      "address": "bze1tygms3xhhs3yv487phx3dw4a95jn7t7lule4a5",
+      "name": "Unbonding tokens pool",
+      "module": "not_bonded_tokens_pool"
+    },
+    {
+      "address": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+      "name": "Governance",
+      "module": "gov"
+    },
+    {
+      "address": "bze1245yut9zht8q4hz39sd0lzqtzkuw5us58k46ua",
+      "name": "Rewards",
+      "module": "rewards"
+    },
+    {
+      "address": "bze1pc5zjcvhx3e8l305zjl72grytfa30r5mdypmw4",
+      "name": "Burner black hole",
+      "module": "burner_black_hole"
+    },
+    {
+      "address": "bze18hsqalgwlzqavrrkfnxmrjmygwyjy8senx5tgs",
+      "name": "Burner raffle",
+      "module": "burner_raffle"
+    },
+    {
+      "address": "bze19ejy8n9qsectrf4semdp9cpknflld0j6qy3xlk",
+      "name": "Factory",
+      "module": "tokenfactory"
+    },
+    {
+      "address": "bze1k8py7ynzrrnmzqwk2mkz3a6znatmqshdnnsehy",
+      "name": "Stakers fee collector",
+      "module": "txfeecollector"
+    },
+    {
+      "address": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
+      "name": "Burner fee collector",
+      "module": "txfeecollector_burner"
+    },
+    {
+      "address": "bze1knfjgvdsv67u2ksejka54ulpfzegr6semkvjn0",
+      "name": "CP fee collector",
+      "module": "txfeecollector_cp"
     }
   ]
 }

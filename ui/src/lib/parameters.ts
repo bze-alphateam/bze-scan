@@ -763,24 +763,7 @@ export function parameterGroups(params: ChainParams, stats: Stats | null): Param
   });
 }
 
-/** The most recent recorded change across modules, with the groups it touched. */
-export function latestChange(
-  params: ChainParams,
-): { proposalId: number | null; time: string; height: number; groups: string[] } | null {
-  const changes = Object.entries(params)
-    .filter(([, m]) => m?.last_change)
-    .map(([module, m]) => ({ module, ...m!.last_change! }));
-  if (changes.length === 0) return null;
-  const last = changes.reduce((a, b) => (b.time > a.time ? b : a));
-  const same = changes.filter((c) =>
-    last.proposal_id != null ? c.proposal_id === last.proposal_id : c.height === last.height && c.proposal_id == null,
-  );
-  const modules = new Set(same.map((c) => c.module));
-  const groups = PARAM_GROUPS.filter((g) => g.modules.some((m) => modules.has(m))).map((g) => g.label);
-  return { proposalId: last.proposal_id, time: last.time, height: last.height, groups };
-}
-
-/** The anchor of a module's group on the parameters page (`/parameters#dex` for tradebin). */
+/** The group of a module on the parameters page (`dex` for tradebin). */
 export function groupOfModule(module: string): ParamGroup | null {
   return PARAM_GROUPS.find((g) => g.modules.includes(module))?.group ?? null;
 }
