@@ -134,8 +134,9 @@ func NewExplorerController(repo ExplorerReader, stats StatsReader) *ExplorerCont
 	return &ExplorerController{repo: repo, stats: stats}
 }
 
-// Blocks serves GET /api/v1/blocks?cursor&limit: blocks by height
-// descending.
+// Blocks serves GET /api/v1/blocks?cursor|before&limit: blocks by height
+// descending, below the cursor's height or below before (exclusive), which
+// numbered pages pinned to a top height use.
 func (h *ExplorerController) Blocks(c *echo.Context) error {
 	limit, err := parseLimit(c)
 	if err != nil {
@@ -146,6 +147,16 @@ func (h *ExplorerController) Blocks(c *echo.Context) error {
 		return err
 	} else if keys != nil {
 		before = &keys[0]
+	}
+	if s := c.QueryParam("before"); s != "" {
+		if before != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "use either before or cursor")
+		}
+		b, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || !isDigits(s) || b < 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, "before must be a block height")
+		}
+		before = &b
 	}
 
 	rows, err := h.repo.Blocks(c.Request().Context(), before, limit+1)
@@ -633,6 +644,22 @@ func parseLimit(c *echo.Context) (int, error) {
 	n, err := strconv.Atoi(s)
 	if err != nil || n < 1 || n > MaxLimit {
 		return 0, echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("limit must be an integer from 1 to %d", MaxLimit))
+	}
+	return n, nil
+}
+
+// maxPage bounds a page number so its offset cannot overflow.
+const maxPage = 1 << 31
+
+// parsePage returns the page query parameter, or 0 when there is none.
+func parsePage(c *echo.Context) (int64, error) {
+	s := c.QueryParam("page")
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || !isDigits(s) || n < 1 || n > maxPage {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, "page must be a positive integer")
 	}
 	return n, nil
 }

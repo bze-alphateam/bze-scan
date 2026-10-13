@@ -22,6 +22,13 @@ type AccountReader interface {
 	// of category when not nil, after before when not nil.
 	Activity(ctx context.Context, address string, category *string, before *repository.ActivityKey,
 		limit int) ([]repository.Activity, error)
+	// ActivityPage returns up to limit activity rows of address, newest
+	// first, of category when not nil, skipping the newest offset rows.
+	ActivityPage(ctx context.Context, address string, category *string, offset int64,
+		limit int) ([]repository.Activity, error)
+	// ActivityTotal returns the number of activity rows of address, of
+	// category when not nil.
+	ActivityTotal(ctx context.Context, address string, category *string) (int64, error)
 	// AccountOrders returns up to limit orders owned by owner, newest
 	// first, of status when not nil, after before when not nil.
 	AccountOrders(ctx context.Context, owner string, status *string, before *repository.OrderKey,
@@ -108,7 +115,7 @@ func (h *AccountController) Account(c *echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewAccount(acc, live, denoms, monikers))
 }
 
-// Activity serves GET /api/v1/accounts/{address}/activity?category&cursor&limit:
+// Activity serves GET /api/v1/accounts/{address}/activity?category&cursor|page&limit:
 // the address's activity rows, newest first, one per transaction or block
 // that touched it, optionally of one category. Anything but a bze1 address
 // or a known category is a 400; an address without activity is an empty
@@ -135,10 +142,28 @@ func (h *AccountController) Activity(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
 		}
 	}
+	pageNo, err := parsePage(c)
+	if err != nil {
+		return err
+	}
+	if pageNo > 0 && before != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
+	}
 
 	ctx := c.Request().Context()
-	rows, err := h.repo.Activity(ctx, address, category, before, limit+1)
-	if err != nil {
+	var rows []repository.Activity
+	var total *int64
+	if pageNo > 0 {
+		n, err := h.repo.ActivityTotal(ctx, address, category)
+		if err != nil {
+			return err
+		}
+		total = &n
+		rows, err = h.repo.ActivityPage(ctx, address, category, (pageNo-1)*int64(limit), limit+1)
+		if err != nil {
+			return err
+		}
+	} else if rows, err = h.repo.Activity(ctx, address, category, before, limit+1); err != nil {
 		return err
 	}
 	page := rows[:min(len(rows), limit)]
@@ -146,7 +171,8 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	resp := dto.List[dto.Activity]{Items: make([]dto.Activity, 0, len(page))}
+	resp := dto.PagedList[dto.Activity]{List: dto.List[dto.Activity]{Items: make([]dto.Activity, 0, len(page))},
+		Total: total}
 	for _, a := range page {
 		resp.Items = append(resp.Items, dto.NewActivity(a, denoms))
 	}

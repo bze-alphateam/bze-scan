@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -46,6 +47,42 @@ type Activity struct {
 // filtered list, the primary key the unfiltered one.
 func (r *Explorer) Activity(ctx context.Context, address string, category *string, before *ActivityKey,
 	limit int) ([]Activity, error) {
+	return r.activity(ctx, address, category, before, 0, limit)
+}
+
+// ActivityPage returns up to limit account_activity rows of address, newest
+// first, only of category when it is not nil, skipping the newest offset
+// rows. Offsets stay within one address, so they are bounded by its own
+// activity count.
+func (r *Explorer) ActivityPage(ctx context.Context, address string, category *string,
+	offset int64, limit int) ([]Activity, error) {
+	return r.activity(ctx, address, category, nil, offset, limit)
+}
+
+// ActivityTotal returns the number of account_activity rows of address, only
+// of category when it is not nil: the unfiltered count is the accounts row's
+// activity_count (0 when the address has no row), a category is counted on
+// its index.
+func (r *Explorer) ActivityTotal(ctx context.Context, address string, category *string) (int64, error) {
+	var n int64
+	var err error
+	if category == nil {
+		err = r.db.QueryRow(ctx, `SELECT activity_count FROM explorer.accounts WHERE address = $1`, address).Scan(&n)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+	} else {
+		err = r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.account_activity
+			WHERE address = $1 AND category = $2`, address, *category).Scan(&n)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("activity total %s: %w", address, err)
+	}
+	return n, nil
+}
+
+func (r *Explorer) activity(ctx context.Context, address string, category *string, before *ActivityKey,
+	offset int64, limit int) ([]Activity, error) {
 	var beforeHeight, beforeTxIndex *int64
 	if before != nil {
 		beforeHeight, beforeTxIndex = &before.Height, &before.TxIndex
@@ -61,7 +98,7 @@ func (r *Explorer) Activity(ctx context.Context, address string, category *strin
 		  AND ($2::text IS NULL OR a.category = $2)
 		  AND ($3::bigint IS NULL OR (a.height, a.tx_index) < ($3::bigint, $4::integer))
 		ORDER BY a.height DESC, a.tx_index DESC
-		LIMIT $5`, address, category, beforeHeight, beforeTxIndex, limit)
+		LIMIT $5 OFFSET $6`, address, category, beforeHeight, beforeTxIndex, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("activity %s: %w", address, err)
 	}

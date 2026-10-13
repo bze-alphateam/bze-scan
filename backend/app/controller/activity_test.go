@@ -109,3 +109,67 @@ func TestActivityCursorRoundTrip(t *testing.T) {
 	_, err := dto.DecodeActivityCursor(dto.EncodeCursor(1, 2, 3))
 	assert.ErrorIs(t, err, dto.ErrInvalidCursor)
 }
+
+func TestActivityNumberedPage(t *testing.T) {
+	repo := &fakeAccounts{activity: activityRows(), total: 3}
+	rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?page=2&limit=1&category=staking")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, int64(1), repo.gotOffset, "page 2 of 1 skips one row")
+	assert.Equal(t, 2, repo.gotLimit)
+	require.NotNil(t, repo.gotCategory)
+	assert.Equal(t, "staking", *repo.gotCategory)
+
+	page := decodeRaw(t, rec)
+	assert.JSONEq(t, `3`, string(page["total"]))
+	items := decode[dto.PagedList[dto.Activity]](t, rec)
+	require.Len(t, items.Items, 1)
+	assert.Equal(t, int64(30), items.Items[0].Height)
+	require.NotNil(t, items.NextCursor, "older from a numbered page keeps working")
+	k, err := dto.DecodeActivityCursor(*items.NextCursor)
+	require.NoError(t, err)
+	assert.Equal(t, &repository.ActivityKey{Height: 30, TxIndex: -1}, k)
+}
+
+func TestActivityPagePastTheEnd(t *testing.T) {
+	repo := &fakeAccounts{activity: activityRows(), total: 3}
+	rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?page=5&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, int64(8), repo.gotOffset)
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"total":3}`, rec.Body.String())
+
+	repo.total = 0
+	rec = get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?page=1&category=dex")
+	assert.JSONEq(t, `0`, string(decodeRaw(t, rec)["total"]), "a zero total is still present")
+}
+
+func TestActivityTotalOnlyWithPage(t *testing.T) {
+	repo := &fakeAccounts{activity: activityRows(), total: 3}
+	rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, decodeRaw(t, rec), "total")
+	assert.Zero(t, repo.gotOffset, "no page means the keyset query")
+}
+
+func TestActivityPageValidation(t *testing.T) {
+	repo := &fakeAccounts{activity: activityRows()}
+	cursor := dto.EncodeActivityCursor(repository.Activity{Height: 30, TxIndex: -1})
+	for path, msg := range map[string]string{
+		"/accounts/" + account + "/activity?page=0":                  "page must be a positive integer",
+		"/accounts/" + account + "/activity?page=-1":                 "page must be a positive integer",
+		"/accounts/" + account + "/activity?page=two":                "page must be a positive integer",
+		"/accounts/" + account + "/activity?page=99999999999":        "page must be a positive integer",
+		"/accounts/" + account + "/activity?page=2&cursor=" + cursor: "use either page or cursor",
+	} {
+		rec := get(t, newActivityAPI(repo), path)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, path)
+		body := decode[middleware.ErrorBody](t, rec)
+		assert.Equal(t, "bad_request", body.Error.Code, path)
+		assert.Equal(t, msg, body.Error.Message, path)
+	}
+
+	repo.totalErr = errors.New("db down")
+	assert.Equal(t, http.StatusInternalServerError, get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?page=1").Code)
+	repo.totalErr, repo.activityErr = nil, errors.New("db down")
+	assert.Equal(t, http.StatusInternalServerError, get(t, newActivityAPI(repo), "/accounts/"+account+"/activity?page=1").Code)
+}
