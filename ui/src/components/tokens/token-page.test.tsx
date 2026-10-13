@@ -60,11 +60,18 @@ describe("TokenPage", () => {
   });
 
   it("tells a two-hop token apart from the direct one and draws the chain it came through", async () => {
-    renderWithProviders(<TokenPage denom={atone.denom} />, { api: api(atone) });
+    const directAtone = { ...atone, denom: "ibc/DIRECTATONE", ibc_hops: 1, via_chain: null };
+    const tokens = () => Promise.resolve({ items: [atone, directAtone], next_cursor: null } as Page<TokenSummary>);
+    renderWithProviders(<TokenPage denom={atone.denom} />, { api: api(atone, { tokens }) });
     const callout = await screen.findByTestId("hops-callout");
     expect(callout).toHaveAttribute("data-tone", "warn");
     expect(callout).toHaveTextContent(
-      "Not the same token as ATONE sent straight from AtomOneIt came through Osmosis, so BZE sees it as a different token from the ATONE that came directly: the two are not interchangeable on BZE.",
+      "Not the same token as ATONE sent straight from AtomOneIt came through Osmosis, so BZE sees it as a different token from the ATONE that came directly: the two are not interchangeable on BZE. " +
+        "To turn it into the direct one, send it back to Osmosis and on to AtomOne, then over to BZE.",
+    );
+    expect(await within(callout).findByRole("link", { name: "See ATONE sent directly from AtomOne →" })).toHaveAttribute(
+      "href",
+      "/tokens/ibc%2FDIRECTATONE",
     );
     expect(screen.getByTestId("token-chips")).toHaveTextContent(/^Cross-chainfrom AtomOnevia Osmosis2 hops$/);
     expect(screen.getByTestId("ibc-route")).toHaveTextContent("2 hops · not direct");
@@ -170,6 +177,13 @@ describe("TokenPage", () => {
     expect(await screen.findAllByTestId("holder-row")).toHaveLength(7);
     expect(tokenHolders.mock.calls.map((c) => c[1])).toEqual([{ limit: 10 }, { cursor: holders.next_cursor, limit: 100 }]);
     expect(screen.queryByRole("button", { name: /Show/ })).not.toBeInTheDocument();
+  });
+
+  it("does not offer all N holders when N, the holders of at least 1 token, is fewer than the rows shown", async () => {
+    renderWithProviders(<TokenPage denom={honey.denom} />, { api: api({ ...honey, holders_count: 3 }, { tokenHolders: () => Promise.resolve(holders) }) });
+    expect(await screen.findAllByTestId("holder-row")).toHaveLength(6);
+    expect(screen.getByRole("button", { name: "Show more holders" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Show all/ })).not.toBeInTheDocument();
   });
 
   it("merges the events with the transfers, newest first", async () => {

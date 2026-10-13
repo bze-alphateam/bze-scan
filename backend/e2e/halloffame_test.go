@@ -68,6 +68,11 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 	require.NoError(t, err)
 	_, err = e.db.Exec(`UPDATE explorer.validators SET jailed = true WHERE operator_address = $1`, jailed.op)
 	require.NoError(t, err)
+	// Stakes of different lengths: as text, "10…" would sort before "9…".
+	_, err = e.db.Exec(`UPDATE explorer.validators SET tokens = 10000000000000 WHERE operator_address = $1`, large.op)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`UPDATE explorer.validators SET tokens = 9000000000000 WHERE operator_address = $1`, small.op)
+	require.NoError(t, err)
 
 	// They vote, whatever the option, on the ten latest closed proposals;
 	// skipped leaves out the oldest of the ten.

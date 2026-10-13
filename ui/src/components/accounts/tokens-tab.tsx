@@ -21,11 +21,13 @@ import { tokenHref } from "@/render/tokens";
 import { bondFull } from "@/render/validators";
 
 // Token · Origin (c2) · Balance · Value (c2) · DEX link (c3). On phones the
-// origin chips take a second row and the value sits under the balance.
+// origin chips take a second row and the value sits under the balance. Every
+// row is its own grid, so from c2 no column may be `auto`: it would size to
+// each row's content and the columns would not line up.
 const COLUMNS = {
   base: "minmax(0, 1fr) auto",
-  c2: "minmax(0, 1.4fr) minmax(0, 1.3fr) auto auto",
-  c3: "minmax(0, 1.4fr) minmax(0, 1.3fr) auto auto 110px",
+  c2: "minmax(0, 1.2fr) minmax(0, 1.7fr) minmax(0, 1.2fr) 120px",
+  c3: "minmax(0, 1.2fr) minmax(0, 1.7fr) minmax(0, 1.2fr) 120px 110px",
 };
 const ORIGIN_COLUMN = { base: "1 / -1", c2: "auto" };
 const ORIGIN_ROW = { base: "2", c2: "auto" };

@@ -31,6 +31,7 @@ import {
   adminNote,
   baseUnitText,
   changeText,
+  directToken,
   eventLine,
   holdersSub,
   ibcRoute,
@@ -163,7 +164,9 @@ function Header({ t }: { t: Token }) {
 
 /** The warnings under the header: a multi-hop token is not the direct one; a stranded one cannot go back. */
 function Warnings({ t }: { t: Token }) {
+  const denoms = useDenoms();
   const hop = multiHopCallout(t);
+  const direct = directToken(t, denoms.data?.values());
   const stranded = strandedExplainer(t);
   if (!hop && !stranded) return null;
   return (
@@ -171,6 +174,16 @@ function Warnings({ t }: { t: Token }) {
       {hop && (
         <Callout tone="warn" title={hop.title} data-testid="hops-callout">
           {hop.body}
+          {direct && (
+            <>
+              {" "}
+              <Link asChild color="accent.fg">
+                <NextLink href={tokenHref(direct.denom)}>
+                  See {tokenSymbol(direct)} sent directly from {t.origin_chain?.name || t.origin_chain?.chain_id} →
+                </NextLink>
+              </Link>
+            </>
+          )}
         </Callout>
       )}
       {stranded && (
@@ -584,7 +597,10 @@ function TopHolders({ t }: { t: Token }) {
           )}
           {holders.hasNextPage && !holders.isFetchingNextPage && (
             <PanelFoot onClick={() => void holders.fetchNextPage()}>
-              {items.length <= 10 && t.holders_count != null ? `Show all ${formatCount(t.holders_count)} holders` : "Show more holders"}
+              {/* holders_count counts balances of at least 1 token; the list also has smaller ones, so name it only when it is more. */}
+              {items.length <= 10 && t.holders_count != null && t.holders_count > items.length
+                ? `Show all ${formatCount(t.holders_count)} holders`
+                : "Show more holders"}
             </PanelFoot>
           )}
         </>

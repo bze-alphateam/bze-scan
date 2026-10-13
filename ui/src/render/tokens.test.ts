@@ -15,6 +15,7 @@ import {
   changeText,
   denomFromSegments,
   DEX_MODULE_ADDRESS,
+  directToken,
   eventLine,
   filterTokens,
   hopsExplainer,
@@ -69,9 +70,24 @@ describe("tokens list", () => {
     expect(multiHopCallout(direct)).toBeNull();
     expect(multiHopCallout(twoHop)).toEqual({
       title: "Not the same token as ATOM sent straight from Cosmos Hub",
-      body: "It came through Osmosis, so BZE sees it as a different token from the ATOM that came directly: the two are not interchangeable on BZE.",
+      body:
+        "It came through Osmosis, so BZE sees it as a different token from the ATOM that came directly: the two are not interchangeable on BZE. " +
+        "To turn it into the direct one, send it back to Osmosis and on to Cosmos Hub, then over to BZE.",
     });
     expect(multiHopCallout({ ...twoHop, via_chain: null })?.body).toMatch(/^It came through another chain,/);
+    // Past two hops the chains between are not all named: back the way it came.
+    expect(multiHopCallout({ ...twoHop, ibc_hops: 3 })?.body).toMatch(/send it back the way it came, to Cosmos Hub, then over to BZE\.$/);
+  });
+
+  it("finds the token sent straight from a multi-hop token's home chain", () => {
+    const osmosis = { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null };
+    const direct = bySymbol("ATOM");
+    const twoHop = { ...direct, denom: "ibc/TWOHOP", ibc_hops: 2, via_chain: osmosis };
+    const tokens = [twoHop, { ...direct, origin_chain: osmosis }, direct];
+    expect(directToken(twoHop, tokens)).toBe(direct);
+    expect(directToken(direct, tokens)).toBeNull();
+    expect(directToken(twoHop, [twoHop])).toBeNull();
+    expect(directToken(twoHop, undefined)).toBeNull();
   });
 
   it("shortens a denom for a breadcrumb", () => {

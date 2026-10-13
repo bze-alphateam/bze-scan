@@ -68,12 +68,32 @@ export function multiHopCallout(
   if (!hop) return null;
   const symbol = tokenSymbol(t);
   const home = t.origin_chain?.name || t.origin_chain?.chain_id || "its home chain";
+  const back =
+    hop.hops === 2 && hop.via ? `send it back to ${hop.via} and on to ${home}` : `send it back the way it came, to ${home}`;
   return {
     title: `Not the same token as ${symbol} sent straight from ${home}`,
     body:
       `It came through ${hop.via ?? "another chain"}, so BZE sees it as a different token from the ${symbol} that came directly: ` +
-      `the two are not interchangeable on BZE.`,
+      `the two are not interchangeable on BZE. To turn it into the direct one, ${back}, then over to BZE.`,
   };
+}
+
+/**
+ * The token of the same symbol sent straight from a multi-hop token's home
+ * chain (one hop, same origin chain), for the callout's link; null when the
+ * token is not multi-hop or BZE has no direct one.
+ */
+export function directToken(
+  t: Pick<TokenSummary, "denom" | "ibc_hops" | "via_chain" | "origin_chain" | "symbol">,
+  tokens: Iterable<TokenSummary> | undefined,
+): TokenSummary | null {
+  const chain = t.origin_chain?.chain_id;
+  if (!multiHop(t) || !chain || !tokens) return null;
+  const symbol = tokenSymbol(t);
+  for (const d of tokens) {
+    if (d.denom !== t.denom && d.kind === "ibc" && d.ibc_hops === 1 && d.origin_chain?.chain_id === chain && tokenSymbol(d) === symbol) return d;
+  }
+  return null;
 }
 
 /** A chain on a token's way to BZE, as the "How it got here" route draws it. */
