@@ -5,38 +5,42 @@ import { noHorizontalScroll } from "./layout";
 import params from "../test/fixtures/api/v1/params.json";
 
 // The mock API answers /params from test/fixtures/api/v1/params.json (all
-// eleven modules), /stats from stats.json and the last change's proposal from
-// proposals/44.json.
+// eleven modules), /stats from stats.json and /modules from modules.json.
 
 test.describe("chain parameters", () => {
-  test("renders every group from the live values and links the last change", async ({ page }) => {
+  test("shows Fees first, one group at a time, with its module accounts", async ({ page }) => {
     await page.goto("/parameters");
     await expect(page).toHaveTitle("Chain parameters · BZE Explorer");
-    await expect(page.getByTestId("param-group")).toHaveCount(10);
+    const group = page.getByTestId("param-group");
+    await expect(group).toHaveCount(1);
+    await expect(group).toHaveAttribute("id", "fees");
     await expect(page.getByText("not available")).toHaveCount(0);
-
-    const last = page.getByTestId("last-change-link");
-    await expect(last).toHaveText("#44 V8 Upgrade");
-    await expect(last).toHaveAttribute("href", "/proposals/44");
-
-    const staking = page.locator("section#staking");
-    await expect(staking.getByTestId("param-row").first()).toContainText("Unstaking period");
-    await expect(staking.getByTestId("param-row").first()).toContainText("1814400s");
-    await expect(page.locator("section#dex").getByRole("link", { name: "Burner module · module" })).toBeVisible();
+    await expect(page.getByTestId("module-account-row")).toHaveCount(4);
+    await expect(page.getByTestId("module-account-row").first()).toContainText("Fee collector");
   });
 
-  test("the anchor nav scrolls to a group", async ({ page }) => {
+  test("the group nav switches the group and keeps it in the URL", async ({ page }) => {
     await page.goto("/parameters");
-    await expect(page.getByTestId("param-group")).toHaveCount(10);
-    await page.getByTestId("param-nav").getByRole("link", { name: "CoinTrunk" }).click();
-    await expect(page).toHaveURL(/#cointrunk$/);
-    await expect(page.locator("section#cointrunk")).toBeInViewport();
+    await page.getByTestId("param-nav").getByRole("link", { name: /^Staking/ }).click();
+    await expect(page).toHaveURL(/\/parameters\?group=staking$/);
+    await expect(page.getByTestId("param-group")).toHaveAttribute("id", "staking");
+
+    const unbonding = page.getByTestId("param-row").first();
+    await expect(unbonding).toContainText("Unstaking period");
+    await unbonding.getByRole("button", { name: "Info about Unstaking period" }).click();
+    await expect(unbonding.getByTestId("param-info")).toContainText("1814400s");
+    await expect(unbonding.getByTestId("param-info")).toContainText("unbonding_time");
   });
 
-  test("a group in the URL is scrolled to once the values load", async ({ page }) => {
-    await page.goto("/parameters#cointrunk");
-    await expect(page.getByTestId("param-group")).toHaveCount(10);
-    await expect(page.locator("section#cointrunk")).toBeInViewport();
+  test("opens the group of ?group= and of a legacy #anchor", async ({ page }) => {
+    await page.goto("/parameters?group=cointrunk");
+    await expect(page.getByTestId("param-group")).toHaveAttribute("id", "cointrunk");
+    await expect(page.getByTestId("module-accounts")).toContainText("CoinTrunk has no module account");
+
+    await page.goto("/parameters#dex");
+    await expect(page.getByTestId("param-group")).toHaveAttribute("id", "dex");
+    await expect(page).toHaveURL(/\/parameters\?group=dex$/);
+    await expect(page.getByRole("link", { name: "Burner module · module" })).toBeVisible();
   });
 
   test("copies every module's values as JSON", async ({ page, context }) => {
@@ -52,9 +56,14 @@ test.describe("chain parameters", () => {
 test.describe("chain parameters on a phone", () => {
   test.skip(({ isMobile }) => !isMobile, "phone layout");
 
-  test("stacks each row and stays within the screen", async ({ page }) => {
-    await page.goto("/parameters");
-    await expect(page.getByTestId("param-group")).toHaveCount(10);
+  test("shows the groups as chips and stays within the screen", async ({ page }) => {
+    await page.goto("/parameters?group=burner");
+    await expect(page.getByTestId("param-group")).toHaveAttribute("id", "burner");
+    await expect(page.getByTestId("param-nav-item")).toHaveCount(10);
+    // Below c3 the short form shows; the full address stays hidden (and in the title).
+    const address = page.getByTestId("module-account-address").first();
+    await expect(address.getByText("bze1v7u…5qun")).toBeVisible();
+    await expect(address.getByText("bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun")).toBeHidden();
     await noHorizontalScroll(page);
   });
 });

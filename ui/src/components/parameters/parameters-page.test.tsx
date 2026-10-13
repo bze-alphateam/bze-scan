@@ -1,86 +1,168 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
-import type { ChainParams, Proposal, Stats } from "@/api/types";
+import type { ChainParams, ModuleAccount, Stats } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
+import modules from "../../../test/fixtures/api/v1/modules.json";
 import params from "../../../test/fixtures/api/v1/params.json";
-import proposal from "../../../test/fixtures/api/v1/proposals/45.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
 
 import { ParametersPage } from "./parameters-page";
+
+const replace = vi.fn();
+const router = { replace };
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const api = (over: Partial<Parameters<typeof fakeApi>[0]> = {}) =>
   fakeApi({
     params: () => Promise.resolve(params as ChainParams),
     stats: () => Promise.resolve(stats as Stats),
-    proposal: (id) => Promise.resolve({ ...(proposal as Proposal), id, title: "V8 Upgrade" }),
+    modules: () => Promise.resolve({ items: modules.items as ModuleAccount[] }),
     ...over,
   });
 
-const group = (id: string) => screen.getAllByTestId("param-group").find((g) => g.id === id)!;
+const shown = async () => (await screen.findByTestId("param-group")).id;
+const row = (name: string) => screen.getByText(name).closest<HTMLElement>("[data-testid=param-row]")!;
+const navItem = (label: string) => within(screen.getByTestId("param-nav")).getByRole("link", { name: new RegExp(`^${label}`) });
+
+beforeEach(() => replace.mockClear());
+afterEach(() => window.history.replaceState(null, "", "/"));
 
 describe("ParametersPage", () => {
-  it("shows the anchor nav and three skeleton rows per group on the first load", () => {
+  it("lists every group in the nav and shows the selected one's header while loading", () => {
     renderWithProviders(<ParametersPage />, { api: pendingApi() });
-    expect(screen.getByTestId("parameters-skeleton")).toBeInTheDocument();
-    expect(within(screen.getByTestId("param-nav")).getAllByRole("link")).toHaveLength(10);
-    expect(screen.getAllByTestId("table-skeleton-row")).toHaveLength(30);
+    expect(screen.getByTestId("parameters-skeleton")).toHaveTextContent("Fees");
+    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(10);
+    expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
   });
 
-  it("renders every group with plain names, human and raw values, and what they mean", async () => {
+  it("shows Fees with no ?group=, and only that group", async () => {
     renderWithProviders(<ParametersPage />, { api: api() });
-    expect(await screen.findByTestId("last-change")).toHaveTextContent("Last change #44 · Nov 24, 2025 · DEX, Rewards programs");
-    expect(await screen.findByRole("link", { name: "#44 V8 Upgrade" })).toHaveAttribute("href", "/proposals/44");
-    expect(screen.getAllByTestId("param-group").map((g) => g.id)).toEqual([
-      "fees",
-      "staking",
-      "inflation",
-      "penalties",
-      "gov",
-      "dex",
-      "factory",
-      "rewards",
-      "burner",
-      "cointrunk",
-    ]);
-    expect(within(screen.getByTestId("param-nav")).getByRole("link", { name: "Governance" })).toHaveAttribute("href", "#gov");
+    expect(await shown()).toBe("fees");
+    expect(screen.getAllByTestId("param-group")).toHaveLength(1);
+    expect(screen.queryByText("Unstaking period")).not.toBeInTheDocument();
+    expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
+    expect(navItem("Staking")).toHaveAttribute("href", "/parameters?group=staking");
+    expect(navItem("Staking")).not.toHaveAttribute("aria-current");
+  });
 
-    const staking = group("staking");
-    expect(within(staking).getByTestId("changed-by")).toHaveAttribute("href", "/proposals/11");
-    const unbonding = within(staking).getAllByTestId("param-row")[0];
-    expect(unbonding).toHaveTextContent("Unstaking period");
-    expect(unbonding).toHaveTextContent("unbonding_time");
+  it("selects the group of ?group=, and falls back to Fees for an unknown one", async () => {
+    const { unmount } = renderWithProviders(<ParametersPage group="staking" />, { api: api() });
+    expect(await shown()).toBe("staking");
+    expect(navItem("Staking")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByTestId("param-count")).toHaveTextContent(/^\d+ \+ \d+ advanced$/);
+    unmount();
+
+    renderWithProviders(<ParametersPage group="nope" />, { api: api() });
+    expect(await shown()).toBe("fees");
+  });
+
+  it("selects the group of a legacy #anchor and moves it to ?group=", async () => {
+    window.history.replaceState(null, "", "/parameters#dex");
+    renderWithProviders(<ParametersPage />, { api: api() });
+    expect(await shown()).toBe("dex");
+    expect(replace).toHaveBeenCalledWith("/parameters?group=dex", { scroll: false });
+  });
+
+  it("switches the group in place and keeps it in the URL", async () => {
+    renderWithProviders(<ParametersPage />, { api: api() });
+    await shown();
+    await userEvent.click(navItem("Governance"));
+    expect(await shown()).toBe("gov");
+    expect(replace).toHaveBeenCalledWith("/parameters?group=gov", { scroll: false });
+    expect(navItem("Governance")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("link", { name: "the proposals" })).toHaveAttribute("href", "/proposals");
+  });
+
+  it("opens a row's info: what it means, its chain name, the stored value and the proposal that changed it", async () => {
+    renderWithProviders(<ParametersPage group="staking" />, { api: api() });
+    await shown();
+    const unbonding = row("Unstaking period");
     expect(within(unbonding).getByTestId("param-value")).toHaveTextContent("21 days");
-    expect(within(unbonding).getByTestId("param-raw")).toHaveTextContent("1814400s");
-    expect(unbonding).toHaveTextContent("Unstaked BZE stays locked for 21 days");
-    expect(within(staking).getAllByTestId("param-row")[1]).toHaveTextContent("3 seats are taken right now.");
-    expect(within(staking).getByText("Bond denom").closest("[data-testid=param-row]")).toHaveAttribute("data-advanced", "true");
+    expect(screen.queryByTestId("param-info")).not.toBeInTheDocument();
 
-    // The fee destinations are the Burner's module account.
-    const burner = within(group("dex")).getByRole("link", { name: "Burner module · module" });
+    const button = within(unbonding).getByRole("button", { name: "Info about Unstaking period" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    const info = within(unbonding).getByTestId("param-info");
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(info).toHaveTextContent("Unstaked BZE stays locked for 21 days");
+    expect(info).toHaveTextContent("On chainunbonding_time");
+    expect(within(info).getByTestId("param-raw")).toHaveTextContent("1814400s");
+    expect(within(info).getByRole("link", { name: "#11" })).toHaveAttribute("href", "/proposals/11");
+
+    // A second row opens too; clicking the row itself closes it again.
+    await userEvent.click(within(row("Active validator seats")).getByRole("button"));
+    expect(screen.getAllByTestId("param-info")).toHaveLength(2);
+    expect(row("Active validator seats")).toHaveTextContent("3 seats are taken right now.");
+    await userEvent.click(within(unbonding).getByText("Unstaking period"));
+    expect(screen.getAllByTestId("param-info")).toHaveLength(1);
+    expect(row("Bond denom")).toHaveAttribute("data-advanced", "true");
+  });
+
+  it("shows module-account values as chips linking to the account", async () => {
+    renderWithProviders(<ParametersPage group="dex" />, { api: api() });
+    await shown();
+    const burner = within(row("Where the fees go")).getByRole("link", { name: "Burner module · module" });
     expect(burner).toHaveAttribute("href", "/accounts/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun");
-    expect(within(group("dex")).getByTestId("changed-by")).toHaveTextContent("changed by #44");
-    expect(within(group("gov")).getByRole("link", { name: "the proposals" })).toHaveAttribute("href", "/proposals");
-    expect(screen.queryByText("not available")).not.toBeInTheDocument();
+    // jsdom cannot follow the link; the row must not open either way.
+    document.addEventListener("click", (e) => e.preventDefault(), { capture: true, once: true });
+    await userEvent.click(burner);
+    expect(screen.queryByTestId("param-info")).not.toBeInTheDocument();
+  });
+
+  it("lists the group's module accounts by the backend's names", async () => {
+    renderWithProviders(<ParametersPage />, { api: api() });
+    const block = await screen.findByTestId("module-accounts");
+    expect(within(block).getByRole("heading")).toHaveTextContent("Module accounts");
+    const rows = await within(block).findAllByTestId("module-account-row");
+    expect(rows.map((r) => within(r).getAllByRole("link")[0].textContent)).toEqual([
+      "FCFee collector",
+      "SFStakers fee collector",
+      "BFBurner fee collector",
+      "CFCP fee collector",
+    ]);
+    const address = within(rows[0]).getByTestId("module-account-address");
+    expect(address).toHaveAttribute("href", "/accounts/bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2");
+    expect(address).toHaveAttribute("title", "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2");
+    expect(address).toHaveTextContent("bze17xp…0te2");
+    expect(within(rows[0]).getByRole("button", { name: "Copy address" })).toBeInTheDocument();
+  });
+
+  it("names a single module account in the singular", async () => {
+    renderWithProviders(<ParametersPage group="dex" />, { api: api() });
+    const block = await screen.findByTestId("module-accounts");
+    await within(block).findByTestId("module-account-row");
+    expect(within(block).getByRole("heading")).toHaveTextContent(/^Module account$/);
+    expect(within(block).getByRole("link", { name: "DEX · module" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["penalties", "Slashing has no module account: penalties are taken straight from the validator's stake."],
+    ["cointrunk", "CoinTrunk has no module account: article fees go straight to the community pool."],
+  ])("says why %s has no module account", async (group, note) => {
+    renderWithProviders(<ParametersPage group={group} />, { api: api() });
+    const block = await screen.findByTestId("module-accounts");
+    expect(block).toHaveTextContent(note);
+    expect(within(block).queryByTestId("module-account-row")).not.toBeInTheDocument();
   });
 
   it("says not available for a module the chain did not answer", async () => {
     const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as ChainParams;
-    renderWithProviders(<ParametersPage />, { api: api({ params: () => Promise.resolve(rest) }) });
+    renderWithProviders(<ParametersPage group="dex" />, { api: api({ params: () => Promise.resolve(rest) }) });
     expect(await screen.findAllByText("not available")).toHaveLength(7);
-    expect(within(group("dex")).queryByTestId("changed-by")).not.toBeInTheDocument();
     expect(screen.queryByTestId("parameters-skeleton")).not.toBeInTheDocument();
   });
 
   it("renders without /stats when it fails", async () => {
-    renderWithProviders(<ParametersPage />, {
+    renderWithProviders(<ParametersPage group="inflation" />, {
       api: api({ stats: () => Promise.reject(new ApiError(404, "not_found", "no stats")) }),
     });
-    const inflation = await screen.findByText("Inflation right now");
-    expect(inflation.closest("[data-testid=param-row]")).toHaveTextContent("not available");
+    await screen.findByText("Inflation right now");
+    expect(row("Inflation right now")).toHaveTextContent("not available");
   });
 
   it("copies the whole answer as JSON", async () => {
@@ -92,23 +174,6 @@ describe("ParametersPage", () => {
     expect(JSON.parse(writeText.mock.calls[0][0])).toEqual(params);
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", expect.stringMatching(/\/params$/));
-  });
-
-  it("scrolls to the group in the URL once the values load, not to the skeleton's", async () => {
-    const scrolled: string[] = [];
-    const scrollIntoView = vi.fn(function (this: HTMLElement) {
-      scrolled.push(this.id);
-    });
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: scrollIntoView, configurable: true });
-    window.history.replaceState(null, "", "#gov");
-    try {
-      renderWithProviders(<ParametersPage />, { api: api() });
-      await screen.findAllByTestId("param-group");
-      expect(scrolled).toEqual(["gov"]);
-      expect(scrollIntoView.mock.contexts[0]).toHaveAttribute("data-testid", "param-group");
-    } finally {
-      window.history.replaceState(null, "", "#");
-    }
   });
 
   it("offers a retry when the API fails", async () => {
