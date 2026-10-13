@@ -15,7 +15,7 @@ const DAY_MS = 86_400_000;
 
 export type AccountTab = "activity" | "tokens" | "staking";
 
-/** The tabs, in order; the first is the default. */
+/** A personal account's tabs, in order; the first is the default. */
 export const ACCOUNT_TABS: AccountTab[] = ["activity", "tokens", "staking"];
 
 /** The tab a `?tab=` value names; the Activity tab for anything else. */
@@ -23,24 +23,175 @@ export function parseTab(value: string | string[] | undefined): AccountTab {
   return ACCOUNT_TABS.find((t) => t === value) ?? "activity";
 }
 
+/** A module account's tabs: Holdings (`?tab=tokens`, the default) and Movements. */
+export type ModuleTab = "tokens" | "movements";
+
+export function parseModuleTab(value: string | string[] | undefined): ModuleTab {
+  return value === "movements" ? "movements" : "tokens";
+}
+
+/** A `?page=` value: a positive whole number, else page 1. */
+export function parsePage(value: string | string[] | undefined): number {
+  const v = Array.isArray(value) ? value[0] : value;
+  if (v == null || !/^[1-9]\d{0,8}$/.test(v)) return 1;
+  return Number(v);
+}
+
+/** The last numbered page of `total` rows, `perPage` a page; 1 for none. */
+export function lastPage(total: number, perPage: number): number {
+  return Math.max(1, Math.ceil(total / perPage));
+}
+
+/** "Activity 51–75 of 534"; "Activity 0 of 0" when there is none. */
+export function activityRange(page: number, perPage: number, total: number): string {
+  const from = (page - 1) * perPage + 1;
+  if (total === 0 || from > total) return `Activity 0 of ${formatCount(total)}`;
+  return `Activity ${formatCount(from)}–${formatCount(Math.min(total, page * perPage))} of ${formatCount(total)}`;
+}
+
+/**
+ * The URL of the Activity tab's place: `?tab=activity&category=dex&page=3`,
+ * the defaults (all categories, page 1) left out; nothing at all for the default place.
+ */
+export function activitySearch(category: string | null, page: number): string {
+  const q = new URLSearchParams();
+  if (category) {
+    q.set("tab", "activity");
+    q.set("category", category);
+  }
+  if (page > 1) {
+    q.set("tab", "activity");
+    q.set("page", String(page));
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+/** What the module account page says about a module: who owns it, and when its coins move. */
+export interface ModuleFacts {
+  /** One sentence; a `word` in backticks is a module name, shown in mono. */
+  owner: string;
+  moves: string;
+  movesSub: string;
+}
+
+const MODULES: Record<string, ModuleFacts> = {
+  tradebin: {
+    owner: "Owned by the chain's DEX module (`tradebin`). Holds the coins in liquidity pools and open orders.",
+    moves: "people trade",
+    movesSub: "add or remove liquidity, place, fill or cancel orders",
+  },
+  burner: {
+    owner: "Owned by the Burner module (`burner`). Collects coins to destroy at the next periodic burn.",
+    moves: "coins are burned",
+    movesSub: "sent to burn, and at every periodic burn",
+  },
+  burner_black_hole: {
+    owner: "Owned by the Burner module. Holds coins locked forever.",
+    moves: "coins are locked",
+    movesSub: "coins only come in, never leave",
+  },
+  burner_raffle: {
+    owner: "Owned by the Burner module. Holds the burner raffles' pots.",
+    moves: "raffles run",
+    movesSub: "people join, raffles pay out",
+  },
+  fee_collector: {
+    owner: "Owned by the chain's auth module (`fee_collector`). Collects every transaction fee paid in BZE.",
+    moves: "every block",
+    movesSub: "fees come in, then go to stakers and the community pool",
+  },
+  txfeecollector: {
+    owner: "Owned by BZE's fee module (`txfeecollector`). Collects fees paid in other tokens and converts them to BZE.",
+    moves: "fees are paid in other tokens",
+    movesSub: "converted, then sent to the fee collector",
+  },
+  txfeecollector_burner: {
+    owner: "Owned by BZE's fee module. Collects the fees that go to the Burner.",
+    moves: "fees are paid",
+    movesSub: "passed on to the Burner",
+  },
+  txfeecollector_cp: {
+    owner: "Owned by BZE's fee module. Collects the fees that go to the community pool.",
+    moves: "fees are paid",
+    movesSub: "passed on to the community pool",
+  },
+  distribution: {
+    owner: "Owned by the distribution module. Holds staking rewards until claimed, and the community pool.",
+    moves: "every block",
+    movesSub: "rewards added and claimed, community pool spends",
+  },
+  mint: {
+    owner: "Owned by the mint module. Creates the new BZE of each block.",
+    moves: "every block",
+    movesSub: "new BZE created and passed on",
+  },
+  bonded_tokens_pool: {
+    owner: "Owned by the staking module. Holds all staked BZE.",
+    moves: "people stake",
+    movesSub: "stake, unstake, redelegate, slashing",
+  },
+  not_bonded_tokens_pool: {
+    owner: "Owned by the staking module. Holds BZE during the unstaking period.",
+    moves: "unstaking starts or ends",
+    movesSub: "released after the unstaking period",
+  },
+  gov: {
+    owner: "Owned by the governance module. Holds proposal deposits.",
+    moves: "proposals get deposits",
+    movesSub: "deposits come in, are returned or burned",
+  },
+  rewards: {
+    owner: "Owned by the rewards module. Holds the prizes of staking and trading reward programs.",
+    moves: "reward programs run",
+    movesSub: "programs open, pay out, people join or leave",
+  },
+  tokenfactory: {
+    owner: "Owned by the token factory module.",
+    moves: "tokens are created",
+    movesSub: "creation fees, minting and burning",
+  },
+  transfer: {
+    owner: "Owned by the cross-chain transfer module.",
+    moves: "cross-chain transfers",
+    movesSub: "tokens minted or burned for transfers",
+  },
+  feeibc: {
+    owner: "Owned by the cross-chain relayer fee module.",
+    moves: "relayer fees are paid",
+    movesSub: "fees escrowed for relayers",
+  },
+  interchainaccounts: {
+    owner: "Owned by the interchain accounts module.",
+    moves: "rarely",
+    movesSub: "interchain account actions",
+  },
+  nft: {
+    owner: "Owned by the NFT module.",
+    moves: "rarely",
+    movesSub: "not used on BZE",
+  },
+};
+
+/** The facts of a module by its `module` name (from `/modules`); a plain fallback for one this list lacks, or while unknown. */
+export function moduleFacts(module: string | null | undefined): ModuleFacts {
+  const known = module ? MODULES[module] : undefined;
+  if (known) return known;
+  return {
+    owner: module ? `Owned by the chain's \`${module}\` module.` : "Owned by one of the chain's modules.",
+    moves: "as the module's rules say",
+    movesSub: "inside other people's transactions",
+  };
+}
+
+/** Where a module's BZE sits, for the BZE held tile. */
+export function moduleBondWhere(module: string | null | undefined): string {
+  return module === "tradebin" ? "in pools and open orders" : "held by the module";
+}
+
 /** The page's name: the label, else "Account bze1q8f…u4a". */
 export function accountTitle(address: string, label: Label | null | undefined): string {
   return label?.name || `Account ${shortAddress(address)}`;
-}
-
-/** The chip next to a labelled account's name; null for a plain account. */
-export function labelChip(label: Label | null | undefined): { text: string; dashed: boolean } | null {
-  if (!label) return null;
-  switch (label.kind) {
-    case "module":
-      return { text: "module account", dashed: true };
-    case "validator_owner":
-      return { text: `owner of ${label.name}`, dashed: false };
-    case "ibc_escrow":
-      return { text: "cross-chain escrow", dashed: false };
-    default:
-      return { text: label.name, dashed: false };
-  }
 }
 
 /** "active since Apr 2022 · 1,204 transactions", or "no transactions seen yet". */

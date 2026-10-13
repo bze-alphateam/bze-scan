@@ -29,7 +29,20 @@ const JUMP_LINE = { base: "0", c2: "1px" };
  * One pager square: a link (`href`), a button (`onClick`), or dimmed when
  * there is nowhere to go (null): a span standing for the link, a disabled button.
  */
-function Pg({ href, onClick, label, children }: { href?: string | null; onClick?: (() => void) | null; label: string; children: ReactNode }) {
+function Pg({
+  href,
+  onClick,
+  onFollow,
+  label,
+  children,
+}: {
+  href?: string | null;
+  onClick?: (() => void) | null;
+  /** With `href`: a plain click runs this instead of navigating (a new tab still opens the link). */
+  onFollow?: () => void;
+  label?: string;
+  children: ReactNode;
+}) {
   if (onClick !== undefined) {
     return (
       <Box
@@ -55,7 +68,18 @@ function Pg({ href, onClick, label, children }: { href?: string | null; onClick?
   }
   return (
     <Link asChild {...square} _hover={{ textDecoration: "none", ...hoverSquare }}>
-      <NextLink href={href} aria-label={label}>
+      <NextLink
+        href={href}
+        aria-label={label}
+        onClick={
+          onFollow &&
+          ((e) => {
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            onFollow();
+          })
+        }
+      >
         {children}
       </NextLink>
     </Link>
@@ -144,35 +168,62 @@ interface PagerProps {
   href: (page: number) => string;
   /** Where « goes: the first page, or the live list. */
   firstHref: string;
+  /** Number the pages around the current one (1 … 4 5 6 … N) once `last` is known. */
+  numbered?: boolean;
+  /** Move in the page instead of navigating: the links keep their `href` for a new tab. */
+  onGo?: (page: number) => void;
+}
+
+/** The pages a numbered pager shows: first, last and the current ±1, a null for each gap. */
+function pageWindow(page: number, last: number): (number | null)[] {
+  const shown = [...new Set([1, page - 1, page, page + 1, last])].filter((n) => n >= 1 && n <= last).sort((a, b) => a - b);
+  return shown.flatMap((n, i) => (i > 0 && n - shown[i - 1] > 1 ? [null, n] : [n]));
 }
 
 /**
  * The bar under a numbered list: the range on the left; « ‹ page › » and a
  * "Page [#]" box on the right. A typed page is clamped to 1…last.
  */
-export function Pager({ children, page, last, hasNext, href, firstHref }: PagerProps) {
+export function Pager({ children, page, last, hasNext, href, firstHref, numbered, onGo }: PagerProps) {
   const router = useRouter();
   const [typed, setTyped] = useState("");
   const id = useId();
   const atStart = page <= 1;
   const atEnd = last != null ? page >= last : !hasNext;
-  const go = (n: number) => router.push(n === 1 && atStart ? firstHref : href(n));
+  const go = (n: number) => (onGo ? onGo(n) : router.push(n === 1 && atStart ? firstHref : href(n)));
+  const follow = (n: number) => (onGo ? () => onGo(n) : undefined);
 
   return (
     <PagerBar
       nav={
         <>
-          <Pg href={atStart ? null : firstHref} label="First page">
+          <Pg href={atStart ? null : firstHref} onFollow={follow(1)} label="First page">
             «
           </Pg>
-          <Pg href={atStart ? null : href(page - 1)} label="Previous page">
+          <Pg href={atStart ? null : href(page - 1)} onFollow={follow(page - 1)} label="Previous page">
             ‹
           </Pg>
-          <Current page={page} />
-          <Pg href={atEnd ? null : href(page + 1)} label="Next page">
+          {numbered && last != null ? (
+            pageWindow(page, last).map((n, i) =>
+              n == null ? (
+                <Text as="span" key={`gap-${i}`} px="1" color="fg.muted" fontFamily="mono" aria-hidden>
+                  …
+                </Text>
+              ) : n === page ? (
+                <Current key={n} page={n} />
+              ) : (
+                <Pg key={n} href={n === 1 ? firstHref : href(n)} onFollow={follow(n)} label={`Page ${n}`}>
+                  {n}
+                </Pg>
+              ),
+            )
+          ) : (
+            <Current page={page} />
+          )}
+          <Pg href={atEnd ? null : href(page + 1)} onFollow={follow(page + 1)} label="Next page">
             ›
           </Pg>
-          <Pg href={atEnd || last == null ? null : href(last)} label="Last page">
+          <Pg href={atEnd || last == null ? null : href(last)} onFollow={last != null ? follow(last) : undefined} label="Last page">
             »
           </Pg>
           <HStack

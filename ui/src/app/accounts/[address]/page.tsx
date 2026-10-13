@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import type { Account } from "@/api/types";
 import { AccountPage } from "@/components/accounts/account-page";
 import { serverApiUrl } from "@/lib/env";
-import { accountTitle, parseTab } from "@/render/account";
+import { accountTitle, parsePage } from "@/render/account";
 import { parseCategory } from "@/render/activity";
 
 // A `bze1…` account; contracts and interchain accounts are longer than 38.
@@ -12,7 +12,7 @@ const ADDRESS = /^bze1[02-9ac-hj-np-z]{38,}$/;
 
 interface Props {
   params: Promise<{ address: string }>;
-  searchParams: Promise<{ tab?: string | string[]; category?: string | string[] }>;
+  searchParams: Promise<{ tab?: string | string[]; category?: string | string[]; page?: string | string[] }>;
 }
 
 /** The account, or null for any failure, read on the server for the title. */
@@ -40,8 +40,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function AccountRoute({ params, searchParams }: Props) {
   const { address } = await params;
   if (!ADDRESS.test(address)) notFound();
-  const { tab, category } = await searchParams;
+  const { tab, category, page } = await searchParams;
   return (
-    <AccountPage key={address} address={address} initialTab={parseTab(tab)} initialCategory={parseCategory(category)} />
+    <AccountPage
+      key={address}
+      address={address}
+      initialTab={Array.isArray(tab) ? tab[0] : tab}
+      initialCategory={parseCategory(category)}
+      initialPage={parsePage(page)}
+    />
   );
 }

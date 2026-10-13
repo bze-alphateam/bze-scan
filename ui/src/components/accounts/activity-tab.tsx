@@ -1,19 +1,25 @@
 "use client";
 
-import { Badge, Box, Button, Circle, HStack, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Grid, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { LuTriangleAlert } from "react-icons/lu";
 
-import { useAccountActivity, useAccountIbc, useDenoms } from "@/api/hooks";
+import { ACTIVITY_PER_PAGE, useAccountActivity, useAccountIbc, useDenoms, useStatus } from "@/api/hooks";
 import type { Activity, ActivityCategory, IbcTransfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { categoryLook } from "@/components/ui/action-card";
-import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { FilterPills } from "@/components/ui/filter-pills";
 import { HashLink } from "@/components/ui/links";
+import { ListPanel } from "@/components/ui/list";
+import { Pager, PagerPill } from "@/components/ui/pager";
 import { ListSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount } from "@/lib/format";
+import { activityRange, activitySearch, lastPage } from "@/render/account";
 import {
   ACTIVITY_FILTERS,
   actionCategory,
@@ -27,18 +33,18 @@ import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext } from "@/render/messages/types";
 
 const NO_TRANSFERS: never[] = [];
+const CHIP_LOOK = { orange: "warn", green: "ok", red: "bad" } as const;
 const NO_IBC: IbcTransfer[] = [];
 
-/** Keeps the category in the URL (`?tab=activity&category=dex`) without a navigation. */
-function writeCategory(category: ActivityCategory | null) {
+// Icon · what happened · the account's own net; on phones the net goes under the words.
+const ROW_COLUMNS = { base: "32px minmax(0, 1fr)", c2: "32px minmax(0, 1fr) auto" };
+const NET_COLUMN = { base: "2", c2: "auto" };
+const NET_ALIGN = { base: "flex-start", c2: "flex-end" };
+
+/** Keeps the place in the URL (`?tab=activity&category=dex&page=3`) without a navigation. */
+function writePlace(category: ActivityCategory | null, page: number) {
   const url = new URL(window.location.href);
-  if (category) {
-    url.searchParams.set("tab", "activity");
-    url.searchParams.set("category", category);
-  } else {
-    url.searchParams.delete("tab");
-    url.searchParams.delete("category");
-  }
+  url.search = activitySearch(category, page);
   window.history.replaceState(window.history.state, "", url);
 }
 
@@ -54,44 +60,45 @@ function PartView({ part }: { part: Part }) {
 
 function ActivityRow({ row, address, ctx, transfers }: { row: Activity; address: string; ctx: RenderContext; transfers: IbcTransfer[] }) {
   const line = activityLine(row, { address, ctx, ibc: ibcFor(row, transfers) });
-  const look = categoryLook(actionCategory(row.category));
-  const Icon = look.icon;
+  const Icon = categoryLook(actionCategory(row.category)).icon;
   const lines = deltaLines(row, ctx);
   return (
-    <HStack
+    <Grid
       role="listitem"
-      align="start"
-      gap="3"
+      templateColumns={ROW_COLUMNS}
+      columnGap="3"
+      rowGap="1"
+      alignItems="center"
       px="4"
       py="3"
-      borderTopWidth="1px"
+      borderBottomWidth="1px"
       borderColor="border.panel"
       data-testid="activity-row"
       data-kind={row.kind}
     >
-      <Circle size="9" bg={`${look.palette}.subtle`} color={`${look.palette}.fg`} flexShrink={0} aria-hidden>
-        <Icon />
-      </Circle>
-      <Stack gap="1" minW="0" flex="1">
-        <Box fontSize="sm" lineHeight="tall" wordBreak="break-word" data-testid="activity-what">
+      <Box display="grid" placeItems="center" boxSize="32px" rounded="l2" bg="accent.subtle" color="accent.fg" aria-hidden>
+        <Icon size={16} />
+      </Box>
+      <Stack gap="2px" minW="0">
+        <Box fontSize="14px" lineHeight="1.5" wordBreak="break-word" data-testid="activity-what">
           {line.parts.map((p, i) => (
             <PartView key={i} part={p} />
           ))}
           {line.chips.map((c) => (
-            <Badge key={c.label} colorPalette={c.palette} variant="subtle" rounded="full" size="sm" ms="2" data-testid="activity-chip">
+            <Chip key={c.label} variant={CHIP_LOOK[c.palette]} ms="2" data-testid="activity-chip">
               {c.label}
-            </Badge>
+            </Chip>
           ))}
         </Box>
-        <Text fontSize="xs" color="fg.muted" data-testid="activity-when">
+        <Text fontSize="12px" color="fg.muted" data-testid="activity-when">
           <TimeAgo time={row.time} />
           {" · "}
           {row.tx_hash ? (
-            <HashLink hash={row.tx_hash} noCopy />
+            <HashLink hash={row.tx_hash} noCopy fontSize="12px" />
           ) : (
             <>
               settled in block{" "}
-              <Link asChild>
+              <Link asChild fontFamily="mono">
                 <NextLink href={`/blocks/${row.height}`}>{formatCount(row.height)}</NextLink>
               </Link>
               , {BLOCK_LEVEL_NOTE}
@@ -99,126 +106,180 @@ function ActivityRow({ row, address, ctx, transfers }: { row: Activity; address:
           )}
         </Text>
         {!row.success && (
-          <Text fontSize="xs" color="red.fg" data-testid="activity-failed">
+          <Text fontSize="12px" color="neg.fg" data-testid="activity-failed">
             Failed · see the transaction for the reason
           </Text>
         )}
       </Stack>
-      <Stack gap="0.5" align="end" flexShrink={0} maxW="45%" data-testid="activity-amounts">
+      <Stack
+        gap="1px"
+        gridColumn={NET_COLUMN}
+        align={NET_ALIGN}
+        fontFamily="mono"
+        fontSize="13px"
+        whiteSpace="nowrap"
+        data-testid="activity-amounts"
+      >
         {lines.length === 0 ? (
-          <Text fontSize="sm" color="fg.muted">
-            —
-          </Text>
+          <Text color="fg.muted">—</Text>
         ) : (
           lines.map((l) => (
-            <Text
-              key={l.text}
-              fontSize={l.fee ? "xs" : "sm"}
-              color={l.positive ? "green.fg" : l.fee ? "fg.muted" : undefined}
-              fontVariantNumeric="tabular-nums"
-              textAlign="right"
-              wordBreak="break-word"
-            >
+            <Text key={l.text} fontSize={l.fee ? "11px" : undefined} color={l.positive ? "pos.fg" : l.fee ? "fg.muted" : undefined}>
               {l.text}
             </Text>
           ))
         )}
       </Stack>
-    </HStack>
+    </Grid>
   );
 }
 
 function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
-    <Card title="The activity could not be loaded">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text color="fg.muted" fontSize="sm">
-          The explorer did not answer. Try again in a moment.
-        </Text>
-        <Button colorPalette="blue" minH="44px" onClick={onRetry}>
+    <StateBox
+      tone="error"
+      icon={<LuTriangleAlert size={20} />}
+      title="The activity could not be loaded"
+      actions={
+        <Button size="sm" colorPalette="blue" onClick={onRetry}>
           Try again
         </Button>
-      </HStack>
-    </Card>
+      }
+    >
+      The explorer did not answer. Try again in a moment.
+    </StateBox>
   );
 }
 
-/** The account's Activity tab: category chips, one row per transaction (or block), polled until older rows are loaded. */
-export function ActivityTab({ address, initialCategory = null }: { address: string; initialCategory?: ActivityCategory | null }) {
+/** A panel saying there is nothing to list: a bold line and a muted paragraph. */
+export function EmptyPanel({ title, children, testId }: { title: string; children: ReactNode; testId?: string }) {
+  return (
+    <ListPanel px="5" py="18px" data-testid={testId}>
+      <Text fontWeight="600" mb="1">
+        {title}
+      </Text>
+      <Text color="fg.muted" fontSize="13px" lineHeight="1.55" maxW="720px">
+        {children}
+      </Text>
+    </ListPanel>
+  );
+}
+
+/** An address the explorer never saw do anything: its history is empty, its balances still right. */
+function NeverSeen() {
+  const oldest = useStatus().data?.back_fill.oldest_height ?? null;
+  return (
+    <EmptyPanel title="No activity seen yet" testId="activity-never">
+      Nothing this account did is in the explorer&apos;s history
+      {oldest != null && (
+        <>
+          {" "}
+          (from block{" "}
+          <Text as="span" fontFamily="mono">
+            {formatCount(oldest)}
+          </Text>
+          )
+        </>
+      )}
+      . Balances above are read live from the chain, so they are right even when the history is empty.
+    </EmptyPanel>
+  );
+}
+
+interface ActivityTabProps {
+  address: string;
+  initialCategory?: ActivityCategory | null;
+  initialPage?: number;
+  /** The explorer never saw the address do anything (no activity at all). */
+  neverSeen?: boolean;
+}
+
+/**
+ * The account's Activity tab: category pills, then 25 rows a numbered page,
+ * newest first. Page 1 is polled; an older page stays as it was read, and a
+ * pill says how many rows came in since, linking back to the newest.
+ */
+export function ActivityTab({ address, initialCategory = null, initialPage = 1, neverSeen = false }: ActivityTabProps) {
   const [category, setCategory] = useState<ActivityCategory | null>(initialCategory);
-  const list = useAccountActivity(address, { category });
+  const [page, setPage] = useState(initialPage);
+  // The total this place was read with; the polled page 1 shows how many came after.
+  const list = useAccountActivity(address, { category, page, enabled: !neverSeen });
+  const latest = useAccountActivity(address, { category, page: 1, limit: 1, enabled: !neverSeen && page > 1 });
   const ibc = useAccountIbc(address);
   const denoms = useDenoms();
   const ctx = useMemo(() => createRenderContext({ transfers: NO_TRANSFERS, tokens: denoms.data }), [denoms.data]);
-  const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+
+  if (neverSeen) return <NeverSeen />;
+
+  const go = (next: ActivityCategory | null, n: number) => {
+    setCategory(next);
+    setPage(n);
+    writePlace(next, n);
+  };
+  const items = list.data?.items ?? [];
   const transfers = ibc.data ?? NO_IBC;
+  const total = list.data?.total ?? null;
+  const last = total != null ? lastPage(total, ACTIVITY_PER_PAGE) : null;
+  const fresh = page > 1 && latest.data && total != null ? latest.data.total - total : 0;
+  const href = (n: number) => `/accounts/${address}${activitySearch(category, n)}`;
+
   return (
-    <Stack gap="4">
+    <Box>
       <Box overflowX="auto" mx={{ base: "-4", md: "0" }} px={{ base: "4", md: "0" }}>
-        <HStack gap="2" wrap={{ base: "nowrap", md: "wrap" }} role="group" aria-label="Show activity">
-          {ACTIVITY_FILTERS.map((f) => (
-            <Button
-              key={f.label}
-              size="sm"
-              minH="44px"
-              rounded="full"
-              flexShrink={0}
-              variant={category === f.value ? "subtle" : "outline"}
-              aria-pressed={category === f.value}
-              onClick={() => {
-                setCategory(f.value);
-                writeCategory(f.value);
-              }}
-            >
-              {f.label}
-            </Button>
-          ))}
-        </HStack>
+        <FilterPills
+          label="Show activity"
+          options={ACTIVITY_FILTERS}
+          value={category}
+          onChange={(c) => go(c, 1)}
+          mb="14px"
+        />
       </Box>
-      {list.snapshot && (
-        <HStack justify="space-between" wrap="wrap" gap="3" data-testid="activity-snapshot">
-          <Text fontSize="sm" color="fg.muted">
-            Showing older activity: the list stopped updating.
-          </Text>
-          <Button variant="outline" size="sm" minH="44px" onClick={() => list.latest()}>
-            Back to the latest activity
-          </Button>
-        </HStack>
-      )}
       {!list.data ? (
         list.error ? (
           <LoadError onRetry={() => void list.refetch()} />
         ) : (
-          // The first open and every chip change: a different list, loading.
+          // The first open and every move: a different page, loading.
           <ListSkeleton rows={8} />
         )
-      ) : items.length === 0 ? (
-        <Card title="No activity in this category yet">
-          <Text fontSize="sm" color="fg.muted">
-            What happens to this account will show up here, newest first.
-          </Text>
-        </Card>
+      ) : items.length === 0 && page === 1 ? (
+        <EmptyPanel title="No activity in this category yet">What happens to this account will show up here, newest first.</EmptyPanel>
       ) : (
-        <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-          <Box role="list" aria-label="Activity" mt="-1px">
+        <ListPanel>
+          <Box role="list" aria-label="Activity">
             {items.map((row) => (
-              <ActivityRow
-                key={`${row.height}:${row.tx_hash ?? "block"}`}
-                row={row}
-                address={address}
-                ctx={ctx}
-                transfers={transfers}
-              />
+              <ActivityRow key={`${row.height}:${row.tx_hash ?? "block"}`} row={row} address={address} ctx={ctx} transfers={transfers} />
             ))}
           </Box>
-        </Box>
+          {items.length === 0 && (
+            <Text px="4" py="6" color="fg.muted" fontSize="sm" borderBottomWidth="1px" borderColor="border.panel">
+              No activity on this page.
+            </Text>
+          )}
+          <Box mt="-1px">
+            <Pager
+              page={page}
+              last={last}
+              hasNext={page < (last ?? 1)}
+              href={href}
+              firstHref={href(1)}
+              numbered
+              onGo={(n) => go(category, n)}
+            >
+              <Text as="span" fontFamily="mono" color="fg.muted" data-testid="activity-range">
+                {activityRange(page, ACTIVITY_PER_PAGE, total ?? 0)}
+              </Text>
+              {fresh > 0 && (
+                <PagerPill onClick={() => go(category, 1)} testId="activity-new">
+                  <Text as="span" fontFamily="mono">
+                    {formatCount(fresh)}
+                  </Text>{" "}
+                  new · back to latest
+                </PagerPill>
+              )}
+            </Pager>
+          </Box>
+        </ListPanel>
       )}
-      {list.isFetchingNextPage && <ListSkeleton rows={3} />}
-      {list.hasNextPage && !list.isFetchingNextPage && (
-        <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => void list.fetchNextPage()}>
-          Show older activity
-        </Button>
-      )}
-    </Stack>
+    </Box>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { isNotFound } from "./client";
@@ -8,7 +8,6 @@ import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WIND
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
 import type {
-  Activity,
   ActivityCategory,
   BlockListParams,
   BlockTransfer,
@@ -44,8 +43,8 @@ export const queryKeys = {
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
   account: (address: string) => ["account", address] as const,
-  accountActivity: (address: string, category: ActivityCategory | null) =>
-    ["account-activity", address, category ?? "all"] as const,
+  accountActivity: (address: string, category: ActivityCategory | null, page: number, limit: number) =>
+    ["account-activity", address, category ?? "all", page, limit] as const,
   accountIbc: (address: string) => ["account-ibc", address] as const,
   tokens: (p: TokenListParams) => ["tokens", p] as const,
   validatorDirectory: () => ["validator-directory"] as const,
@@ -88,33 +87,6 @@ export function useBlocks(params: BlockListParams = {}) {
     ...listPolicy(params),
   });
 }
-
-/**
- * A list a page grows on request, newest first, 25 a page. The first page is
- * live; once an older page is loaded the list is a snapshot, never refetched,
- * until `latest()` drops the older pages and polls again.
- */
-function useLiveList<T>(queryKey: readonly unknown[], read: (p: PageParams, signal: AbortSignal) => Promise<Page<T>>) {
-  const client = useQueryClient();
-  const query = useInfiniteQuery({
-    queryKey,
-    queryFn: ({ pageParam, signal }) => read(pageParam, signal),
-    initialPageParam: firstPage(25),
-    getNextPageParam: nextPage(25),
-    ...live,
-    refetchInterval: (q) => (isSnapshot(q.state.data) ? false : live.refetchInterval),
-    staleTime: (q) => (isSnapshot(q.state.data) ? Infinity : live.staleTime),
-  });
-  const latest = () => {
-    client.setQueryData<InfiniteData<Page<T>, PageParams>>(queryKey, (d) =>
-      d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) },
-    );
-    void query.refetch();
-  };
-  return { ...query, snapshot: isSnapshot(query.data), latest };
-}
-
-const isSnapshot = (d: InfiniteData<unknown> | undefined) => (d?.pages.length ?? 0) > 1;
 
 /** Sets `expired` once `active` has held for the pending window (two minutes). */
 function usePendingWindow(active: boolean, setExpired: (expired: boolean) => void) {
@@ -288,15 +260,26 @@ export function useAccount(address: string) {
   });
 }
 
+/** Rows a numbered page of an account's activity holds. */
+export const ACTIVITY_PER_PAGE = 25;
+
 /**
- * An account's activity of one category (every one for null), newest first:
- * live until an older page is loaded (see `useLiveList`).
+ * Page `page` of an account's activity of one category (every one for null),
+ * newest first, with the total: page 1 is live, an older page never changes
+ * (new rows shift the pages, so the polled page 1's total tells how many came).
+ * `limit` 1 reads only the total.
  */
-export function useAccountActivity(address: string, { category }: { category: ActivityCategory | null }) {
+export function useAccountActivity(
+  address: string,
+  { category, page, limit = ACTIVITY_PER_PAGE, enabled = true }: { category: ActivityCategory | null; page: number; limit?: number; enabled?: boolean },
+) {
   const api = useApi();
-  return useLiveList<Activity>(queryKeys.accountActivity(address, category), (p, signal) =>
-    api.accountActivity(address, { ...p, category: category ?? undefined }, signal),
-  );
+  return useQuery({
+    queryKey: queryKeys.accountActivity(address, category, page, limit),
+    queryFn: ({ signal }) => api.accountActivity(address, { page, limit, category: category ?? undefined }, signal),
+    enabled,
+    ...(page === 1 ? live : immutable),
+  });
 }
 
 /**

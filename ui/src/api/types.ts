@@ -388,6 +388,13 @@ export type ActivityCategory =
 
 export interface ActivityParams extends PageParams {
   category?: ActivityCategory;
+  /** A numbered page (1 = newest), `limit` rows each; the answer then carries `total`. */
+  page?: number;
+}
+
+/** A numbered page of activity: `total` counts the address's rows (of the category, with one). */
+export interface ActivityPage extends Page<Activity> {
+  total: number;
 }
 
 /** The other party of an activity row: an account, a validator operator (with its moniker) or a module account (with its label). */

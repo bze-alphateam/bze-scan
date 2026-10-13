@@ -12,8 +12,14 @@ import {
   daysText,
   daysUntil,
   dexAssetUrl,
-  labelChip,
+  activityRange,
+  activitySearch,
+  lastPage,
+  moduleBondWhere,
+  moduleFacts,
   originTag,
+  parseModuleTab,
+  parsePage,
   parseTab,
   stakingRows,
   tokenRows,
@@ -35,14 +41,6 @@ describe("header", () => {
     expect(accountTitle(a.address, { name: "Community pool", kind: "module" })).toBe("Community pool");
   });
 
-  it("gives each label kind its chip", () => {
-    expect(labelChip(null)).toBeNull();
-    expect(labelChip({ name: "distribution", kind: "module" })).toEqual({ text: "module account", dashed: true });
-    expect(labelChip({ name: "Honeycomb", kind: "validator_owner" })).toEqual({ text: "owner of Honeycomb", dashed: false });
-    expect(labelChip({ name: "channel-0 escrow", kind: "ibc_escrow" })).toEqual({ text: "cross-chain escrow", dashed: false });
-    expect(labelChip({ name: "BZE team", kind: "known" })).toEqual({ text: "BZE team", dashed: false });
-  });
-
   it("says since when the account is active, or that it was never seen", () => {
     expect(activeSince(a)).toBe("active since Apr 2022 · 1,204 transactions");
     expect(activeSince({ first_seen: { height: 1, time: "2025-06-02T12:00:00Z" }, tx_count: 1 })).toBe(
@@ -57,6 +55,75 @@ describe("header", () => {
     expect(parseTab(undefined)).toBe("activity");
     expect(parseTab("nonsense")).toBe("activity");
     expect(parseTab(["tokens", "staking"])).toBe("activity");
+  });
+
+  it("reads a module account's tab, Holdings by default", () => {
+    expect(parseModuleTab("movements")).toBe("movements");
+    expect(parseModuleTab("tokens")).toBe("tokens");
+    expect(parseModuleTab("staking")).toBe("tokens");
+    expect(parseModuleTab(undefined)).toBe("tokens");
+  });
+});
+
+describe("activity pages", () => {
+  it("reads a page from the query, page 1 for anything else", () => {
+    expect(parsePage("3")).toBe(3);
+    expect(parsePage(["7", "2"])).toBe(7);
+    expect(parsePage(undefined)).toBe(1);
+    expect(parsePage("0")).toBe(1);
+    expect(parsePage("-2")).toBe(1);
+    expect(parsePage("2.5")).toBe(1);
+    expect(parsePage("abc")).toBe(1);
+  });
+
+  it("counts the last page from the total, at least one", () => {
+    expect(lastPage(534, 25)).toBe(22);
+    expect(lastPage(525, 25)).toBe(21);
+    expect(lastPage(1, 25)).toBe(1);
+    expect(lastPage(0, 25)).toBe(1);
+  });
+
+  it("says which rows a page shows", () => {
+    expect(activityRange(1, 25, 534)).toBe("Activity 1–25 of 534");
+    expect(activityRange(3, 25, 534)).toBe("Activity 51–75 of 534");
+    expect(activityRange(22, 25, 534)).toBe("Activity 526–534 of 534");
+    expect(activityRange(1, 25, 1530)).toBe("Activity 1–25 of 1,530");
+    expect(activityRange(1, 25, 0)).toBe("Activity 0 of 0");
+    expect(activityRange(30, 25, 534)).toBe("Activity 0 of 534");
+  });
+
+  it("writes the place into the query, leaving the defaults out", () => {
+    expect(activitySearch(null, 1)).toBe("");
+    expect(activitySearch("dex", 1)).toBe("?tab=activity&category=dex");
+    expect(activitySearch(null, 4)).toBe("?tab=activity&page=4");
+    expect(activitySearch("dex", 3)).toBe("?tab=activity&category=dex&page=3");
+  });
+});
+
+describe("module accounts", () => {
+  it("says who owns a known module and when its coins move", () => {
+    expect(moduleFacts("tradebin")).toEqual({
+      owner: "Owned by the chain's DEX module (`tradebin`). Holds the coins in liquidity pools and open orders.",
+      moves: "people trade",
+      movesSub: "add or remove liquidity, place, fill or cancel orders",
+    });
+    expect(moduleFacts("bonded_tokens_pool").owner).toBe("Owned by the staking module. Holds all staked BZE.");
+    expect(moduleFacts("nft").movesSub).toBe("not used on BZE");
+  });
+
+  it("falls back to plain words for a module it does not know", () => {
+    expect(moduleFacts("wasm")).toEqual({
+      owner: "Owned by the chain's `wasm` module.",
+      moves: "as the module's rules say",
+      movesSub: "inside other people's transactions",
+    });
+    expect(moduleFacts(null).owner).toBe("Owned by one of the chain's modules.");
+  });
+
+  it("puts the DEX's BZE in pools and orders, every other module's in the module", () => {
+    expect(moduleBondWhere("tradebin")).toBe("in pools and open orders");
+    expect(moduleBondWhere("burner")).toBe("held by the module");
+    expect(moduleBondWhere(null)).toBe("held by the module");
   });
 });
 
