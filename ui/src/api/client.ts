@@ -1,6 +1,6 @@
 import type {
   Account,
-  Activity,
+  ActivityPage,
   ActivityParams,
   Block,
   BlockListParams,
@@ -62,7 +62,7 @@ export interface ExplorerApi {
   validatorBlocks(operator: string, params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
 
   account(address: string, signal?: AbortSignal): Promise<Account>;
-  accountActivity(address: string, params: ActivityParams, signal?: AbortSignal): Promise<Page<Activity>>;
+  accountActivity(address: string, params: ActivityParams, signal?: AbortSignal): Promise<ActivityPage>;
   accountIbc(address: string, params: IbcListParams, signal?: AbortSignal): Promise<Page<IbcTransfer>>;
 
   tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
@@ -176,7 +176,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
 
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
     accountActivity: (address, params, signal) =>
-      get(`/accounts/${seg(address)}/activity`, { ...page(params), category: params.category }, signal),
+      get(`/accounts/${seg(address)}/activity`, { ...page(params), page: params.page, category: params.category }, signal),
     accountIbc: (address, params, signal) =>
       get(`/accounts/${seg(address)}/ibc`, { ...page(params), direction: params.direction }, signal),
 

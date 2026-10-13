@@ -1,12 +1,13 @@
 "use client";
 
-import { Badge, Box, Grid, HStack, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Flex, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { LuExternalLink } from "react-icons/lu";
 
 import { useAllValidators } from "@/api/hooks";
 import type { Account, Validator } from "@/api/types";
-import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
+import { PanelHead } from "@/components/ui/page-head";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount } from "@/lib/format";
@@ -14,106 +15,69 @@ import { externalLinks } from "@/lib/links";
 import { amountOf, BOND_DENOM, stakingRows, unlockText, validatorStatus, type StakingRow } from "@/render/account";
 import { bondFull, unbondingText } from "@/render/validators";
 
-const COLUMNS = { base: "minmax(0, 1fr)", md: "minmax(0, 2.2fr) 1.3fr 1fr 1.2fr 96px" };
+// Validator · Staked · Share of your stake (c2) · Rewards to claim (c3).
+const COLUMNS = {
+  base: "minmax(0, 1fr) auto",
+  c2: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)",
+  c3: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",
+};
 
-function PhoneLabel({ children }: { children: string }) {
-  return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
-  );
-}
-
-function ManageLink({ label = "Manage" }: { label?: string }) {
-  return (
-    <Link href={externalLinks.staking} target="_blank" rel="noopener noreferrer" fontSize="sm" minH="44px">
-      {label} <LuExternalLink aria-hidden />
-    </Link>
-  );
-}
+const TONE = { green: "ok", gray: "default", red: "bad" } as const;
 
 function StatusChips({ v }: { v: Validator | undefined }) {
   const status = validatorStatus(v);
   if (!status) return null;
   return (
-    <HStack gap="1" wrap="wrap">
-      <Badge colorPalette={status.tone} variant="subtle" size="sm" data-testid="validator-status-chip">
+    <Flex gap="1" wrap="wrap">
+      <Chip variant={TONE[status.tone]} data-testid="validator-status-chip">
         {status.text}
-      </Badge>
-      {status.uptime && (
-        <Badge colorPalette="orange" variant="subtle" size="sm">
-          {status.uptime}
-        </Badge>
-      )}
-    </HStack>
+      </Chip>
+      {status.uptime && <Chip variant="warn">{status.uptime}</Chip>}
+    </Flex>
+  );
+}
+
+/** A label shown before a value on phones, where the head row's columns are hidden. */
+function PhoneLabel({ children }: { children: string }) {
+  return (
+    <Text as="span" hideFrom="c2" fontFamily="body" fontSize="12px" color="fg.muted" me="1">
+      {children}
+    </Text>
   );
 }
 
 function Row({ row, v }: { row: StakingRow; v: Validator | undefined }) {
   return (
-    <Grid
-      role="listitem"
-      templateColumns={COLUMNS}
-      gap={{ base: "1.5", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="delegation-row"
-    >
+    <ListRow role="listitem" templateColumns={COLUMNS} data-testid="delegation-row">
       <Stack gap="1" minW="0" align="start">
         <ValidatorChip operator={row.validator} moniker={row.moniker} />
         <StatusChips v={v} />
       </Stack>
-      <Text fontSize="sm">
-        <PhoneLabel>Staked</PhoneLabel>
-        {bondFull(row.amount)}
-      </Text>
-      <Text fontSize="sm">
-        <PhoneLabel>Share of your stake</PhoneLabel>
+      <Box textAlign="right" fontFamily="mono" fontSize="13px">
+        <Text>{bondFull(row.amount)}</Text>
+        <Text hideFrom="c2" fontSize="12px" color="fg.muted">
+          <PhoneLabel>Share</PhoneLabel>
+          {row.share}
+        </Text>
+        <Text hideFrom="c3" fontSize="12px" color="fg.muted">
+          <PhoneLabel>Rewards</PhoneLabel>
+          {row.rewards ? bondFull(row.rewards) : "—"}
+        </Text>
+      </Box>
+      <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
         {row.share}
       </Text>
-      <Text fontSize="sm">
-        <PhoneLabel>Rewards to claim</PhoneLabel>
+      <Text hideBelow="c3" textAlign="right" fontFamily="mono" fontSize="13px">
         {row.rewards ? bondFull(row.rewards) : "—"}
       </Text>
-      <Box>
-        <ManageLink />
-      </Box>
-    </Grid>
-  );
-}
-
-function Header() {
-  return (
-    <Grid
-      hideBelow="md"
-      templateColumns={COLUMNS}
-      gap="4"
-      px="4"
-      h="10"
-      alignItems="center"
-      fontSize="xs"
-      color="fg.muted"
-      textTransform="uppercase"
-      letterSpacing="wide"
-      aria-hidden
-    >
-      <Text>Validator</Text>
-      <Text>Staked</Text>
-      <Text>Share of your stake</Text>
-      <Text>Rewards to claim</Text>
-      <span />
-    </Grid>
+    </ListRow>
   );
 }
 
 /** The Staking tab: the delegations with their validators' status, a total, and what is unstaking. */
 export function StakingTab({ a }: { a: Account }) {
   const validators = useAllValidators();
-  if (!validators.data && !validators.error) return <TableSkeleton rows={Math.max(a.delegations.length, 3)} columns={5} />;
+  if (!validators.data && !validators.error) return <TableSkeleton rows={Math.max(a.delegations.length, 3)} columns={4} />;
   if (!a.live.available) {
     return (
       <Text fontSize="sm" color="fg.muted">
@@ -128,68 +92,92 @@ export function StakingTab({ a }: { a: Account }) {
   const period = unbondingText(validators.data?.summary?.unbonding_period);
   const now = new Date();
   return (
-    <Stack gap="5">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text fontSize="sm" color="fg.muted" data-testid="staking-summary">
+    <Box>
+      <Flex justify="space-between" align="center" gap="3" wrap="wrap" mb="14px" fontSize="13px">
+        <Text color="fg.muted" data-testid="staking-summary">
           {bondFull(a.total_staked ?? "0")} staked with {formatCount(n)} {n === 1 ? "validator" : "validators"} ·{" "}
           {bondFull(rewards)} of rewards waiting
         </Text>
-        <ManageLink label="Manage on Staking" />
-      </HStack>
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-        <Header />
+        <Link
+          href={externalLinks.staking}
+          target="_blank"
+          rel="noopener noreferrer"
+          display="inline-flex"
+          alignItems="center"
+          h="30px"
+          px="3"
+          borderWidth="1px"
+          borderColor="border.panel"
+          rounded="l2"
+          fontSize="13px"
+          color="fg"
+          _hover={{ borderColor: "accent.fg", color: "accent.fg", textDecoration: "none" }}
+        >
+          Manage on Staking ↗
+        </Link>
+      </Flex>
+      <ListPanel>
+        <ListHead templateColumns={COLUMNS} aria-hidden>
+          <Text>Validator</Text>
+          <Text textAlign="right">Staked</Text>
+          <Text hideBelow="c2" textAlign="right">
+            Share of your stake
+          </Text>
+          <Text hideBelow="c3" textAlign="right">
+            Rewards to claim
+          </Text>
+        </ListHead>
         <Box role="list" aria-label="Stake by validator">
           {rows.map((row) => (
             <Row key={row.validator} row={row} v={byOperator.get(row.validator)} />
           ))}
         </Box>
         {n === 0 ? (
-          <Text px="4" py="6" color="fg.muted" fontSize="sm" borderTopWidth="1px" borderColor="border.panel">
+          <Text px="4" py="22px" color="fg.muted" fontSize="13px" textAlign="center">
             This account stakes with no validator.
           </Text>
         ) : (
-          <Grid
+          <ListRow
             templateColumns={COLUMNS}
-            gap={{ base: "1.5", md: "4" }}
-            px="4"
-            py="3"
             borderTopWidth="1px"
-            borderColor="border.panel"
-            fontSize="sm"
-            fontWeight="semibold"
+            fontSize="13px"
+            fontWeight="600"
+            _hover={undefined}
             data-testid="delegation-total"
           >
             <Text>Total</Text>
-            <Text>
-              <PhoneLabel>Staked</PhoneLabel>
+            <Text textAlign="right" fontFamily="mono">
               {bondFull(a.total_staked ?? "0")}
             </Text>
-            <Text>
-              <PhoneLabel>Share of your stake</PhoneLabel>
+            <Text hideBelow="c2" textAlign="right" fontFamily="mono">
               100%
             </Text>
-            <Text>
-              <PhoneLabel>Rewards to claim</PhoneLabel>
+            <Text hideBelow="c3" textAlign="right" fontFamily="mono">
               {bondFull(rewards)}
             </Text>
-          </Grid>
+          </ListRow>
         )}
-      </Box>
+      </ListPanel>
       {a.unbonding.length > 0 && (
-        <Card title={`Unstaking · ${formatCount(a.unbonding.length)}`}>
-          <Stack gap="0" role="list" aria-label="Unstaking">
+        <ListPanel mt="5">
+          <PanelHead id="unstaking-head" title={`Unstaking · ${formatCount(a.unbonding.length)}`} />
+          <Box role="list" aria-labelledby="unstaking-head">
             {a.unbonding.map((u, i) => (
               <Text
                 key={`${u.validator}-${u.completion_time}-${i}`}
                 role="listitem"
-                fontSize="sm"
-                py="2"
+                fontSize="13px"
+                px="4"
+                py="10px"
                 borderTopWidth={i === 0 ? "0" : "1px"}
                 borderColor="border.panel"
                 data-testid="unbonding-item"
               >
-                {bondFull(u.amount)} from{" "}
-                <Link asChild>
+                <Text as="span" fontFamily="mono">
+                  {bondFull(u.amount)}
+                </Text>{" "}
+                from{" "}
+                <Link asChild color="accent.fg">
                   <NextLink href={`/validators/${encodeURIComponent(u.validator)}`}>{u.moniker ?? u.validator}</NextLink>
                 </Link>{" "}
                 <Text as="span" color="fg.muted">
@@ -197,16 +185,16 @@ export function StakingTab({ a }: { a: Account }) {
                 </Text>
               </Text>
             ))}
-          </Stack>
-        </Card>
+          </Box>
+        </ListPanel>
       )}
-      <Text fontSize="sm" color="fg.muted">
+      <Text mt="3" fontSize="13px" color="fg.muted">
         Staked BZE never leaves this account; a validator cannot move it. Unstaking takes {period ?? "a few weeks"}, see{" "}
-        <Link asChild>
+        <Link asChild color="accent.fg">
           <NextLink href="/parameters#staking">the staking parameters</NextLink>
         </Link>
         .
       </Text>
-    </Stack>
+    </Box>
   );
 }

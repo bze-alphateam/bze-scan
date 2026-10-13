@@ -11,13 +11,32 @@
   "last_seen_height": 25120001,
   "tx_count": 3,
   "activity_count": 5,
-  "balances": [],
+  "balances": [
+    {
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+      "amount": "2271536971272",
+      "symbol": "HONEY",
+      "exponent": 6
+    },
+    {
+      "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "amount": "807046302",
+      "symbol": "USDC",
+      "exponent": 6
+    },
+    {
+      "denom": "ubze",
+      "amount": "7413300001729",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
   "delegations": [],
   "unbonding": [],
   "rewards": [],
-  "total_staked": null,
+  "total_staked": "0",
   "total_rewards": [],
   "live": {
-    "available": false
+    "available": true
   }
 }

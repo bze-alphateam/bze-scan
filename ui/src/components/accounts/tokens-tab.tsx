@@ -1,101 +1,122 @@
 "use client";
 
-import { Badge, Box, Button, ButtonGroup, Grid, HStack, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Flex, Link, Text } from "@chakra-ui/react";
+import NextLink from "next/link";
 import { useState } from "react";
-import { LuExternalLink } from "react-icons/lu";
 
 import { useDenoms } from "@/api/hooks";
 import type { Account } from "@/api/types";
-import { Amount } from "@/components/ui/amount";
-import { TableSkeleton } from "@/components/ui/skeleton";
 import { TokenLogo } from "@/components/tokens/tokens-page";
+import { Amount } from "@/components/ui/amount";
+import { Chip } from "@/components/ui/chip";
 import { ExplainedBadges } from "@/components/ui/explained-badge";
-import { tokenBadges } from "@/render/badges";
+import { FilterPills } from "@/components/ui/filter-pills";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { formatCount, formatUsd } from "@/lib/format";
 import { sumAmounts } from "@/lib/math";
 import { BOND_DENOM, dexAssetUrl, tokenRows, tokensTotalUsd, type TokenRow, type TokenSort } from "@/render/account";
+import { tokenBadges } from "@/render/badges";
+import { tokenHref } from "@/render/tokens";
 import { bondFull } from "@/render/validators";
 
-const COLUMNS = { base: "minmax(0, 1fr)", md: "minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.6fr) 1fr 120px" };
+// Token · Origin (c2) · Balance · Value (c2) · DEX link (c3). On phones the
+// origin chips take a second row and the value sits under the balance.
+const COLUMNS = {
+  base: "minmax(0, 1fr) auto",
+  c2: "minmax(0, 1.4fr) minmax(0, 1.3fr) auto auto",
+  c3: "minmax(0, 1.4fr) minmax(0, 1.3fr) auto auto 110px",
+};
+const ORIGIN_COLUMN = { base: "1 / -1", c2: "auto" };
+const ORIGIN_ROW = { base: "2", c2: "auto" };
 
-/** A label shown before a value on phones, where the header row is hidden. */
-function PhoneLabel({ children }: { children: string }) {
-  return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
-  );
-}
+const SORTS: { label: string; value: TokenSort }[] = [
+  { label: "By value", value: "value" },
+  { label: "By name", value: "name" },
+];
 
 function RowLogo({ row }: { row: TokenRow }) {
   const denoms = useDenoms();
   return <TokenLogo t={{ denom: row.denom, symbol: row.symbol, logo_url: row.logoUrl, lp_pair: row.lpPair }} denoms={denoms.data} />;
 }
 
-function Row({ row, a }: { row: TokenRow; a: Account }) {
-  const isBond = row.denom === BOND_DENOM;
-  const unbonding = sumAmounts(a.unbonding.map((u) => u.amount));
-  return (
-    <Grid
-      role="listitem"
-      templateColumns={COLUMNS}
-      gap={{ base: "1.5", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="token-row"
-    >
-      <HStack gap="3" minW="0">
-        <RowLogo row={row} />
-        <Stack gap="0" minW="0">
-          <Text fontWeight="medium" truncate title={row.denom} data-testid="token-symbol">
-            {row.symbol ?? row.denom}
-          </Text>
-          {row.name && (
-            <Text fontSize="xs" color="fg.muted" truncate>
-              {row.name}
-            </Text>
-          )}
-        </Stack>
-      </HStack>
-      {row.token ? (
-        <ExplainedBadges badges={tokenBadges(row.token)} />
-      ) : (
-        <Badge variant="subtle" size="sm" maxW="full" h="auto" py="0.5" whiteSpace="normal" data-testid="origin-tag">
-          {row.origin}
-        </Badge>
-      )}
-      <Stack gap="0" fontSize="sm" minW="0">
-        <Text wordBreak="break-word">
-          <PhoneLabel>Balance</PhoneLabel>
-          <Amount amount={row.amount} denom={row.denom} symbol={row.symbol} exponent={row.exponent} />
-        </Text>
-        {isBond && (
-          <Text fontSize="xs" color="fg.muted">
-            + {bondFull(a.total_staked ?? "0")} staked · {bondFull(unbonding)} unstaking
-          </Text>
-        )}
-      </Stack>
-      <Text fontSize="sm" color={row.valueUsd == null ? "fg.muted" : undefined}>
-        <PhoneLabel>Value</PhoneLabel>
-        {row.valueUsd == null ? "no price" : formatUsd(row.valueUsd)}
-      </Text>
-      <Box>
-        {row.valueUsd != null && (
-          <Link href={dexAssetUrl(row.denom)} target="_blank" rel="noopener noreferrer" fontSize="sm" minH="44px">
-            View on DEX <LuExternalLink aria-hidden />
-          </Link>
-        )}
-      </Box>
-    </Grid>
+function ValueText({ row }: { row: TokenRow }) {
+  return row.valueUsd == null ? (
+    <Text as="span" color="fg.muted">
+      no price
+    </Text>
+  ) : (
+    <>{formatUsd(row.valueUsd)}</>
   );
 }
 
-/** The Tokens tab: every non-zero balance with its origin and value at DEX prices. */
-export function TokensTab({ a }: { a: Account }) {
+function Row({ row, staked, unstaking }: { row: TokenRow; staked: string | null; unstaking: string | null }) {
+  const name = row.symbol ?? row.denom;
+  return (
+    <ListRow role="listitem" templateColumns={COLUMNS} rowGap="2" data-testid="token-row">
+      <Flex align="center" gap="10px" minW="0">
+        <RowLogo row={row} />
+        <Box minW="0">
+          {row.token ? (
+            <Link asChild display="block" fontWeight="500" color="accent.fg" truncate>
+              <NextLink href={tokenHref(row.denom)} title={row.denom} data-testid="token-symbol">
+                {name}
+              </NextLink>
+            </Link>
+          ) : (
+            <Text fontWeight="500" truncate title={row.denom} data-testid="token-symbol">
+              {name}
+            </Text>
+          )}
+          {row.name && (
+            <Text fontSize="12px" color="fg.muted" truncate>
+              {row.name}
+            </Text>
+          )}
+        </Box>
+      </Flex>
+      <Box gridColumn={ORIGIN_COLUMN} gridRow={ORIGIN_ROW} minW="0">
+        {row.token ? (
+          <ExplainedBadges badges={tokenBadges(row.token)} />
+        ) : (
+          <Chip whiteSpace="normal" data-testid="origin-tag">
+            {row.origin}
+          </Chip>
+        )}
+      </Box>
+      <Box textAlign="right" minW="0">
+        <Text fontFamily="mono" fontSize="13px" wordBreak="break-word">
+          <Amount amount={row.amount} denom={row.denom} symbol={row.symbol} exponent={row.exponent} />
+        </Text>
+        {row.denom === BOND_DENOM && staked != null && (
+          <Text fontSize="12px" color="fg.muted">
+            + {bondFull(staked)} staked · {bondFull(unstaking ?? "0")} unstaking
+          </Text>
+        )}
+        <Text hideFrom="c2" fontFamily="mono" fontSize="12px" color="fg.muted">
+          <ValueText row={row} />
+        </Text>
+      </Box>
+      <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px" whiteSpace="nowrap">
+        <ValueText row={row} />
+      </Text>
+      <Box hideBelow="c3" textAlign="right">
+        {row.valueUsd != null && (
+          <Link href={dexAssetUrl(row.denom)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" whiteSpace="nowrap">
+            View on DEX ↗
+          </Link>
+        )}
+      </Box>
+    </ListRow>
+  );
+}
+
+/**
+ * Every non-zero balance with its origin and value at DEX prices: a personal
+ * account's Tokens tab, a module account's Holdings (`module`, where staking
+ * has no place).
+ */
+export function TokensTab({ a, module = false }: { a: Account; module?: boolean }) {
   const [sort, setSort] = useState<TokenSort>("value");
   const denoms = useDenoms();
   // Without the tokens list the rows still render, unpriced, once it failed.
@@ -109,60 +130,45 @@ export function TokensTab({ a }: { a: Account }) {
   }
   const rows = tokenRows(a.balances, denoms.data, sort);
   const total = tokensTotalUsd(rows);
+  const staked = module ? null : (a.total_staked ?? "0");
+  const unstaking = module ? null : sumAmounts(a.unbonding.map((u) => u.amount));
   return (
-    <Stack gap="3">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text fontSize="sm" color="fg.muted" data-testid="tokens-summary">
-          {formatCount(rows.length)} {rows.length === 1 ? "token" : "tokens"} · {formatUsd(total)} in total, at DEX prices
+    <Box>
+      <Flex justify="space-between" align="center" gap="3" wrap="wrap" mb="14px" fontSize="13px">
+        <Text color="fg.muted" data-testid="tokens-summary">
+          {formatCount(rows.length)} {rows.length === 1 ? "token" : "tokens"} ·{" "}
+          <Text as="span" fontFamily="mono">
+            {formatUsd(total)}
+          </Text>{" "}
+          in total, at DEX prices
         </Text>
-        <ButtonGroup size="sm" variant="outline" attached>
-          {(["value", "name"] as const).map((s) => (
-            <Button
-              key={s}
-              minH="44px"
-              aria-pressed={sort === s}
-              variant={sort === s ? "subtle" : "outline"}
-              onClick={() => setSort(s)}
-            >
-              By {s}
-            </Button>
-          ))}
-        </ButtonGroup>
-      </HStack>
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-        <Grid
-          hideBelow="md"
-          templateColumns={COLUMNS}
-          gap="4"
-          px="4"
-          h="10"
-          alignItems="center"
-          fontSize="xs"
-          color="fg.muted"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          aria-hidden
-        >
+        <FilterPills label="Sort the tokens" options={SORTS} value={sort} onChange={setSort} mb="0" />
+      </Flex>
+      <ListPanel>
+        <ListHead templateColumns={COLUMNS} aria-hidden>
           <Text>Token</Text>
-          <Text>Origin</Text>
-          <Text>Balance</Text>
-          <Text>Value</Text>
-          <span />
-        </Grid>
+          <Text hideBelow="c2">Origin</Text>
+          <Text textAlign="right">Balance</Text>
+          <Text hideBelow="c2" textAlign="right">
+            Value
+          </Text>
+          <Text hideBelow="c3" />
+        </ListHead>
         <Box role="list" aria-label="Tokens">
           {rows.map((row) => (
-            <Row key={row.denom} row={row} a={a} />
+            <Row key={row.denom} row={row} staked={staked} unstaking={unstaking} />
           ))}
         </Box>
         {rows.length === 0 && (
-          <Text px="4" py="6" color="fg.muted" fontSize="sm" borderTopWidth="1px" borderColor="border.panel">
+          <Text px="4" py="6" color="fg.muted" fontSize="sm">
             This account holds no tokens.
           </Text>
         )}
-      </Box>
-      <Text fontSize="sm" color="fg.muted">
-        Tokens without a market on the DEX show no value. Staked and unstaking BZE are counted in the tiles above, not here.
+      </ListPanel>
+      <Text mt="3" fontSize="13px" color="fg.muted">
+        Tokens without a market on the DEX show no value.
+        {!module && " Staked and unstaking BZE are counted in the tiles above, not here."}
       </Text>
-    </Stack>
+    </Box>
   );
 }

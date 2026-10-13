@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { Account, Activity, IbcTransfer, ModuleAccount, Page, TokenSummary, ValidatorList } from "@/api/types";
+import type { Account, ActivityPage, IbcTransfer, ModuleAccount, Page, Status, TokenSummary, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import plain from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
@@ -12,6 +12,7 @@ import ibc from "../../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8
 import nodeDown from "../../../test/fixtures/api/v1/accounts/bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
 import modules from "../../../test/fixtures/api/v1/modules.json";
+import status from "../../../test/fixtures/api/v1/status.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 
 import { AccountPage } from "./account-page";
@@ -28,13 +29,17 @@ function api(account: unknown = plain, extra: Partial<ExplorerApi> = {}): Explor
     account: () => Promise.resolve(account as Account),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     validators: () => Promise.resolve(list as ValidatorList),
-    accountActivity: () => Promise.resolve(activity as Page<Activity>),
+    accountActivity: () => Promise.resolve({ ...activity, total: 1530 } as ActivityPage),
+    status: () => Promise.resolve(status as unknown as Status),
     accountIbc: () => Promise.resolve(ibc as Page<IbcTransfer>),
     ...extra,
   });
 }
 
 const tiles = () => screen.getAllByTestId("tile").map((t) => t.textContent?.trim());
+const dex = modules.items[2];
+const asModule = (address: string, name: string) => ({ ...plain, address, label: { name, kind: "module" } });
+const withModules = (list: ModuleAccount[] = modules.items) => ({ modules: () => Promise.resolve({ items: list }) });
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: new Date("2099-10-11T10:00:00Z") });
@@ -57,6 +62,8 @@ describe("AccountPage", () => {
   it("renders a plain account's header, tiles and tab strip", async () => {
     renderWithProviders(<AccountPage address={ADDR} />, { api: api() });
     expect(await screen.findByRole("heading", { level: 1, name: "Account" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Home/Account");
+    expect(screen.getByTestId("kind-chip")).toHaveTextContent("Personal account");
     expect(screen.queryByTestId("label-chip")).not.toBeInTheDocument();
     expect(screen.getByTestId("account-since")).toHaveTextContent("active since Apr 2022 · 1,204 transactions");
     expect(screen.getByTestId("account-address")).toHaveTextContent(ADDR);
@@ -66,46 +73,16 @@ describe("AccountPage", () => {
     expect(tiles()).toEqual([
       "Available1.2K BZE≈ $1.85",
       "Staked1K BZEwith 3 validators",
-      "Rewards to claim15.75 BZEClaim on Staking",
+      "Rewards to claim15.75 BZEClaim on Staking ↗",
       "Unstaking300 BZEnext unlock in 9 days",
     ]);
     expect(screen.getByRole("link", { name: /Claim on Staking/ })).toHaveAttribute("href", "https://staking.getbze.com");
 
-    expect(screen.getByRole("tab", { name: "Activity · 1,530" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Tokens · 5" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Staking · 3 validators" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Activity 1,530" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Tokens 5" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Staking 3 validators" })).toBeInTheDocument();
     expect(await screen.findAllByTestId("activity-row")).toHaveLength(8);
-  });
-
-  it("names a module account with a dashed chip, and the Staking tab is empty", async () => {
-    const moduleAccount = {
-      ...plain,
-      label: { name: "Community pool", kind: "module" },
-      delegations: [],
-      unbonding: [],
-      rewards: [],
-      total_staked: "0",
-      total_rewards: [],
-    };
-    renderWithProviders(<AccountPage address={ADDR} initialTab="staking" />, { api: api(moduleAccount) });
-    expect(await screen.findByRole("heading", { level: 1, name: "Community pool" })).toBeInTheDocument();
-    expect(screen.getByTestId("label-chip")).toHaveTextContent("module account");
-    expect(screen.getByTestId("label-chip")).toHaveStyle({ borderStyle: "dashed" });
-    expect(await screen.findByText("This account stakes with no validator.")).toBeInTheDocument();
-    expect(screen.getAllByTestId("tile")[3]).toHaveTextContent("Unstakingnone");
-  });
-
-  it("lets a module account move to the chain's other module accounts", async () => {
-    const dex = { ...nodeDown, address: modules.items[2].address, label: { name: "DEX", kind: "module" } };
-    renderWithProviders(<AccountPage address={dex.address} />, {
-      api: api(dex, { modules: () => Promise.resolve(modules as { items: ModuleAccount[] }) }),
-    });
-    const select = await screen.findByTestId("module-switcher");
-    expect(select).toHaveValue(dex.address);
-    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Burner", "Community pool", "DEX"]);
-
-    await userEvent.selectOptions(select, "Burner");
-    expect(push).toHaveBeenCalledWith("/accounts/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun");
+    expect(screen.getByTestId("activity-range")).toHaveTextContent("Activity 1–25 of 1,530");
   });
 
   it("offers no module menu on an account that is not a module", async () => {
@@ -140,9 +117,16 @@ describe("AccountPage", () => {
     );
   });
 
-  it("says when an address was never seen", async () => {
-    renderWithProviders(<AccountPage address={ADDR} />, { api: api({ ...plain, first_seen: null, tx_count: 0 }) });
+  it("says when an address was never seen, with its live balances still shown", async () => {
+    const accountActivity = vi.fn();
+    renderWithProviders(<AccountPage address={ADDR} />, {
+      api: api({ ...plain, first_seen: null, tx_count: 0, activity_count: 0 }, { accountActivity }),
+    });
     expect(await screen.findByText("no transactions seen yet")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Activity 0" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByTestId("activity-never")).toHaveTextContent("No activity seen yet");
+    expect(accountActivity).not.toHaveBeenCalled();
+    expect(await screen.findByText("≈ $1.85")).toBeInTheDocument();
   });
 
   it("explains a node that did not answer instead of showing balances", async () => {
@@ -151,7 +135,7 @@ describe("AccountPage", () => {
       "Live balances are unavailable right now: the node did not answer. Transactions and activity are still here.",
     );
     expect(screen.getAllByTestId("tile").map((t) => t.children[1].textContent)).toEqual(["—", "—", "—", "—"]);
-    expect(screen.getByRole("tab", { name: "Activity · 5" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Activity 5" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Tokens" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Staking" })).toBeInTheDocument();
   });
@@ -160,13 +144,104 @@ describe("AccountPage", () => {
     const account = vi.fn(() => Promise.reject(new ApiError(400, "bad_request", "not a bze1 address")));
     renderWithProviders(<AccountPage address={ADDR} />, { api: api(plain, { account }) });
     expect(await screen.findByRole("heading", { name: "Not a BZE account" })).toBeInTheDocument();
+    expect(screen.getByTestId("account-invalid")).toHaveAttribute("data-state", "error");
+    expect(screen.getByTestId("account-invalid")).toHaveTextContent(
+      "bze1m3k…9ds4 is not an address the explorer can read. Check that it starts with bze1 and was copied whole.",
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Account" })).toBeInTheDocument();
   });
 
   it("offers a retry when the API fails", async () => {
     const account = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<AccountPage address={ADDR} />, { api: api(plain, { account }) });
-    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("heading", { name: "This account could not be loaded" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(account).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Module account", () => {
+  it("is designed apart: dashed avatar and chip, the owner sentence, its own tiles and the callout", async () => {
+    renderWithProviders(<AccountPage address={dex.address} />, { api: api(asModule(dex.address, "DEX"), withModules()) });
+    expect(await screen.findByRole("heading", { level: 1, name: "DEX" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Home/Module account");
+    const chip = screen.getByTestId("kind-chip");
+    expect(chip).toHaveTextContent("Module account");
+    expect(chip).toHaveAttribute("data-chip", "modc");
+    expect(document.querySelector('[data-avatar="module"]')).toBeInTheDocument();
+    expect(await screen.findByTestId("module-owner")).toHaveTextContent(
+      "Owned by the chain's DEX module (tradebin). Holds the coins in liquidity pools and open orders.",
+    );
+
+    await screen.findAllByText("≈ $37.35");
+    expect(tiles()).toEqual([
+      "Holds≈ $37.355 tokens, at DEX prices",
+      "BZE held1.2K BZEin pools and open orders",
+      "Moves whenpeople tradeadd or remove liquidity, place, fill or cancel orders",
+      "Who can signnobodyno private key exists",
+    ]);
+    expect(screen.getByTestId("module-callout")).toHaveTextContent(
+      "This account belongs to the chain, not to a personNobody holds a key to it, so nobody can send from it. Its coins move only by the DEX's own rules, as a side effect of other people's transactions. It never stakes and earns no staking rewards.",
+    );
+    expect(screen.queryByTestId("account-since")).toHaveTextContent(/Owned by/);
+  });
+
+  it("opens on Holdings, offers Movements, and has no Activity or Staking tab", async () => {
+    const accountActivity = vi.fn();
+    renderWithProviders(<AccountPage address={dex.address} initialTab="staking" />, {
+      api: api(asModule(dex.address, "DEX"), { ...withModules(), accountActivity }),
+    });
+    expect(await screen.findByRole("tab", { name: "Holdings 5" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Holdings 5", "Movements"]);
+    expect(await screen.findAllByTestId("token-row")).toHaveLength(5);
+    // Staking has no place on a module's holdings.
+    expect(screen.queryByText(/staked ·/)).not.toBeInTheDocument();
+    expect(screen.getByText("Tokens without a market on the DEX show no value.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Movements" }));
+    expect(window.location.search).toBe("?tab=movements");
+    expect(screen.getByTestId("module-movements")).toHaveTextContent(
+      "Module accounts don't send transactionsCoins move in and out of the DEX account inside other people's transactions.",
+    );
+    expect(screen.getByRole("link", { name: "See the latest transactions →" })).toHaveAttribute("href", "/txs");
+    expect(accountActivity).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Holdings 5" }));
+    expect(window.location.search).toBe("");
+  });
+
+  it("opens Movements from the URL", async () => {
+    renderWithProviders(<AccountPage address={dex.address} initialTab="movements" />, { api: api(asModule(dex.address, "DEX"), withModules()) });
+    expect(await screen.findByTestId("module-movements")).toBeInTheDocument();
+  });
+
+  it("falls back to plain words for a module the page does not know", async () => {
+    const wasm = { address: ADDR, name: "Contracts", module: "wasm" };
+    renderWithProviders(<AccountPage address={ADDR} />, {
+      api: api(asModule(ADDR, "Contracts"), withModules([...modules.items, wasm])),
+    });
+    expect(await screen.findByTestId("module-owner")).toHaveTextContent("Owned by the chain's wasm module.");
+    expect(screen.getAllByTestId("tile")[1]).toHaveTextContent("held by the module");
+    expect(screen.getAllByTestId("tile")[2]).toHaveTextContent("Moves whenas the module's rules say");
+  });
+
+  it("explains a node that did not answer", async () => {
+    renderWithProviders(<AccountPage address={dex.address} />, {
+      api: api({ ...nodeDown, address: dex.address, label: { name: "DEX", kind: "module" } }, withModules()),
+    });
+    expect(await screen.findByTestId("live-unavailable")).toHaveTextContent("Live balances are unavailable right now");
+    expect(screen.getByRole("tab", { name: "Holdings" })).toBeInTheDocument();
+  });
+
+  it("moves to the chain's other module accounts", async () => {
+    renderWithProviders(<AccountPage address={dex.address} />, { api: api(asModule(dex.address, "DEX"), withModules()) });
+    const select = await screen.findByTestId("module-switcher");
+    expect(screen.getByLabelText("Other module accounts")).toBe(select);
+    expect(select).toHaveValue(dex.address);
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Burner", "Community pool", "DEX"]);
+
+    await userEvent.selectOptions(select, "Burner");
+    expect(push).toHaveBeenCalledWith("/accounts/bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun");
   });
 });
 
@@ -193,13 +268,15 @@ describe("Tokens tab", () => {
     expect(rows[2]).toHaveTextContent("+ 1,000 BZE staked · 300 BZE unstaking");
     expect(rows[3]).toHaveTextContent("DEX pool share");
     expect(rows[3]).toHaveTextContent("no price");
-    expect(within(rows[3]).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(rows[3]).queryByRole("link", { name: /View on DEX/ })).not.toBeInTheDocument();
+    expect(within(rows[0]).getByTestId("token-symbol")).toHaveAttribute("href", expect.stringMatching(/^\/tokens\/ibc/));
+    expect(within(rows[4]).getByTestId("token-symbol").tagName).not.toBe("A");
     expect(rows[4]).toHaveTextContent("42 uzzz");
   });
 
   it("sorts by name and keeps the tab in the URL", async () => {
     renderWithProviders(<AccountPage address={ADDR} />, { api: api() });
-    await userEvent.click(await screen.findByRole("tab", { name: "Tokens · 5" }));
+    await userEvent.click(await screen.findByRole("tab", { name: "Tokens 5" }));
     expect(window.location.search).toBe("?tab=tokens");
     await userEvent.click(await screen.findByRole("button", { name: "By name" }));
     const rows = screen.getAllByTestId("token-row");
@@ -210,7 +287,7 @@ describe("Tokens tab", () => {
       "USDC",
       "uzzz",
     ]);
-    await userEvent.click(screen.getByRole("tab", { name: "Activity · 1,530" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Activity 1,530" }));
     expect(window.location.search).toBe("");
   });
 
@@ -229,7 +306,7 @@ describe("Tokens tab", () => {
     renderWithProviders(<AccountPage address={ADDR} initialTab="tokens" />, {
       api: api(plain, { tokens: () => new Promise(() => {}) }),
     });
-    await screen.findByRole("tab", { name: "Tokens · 5" });
+    await screen.findByRole("tab", { name: "Tokens 5" });
     expect(screen.getByTestId("table-skeleton")).toBeInTheDocument();
   });
 });
@@ -253,7 +330,7 @@ describe("Staking tab", () => {
     expect(rows[1]).toHaveTextContent("98.4% uptime");
     expect(rows[2]).toHaveTextContent("Jailed");
     expect(rows[2]).toHaveTextContent("—");
-    expect(screen.getByTestId("delegation-total")).toHaveTextContent("TotalStaked1,000 BZEShare of your stake100%Rewards to claim15.75 BZE");
+    expect(screen.getByTestId("delegation-total")).toHaveTextContent("Total1,000 BZE100%15.75 BZE");
 
     const unbonding = screen.getAllByTestId("unbonding-item");
     expect(screen.getByRole("heading", { name: "Unstaking · 2" })).toBeInTheDocument();
