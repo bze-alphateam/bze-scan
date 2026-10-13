@@ -37,6 +37,7 @@ describe("createHttpApi", () => {
     const api = createHttpApi({ baseUrl: "http://h/api", fetch });
     await api.status();
     await api.blocks({});
+    await api.blocks({ before: 101, limit: 25 });
     await api.block(5);
     await api.blockEvents(5, { cursor: "abc" });
     await api.blockTransfers(5, { limit: 100, cursor: "t" });
@@ -67,6 +68,7 @@ describe("createHttpApi", () => {
     expect(urls.map((u) => u.replace("http://h/api", ""))).toEqual([
       "/v1/status",
       "/v1/blocks",
+      "/v1/blocks?limit=25&before=101",
       "/v1/blocks/5",
       "/v1/blocks/5/events?cursor=abc",
       "/v1/blocks/5/transfers?cursor=t&limit=100",

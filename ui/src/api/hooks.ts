@@ -10,7 +10,7 @@ import type { ExplorerApi } from "./client";
 import type {
   Activity,
   ActivityCategory,
-  BlockSummary,
+  BlockListParams,
   BlockTransfer,
   HallOfFame,
   Page,
@@ -34,8 +34,7 @@ import type {
 /** Query keys, one tuple per route and its arguments. */
 export const queryKeys = {
   status: () => ["status"] as const,
-  blocks: (p: PageParams) => ["blocks", p] as const,
-  blockList: () => ["blocks", "list"] as const,
+  blocks: (p: BlockListParams) => ["blocks", p] as const,
   block: (height: number) => ["block", height] as const,
   blockTransfers: (height: number) => ["block-transfers", height] as const,
   blockEvents: (height: number, p: PageParams) => ["block-events", height, p] as const,
@@ -75,16 +74,16 @@ export const queryKeys = {
   rawTx: (hash: string) => ["raw", "tx", hash.toUpperCase()] as const,
 };
 
-// A list's first page is live; an older page (with a cursor) never changes.
-const listPolicy = (p: PageParams) => (p.cursor ? immutable : live);
+// A list's first page is live; an older page (with a cursor, or below a height) never changes.
+const listPolicy = (p: BlockListParams) => (p.cursor || p.before ? immutable : live);
 
 export function useStatus() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.status(), queryFn: ({ signal }) => api.status(signal), ...status });
 }
 
-/** One page of the latest blocks (the home page's five): live. */
-export function useBlocks(params: PageParams = {}) {
+/** One page of blocks: the latest (the home page's five, the list's live page) live, a page `before` a height immutable. */
+export function useBlocks(params: BlockListParams = {}) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.blocks(params),
@@ -116,12 +115,6 @@ function useLiveList<T>(queryKey: readonly unknown[], read: (p: PageParams, sign
     void query.refetch();
   };
   return { ...query, snapshot: isSnapshot(query.data), latest };
-}
-
-/** The blocks list: live until an older page is loaded (see `useLiveList`). */
-export function useBlockList() {
-  const api = useApi();
-  return useLiveList<BlockSummary>(queryKeys.blockList(), (p, signal) => api.blocks(p, signal));
 }
 
 /** The transactions list of one status (every one for null): live until an older page is loaded. */

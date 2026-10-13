@@ -1,9 +1,9 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, IconButton, Link, Skeleton, Stack, Tabs, Text } from "@chakra-ui/react";
+import { Box, Button, HStack, IconButton, Link, Skeleton, Stack, Tabs, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo } from "react";
-import { LuChevronLeft, LuChevronRight, LuExternalLink } from "react-icons/lu";
+import { LuChevronLeft, LuChevronRight, LuClock, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import {
@@ -20,11 +20,15 @@ import type { Block, BlockTx, RawRpcResponse } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
 import { JsonBlock } from "@/components/ui/json-block";
 import { HashLink } from "@/components/ui/links";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
 import { MoreDetails } from "@/components/ui/more-details";
+import { Breadcrumb, DetailMeta, DetailTitle, SectionHead } from "@/components/ui/page-head";
 import { CardSkeleton, JsonSkeleton, TableSkeleton } from "@/components/ui/skeleton";
-import { StatusPill } from "@/components/ui/status-pill";
+import { StateBox } from "@/components/ui/state-box";
+import { StatusPill, Tag } from "@/components/ui/status-pill";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount, formatDateTime, formatPct } from "@/lib/format";
@@ -41,234 +45,180 @@ export function pingPubBlockUrl(height: number): string {
   return `${externalLinks.pingPub}/block/${height}`;
 }
 
-/** "Blocks / 25,120,440". */
-function Breadcrumb({ height }: { height: number }) {
+/** "Blocks / 25,120,440", "Block 25,120,440" and the square arrows to the previous and next blocks. */
+function Head({ height }: { height: number }) {
   return (
-    <HStack as="nav" aria-label="Breadcrumb" gap="2" fontSize="sm" color="fg.muted">
-      <Link asChild color="fg.muted">
-        <NextLink href="/blocks">Blocks</NextLink>
-      </Link>
-      <Text as="span" aria-hidden>
-        /
-      </Text>
-      <Text as="span" aria-current="page">
-        {formatCount(height)}
-      </Text>
-    </HStack>
+    <>
+      <Breadcrumb path={[{ label: "Blocks", href: "/blocks" }]} current={formatCount(height)} mono />
+      <DetailTitle
+        title={
+          <>
+            Block{" "}
+            <Text as="span" fontFamily="mono">
+              {formatCount(height)}
+            </Text>
+          </>
+        }
+      >
+        <HStack gap="1">
+          {height > 1 && <Arrow href={`/blocks/${height - 1}`} label="Previous block" icon={<LuChevronLeft size={14} />} />}
+          <Arrow href={`/blocks/${height + 1}`} label="Next block" icon={<LuChevronRight size={14} />} />
+        </HStack>
+      </DetailTitle>
+    </>
   );
 }
 
-/** "Block N" with the previous and next blocks' arrows. */
-function Title({ height }: { height: number }) {
+function Arrow({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
   return (
-    <HStack gap="2" wrap="wrap">
-      <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-        Block {formatCount(height)}
-      </Heading>
-      <HStack gap="1">
-        {height > 1 && (
-          <IconButton asChild variant="ghost" size="sm" minW="44px" minH="44px" aria-label="Previous block">
-            <NextLink href={`/blocks/${height - 1}`}>
-              <LuChevronLeft />
-            </NextLink>
-          </IconButton>
-        )}
-        <IconButton asChild variant="ghost" size="sm" minW="44px" minH="44px" aria-label="Next block">
-          <NextLink href={`/blocks/${height + 1}`}>
-            <LuChevronRight />
-          </NextLink>
-        </IconButton>
-      </HStack>
-    </HStack>
+    <IconButton
+      asChild
+      variant="outline"
+      boxSize="28px"
+      minW="28px"
+      h="28px"
+      rounded="l1"
+      color="fg.muted"
+      borderColor="border.panel"
+      _hover={{ color: "accent.fg", borderColor: "accent.fg", bg: "transparent" }}
+      aria-label={label}
+    >
+      <NextLink href={href}>{icon}</NextLink>
+    </IconButton>
   );
 }
 
 function Header({ block, tip }: { block: Block; tip: number | null }) {
   const succeeded = block.tx_count - block.tx_failed_count;
   return (
-    <Stack gap="3">
-      <Breadcrumb height={block.height} />
-      <Title height={block.height} />
-      <Text color="fg.muted" fontSize="sm" data-testid="block-when">
-        <TimeAgo time={block.time} />
-        {block.height === tip && " · latest block"}
-      </Text>
-      <HStack gap="2" wrap="wrap" data-testid="block-chips">
-        <Badge variant="outline" size="lg" rounded="full">
-          {formatCount(block.tx_count)} transaction{block.tx_count === 1 ? "" : "s"}
-        </Badge>
-        {block.tx_count > 0 && (
-          <Badge colorPalette="green" variant="subtle" size="lg" rounded="full">
-            {formatCount(succeeded)} succeeded
-          </Badge>
-        )}
-        {block.tx_failed_count > 0 && (
-          <Badge colorPalette="red" variant="subtle" size="lg" rounded="full">
-            {formatCount(block.tx_failed_count)} failed
-          </Badge>
-        )}
-      </HStack>
-    </Stack>
+    <Box>
+      <Head height={block.height} />
+      <DetailMeta data-testid="block-meta">
+        <Text as="span" data-testid="block-when">
+          <TimeAgo time={block.time} />
+          {block.height === tip && " · latest block"}
+        </Text>
+        <HStack as="span" gap="10px" wrap="wrap" data-testid="block-chips">
+          <Tag bg="transparent" borderWidth="1px" borderColor="accent.fg">
+            {formatCount(block.tx_count)} transaction{block.tx_count === 1 ? "" : "s"}
+          </Tag>
+          {block.tx_count > 0 && <Tag tone="ok">{formatCount(succeeded)} succeeded</Tag>}
+          {block.tx_failed_count > 0 && <Tag tone="bad">{formatCount(block.tx_failed_count)} failed</Tag>}
+        </HStack>
+      </DetailMeta>
+    </Box>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <>
-      <Text as="dt" fontSize="sm" color="fg.muted" mt={{ base: "2", sm: "0" }}>
-        {label}
-      </Text>
-      <Box as="dd" fontSize="sm" minW="0">
-        {children}
-      </Box>
-    </>
-  );
-}
-
-const DL = { base: "1fr", sm: "minmax(8rem, max-content) 1fr" };
+const Muted = ({ children }: { children: React.ReactNode }) => (
+  <Text as="span" color="fg.muted">
+    {children}
+  </Text>
+);
 
 function Overview({ block, ctx }: { block: Block; ctx: RenderContext }) {
   const fees = blockFees(block);
   return (
-    <Card title="Overview" data-testid="block-overview">
-      <Grid as="dl" templateColumns={DL} columnGap="6" rowGap={{ base: "1", sm: "3" }}>
-        <Row label="Time">
+    <Card title="Overview" p="0" mt="8" data-testid="block-overview">
+      <DetailList>
+        <DetailRow label="Time">
           <TimeAgo time={block.time} />
-          <Text as="span" color="fg.muted">
-            {" "}
-            · {formatDateTime(block.time)}
-          </Text>
-        </Row>
-        <Row label="Proposed by">
+          <Muted>· {formatDateTime(block.time)}</Muted>
+        </DetailRow>
+        <DetailRow label="Proposed by">
           {block.proposer ? (
             <ValidatorChip operator={block.proposer.operator_address} moniker={block.proposer.moniker} />
           ) : (
-            <Text as="span" color="fg.muted">
-              unknown
-            </Text>
+            <Muted>unknown</Muted>
           )}
-        </Row>
-        <Row label="Fees">
+        </DetailRow>
+        <DetailRow label="Fees">
           {fees.coins.length > 0 ? (
             <>
-              {coinsText(fees.coins, ctx)}
-              <Text as="span" color="fg.muted">
-                {" "}
-                · collected from {formatCount(fees.payers)} transaction{fees.payers === 1 ? "" : "s"}
+              <Text as="span" fontFamily="mono">
+                {coinsText(fees.coins, ctx)}
               </Text>
+              <Muted>
+                · collected from {formatCount(fees.payers)} transaction{fees.payers === 1 ? "" : "s"}
+              </Muted>
             </>
           ) : (
-            <Text as="span" color="fg.muted">
-              none
-            </Text>
+            <Muted>none</Muted>
           )}
-        </Row>
-        <Row label="Block time">
-          {blockTimeText(block.block_time_ms)}
+        </DetailRow>
+        <DetailRow label="Block time">
+          <Text as="span" fontFamily="mono">
+            {blockTimeText(block.block_time_ms)}
+          </Text>
           {block.block_time_ms != null && block.height > 1 && (
-            <Text as="span" color="fg.muted">
-              {" "}
-              · since block{" "}
-              <Link asChild>
+            <>
+              <Muted>· since block</Muted>
+              <Link asChild fontFamily="mono" color="accent.fg">
                 <NextLink href={`/blocks/${block.height - 1}`}>{formatCount(block.height - 1)}</NextLink>
               </Link>
-            </Text>
+            </>
           )}
-        </Row>
-        <Row label="Hash">
-          <HStack gap="1" align="start">
-            <Text as="span" fontFamily="mono" wordBreak="break-all" data-testid="block-hash">
-              {block.hash}
-            </Text>
-            <CopyButton value={block.hash} label="Copy hash" />
-          </HStack>
-        </Row>
-      </Grid>
+        </DetailRow>
+        <DetailRow label="Hash" last>
+          <Text as="span" fontFamily="mono" fontSize="12px" wordBreak="break-all" data-testid="block-hash">
+            {block.hash}
+          </Text>
+          <CopyButton value={block.hash} label="Copy hash" />
+        </DetailRow>
+      </DetailList>
     </Card>
   );
 }
 
-const TX_COLUMNS = { base: "minmax(0, 1fr) auto", md: "110px minmax(0, 2fr) minmax(0, 1fr) 104px minmax(0, 0.8fr)" };
-
-function PhoneLabel({ children }: { children: string }) {
-  return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
-  );
-}
+// Hash (c2) · What happened · By (c2) · Status · Fee (c3).
+const TX_COLUMNS = {
+  base: "minmax(0, 1fr) auto",
+  c2: "110px minmax(0, 2fr) minmax(0, 1fr) auto",
+  c3: "110px minmax(0, 2fr) minmax(0, 1fr) auto minmax(0, 0.8fr)",
+};
 
 function TxRow({ tx, ctx }: { tx: BlockTx; ctx: RenderContext }) {
   return (
-    <Grid
-      role="listitem"
-      templateColumns={TX_COLUMNS}
-      gap={{ base: "1", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="block-tx"
-    >
-      <HashLink hash={tx.hash} noCopy />
-      <Box gridRow={{ base: "1", md: "auto" }} gridColumn={{ base: "2", md: "4" }} justifySelf={{ base: "end", md: "start" }}>
-        <StatusPill success={tx.success} />
+    <ListRow role="listitem" templateColumns={TX_COLUMNS} data-testid="block-tx">
+      <Box hideBelow="c2" minW="0">
+        <HashLink hash={tx.hash} noCopy />
       </Box>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "2" }} gridRow={{ md: "1" }} data-testid="block-tx-what">
-        {txOneLine(tx, ctx)}
-      </Text>
-      <Box minW="0" gridColumn={{ base: "1 / -1", md: "3" }} gridRow={{ md: "1" }}>
-        <PhoneLabel>By</PhoneLabel>
-        {tx.signer ? (
-          <AccountChip address={tx.signer} label={ctx.label(tx.signer)} />
-        ) : (
-          <Text as="span" color="fg.muted">
-            —
-          </Text>
-        )}
+      <Link asChild color="fg" minW="0" _hover={{ color: "accent.fg" }}>
+        <NextLink href={`/txs/${tx.hash}`} data-testid="block-tx-what">
+          {txOneLine(tx, ctx)}
+        </NextLink>
+      </Link>
+      <Box hideBelow="c2" minW="0">
+        {tx.signer ? <AccountChip address={tx.signer} label={ctx.label(tx.signer)} /> : <Muted>—</Muted>}
       </Box>
-      <Text fontSize="sm" color="fg.muted" gridColumn={{ base: "1 / -1", md: "5" }} gridRow={{ md: "1" }}>
-        <PhoneLabel>Fee</PhoneLabel>
+      <StatusPill success={tx.success} />
+      <Text hideBelow="c3" textAlign="right" fontFamily="mono" color="fg.muted" truncate>
         {tx.fee.length ? coinsText(tx.fee, ctx) : "none"}
       </Text>
-    </Grid>
+    </ListRow>
   );
 }
 
 function Transactions({ block, ctx }: { block: Block; ctx: RenderContext }) {
   return (
-    <Stack as="section" gap="3" aria-labelledby="block-txs-title">
-      <Heading as="h2" size="lg" id="block-txs-title">
-        Transactions in this block
-      </Heading>
-      <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
+    <Box as="section" mt="8" aria-labelledby="block-txs-title">
+      <SectionHead id="block-txs-title" title="Transactions in this block" />
+      <ListPanel>
         {block.transactions.length === 0 ? (
           <Text px="4" py="6" color="fg.muted" fontSize="sm">
             No transactions in this block
           </Text>
         ) : (
           <>
-            <Grid
-              hideBelow="md"
-              templateColumns={TX_COLUMNS}
-              gap="4"
-              px="4"
-              h="10"
-              alignItems="center"
-              fontSize="xs"
-              color="fg.muted"
-              textTransform="uppercase"
-              letterSpacing="wide"
-              aria-hidden
-            >
-              <Text>Hash</Text>
+            <ListHead templateColumns={TX_COLUMNS} aria-hidden>
+              <Text hideBelow="c2">Hash</Text>
               <Text>What happened</Text>
-              <Text>By</Text>
+              <Text hideBelow="c2">By</Text>
               <Text>Status</Text>
-              <Text>Fee</Text>
-            </Grid>
+              <Text hideBelow="c3" textAlign="right">
+                Fee
+              </Text>
+            </ListHead>
             <Box role="list" aria-label="Transactions">
               {block.transactions.map((tx) => (
                 <TxRow key={tx.hash} tx={tx} ctx={ctx} />
@@ -276,8 +226,8 @@ function Transactions({ block, ctx }: { block: Block; ctx: RenderContext }) {
             </Box>
           </>
         )}
-      </Box>
-    </Stack>
+      </ListPanel>
+    </Box>
   );
 }
 
@@ -322,39 +272,51 @@ function Signatures({ block }: { block: Block }) {
 function BlockDetails({ block }: { block: Block }) {
   const gas = blockGas(block);
   return (
-    <Stack gap="5" bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" p={{ base: "4", md: "5" }}>
-      <Grid as="dl" templateColumns={DL} columnGap="6" rowGap={{ base: "1", sm: "3" }}>
-        <Row label="Gas">{gas != null ? `${formatCount(gas)} used in this block` : "unknown"}</Row>
-        <Row label="Signatures">
+    <ListPanel>
+      <DetailList>
+        <DetailRow label="Gas">
+          {gas != null ? (
+            <>
+              <Text as="span" fontFamily="mono">
+                {formatCount(gas)}
+              </Text>
+              <Muted>used in this block</Muted>
+            </>
+          ) : (
+            <Muted>unknown</Muted>
+          )}
+        </DetailRow>
+        <DetailRow label="Signatures" last>
           <Signatures block={block} />
-        </Row>
-      </Grid>
+        </DetailRow>
+      </DetailList>
       <Tabs.Root defaultValue="block" variant="line" lazyMount>
-        <Tabs.List>
-          <Tabs.Trigger value="block" minH="44px">
+        <Tabs.List px="2" borderTopWidth="1px" borderColor="border.panel" alignItems="center">
+          <Tabs.Trigger value="block" fontSize="13px">
             Raw block
           </Tabs.Trigger>
-          <Tabs.Trigger value="results" minH="44px">
+          <Tabs.Trigger value="results" fontSize="13px">
             Block results
           </Tabs.Trigger>
-          <Tabs.Trigger value="commit" minH="44px">
+          <Tabs.Trigger value="commit" fontSize="13px">
             Commit
           </Tabs.Trigger>
+          <Box flex="1" />
+          <Link href={pingPubBlockUrl(block.height)} target="_blank" rel="noopener noreferrer" fontSize="12px" px="2" color="accent.fg">
+            Open on Ping.pub ↗
+          </Link>
         </Tabs.List>
-        <Tabs.Content value="block" pt="3">
+        <Tabs.Content value="block" p="4" pt="3">
           <RawBlockTab height={block.height} />
         </Tabs.Content>
-        <Tabs.Content value="results" pt="3">
+        <Tabs.Content value="results" p="4" pt="3">
           <RawResultsTab height={block.height} />
         </Tabs.Content>
-        <Tabs.Content value="commit" pt="3">
+        <Tabs.Content value="commit" p="4" pt="3">
           <RawCommitTab height={block.height} />
         </Tabs.Content>
       </Tabs.Root>
-      <Link href={pingPubBlockUrl(block.height)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-        Open on Ping.pub <LuExternalLink aria-hidden />
-      </Link>
-    </Stack>
+    </ListPanel>
   );
 }
 
@@ -367,29 +329,31 @@ export function BlockView({ block, tip }: { block: Block; tip: number | null }) 
     [block.transfers, tokens.data, validators.data],
   );
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
+    <Box>
       <Header block={block} tip={tip} />
       <Overview block={block} ctx={ctx} />
       <Transactions block={block} ctx={ctx} />
       {block.transfers_count > 0 && <BlockFlow height={block.height} count={block.transfers_count} />}
-      <MoreDetails hint="gas, signatures, raw JSON">
-        <BlockDetails block={block} />
-      </MoreDetails>
-    </Stack>
+      <Box mt="8">
+        <MoreDetails hint="gas, signatures, raw JSON">
+          <BlockDetails block={block} />
+        </MoreDetails>
+      </Box>
+    </Box>
   );
 }
 
 /** The page's skeleton: the header, the overview grid, five transaction rows and the funds-flow group lines. */
 export function BlockSkeleton() {
   return (
-    <Stack gap={{ base: "6", md: "8" }} aria-busy data-testid="block-skeleton">
+    <Stack gap="8" pt="6" aria-busy data-testid="block-skeleton">
       <Stack gap="3">
-        <Skeleton h="4" w="40" />
-        <Skeleton h="9" w="72" maxW="full" />
-        <Skeleton h="4" w="32" />
+        <Skeleton h="3" w="40" />
+        <Skeleton h="8" w="72" maxW="full" />
         <HStack gap="2">
-          <Skeleton h="7" w="32" rounded="full" />
-          <Skeleton h="7" w="28" rounded="full" />
+          <Skeleton h="4" w="24" />
+          <Skeleton h="5" w="28" />
+          <Skeleton h="5" w="24" />
         </HStack>
       </Stack>
       <CardSkeleton lines={5} />
@@ -399,54 +363,103 @@ export function BlockSkeleton() {
   );
 }
 
-const NOT_FOUND_TEXT: Record<BlockNotFound, string> = {
-  not_produced: "Not produced yet",
-  too_old: "Older than the explorer's history",
-  missing: "Not indexed: this height is missing from the explorer",
-};
-
-function NotFound({ height, kind, oldest, expired }: { height: number; kind: BlockNotFound; oldest: number | null; expired: boolean }) {
+/** Two rails with a dashed gap: a height missing from the index. */
+function GapIcon() {
   return (
-    <Stack gap="6">
-      <Stack gap="3">
-        <Breadcrumb height={height} />
-        <Title height={height} />
-      </Stack>
-      <Card data-testid={`block-${kind}`}>
-        <Stack gap="2" role={kind === "not_produced" && !expired ? "status" : undefined}>
-          <Text fontWeight="semibold">
-            {NOT_FOUND_TEXT[kind]}
-            {kind === "too_old" && oldest != null && ` (from block ${formatCount(oldest)})`}
-          </Text>
-          {kind === "not_produced" ? (
-            <Text color="fg.muted" fontSize="sm">
-              {expired
-                ? "The chain has not reached this height yet. Reload the page to look again."
-                : "The chain has not reached this height yet. This page shows it as soon as it is produced."}
-            </Text>
-          ) : (
-            <Link href={pingPubBlockUrl(height)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-              Look it up on Ping.pub <LuExternalLink aria-hidden />
-            </Link>
-          )}
-        </Stack>
-      </Card>
-    </Stack>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M4 6h16M4 18h16" />
+      <path d="M9 12h6" strokeDasharray="2 2" />
+    </svg>
   );
 }
 
-function LoadError({ onRetry }: { onRetry: () => void }) {
+function PingPubLookup({ height }: { height: number }) {
   return (
-    <Card title="This block could not be loaded">
-      <HStack justify="space-between" wrap="wrap" gap="3">
+    <Link href={pingPubBlockUrl(height)} target="_blank" rel="noopener noreferrer" color="accent.fg">
+      Look it up on Ping.pub ↗
+    </Link>
+  );
+}
+
+function NotFoundBox({ height, kind, oldest, expired }: { height: number; kind: BlockNotFound; oldest: number | null; expired: boolean }) {
+  if (kind === "too_old") {
+    return (
+      <StateBox
+        icon={<LuClock size={20} />}
+        title={
+          <>
+            Older than the explorer&apos;s history
+            {oldest != null && (
+              <Text as="span" color="fg.muted" fontFamily="mono" fontWeight="400">
+                {" "}
+                (from block {formatCount(oldest)})
+              </Text>
+            )}
+          </>
+        }
+        actions={<PingPubLookup height={height} />}
+        data-testid="block-too_old"
+      >
+        The block is on the chain, the explorer just doesn&apos;t keep blocks this old.
+      </StateBox>
+    );
+  }
+  if (kind === "missing") {
+    return (
+      <StateBox
+        tone="warn"
+        icon={<GapIcon />}
+        title="Not indexed: this height is missing from the explorer"
+        actions={<PingPubLookup height={height} />}
+        data-testid="block-missing"
+      />
+    );
+  }
+  // Not produced yet: unchanged until the Future block page replaces it.
+  return (
+    <Card data-testid="block-not_produced">
+      <Stack gap="2" role={expired ? undefined : "status"}>
+        <Text fontWeight="semibold">Not produced yet</Text>
         <Text color="fg.muted" fontSize="sm">
-          The explorer did not answer. Try again in a moment.
+          {expired
+            ? "The chain has not reached this height yet. Reload the page to look again."
+            : "The chain has not reached this height yet. This page shows it as soon as it is produced."}
         </Text>
-        <Button colorPalette="blue" minH="44px" onClick={onRetry}>
-          Try again
-        </Button>
-      </HStack>
+      </Stack>
     </Card>
+  );
+}
+
+function NotFound(props: { height: number; kind: BlockNotFound; oldest: number | null; expired: boolean }) {
+  return (
+    <Box>
+      <Head height={props.height} />
+      <Box mt="6">
+        <NotFoundBox {...props} />
+      </Box>
+    </Box>
+  );
+}
+
+function LoadError({ height, onRetry }: { height: number; onRetry: () => void }) {
+  return (
+    <Box>
+      <Head height={height} />
+      <StateBox
+        mt="6"
+        tone="error"
+        icon={<LuTriangleAlert size={20} />}
+        title="This block could not be loaded"
+        actions={
+          <Button size="sm" colorPalette="blue" onClick={onRetry}>
+            Try again
+          </Button>
+        }
+        data-testid="block-error"
+      >
+        The explorer did not answer. Try again in a moment.
+      </StateBox>
+    </Box>
   );
 }
 
@@ -470,6 +483,6 @@ export function BlockPage({ height }: { height: number }) {
       />
     );
   }
-  if (error && !isNotFound(error)) return <LoadError onRetry={() => void refetch()} />;
+  if (error && !isNotFound(error)) return <LoadError height={height} onRetry={() => void refetch()} />;
   return <BlockSkeleton />;
 }

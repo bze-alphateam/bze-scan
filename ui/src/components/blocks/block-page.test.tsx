@@ -60,8 +60,8 @@ describe("BlockPage", () => {
 
     const overview = screen.getByTestId("block-overview");
     expect(within(overview).getByRole("link", { name: "Honeycomb" })).toBeInTheDocument();
-    expect(overview).toHaveTextContent("0.022 BZE · collected from 3 transactions");
-    expect(overview).toHaveTextContent("5.8 s · since block 25,120,439");
+    expect(overview).toHaveTextContent("Fees0.022 BZE· collected from 3 transactions");
+    expect(overview).toHaveTextContent("Block time5.8 s· since block25,120,439");
     expect(within(overview).getByTestId("block-hash")).toHaveTextContent(block.hash);
 
     const txs = screen.getAllByTestId("block-tx");
@@ -69,6 +69,7 @@ describe("BlockPage", () => {
     expect(within(txs[0]).getByTestId("block-tx-what")).toHaveTextContent("Send 10 BZE to bze1m3k…9ds4");
     expect(within(txs[1]).getByTestId("block-tx-what")).toHaveTextContent(/^Stake 500 BZE with .+ \+ 1 more action$/);
     expect(within(txs[0]).getByRole("link", { name: "3F9A…C21E" })).toHaveAttribute("href", `/txs/${block.transactions[0].hash}`);
+    expect(within(txs[0]).getByTestId("block-tx-what")).toHaveAttribute("href", `/txs/${block.transactions[0].hash}`);
     expect(within(txs[2]).getByText("Failed")).toBeInTheDocument();
     expect(txs[0]).toHaveTextContent("0.002 BZE");
   });
@@ -135,7 +136,8 @@ describe("BlockPage", () => {
     renderWithProviders(<BlockPage height={HEIGHT} />, { api: api({ rawBlock: raw, rawBlockResults: results }) });
 
     await user.click(await screen.findByRole("button", { name: /More details/ }));
-    expect(await screen.findByText("474,968 used in this block")).toBeInTheDocument();
+    expect(await screen.findByText("474,968")).toBeInTheDocument();
+    expect(screen.getByText("used in this block")).toBeInTheDocument();
     expect(await screen.findByText("3 of 3 validators · 93.4% of voting power")).toBeInTheDocument();
     expect(await screen.findByText(/"chain_id": "beezee-1"/)).toBeInTheDocument();
     expect(raw).toHaveBeenCalledTimes(1);
@@ -184,7 +186,10 @@ describe("BlockPage", () => {
     const fetchBlock = vi.fn(notIndexed);
     renderWithProviders(<BlockPage height={24998000} />, { api: api({ block: fetchBlock }) });
     const card = await screen.findByTestId("block-too_old");
-    expect(card).toHaveTextContent("Older than the explorer's history (from block 24,998,316)");
+    expect(within(card).getByRole("heading")).toHaveTextContent("Older than the explorer's history (from block 24,998,316)");
+    expect(card).toHaveTextContent("The block is on the chain, the explorer just doesn't keep blocks this old.");
+    expect(card).toHaveAttribute("data-state", "neutral");
+    expect(screen.getByRole("heading", { level: 1, name: "Block 24,998,000" })).toBeInTheDocument();
     expect(within(card).getByRole("link", { name: /Ping.pub/ })).toHaveAttribute("href", expect.stringMatching(/\/block\/24998000$/));
     expect(fetchBlock).toHaveBeenCalledTimes(1);
   });
@@ -192,14 +197,19 @@ describe("BlockPage", () => {
   it("explains a height missing from the explorer", async () => {
     renderWithProviders(<BlockPage height={25000000} />, { api: api({ block: notIndexed }) });
     const card = await screen.findByTestId("block-missing");
-    expect(card).toHaveTextContent("Not indexed: this height is missing from the explorer");
+    expect(within(card).getByRole("heading")).toHaveTextContent("Not indexed: this height is missing from the explorer");
+    expect(card).toHaveAttribute("data-state", "warn");
     expect(within(card).getByRole("link", { name: /Ping.pub/ })).toBeInTheDocument();
   });
 
   it("offers a retry when the API fails", async () => {
     const fail = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<BlockPage height={HEIGHT} />, { api: api({ block: fail }) });
-    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    const card = await screen.findByTestId("block-error");
+    expect(card).toHaveAttribute("data-state", "error");
+    expect(within(card).getByRole("heading")).toHaveTextContent("This block could not be loaded");
+    expect(screen.getByRole("heading", { level: 1, name: "Block 25,120,440" })).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Try again" }));
     await vi.waitFor(() => expect(fail).toHaveBeenCalledTimes(2));
   });
 });

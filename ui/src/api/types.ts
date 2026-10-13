@@ -14,6 +14,11 @@ export interface PageParams {
   limit?: number;
 }
 
+/** `/blocks`: a page, or with `before` the blocks below that height (exclusive), newest first. */
+export interface BlockListParams extends PageParams {
+  before?: number;
+}
+
 /** The error envelope every failed request answers with. */
 export interface ErrorBody {
   error: { code: string; message: string };

@@ -1,45 +1,48 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { noHorizontalScroll } from "./layout";
 
-import latest from "../test/fixtures/api/v1/blocks.json";
 import block from "../test/fixtures/api/v1/blocks/25120440.json";
 import status from "../test/fixtures/api/v1/status.json";
 
-// The mock API answers /blocks from test/fixtures/api/v1/blocks.json, block
-// 25120440 with its transfers and raw block, and 404s any other height. The
-// status' latest block is 25120450; the e2e build shortens the pending window
-// to 4 s.
-
-const OLDER = { items: [{ ...latest.items[9], height: 25120439, hash: "B".repeat(64) }], next_cursor: null };
-
-/** Answers the blocks list's older page (the mock API ignores the cursor). */
-async function olderPage(page: Page) {
-  await page.route(/\/api\/v1\/blocks\?/, async (route) => {
-    const cursor = new URL(route.request().url()).searchParams.get("cursor");
-    if (!cursor) return route.fallback();
-    return route.fulfill({ json: OLDER, headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" } });
-  });
-}
+// The mock API answers /blocks from test/fixtures/api/v1/blocks.json (newest
+// 25,120,449), /blocks?before=H with the 25 heights below H, block 25120440
+// with its transfers and raw block, and 404s any other height. The status'
+// latest block is 25120450; the e2e build shortens the pending window to 4 s.
 
 test.describe("blocks list", () => {
-  test("lists the latest blocks and loads an older page", async ({ page }) => {
-    await olderPage(page);
+  test("lists the latest blocks, pins page 2 to the newest height and goes back to the latest", async ({ page }) => {
     await page.goto("/blocks");
     await expect(page).toHaveTitle("Blocks · BZE Explorer");
     const rows = page.getByTestId("block-row");
     await expect(rows).toHaveCount(10);
     await expect(rows.first().getByRole("link", { name: "25,120,449" })).toHaveAttribute("href", "/blocks/25120449");
     await expect(rows.last().getByTestId("block-txs")).toContainText("7 · 1 failed");
+    await expect(page.getByTestId("pager-current")).toHaveText("1");
+    await expect(page.getByRole("link", { name: "Previous page" })).toHaveAttribute("aria-disabled", "true");
 
-    await page.getByRole("button", { name: "Show older blocks" }).click();
-    await expect(rows).toHaveCount(11);
-    await expect(rows.last().getByRole("link", { name: "25,120,439" })).toBeVisible();
-    await expect(page.getByTestId("blocks-snapshot")).toBeVisible();
+    await page.getByRole("link", { name: "Next page" }).click();
+    await expect(page).toHaveURL(/\/blocks\?top=25120449&page=2$/);
+    await expect(rows).toHaveCount(25);
+    await expect(page.getByTestId("blocks-range")).toHaveText("Blocks 25,120,424 – 25,120,400");
+    await expect(page.getByTestId("pager-current")).toHaveText("2");
+    await expect(page.getByRole("link", { name: "Last page" })).toHaveAttribute("href", "/blocks?top=25120449&page=4886");
 
-    await page.getByRole("button", { name: "Back to the latest blocks" }).click();
+    const fresh = page.getByTestId("blocks-new");
+    await expect(fresh).toHaveText("1 new block · back to latest");
+    await fresh.click();
+    await expect(page).toHaveURL(/\/blocks$/);
     await expect(rows).toHaveCount(10);
-    await expect(page.getByTestId("blocks-snapshot")).toHaveCount(0);
+    await expect(page.getByTestId("blocks-new")).toHaveCount(0);
+  });
+
+  test("jumps to a typed page, clamped to the history", async ({ page }) => {
+    await page.goto("/blocks?top=25120449&page=2");
+    await page.getByRole("textbox", { name: "Page" }).fill("99999");
+    await page.getByRole("button", { name: "Go to page" }).click();
+    await expect(page).toHaveURL(/\/blocks\?top=25120449&page=4886$/);
+    await expect(page.getByTestId("blocks-range")).toHaveText("Blocks 24,998,324 – 24,998,316");
+    await expect(page.getByRole("link", { name: "Next page" })).toHaveAttribute("aria-disabled", "true");
   });
 });
 
@@ -53,7 +56,7 @@ test.describe("block page", () => {
     await expect(page.getByTestId("block-chips")).toContainText("1 failed");
 
     const overview = page.getByTestId("block-overview");
-    await expect(overview).toContainText("0.022 BZE · collected from 3 transactions");
+    await expect(overview).toContainText("0.022 BZE· collected from 3 transactions");
     await expect(overview.getByTestId("block-hash")).toHaveText(block.hash);
 
     const txs = page.getByTestId("block-tx");
@@ -73,7 +76,7 @@ test.describe("block page", () => {
     await expect(page.getByTestId("block-flow-all").getByTestId("flow-step")).toHaveCount(18);
 
     await page.getByRole("button", { name: /More details/ }).click();
-    await expect(page.getByText("474,968 used in this block")).toBeVisible();
+    await expect(page.getByText("474,968", { exact: true })).toBeVisible();
     await expect(page.getByText(/"chain_id": "beezee-1"/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute(
       "href",
@@ -93,6 +96,10 @@ test.describe("block page", () => {
   test("explains a height older than the explorer's history", async ({ page }) => {
     await page.goto("/blocks/24998000");
     await expect(page.getByTestId("block-too_old")).toContainText("(from block 24,998,316)");
+    await expect(page.getByTestId("block-too_old").getByRole("link", { name: /Ping.pub/ })).toHaveAttribute(
+      "href",
+      "https://explorer.getbze.com/beezee/block/24998000",
+    );
   });
 
   test("answers not found for something that is not a height", async ({ page }) => {

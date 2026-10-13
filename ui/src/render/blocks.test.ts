@@ -5,7 +5,18 @@ import type { Block, Status } from "@/api/types";
 import block from "../../test/fixtures/api/v1/blocks/25120440.json";
 import status from "../../test/fixtures/api/v1/status.json";
 
-import { blockFees, blockGas, blockNotFound, blockTimeText, sizeText, sumCoins } from "./blocks";
+import {
+  blockFees,
+  blockGas,
+  blockNotFound,
+  blocksHref,
+  blocksLastPage,
+  blocksPageBefore,
+  blockTimeText,
+  parseBlocksPlace,
+  sizeText,
+  sumCoins,
+} from "./blocks";
 
 const b = block as unknown as Block;
 const s = status as Status;
@@ -63,5 +74,36 @@ describe("formatting", () => {
     expect(sizeText(1536)).toBe("1.5 KB");
     expect(sizeText(2_000_000)).toBe("1,953.1 KB");
     expect(sizeText(null)).toBe("—");
+  });
+});
+
+describe("blocks list pages", () => {
+  it("reads a pinned place from the query, else the live list", () => {
+    expect(parseBlocksPlace({})).toEqual({ top: null, page: 1 });
+    expect(parseBlocksPlace({ page: "3" })).toEqual({ top: null, page: 1 });
+    expect(parseBlocksPlace({ top: "25120450", page: "3" })).toEqual({ top: 25120450, page: 3 });
+    expect(parseBlocksPlace({ top: "25120450" })).toEqual({ top: 25120450, page: 1 });
+    expect(parseBlocksPlace({ top: "25120450", page: "0" })).toEqual({ top: 25120450, page: 1 });
+    expect(parseBlocksPlace({ top: "-4", page: "2" })).toEqual({ top: null, page: 1 });
+    expect(parseBlocksPlace({ top: ["9", "8"], page: "x" })).toEqual({ top: 9, page: 1 });
+  });
+
+  it("links the live list without a top", () => {
+    expect(blocksHref({ top: null, page: 1 })).toBe("/blocks");
+    expect(blocksHref({ top: 100, page: 2 })).toBe("/blocks?top=100&page=2");
+  });
+
+  it("asks page p for the heights below top−(p−1)·25+1", () => {
+    expect(blocksPageBefore(1000, 1)).toBe(1001);
+    expect(blocksPageBefore(1000, 2)).toBe(976);
+    expect(blocksPageBefore(1000, 40)).toBe(26);
+  });
+
+  it("counts the pages down to the history start", () => {
+    expect(blocksLastPage(1000, 1)).toBe(40);
+    expect(blocksLastPage(1000, 976)).toBe(1);
+    expect(blocksLastPage(1000, 975)).toBe(2);
+    expect(blocksLastPage(1000, 2000)).toBe(1);
+    expect(blocksLastPage(1000, null)).toBeNull();
   });
 });

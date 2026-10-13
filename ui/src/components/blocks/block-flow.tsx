@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Heading, HStack, Skeleton, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, HStack, Skeleton, Stack, Text } from "@chakra-ui/react";
 import { useMemo, useState } from "react";
 import { LuChevronDown } from "react-icons/lu";
 
@@ -8,6 +8,8 @@ import { useBlockTransfers } from "@/api/hooks";
 import type { BlockTransfer } from "@/api/types";
 import { StepList } from "@/components/funds-flow/step-list";
 import { HashLink } from "@/components/ui/links";
+import { ListPanel } from "@/components/ui/list";
+import { SectionHead } from "@/components/ui/page-head";
 import { formatCount } from "@/lib/format";
 import { groupMeta, groupTransfers, phraseOf, type FlowGroupView } from "@/render/block-flow";
 
@@ -51,46 +53,84 @@ function Steps({ rows, height }: { rows: BlockTransfer[]; height: number }) {
   );
 }
 
+const Chevron = ({ open }: { open: boolean }) => (
+  <Box as="span" display="inline-flex" transition="transform 0.15s" transform={open ? "rotate(180deg)" : undefined}>
+    <LuChevronDown size={12} />
+  </Box>
+);
+
+/** "Show all N transfers, one by one": an accent text toggle. */
 function Toggle({ open, onClick, children }: { open: boolean; onClick: () => void; children: string }) {
   return (
-    <Button variant="ghost" size="sm" minH="44px" aria-expanded={open} onClick={onClick} flexShrink="0">
+    <Button
+      variant="plain"
+      size="sm"
+      minH="44px"
+      px="0"
+      gap="1.5"
+      color="accent.fg"
+      fontSize="13px"
+      fontWeight="500"
+      aria-expanded={open}
+      onClick={onClick}
+    >
       {children}
-      <Box as="span" transform={open ? "rotate(180deg)" : undefined} display="inline-flex">
-        <LuChevronDown />
-      </Box>
+      <Chevron open={open} />
     </Button>
   );
 }
 
+/** A group: its summary row opens to its steps. */
 function Group({ g, height }: { g: FlowGroupView; height: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <Stack gap="2" py="3" borderTopWidth="1px" borderColor="border.panel" _first={{ borderTopWidth: "0" }} data-testid="flow-group" data-group={g.group}>
-      <HStack justify="space-between" align="start" gap="3">
-        <Stack gap="0.5" minW="0">
-          <Text fontSize="sm" data-testid="flow-group-summary">
-            <Text as="span" fontWeight="semibold">
+    <Box borderBottomWidth="1px" borderColor="border.panel" _last={{ borderBottomWidth: "0" }} data-testid="flow-group" data-group={g.group}>
+      <Flex
+        as="button"
+        w="full"
+        justify="space-between"
+        align="center"
+        gap="4"
+        px="4"
+        py="3"
+        textAlign="start"
+        cursor="pointer"
+        bg={open ? "bg.hover" : undefined}
+        borderBottomWidth={open ? "1px" : "0"}
+        borderColor="border.panel"
+        _hover={{ bg: "bg.hover" }}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Box minW="0">
+          <Text fontWeight="500" data-testid="flow-group-summary">
+            <Text as="span" fontWeight="600">
               {g.label}
             </Text>
             {g.summary && ` · ${g.summary}`}
           </Text>
-          <Text fontSize="xs" color="fg.muted" data-testid="flow-group-meta">
+          <Text mt="2px" fontSize="12px" color="fg.muted" data-testid="flow-group-meta">
             {groupMeta(g)}
           </Text>
-        </Stack>
-        <Toggle open={open} onClick={() => setOpen((o) => !o)}>
+        </Box>
+        <HStack as="span" gap="6px" flexShrink="0" fontSize="12px" color="accent.fg" whiteSpace="nowrap">
           {open ? "Hide" : "Show"}
-        </Toggle>
-      </HStack>
-      {open && <Steps rows={g.rows} height={height} />}
-    </Stack>
+          <Chevron open={open} />
+        </HStack>
+      </Flex>
+      {open && (
+        <Box px="4" ps="7">
+          <Steps rows={g.rows} height={height} />
+        </Box>
+      )}
+    </Box>
   );
 }
 
 /** The group lines while the transfers load. */
 export function FlowSkeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <Stack gap="0" {...panel} px={{ base: "4", md: "5" }} aria-hidden data-testid="flow-skeleton">
+    <Stack gap="0" {...panel} px="4" aria-hidden data-testid="flow-skeleton">
       {Array.from({ length: lines }).map((_, i) => (
         <Stack key={i} gap="2" py="3" borderTopWidth={i === 0 ? "0" : "1px"} borderColor="border.panel">
           <Skeleton h="4" w="70%" />
@@ -112,22 +152,18 @@ export function BlockFlow({ height, count }: { height: number; count: number }) 
   const total = data?.length ?? count;
 
   return (
-    <Stack as="section" gap="3" aria-labelledby="block-flow-title" data-testid="block-flow">
-      <Stack gap="1">
-        <Heading as="h2" size="lg" id="block-flow-title">
-          Where the funds went in this block
-        </Heading>
-        <Text fontSize="sm" color="fg.muted">
-          Every coin that moved, grouped by what happened. Steps the chain does by itself are marked &ldquo;by the chain&rdquo;.
-        </Text>
-      </Stack>
+    <Box as="section" mt="8" aria-labelledby="block-flow-title" data-testid="block-flow">
+      <SectionHead id="block-flow-title" title="Where the funds went in this block" />
+      <Text mt="-1" mb="3" fontSize="13px" color="fg.muted">
+        Every coin that moved, grouped by what happened. Steps the chain does by itself are marked &ldquo;by the chain&rdquo;.
+      </Text>
       {!data ? (
         error ? (
           <HStack justify="space-between" wrap="wrap" gap="3" {...panel} p="4">
-            <Text fontSize="sm" color="fg.muted">
+            <Text fontSize="sm" color="neg.fg">
               The block&apos;s transfers could not be loaded.
             </Text>
-            <Button colorPalette="blue" minH="44px" onClick={() => void refetch()}>
+            <Button size="sm" colorPalette="blue" onClick={() => void refetch()}>
               Try again
             </Button>
           </HStack>
@@ -136,23 +172,23 @@ export function BlockFlow({ height, count }: { height: number; count: number }) 
         )
       ) : (
         <>
-          <Box {...panel} px={{ base: "4", md: "5" }}>
+          <ListPanel>
             {groups.map((g) => (
               <Group key={g.group} g={g} height={height} />
             ))}
-          </Box>
-          <Box>
+          </ListPanel>
+          <Box mt="2">
             <Toggle open={all} onClick={() => setAll((o) => !o)}>
               {all ? "Hide the transfers" : `Show all ${formatCount(total)} transfers, one by one`}
             </Toggle>
           </Box>
           {all && (
-            <Box {...panel} px={{ base: "4", md: "5" }} py="3" data-testid="block-flow-all">
+            <ListPanel mt="1" px="4" data-testid="block-flow-all">
               <Steps rows={data} height={height} />
-            </Box>
+            </ListPanel>
           )}
         </>
       )}
-    </Stack>
+    </Box>
   );
 }
