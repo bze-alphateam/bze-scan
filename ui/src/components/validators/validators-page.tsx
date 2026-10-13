@@ -5,8 +5,8 @@ import NextLink from "next/link";
 import { useMemo, useState } from "react";
 import { LuExternalLink, LuSearch } from "react-icons/lu";
 
-import { useAllValidators, useParams } from "@/api/hooks";
-import type { Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
+import { useAllValidators, useHallOfFame, useParams } from "@/api/hooks";
+import type { HallOfFame as Fame, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { ExplainedBadge } from "@/components/ui/explained-badge";
@@ -16,9 +16,8 @@ import { formatCount } from "@/lib/format";
 import { externalLinks, stakeHref } from "@/lib/links";
 import {
   bondCompact,
+  type FameRule,
   filterByMoniker,
-  HALL_OF_FAME_MAX_MISSED,
-  hallOfFame,
   hallOfFameExplainer,
   inactiveLabel,
   pctText,
@@ -92,7 +91,7 @@ function PhoneLabel({ children }: { children: string }) {
   );
 }
 
-function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: number; window: number } }) {
+function ValidatorRow({ v, fame }: { v: Validator; fame?: FameRule }) {
   const href = `/validators/${encodeURIComponent(v.operator_address)}`;
   return (
     <Grid
@@ -129,7 +128,7 @@ function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: num
                   text: "Hall of Fame",
                   tone: "yellow",
                   variant: "subtle",
-                  explainer: hallOfFameExplainer(fame.recentProposals, fame.window),
+                  explainer: hallOfFameExplainer(fame),
                 }}
               />
             )}
@@ -170,8 +169,7 @@ function ValidatorRow({ v, fame }: { v: Validator; fame?: { recentProposals: num
 interface FameMarks {
   /** The operator addresses in the Hall of Fame. */
   operators: Set<string>;
-  recentProposals: number;
-  window: number;
+  rule: FameRule;
 }
 
 function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame?: FameMarks }) {
@@ -199,7 +197,7 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
       </Grid>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} fame={fame?.operators.has(v.operator_address) ? fame : undefined} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame?.operators.has(v.operator_address) ? fame.rule : undefined} />
         ))}
       </Box>
       {items.length === 0 && (
@@ -305,13 +303,13 @@ function HallOfFameRow({ v, place, window }: { v: Validator; place: number; wind
   );
 }
 
-function HallOfFame({ items, window, query, onSeeAll }: { items: Validator[]; window: number; query: string; onSeeAll: () => void }) {
+function HallOfFame({ items, rule, query, onSeeAll }: { items: Validator[]; rule: FameRule; query: string; onSeeAll: () => void }) {
   const rows = filterByMoniker(items, query);
   return (
     <Stack gap="3">
       <Text fontSize="sm" color="fg.muted" maxW="3xl" data-testid="hall-of-fame-intro">
-        Active validators that voted on every one of the last {formatCount(items[0]?.recent_votes.of ?? 10)} proposals,
-        whatever their vote, and missed no more than {formatCount(HALL_OF_FAME_MAX_MISSED)} of the last {formatCount(window)}{" "}
+        Active validators that voted on every one of the last {formatCount(rule.proposals)} proposals, whatever their vote,
+        and missed no more than {formatCount(rule.maxMissed)} of the last {formatCount(rule.window)}{" "}
         blocks. The smallest come first: staking with them spreads the voting power.
       </Text>
       <Card p="0">
@@ -322,7 +320,7 @@ function HallOfFame({ items, window, query, onSeeAll }: { items: Validator[]; wi
         ) : (
           <Box role="list" aria-label="Hall of Fame">
             {rows.map((v) => (
-              <HallOfFameRow key={v.operator_address} v={v} place={items.indexOf(v) + 1} window={window} />
+              <HallOfFameRow key={v.operator_address} v={v} place={items.indexOf(v) + 1} window={rule.window} />
             ))}
           </Box>
         )}
@@ -337,18 +335,21 @@ function HallOfFame({ items, window, query, onSeeAll }: { items: Validator[]; wi
 type Tab = "fame" | "active" | "inactive";
 
 /** The list once loaded: intro, tiles, tabs with the filter, the table and the footnotes. */
-export function ValidatorsView({ list }: { list: ValidatorList }) {
+export function ValidatorsView({ list, hallOfFame }: { list: ValidatorList; hallOfFame: Pick<Fame, "items" | "rules"> }) {
   const [tab, setTab] = useState<Tab>("fame");
   const [query, setQuery] = useState("");
   const params = useParams();
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
-  const fame = useMemo(() => hallOfFame(list.items), [list.items]);
+  const { items: fame, rules } = hallOfFame;
   const seats = list.summary?.max_validators ?? null;
-  const window = signedBlocksWindow(params.data) ?? 10_000;
-  const fameMarks = useMemo(
-    () => ({ operators: new Set(fame.map((v) => v.operator_address)), recentProposals: fame[0]?.recent_votes.of ?? 10, window }),
-    [fame, window],
-  );
+  const window = signedBlocksWindow(params.data) ?? rules.signed_blocks_window ?? 10_000;
+  // While fewer proposals have closed than the rule counts, the members voted on all of those.
+  const fameRule: FameRule = {
+    proposals: Math.min(rules.proposals, fame[0]?.recent_votes.of ?? rules.proposals),
+    maxMissed: rules.max_missed_blocks,
+    window: rules.signed_blocks_window ?? window,
+  };
+  const fameOperators = useMemo(() => new Set(fame.map((v) => v.operator_address)), [fame]);
   // Each panel filters its own list: the panel leaving keeps its rows while its exit animation runs.
   const activeRows = filterByMoniker(active, query);
   const inactiveRows = filterByMoniker(inactive, query);
@@ -397,13 +398,13 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
             </HStack>
           </HStack>
           <Tabs.Content value="fame" pt="3">
-            <HallOfFame items={fame} window={window} query={query} onSeeAll={() => setTab("active")} />
+            <HallOfFame items={fame} rule={fameRule} query={query} onSeeAll={() => setTab("active")} />
           </Tabs.Content>
           <Tabs.Content value="active" pt="3">
             <ValidatorTable
               items={activeRows}
               empty={query ? "No active validator has that name." : "No active validators."}
-              fame={fameMarks}
+              fame={{ operators: fameOperators, rule: fameRule }}
             />
           </Tabs.Content>
           <Tabs.Content value="inactive" pt="3">
@@ -425,16 +426,22 @@ export function ValidatorsView({ list }: { list: ValidatorList }) {
 
 /** `/validators`: the skeleton on the first load, then the list (polled; never a skeleton again). */
 export function ValidatorsPage() {
-  const { data, error, refetch } = useAllValidators();
+  const list = useAllValidators();
+  const fame = useHallOfFame();
   return (
     <Stack gap="6">
       <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
         Validators
       </Heading>
-      {data ? (
-        <ValidatorsView list={data} />
-      ) : error ? (
-        <LoadError onRetry={() => void refetch()} />
+      {list.data && fame.data ? (
+        <ValidatorsView list={list.data} hallOfFame={fame.data} />
+      ) : list.error || fame.error ? (
+        <LoadError
+          onRetry={() => {
+            if (list.error) void list.refetch();
+            if (fame.error) void fame.refetch();
+          }}
+        />
       ) : (
         <ValidatorsSkeleton />
       )}

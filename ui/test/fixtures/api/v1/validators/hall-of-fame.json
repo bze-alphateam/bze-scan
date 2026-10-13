@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "rank": 2,
+      "moniker": "Thamar Node",
+      "operator_address": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "tokens": "42100000000000",
+      "voting_power_pct": "10.39506",
+      "commission_rate": "0.045",
+      "uptime": "100.00000",
+      "jailed": false,
+      "status": "bonded",
+      "logo_url": null,
+      "missed_blocks": 0,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 10,
+        "of": 10
+      }
+    },
+    {
+      "rank": 1,
+      "moniker": "Honeycomb",
+      "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "tokens": "50000000000000",
+      "voting_power_pct": "12.34567",
+      "commission_rate": "0.05",
+      "uptime": "99.99000",
+      "jailed": false,
+      "status": "bonded",
+      "logo_url": null,
+      "missed_blocks": 1,
+      "signed_blocks_window": 10000,
+      "recent_votes": {
+        "voted": 10,
+        "of": 10
+      }
+    }
+  ],
+  "next_cursor": null,
+  "rules": {
+    "proposals": 10,
+    "max_missed_blocks": 10,
+    "signed_blocks_window": 10000
+  }
+}

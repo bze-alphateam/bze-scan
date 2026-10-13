@@ -88,6 +88,9 @@ type ExplorerReader interface {
 	// order, after the list position after.
 	Validators(ctx context.Context, status *string, after int64, limit int) ([]repository.ValidatorSummary, error)
 	Validator(ctx context.Context, operator string) (*repository.ValidatorDetail, error)
+	// HallOfFame returns the validators that meet the Hall of Fame rule,
+	// by voting power ascending.
+	HallOfFame(ctx context.Context) (*repository.HallOfFame, error)
 	// ValidatorBlocks lists the blocks proposed by consensus address cons,
 	// below before when it is set.
 	ValidatorBlocks(ctx context.Context, cons string, before *int64, limit int) ([]repository.BlockSummary, error)
@@ -449,6 +452,19 @@ func (h *ExplorerController) Validators(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
+}
+
+// HallOfFame serves GET /api/v1/validators/hall-of-fame: the bonded,
+// unjailed validators that voted on every one of the last proposals whose
+// voting ended and missed at most a few blocks of the signing window, by
+// voting power ascending, in one page, with the rule.
+func (h *ExplorerController) HallOfFame(c *echo.Context) error {
+	fame, err := h.repo.HallOfFame(c.Request().Context())
+	if err != nil {
+		return err
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, dto.NewHallOfFame(fame))
 }
 
 // Validator serves GET /api/v1/validators/{operator}: the validator, its

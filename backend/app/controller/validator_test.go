@@ -3,6 +3,7 @@ package controller_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -55,6 +56,16 @@ func (f *fakeReader) VotesOf(_ context.Context, account string, limit int) ([]re
 	f.gotAccount = account
 	f.limit("votes", limit)
 	return f.votes, f.err
+}
+
+func (f *fakeReader) HallOfFame(context.Context) (*repository.HallOfFame, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.fame == nil {
+		return &repository.HallOfFame{}, nil
+	}
+	return f.fame, nil
 }
 
 const consHex = "090703A2C594C5BA93C0D0E263A9F79AEEE17D10"
@@ -195,4 +206,46 @@ func TestBlockNamesItsProposer(t *testing.T) {
 	page := decode[dto.List[dto.BlockSummary]](t, get(t, e, "/blocks"))
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "ChainTools", page.Items[0].Proposer.Moniker)
+}
+
+func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
+	missed, window := int64(1), int64(10000)
+	member := func(moniker, tokens string) repository.ValidatorSummary {
+		return repository.ValidatorSummary{
+			Moniker: moniker, OperatorAddress: valoper, Tokens: tokens, CommissionRate: "0.05", Status: "bonded",
+			MissedBlocks: &missed, SignedBlocksWindow: &window, RecentVotes: 10, RecentProposals: 10,
+		}
+	}
+	f := &fakeReader{fame: &repository.HallOfFame{
+		Members:            []repository.ValidatorSummary{member("Small", "100"), member("Large", "900")},
+		SignedBlocksWindow: &window,
+	}}
+	rec := get(t, newAPI(f), "/validators/hall-of-fame")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+
+	fame := decode[dto.HallOfFame](t, rec)
+	require.Len(t, fame.Items, 2)
+	assert.Equal(t, "Small", fame.Items[0].Moniker, "the repository's order is kept")
+	assert.Equal(t, "99.99000", *fame.Items[0].Uptime)
+	assert.Equal(t, dto.RecentVotes{Voted: 10, Of: 10}, fame.Items[0].RecentVotes)
+	assert.Nil(t, fame.NextCursor, "one page")
+	assert.Equal(t, dto.HallOfFameRules{
+		Proposals: repository.RecentProposals, MaxMissedBlocks: repository.HallOfFameMaxMissedBlocks, SignedBlocksWindow: &window,
+	}, fame.Rules)
+	assert.Equal(t, 10, fame.Rules.Proposals)
+	assert.Equal(t, 10, fame.Rules.MaxMissedBlocks)
+}
+
+func TestHallOfFameEmpty(t *testing.T) {
+	rec := get(t, newAPI(&fakeReader{}), "/validators/hall-of-fame")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":10,"max_missed_blocks":10,"signed_blocks_window":null}}`,
+		rec.Body.String())
+}
+
+func TestHallOfFameFails(t *testing.T) {
+	rec := get(t, newAPI(&fakeReader{err: errors.New("db down")}), "/validators/hall-of-fame")
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Equal(t, "internal", errorCode(t, rec))
 }

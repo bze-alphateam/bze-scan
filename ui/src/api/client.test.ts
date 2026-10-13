@@ -42,6 +42,7 @@ describe("createHttpApi", () => {
     await api.blockTransfers(5, { limit: 100, cursor: "t" });
     await api.transaction("ABCD");
     await api.validators({ status: "all" });
+    await api.hallOfFame();
     await api.validator("bzevaloper1x");
     await api.validatorBlocks("bzevaloper1x", { limit: 5 });
     await api.search("thamar node");
@@ -71,6 +72,7 @@ describe("createHttpApi", () => {
       "/v1/blocks/5/transfers?cursor=t&limit=100",
       "/v1/txs/ABCD",
       "/v1/validators?status=all",
+      "/v1/validators/hall-of-fame",
       "/v1/validators/bzevaloper1x",
       "/v1/validators/bzevaloper1x/blocks?limit=5",
       "/v1/search?q=thamar+node",
