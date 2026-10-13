@@ -78,10 +78,14 @@ describe("TxPage", () => {
 
     expect(rawTx).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: /More details/ }));
-    expect(screen.getByText("81,234 of 200,000")).toBeInTheDocument();
+    // Flex gaps space the parts, so the text runs together.
+    expect(screen.getByText("Gas").nextElementSibling).toHaveTextContent("81,234of200,000");
     expect(await screen.findByText(/"gas_used": "81234"/)).toBeInTheDocument();
     expect(rawTx).toHaveBeenCalledWith(SEND, expect.anything());
-    expect(screen.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", expect.stringMatching(new RegExp(`/tx/${SEND}$`)));
+    // One on the raw bar from c2 up, one under the JSON on phones.
+    const pings = screen.getAllByRole("link", { name: /Open on Ping.pub/ });
+    expect(pings).toHaveLength(2);
+    for (const a of pings) expect(a).toHaveAttribute("href", expect.stringMatching(new RegExp(`/tx/${SEND}$`)));
   });
 
   it("explains a failed transaction and shows its fee only", async () => {
@@ -101,7 +105,12 @@ describe("TxPage", () => {
     renderWithProviders(<TxPage hash={SEND} />, { api: api(null, { transaction }) });
 
     await act(() => vi.advanceTimersByTimeAsync(0));
-    expect(screen.getByTestId("tx-looking")).toHaveTextContent("Looking for this transaction…");
+    const looking = screen.getByTestId("tx-looking");
+    expect(looking).toHaveTextContent("Looking for this transaction…If you just sent it, it appears within seconds.");
+    expect(looking).toHaveAttribute("data-state", "info");
+    expect(looking).toHaveAttribute("role", "status");
+    expect(screen.getByRole("heading", { level: 1, name: "Transaction" })).toBeInTheDocument();
+    expect(screen.getByTestId("tx-hash")).toHaveTextContent(SEND);
     expect(transaction).toHaveBeenCalledTimes(1);
 
     await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS));
@@ -110,7 +119,9 @@ describe("TxPage", () => {
 
     await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_WINDOW_MS));
     const notFound = screen.getByTestId("tx-not_found");
-    expect(notFound).toHaveTextContent("Not found.");
+    expect(within(notFound).getByRole("heading", { name: "Not found" })).toBeInTheDocument();
+    expect(notFound).toHaveTextContent("transactions older than the explorer's history are not indexed");
+    expect(notFound).toHaveAttribute("data-state", "neutral");
     expect(within(notFound).getByRole("link", { name: /Ping.pub/ })).toHaveAttribute("href", expect.stringContaining(`/tx/${SEND}`));
     expect(screen.queryByText("Failed")).not.toBeInTheDocument();
 
@@ -140,7 +151,9 @@ describe("TxPage", () => {
   it("offers a retry when the API fails", async () => {
     const transaction = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<TxPage hash={SEND} />, { api: api(null, { transaction }) });
-    expect(await screen.findByText("This transaction could not be loaded")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "This transaction could not be loaded" })).toBeInTheDocument();
+    expect(screen.getByTestId("tx-error")).toHaveAttribute("data-state", "error");
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Transactions/3F9A…C21E");
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(transaction).toHaveBeenCalledTimes(2);
   });
@@ -166,7 +179,9 @@ describe("TxPage with BZE actions", () => {
       expect.stringContaining("held for the buy order"),
       expect.stringContaining("staking-reward prize"),
     ]);
-    expect(screen.getByTestId("net-box")).toBeInTheDocument();
+    const net = screen.getByTestId("net-box");
+    expect(net).toHaveTextContent(/^Net for /);
+    expect(net).toHaveTextContent(/fee$/);
   });
 
   it("polls a pending DEX transaction until the order book's outcome arrives", async () => {

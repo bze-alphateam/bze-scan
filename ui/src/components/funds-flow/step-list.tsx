@@ -1,8 +1,8 @@
 "use client";
 
-import { Box, Button, Circle, Grid, HStack, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Grid, HStack, Stack, Text } from "@chakra-ui/react";
 import { useState, type ReactNode } from "react";
-import { LuArrowDown, LuArrowRight, LuChevronDown } from "react-icons/lu";
+import { LuChevronDown } from "react-icons/lu";
 
 import type { Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -49,23 +49,30 @@ function Party({ address, label, none }: { address: string | null; label: Transf
   return <AccountChip address={address} label={label} />;
 }
 
+// n · from · amount · → · to from c2 up; on phones the amount and the recipient stack under the sender.
+// (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
+const STEP_COLUMNS = { base: "24px minmax(0, 1fr)", c2: "24px minmax(0, 1fr) auto 20px minmax(0, 1fr)" };
+const AMOUNT_ALIGN = { base: "left", c2: "right" } as const;
+const ON_PHONE_COL2 = { base: "2", c2: "auto" };
+
 function Step({ index, transfer, reason }: { index: number; transfer: Transfer; reason: ReactNode }) {
   return (
     <Grid
       as="li"
-      templateColumns={{ base: "auto 1fr", md: "auto minmax(0, 1fr) auto auto minmax(0, 1fr)" }}
+      templateColumns={STEP_COLUMNS}
       columnGap="3"
-      rowGap="1.5"
+      rowGap="1"
       alignItems="center"
-      py="3"
+      px="4"
+      py="10px"
       borderBottomWidth="1px"
       borderColor="border.panel"
       _last={{ borderBottomWidth: "0" }}
       data-testid="flow-step"
     >
-      <Circle size="6" bg="bg.muted" fontSize="xs" fontWeight="semibold" gridRow={{ base: "span 4", md: "auto" }} alignSelf="start">
+      <Text as="span" fontFamily="mono" fontSize="12px" color="fg.muted">
         {index}
-      </Circle>
+      </Text>
       <Box minW="0">
         <Party address={transfer.sender} label={transfer.sender_label} none="the chain" />
       </Box>
@@ -74,21 +81,19 @@ function Step({ index, transfer, reason }: { index: number; transfer: Transfer; 
         denom={transfer.denom}
         symbol={transfer.symbol}
         exponent={transfer.exponent}
-        fontWeight="semibold"
-        fontSize="sm"
+        fontFamily="mono"
+        fontWeight="500"
+        fontSize="13px"
+        textAlign={AMOUNT_ALIGN}
+        gridColumn={ON_PHONE_COL2}
       />
-      <Box color="fg.muted" display="inline-flex" aria-hidden>
-        <Box display={{ base: "inline-flex", md: "none" }}>
-          <LuArrowDown />
-        </Box>
-        <Box display={{ base: "none", md: "inline-flex" }}>
-          <LuArrowRight />
-        </Box>
+      <Box hideBelow="c2" color="fg.muted" textAlign="center" aria-hidden>
+        →
       </Box>
-      <Box minW="0">
+      <Box minW="0" gridColumn={ON_PHONE_COL2}>
         <Party address={transfer.recipient} label={transfer.recipient_label} none="burned" />
       </Box>
-      <Box fontSize="xs" color="fg.muted" gridColumn={{ base: "2", md: "2 / -1" }}>
+      <Box fontSize="12px" color="fg.muted" gridColumn="2 / -1">
         {reason}
       </Box>
     </Grid>
@@ -100,23 +105,37 @@ function NetBox({ signer, transfers }: { signer: string; transfers: Transfer[] }
   if (deltas.length === 0 && fees.length === 0) return null;
   const name = partyName(signer, transfers.find((t) => t.sender === signer)?.sender_label ?? null);
   return (
-    <Box bg="bg.subtle" rounded="l2" p="4" data-testid="net-box">
-      <Text fontSize="sm" fontWeight="semibold" mb="2">
-        Net for {name}
+    <Stack
+      gap="1"
+      mx="4"
+      mt="2"
+      mb="4"
+      px="14px"
+      py="3"
+      borderWidth="1px"
+      borderColor="border.panel"
+      rounded="l2"
+      bg="bg.page"
+      fontSize="13px"
+      data-testid="net-box"
+    >
+      <Text fontSize="12px" fontWeight="600" mb="2px">
+        Net for{" "}
+        <Text as="span" fontFamily={name.startsWith("bze1") ? "mono" : undefined}>
+          {name}
+        </Text>
       </Text>
-      <Stack gap="1" fontSize="sm" fontVariantNumeric="tabular-nums">
-        {deltas.map((d) => (
-          <Text key={d.denom} color={d.amount.startsWith("-") ? "fg" : "green.fg"}>
-            {deltaText(d)}
-          </Text>
-        ))}
-        {fees.map((d) => (
-          <Text key={`fee-${d.denom}`} color="fg.muted">
-            {deltaText({ ...d, amount: `-${d.amount}` })} fee
-          </Text>
-        ))}
-      </Stack>
-    </Box>
+      {deltas.map((d) => (
+        <Text key={d.denom} fontFamily="mono" color={d.amount.startsWith("-") ? "neg.fg" : "pos.fg"}>
+          {deltaText(d)}
+        </Text>
+      ))}
+      {fees.map((d) => (
+        <Text key={`fee-${d.denom}`} fontFamily="mono" color="fg.muted">
+          {deltaText({ ...d, amount: `-${d.amount}` })} fee
+        </Text>
+      ))}
+    </Stack>
   );
 }
 
@@ -152,20 +171,20 @@ export function StepList<T extends Transfer>({
 
   if (steps.length === 0) {
     return (
-      <Text fontSize="sm" color="fg.muted">
+      <Text px="4" py="3" fontSize="13px" color="fg.muted">
         No funds moved.
       </Text>
     );
   }
 
   return (
-    <Stack gap="3">
+    <Box>
       {collapsed && (
-        <HStack justify="space-between" gap="3" wrap="wrap">
-          <Text fontSize="sm" data-testid="flow-summary">
+        <HStack justify="space-between" gap="3" wrap="wrap" px="4" py="1" borderBottomWidth={open ? "1px" : "0"} borderColor="border.panel">
+          <Text fontSize="13px" data-testid="flow-summary">
             {flowSummary(steps)}
           </Text>
-          <Button variant="ghost" size="sm" minH="44px" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <Button variant="plain" size="sm" minH="44px" px="0" color="accent.fg" fontSize="13px" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             {open ? "Hide steps" : "Show steps"}
             <Box as="span" transform={open ? "rotate(180deg)" : undefined} display="inline-flex">
               <LuChevronDown />
@@ -181,6 +200,6 @@ export function StepList<T extends Transfer>({
         </Box>
       )}
       {open && netOf && <NetBox signer={netOf} transfers={steps} />}
-    </Stack>
+    </Box>
   );
 }

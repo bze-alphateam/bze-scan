@@ -1,22 +1,24 @@
 "use client";
 
-import { Box, Button, Heading, HStack, Link, Skeleton, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Link, Skeleton, Spinner, Stack, Text } from "@chakra-ui/react";
 import { useMemo } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { useTokenDirectory, useTransaction, useValidatorDirectory } from "@/api/hooks";
 import type { Transfer, Tx } from "@/api/types";
 import { StepList } from "@/components/funds-flow/step-list";
 import { isSimple } from "@/components/funds-flow/net";
 import { ActionCard } from "@/components/ui/action-card";
-import { Card } from "@/components/ui/card";
+import { ListPanel } from "@/components/ui/list";
 import { MoreDetails } from "@/components/ui/more-details";
+import { SectionHead } from "@/components/ui/page-head";
 import { CardSkeleton, ListSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
 import { failureReason } from "@/render/errors";
 import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext, RenderMessage } from "@/render/messages/types";
 
-import { Breadcrumb, FailureCard, FullHash, Overview, pingPubTxUrl, TxDetails, TxHeader } from "./tx-sections";
+import { FailureCard, Overview, pingPubTxUrl, TxDetails, TxHead, TxHeader } from "./tx-sections";
 
 /** The page's skeleton: header lines, one action, two steps, the overview and the More details bar. */
 export function TxSkeleton() {
@@ -38,51 +40,57 @@ export function TxSkeleton() {
 
 function Pending({ hash, state }: { hash: string; state: "looking" | "not_found" }) {
   return (
-    <Stack gap="6">
-      <Stack gap="3">
-        <Breadcrumb hash={hash} />
-        <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-          Transaction
-        </Heading>
-        <FullHash hash={hash} />
-      </Stack>
-      <Card data-testid={`tx-${state}`}>
-        {state === "looking" ? (
-          <Stack gap="1" role="status">
-            <Text fontWeight="semibold">Looking for this transaction…</Text>
-            <Text color="fg.muted" fontSize="sm">
-              If you just sent it, it appears within seconds.
-            </Text>
-          </Stack>
-        ) : (
-          <Stack gap="3">
-            <Text fontWeight="semibold">Not found.</Text>
-            <Text color="fg.muted" fontSize="sm">
-              If it was sent recently, check the hash; transactions older than the explorer&apos;s history are not
-              indexed.
-            </Text>
-            <Link href={pingPubTxUrl(hash)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-              Look it up on Ping.pub <LuExternalLink aria-hidden />
+    <Box>
+      <TxHead hash={hash} />
+      {state === "looking" ? (
+        <StateBox
+          mt="6"
+          tone="info"
+          icon={<Spinner size="sm" />}
+          title="Looking for this transaction…"
+          role="status"
+          data-testid="tx-looking"
+        >
+          If you just sent it, it appears within seconds.
+        </StateBox>
+      ) : (
+        <StateBox
+          mt="6"
+          icon={<LuCircleHelp size={20} />}
+          title="Not found"
+          actions={
+            <Link href={pingPubTxUrl(hash)} target="_blank" rel="noopener noreferrer" color="accent.fg">
+              Look it up on Ping.pub ↗
             </Link>
-          </Stack>
-        )}
-      </Card>
-    </Stack>
+          }
+          data-testid="tx-not_found"
+        >
+          If it was sent recently, check the hash; transactions older than the explorer&apos;s history are not indexed.
+        </StateBox>
+      )}
+    </Box>
   );
 }
 
-function LoadError({ onRetry }: { onRetry: () => void }) {
+function LoadError({ hash, onRetry }: { hash: string; onRetry: () => void }) {
   return (
-    <Card title="This transaction could not be loaded">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text color="fg.muted" fontSize="sm">
-          The explorer did not answer. Try again in a moment.
-        </Text>
-        <Button colorPalette="blue" minH="44px" onClick={onRetry}>
-          Try again
-        </Button>
-      </HStack>
-    </Card>
+    <Box>
+      <TxHead hash={hash} />
+      <StateBox
+        mt="6"
+        tone="error"
+        icon={<LuTriangleAlert size={20} />}
+        title="This transaction could not be loaded"
+        actions={
+          <Button size="sm" colorPalette="blue" onClick={onRetry}>
+            Try again
+          </Button>
+        }
+        data-testid="tx-error"
+      >
+        The explorer did not answer. Try again in a moment.
+      </StateBox>
+    </Box>
   );
 }
 
@@ -92,7 +100,7 @@ const asRenderMessage = (m: Tx["messages"][number]): RenderMessage => ({ ...m, m
 function Actions({ tx, ctx }: { tx: Tx; ctx: RenderContext }) {
   if (tx.messages.length === 0) {
     return (
-      <Text color="fg.muted" fontSize="sm">
+      <Text color="fg.muted" fontSize="13px">
         This transaction has no actions.
       </Text>
     );
@@ -112,14 +120,12 @@ function Actions({ tx, ctx }: { tx: Tx; ctx: RenderContext }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <Stack as="section" gap="3">
-      <Heading as="h2" size="lg">
-        {title}
-      </Heading>
+    <Box as="section" mt="8" aria-labelledby={id}>
+      <SectionHead id={id} title={title} />
       {children}
-    </Stack>
+    </Box>
   );
 }
 
@@ -159,22 +165,24 @@ export function TxView({ tx }: { tx: Tx }) {
     : failureReason(tx, (denom) => ctx.denom(denom).symbol, tx.fee[0]?.denom ?? null);
 
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
+    <Box>
       <TxHeader tx={tx} />
       {failure && <FailureCard reason={failure} log={tx.error_log} />}
-      <Section title="What happened">
+      <Section id="tx-actions-title" title="What happened">
         <Actions tx={tx} ctx={ctx} />
       </Section>
-      <Section title="Where the funds went">
-        <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" px={{ base: "4", md: "5" }} py="3">
+      <Section id="tx-flow-title" title="Where the funds went">
+        <ListPanel>
           <StepList transfers={transfers} reasonOf={reasonOf} collapsed={collapsed} netOf={collapsed ? null : signer} />
-        </Box>
+        </ListPanel>
       </Section>
       <Overview tx={tx} ctx={ctx} />
-      <MoreDetails hint="gas, message types, raw JSON">
-        <TxDetails tx={tx} />
-      </MoreDetails>
-    </Stack>
+      <Box mt="4">
+        <MoreDetails hint="gas, message types, raw JSON">
+          <TxDetails tx={tx} />
+        </MoreDetails>
+      </Box>
+    </Box>
   );
 }
 
@@ -183,6 +191,6 @@ export function TxPage({ hash }: { hash: string }) {
   const { data, error, pending, refetch } = useTransaction(hash);
   if (data) return <TxView tx={data} />;
   if (pending) return <Pending hash={hash} state={pending} />;
-  if (error) return <LoadError onRetry={() => void refetch()} />;
+  if (error) return <LoadError hash={hash} onRetry={() => void refetch()} />;
   return <TxSkeleton />;
 }

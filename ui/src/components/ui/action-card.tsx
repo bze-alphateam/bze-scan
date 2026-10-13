@@ -1,7 +1,9 @@
-import { Badge, Box, Circle, HStack, Heading, Stack, Text } from "@chakra-ui/react";
+import { Box, Grid, HStack, Heading, Text } from "@chakra-ui/react";
 import type { ReactNode } from "react";
 import type { IconType } from "react-icons";
 import { LuArrowLeftRight, LuChartCandlestick, LuCoins, LuFlame, LuGift, LuLandmark, LuSend, LuShapes, LuSparkles } from "react-icons/lu";
+
+import { Tag } from "./status-pill";
 
 /** What kind of action a message is, for its icon and label. */
 export type ActionCategory =
@@ -42,45 +44,37 @@ interface ActionCardProps {
   children?: ReactNode;
 }
 
-/** One numbered action of a transaction: its icon, category, plain-word title and body. */
+/** One numbered action of a transaction: its icon tile, "1. DEX", the plain-word title and the body. */
 export function ActionCard({ index, category, title, notExecuted, children }: ActionCardProps) {
-  const { icon: Icon, label, palette } = CATEGORIES[category];
+  const { icon: Icon, label } = CATEGORIES[category];
   return (
-    <Box
+    <Grid
       as="article"
+      templateColumns="36px minmax(0, 1fr)"
+      gap="14px"
+      p="4"
       bg="bg.panel"
       borderWidth="1px"
       borderColor="border.panel"
       rounded="l3"
-      p={{ base: "4", md: "5" }}
       data-testid="action-card"
       data-category={category}
     >
-      <HStack gap="3" align="start">
-        <Circle size="9" bg={`${palette}.subtle`} color={`${palette}.fg`} flexShrink={0} aria-hidden>
-          <Icon />
-        </Circle>
-        <Stack gap="1" minW="0" flex="1">
-          <HStack gap="2" wrap="wrap">
-            <Text fontSize="xs" color="fg.muted" fontWeight="medium">
-              {index}. {label}
-            </Text>
-            {notExecuted && (
-              <Badge colorPalette="red" variant="outline" size="sm">
-                not executed
-              </Badge>
-            )}
-          </HStack>
-          <Heading as="h3" size="md" wordBreak="break-word">
-            {title}
-          </Heading>
-        </Stack>
-      </HStack>
-      {children && (
-        <Box mt="4" ps={{ base: "0", md: "12" }}>
-          {children}
-        </Box>
-      )}
-    </Box>
+      <Box display="grid" placeItems="center" boxSize="36px" rounded="l2" bg="accent.subtle" color="accent.fg" aria-hidden>
+        <Icon size={18} />
+      </Box>
+      <Box minW="0">
+        <HStack gap="2" wrap="wrap">
+          <Text fontSize="11px" fontWeight="600" letterSpacing="0.06em" textTransform="uppercase" color="fg.muted">
+            {index}. {label}
+          </Text>
+          {notExecuted && <Tag tone="bad">not executed</Tag>}
+        </HStack>
+        <Heading as="h3" mt="2px" fontSize="16px" fontWeight="600" lineHeight="1.4" wordBreak="break-word">
+          {title}
+        </Heading>
+        {children && <Box mt="10px">{children}</Box>}
+      </Box>
+    </Grid>
   );
 }
