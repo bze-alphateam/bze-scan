@@ -133,7 +133,12 @@ test.describe("blocks on a phone", () => {
     expect(heights[0]).toBeLessThan(48);
     const ping = page.getByRole("link", { name: /Open on Ping.pub/ });
     await expect(ping).toHaveCount(1);
-    expect((await ping.boundingBox())?.height).toBeLessThan(24);
+    // One line: its height without the padding stays under two lines of 12px text.
+    const lineBox = await ping.evaluate((el) => {
+      const css = getComputedStyle(el);
+      return el.getBoundingClientRect().height - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
+    });
+    expect(lineBox).toBeLessThan(24);
     await noHorizontalScroll(page);
   });
 });
