@@ -49,6 +49,46 @@ func (r *Explorer) BlockStats(ctx context.Context) (*BlockStats, error) {
 	return &s, nil
 }
 
+// BlockTimeWindow is the average block time over the last Blocks blocks:
+// from block FromHeight to the latest indexed block.
+type BlockTimeWindow struct {
+	Blocks     int64
+	FromHeight int64
+	// AvgBlockTimeMs is nil when block FromHeight is not indexed (history
+	// shorter than the window, or a gap) or below height 1.
+	AvgBlockTimeMs *int64
+}
+
+// blockTimeWindowsSQL looks up the two ends of every window by primary key,
+// never scanning the range between them.
+const blockTimeWindowsSQL = `WITH latest AS (
+		SELECT height, time FROM explorer.blocks ORDER BY height DESC LIMIT 1)
+	SELECT w.n, l.height - w.n,
+	       round(extract(epoch FROM l.time - b.time) * 1000 / w.n)::bigint
+	FROM latest l
+	CROSS JOIN unnest($1::bigint[]) WITH ORDINALITY AS w(n, i)
+	LEFT JOIN explorer.blocks b ON b.height = l.height - w.n AND l.height - w.n >= 1
+	ORDER BY w.i`
+
+// BlockTimeWindows reads the average block time of the last N blocks for
+// each of sizes, in their order, anchored on the latest indexed block L:
+// (time(L) − time(L−N)) ÷ N in whole milliseconds. Empty before the first
+// block.
+func (r *Explorer) BlockTimeWindows(ctx context.Context, sizes []int64) ([]BlockTimeWindow, error) {
+	rows, err := r.db.Query(ctx, blockTimeWindowsSQL, sizes)
+	if err != nil {
+		return nil, fmt.Errorf("block time windows: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (BlockTimeWindow, error) {
+		var w BlockTimeWindow
+		return w, row.Scan(&w.Blocks, &w.FromHeight, &w.AvgBlockTimeMs)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("block time windows: %w", err)
+	}
+	return out, nil
+}
+
 // DailyStats reads the daily_stats rows of the last days closed UTC days,
 // oldest first.
 func (r *Explorer) DailyStats(ctx context.Context, days int) ([]dailystats.Stats, error) {

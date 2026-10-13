@@ -21,14 +21,35 @@ import (
 
 type fakeStats struct {
 	blocks *repository.BlockStats
-	state  map[string]json.RawMessage
-	top    string
-	gotTop int
-	err    error
+	// latest, when set, makes BlockTimeWindows answer every size, with an
+	// average only for the sizes in avgs.
+	latest   int64
+	avgs     map[int64]int64
+	gotSizes []int64
+	state    map[string]json.RawMessage
+	top      string
+	gotTop   int
+	err      error
 }
 
 func (f *fakeStats) BlockStats(context.Context) (*repository.BlockStats, error) {
 	return f.blocks, f.err
+}
+
+func (f *fakeStats) BlockTimeWindows(_ context.Context, sizes []int64) ([]repository.BlockTimeWindow, error) {
+	f.gotSizes = sizes
+	var out []repository.BlockTimeWindow
+	for _, n := range sizes {
+		if f.latest == 0 {
+			break
+		}
+		w := repository.BlockTimeWindow{Blocks: n, FromHeight: f.latest - n}
+		if avg, ok := f.avgs[n]; ok {
+			w.AvgBlockTimeMs = &avg
+		}
+		out = append(out, w)
+	}
+	return out, f.err
 }
 
 func (f *fakeStats) ChainState(context.Context) (map[string]json.RawMessage, error) {
@@ -72,6 +93,27 @@ func TestStatsRoute(t *testing.T) {
 
 	f.err = errors.New("db down")
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/stats").Code)
+}
+
+func TestStatsCarryTheBlockTimeWindows(t *testing.T) {
+	f := &fakeStats{blocks: &repository.BlockStats{}, latest: 25067681,
+		avgs: map[int64]int64{10000: 5812, 30000: 5797, 50000: 5790}}
+	e := echo.New()
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	e.GET("/stats", controller.NewStatsController(f, nil).Stats)
+
+	rec := get(t, e, "/stats")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []int64{10000, 30000, 50000, 100000}, f.gotSizes)
+	assert.JSONEq(t, `[
+		{"blocks":10000,"from_height":25057681,"avg_block_time_ms":5812},
+		{"blocks":30000,"from_height":25037681,"avg_block_time_ms":5797},
+		{"blocks":50000,"from_height":25017681,"avg_block_time_ms":5790},
+		{"blocks":100000,"from_height":24967681,"avg_block_time_ms":null}]`,
+		string(decodeRaw(t, rec)["block_time_windows"]), "the four sizes in order, null where history is short")
+
+	f.latest = 0
+	assert.JSONEq(t, `[]`, string(decodeRaw(t, get(t, e, "/stats"))["block_time_windows"]), "before the first block")
 }
 
 type fakeDaily struct {

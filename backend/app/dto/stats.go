@@ -21,9 +21,13 @@ type Stats struct {
 	LatestTime     *time.Time `json:"latest_time"`
 	AvgBlockTimeMs *int64     `json:"avg_block_time_ms"`
 	Txs24h         int64      `json:"txs_24h"`
-	BondedTokens   *string    `json:"bonded_tokens"`
-	StakedShare    *string    `json:"staked_share"`
-	Inflation      *string    `json:"inflation"`
+	// BlockTimeWindows are the average block times over the last 10k, 30k,
+	// 50k and 100k blocks, for estimates days ahead; empty before the first
+	// block.
+	BlockTimeWindows []BlockTimeWindow `json:"block_time_windows"`
+	BondedTokens     *string           `json:"bonded_tokens"`
+	StakedShare      *string           `json:"staked_share"`
+	Inflation        *string           `json:"inflation"`
 	// RewardRate is the yearly staking reward before commission:
 	// inflation × (1 − community tax) ÷ staked share.
 	RewardRate        *string          `json:"reward_rate"`
@@ -42,6 +46,24 @@ type Stats struct {
 	// Today is the current UTC day so far, computed live; null while it has
 	// no indexed block.
 	Today *DayStats `json:"today"`
+}
+
+// BlockTimeWindow is the average block time from block from_height to the
+// latest indexed block; avg_block_time_ms is null when from_height is not
+// indexed.
+type BlockTimeWindow struct {
+	Blocks         int64  `json:"blocks"`
+	FromHeight     int64  `json:"from_height"`
+	AvgBlockTimeMs *int64 `json:"avg_block_time_ms"`
+}
+
+// NewBlockTimeWindows maps the windows; never nil.
+func NewBlockTimeWindows(ws []repository.BlockTimeWindow) []BlockTimeWindow {
+	out := make([]BlockTimeWindow, 0, len(ws))
+	for _, w := range ws {
+		out = append(out, BlockTimeWindow{Blocks: w.Blocks, FromHeight: w.FromHeight, AvgBlockTimeMs: w.AvgBlockTimeMs})
+	}
+	return out
 }
 
 // DayStats are one UTC day's numbers. Fees sums the transactions' fees per
@@ -221,7 +243,7 @@ func NewStats(b *repository.BlockStats, state map[string]json.RawMessage, denom 
 		LatestHeight: b.LatestHeight, LatestTime: utc(b.LatestTime), AvgBlockTimeMs: b.AvgBlockTimeMs, Txs24h: b.Txs24h,
 		StakedShare: n.stakedShare(), Inflation: n.inflation(), RewardRate: n.rewardRate(),
 		MaxValidators: n.maxValidators(), UnbondingPeriod: n.unbonding(), CommunityPool: n.communityPool(denom),
-		Daily: []DayStats{},
+		Daily: []DayStats{}, BlockTimeWindows: []BlockTimeWindow{},
 	}
 	if n.pool != nil {
 		out.BondedTokens = &n.pool.BondedTokens
