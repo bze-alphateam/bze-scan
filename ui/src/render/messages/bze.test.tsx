@@ -154,6 +154,27 @@ describe("DEX outcome", () => {
     expect(screen.getByTestId("dex-cancelled")).toHaveTextContent("Order #1042 cancelled, 5 USDC returned");
   });
 
+  it("trims a long order id to its first character and last seven, the full id on hover", () => {
+    const short = fixture("tradebin-cancel-order");
+    body(short, dexCtx({ placed: [], fills: [], cancelled: [order({ status: "cancelled" })], pending: false }));
+    expect(screen.getAllByTestId("order-id").map((e) => [e.textContent, e.getAttribute("title")])).toEqual([
+      ["#1042", "1042"],
+      ["#1042", "1042"],
+    ]);
+
+    const id = "000000000000000006714623";
+    const long = { ...short, body: { ...short.body, order_id: id } };
+    const ctx = dexCtx({ placed: [], fills: [], cancelled: [order({ status: "cancelled", order_id: id })], pending: false });
+    expect(rendererFor(long.type_url).title(long, ctx)).toBe("Cancel order #0…6714623 on BZE/USDC");
+    body(long, ctx);
+    const ids = screen.getAllByTestId("order-id").slice(-2);
+    expect(ids.map((e) => [e.textContent, e.getAttribute("title")])).toEqual([
+      ["#0…6714623", id],
+      ["#0…6714623", id],
+    ]);
+    expect(screen.getAllByTestId("dex-cancelled").at(-1)).toHaveTextContent("Order #0…6714623 cancelled");
+  });
+
   it("says pending, never failed, until the order book processes the message", () => {
     const ctx = dexCtx({ placed: [], fills: [], cancelled: [], pending: true });
     body(create, ctx);
