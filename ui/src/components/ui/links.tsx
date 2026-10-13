@@ -1,11 +1,12 @@
 "use client";
 
-import { Badge, HStack, Link, type StackProps } from "@chakra-ui/react";
+import { HStack, Link, type StackProps } from "@chakra-ui/react";
 import NextLink from "next/link";
 
 import type { Label } from "@/api/types";
 import { shortAddress, shortHash } from "@/lib/format";
 
+import { Chip } from "./chip";
 import { CopyButton } from "./copy-button";
 
 /** The explorer page of an address: a validator's or an account's. */
@@ -23,7 +24,7 @@ interface AddressLinkProps extends StackProps {
 
 /**
  * A short address linking to its page, with a copy button. A module account
- * shows as a dashed chip "Name · module"; another labelled account shows its
+ * shows as a dashed chip "Name · module" with a lock; another labelled account shows its
  * label next to the short address.
  */
 export function AddressLink({ address, label, noCopy, ...props }: AddressLinkProps) {
@@ -34,17 +35,15 @@ export function AddressLink({ address, label, noCopy, ...props }: AddressLinkPro
       {isModule ? (
         <Link asChild>
           <NextLink href={href} title={address}>
-            <Badge variant="outline" borderStyle="dashed" borderWidth="1px" boxShadow="none" size="md">
+            <Chip variant="modc" fontSize="12px">
               {label.name} · module
-            </Badge>
+            </Chip>
           </NextLink>
         </Link>
       ) : (
         <>
           {label && (
-            <Badge variant="subtle" size="sm">
-              {label.name}
-            </Badge>
+            <Chip>{label.name}</Chip>
           )}
           <Link asChild fontFamily="mono" fontSize="sm">
             <NextLink href={href} title={address}>

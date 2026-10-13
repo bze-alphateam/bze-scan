@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  avatarHue,
+  avatarIndex,
   formatAmount,
   formatDate,
   formatCount,
@@ -122,11 +122,11 @@ describe("avatars", () => {
     expect(initials("bzevaloper1xyzwv2t3")).toBe("XY");
   });
 
-  it("derives a stable hue", () => {
-    expect(avatarHue("Thamar")).toBe(avatarHue("Thamar"));
-    expect(avatarHue("Thamar")).not.toBe(avatarHue("Thamaz"));
-    expect(avatarHue("x")).toBeGreaterThanOrEqual(0);
-    expect(avatarHue("a very long moniker that overflows")).toBeLessThan(360);
+  it("derives a stable palette colour", () => {
+    expect(avatarIndex("Thamar")).toBe(avatarIndex("Thamar"));
+    expect(avatarIndex("Thamar")).not.toBe(avatarIndex("Thamas"));
+    expect(avatarIndex("x")).toBeGreaterThanOrEqual(0);
+    expect(avatarIndex("a very long moniker that overflows 👽")).toBeLessThan(8);
   });
 });
 

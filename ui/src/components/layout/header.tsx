@@ -1,12 +1,11 @@
 "use client";
 
-import { Badge, Box, CloseButton, Container, Drawer, Flex, HStack, IconButton, Link, Portal, Separator, Stack, Text } from "@chakra-ui/react";
+import { Box, CloseButton, Container, Drawer, Flex, HStack, IconButton, Link, Portal, Separator, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { LuMenu, LuSearch } from "react-icons/lu";
 
-import { env } from "@/lib/env";
 import { appLinks, navLinks } from "@/lib/links";
 
 import { AppsMenu } from "./apps-menu";
@@ -19,8 +18,8 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
- * The header of every page. From `md` up: logo, search box, network badge,
- * Apps, theme toggle, and the nav row. Below `md`: logo, a search icon that
+ * The header of every page. From `md` up: logo, search box, Apps, theme
+ * toggle, and the nav row with the current section underlined. Below `md`: logo, a search icon that
  * opens the box under the bar, and a menu button opening a drawer with the
  * nav and the Apps links.
  */
@@ -32,15 +31,12 @@ export function Header() {
   return (
     <Box as="header" bg="bg.panel" borderBottomWidth="1px" borderColor="border.panel">
       <Container maxW="7xl" px={{ base: "4", md: "6" }}>
-        <Flex h="16" align="center" gap="4">
+        <Flex minH="60px" align="center" gap="4">
           <Logo />
-          <Badge colorPalette="blue" variant="subtle" display={{ base: "none", md: "inline-flex" }}>
-            {env.networkLabel}
-          </Badge>
-          <Box flex="1" maxW="xl" mx="auto" display={{ base: "none", md: "block" }}>
+          <Box flex="1" maxW="520px" ms="2" display={{ base: "none", md: "block" }}>
             <SearchBox />
           </Box>
-          <HStack gap="1" ms="auto" display={{ base: "none", md: "flex" }}>
+          <HStack gap="2" ms="auto" display={{ base: "none", md: "flex" }}>
             <AppsMenu />
             <ThemeToggle />
           </HStack>
@@ -68,9 +64,6 @@ export function Header() {
                   <Drawer.Content>
                     <Drawer.Header>
                       <Drawer.Title>Menu</Drawer.Title>
-                      <Badge colorPalette="blue" variant="subtle">
-                        {env.networkLabel}
-                      </Badge>
                     </Drawer.Header>
                     <Drawer.Body>
                       <Stack as="nav" aria-label="Explorer" gap="0">
@@ -116,7 +109,7 @@ export function Header() {
           </Box>
         )}
 
-        <HStack as="nav" aria-label="Explorer" gap="1" h="12" display={{ base: "none", md: "flex" }}>
+        <HStack as="nav" aria-label="Explorer" gap="0.5" css={{ "& > a:first-of-type": { marginInlineStart: "-12px" } }} borderTopWidth="1px" borderColor="border.panel" display={{ base: "none", md: "flex" }}>
           {navLinks.map((link) => {
             const active = isActive(pathname, link.href);
             return (
@@ -124,12 +117,13 @@ export function Header() {
                 key={link.href}
                 asChild
                 px="3"
-                minH="44px"
-                rounded="l2"
-                fontSize="sm"
-                fontWeight="medium"
+                py="3"
+                fontSize="13px"
+                fontWeight="500"
                 color={active ? "fg" : "fg.muted"}
-                bg={active ? "bg.muted" : undefined}
+                borderBottomWidth="2px"
+                borderColor={active ? "accent.fg" : "transparent"}
+                rounded="0"
                 _hover={{ color: "fg", textDecoration: "none" }}
               >
                 <NextLink href={link.href} aria-current={active ? "page" : undefined}>

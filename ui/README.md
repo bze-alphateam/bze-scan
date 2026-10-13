@@ -1,8 +1,9 @@
 # bze-scan ui
 
 The explorer's web app: Next.js 16 (App Router, TypeScript strict), React 19,
-Chakra UI v3 with the system of dex.getbze.com (Inter, the blue palette, dark
-by default), TanStack Query v5, `bignumber.js` and Lucide icons through
+Chakra UI v3 with the Terminal system in `src/components/ui/provider.tsx`
+(IBM Plex Sans and Mono, the BZE cyan accent, dark by default; components use
+its tokens, never a colour), TanStack Query v5, `bignumber.js` and Lucide icons through
 `react-icons`. Node 24 (`.nvmrc`), pnpm pinned in `package.json`.
 
 The app talks only to the backend API (`backend/README.md`, "HTTP API"),
@@ -15,11 +16,11 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | --- | --- |
 | `src/app` | routes; `layout.tsx` (header, footer), `providers.tsx` (the composition root), `not-found.tsx`, `error.tsx` |
 | `src/api` | `types.ts` (the API's shapes), `client.ts` (the `ExplorerApi` interface, `createHttpApi`, `ApiError`), `provider.tsx` (`ApiProvider`, `useApi`), `hooks.ts` (one React Query hook per route), `policy.ts` (the refetch policies) |
-| `src/components/layout` | header (nav, search box, Apps menu, theme toggle, phone drawer), footer, status light; `search-box.tsx`: an identifier opens its page on submit, other text lists the matching validators and labelled accounts under the box while typing (debounced 250 ms, arrows/Enter/Escape), the form submits to `/search` without JavaScript |
+| `src/components/layout` | network strip (the `/stats` summary above the header), header (nav, search box, Apps menu, theme toggle, phone drawer), footer, health pill (Healthy / Stalled and its popover); `search-box.tsx`: an identifier opens its page on submit, other text lists the matching validators and labelled accounts under the box while typing (debounced 250 ms, arrows/Enter/Escape), the form submits to `/search` without JavaScript |
 | `src/components/home` | the home page: hero with the search box, six live tiles from `/stats`, the latest blocks and transactions, the app links |
 | `src/components/search` | the `/search` results page (rendered on the server by `src/app/search/page.tsx`, which redirects an identifier to its page) and the result row shared with the dropdown |
 | `src/components/txs` | the transactions list (status chips, live until an older page is loaded) and `useListRenderContext` (the renderers' context for list rows) |
-| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
+| `src/components/ui` | the Chakra provider and colour mode, atoms (`Amount`, `AddressLink`, `HashLink`, `TimeAgo`, `CopyButton`, `Avatar`, `Card`, `MoreDetails`, `JsonBlock`, `StatusPill` and `Tag`, `Chip`, `StateBox`, `ListPanel`/`ListHead`/`ListRow`, `ActionCard`, `AccountChip`, `ValidatorChip`, `Tile`) and the skeletons |
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
 | `src/components/blocks` | the blocks list (live until an older page is loaded, then a snapshot) and the block page (header, overview, transactions in one line each, the block's funds flow by group, More details with the raw JSON tabs, the not-found explanations) |
 | `src/components/tx` | the transaction page's sections, states and skeleton |
@@ -74,7 +75,7 @@ tests only. The end-to-end tests run in CI, or on a developer machine with
 | `NEXT_PUBLIC_API_URL` | the API as the browser reaches it, without `/v1` (production `https://scan.getbze.com/api`) |
 | `API_URL` | the API as the Next.js server reaches it; falls back to `NEXT_PUBLIC_API_URL` |
 | `NEXT_PUBLIC_CHAIN_ID` | the chain named in the footer (`beezee-1`) |
-| `NEXT_PUBLIC_NETWORK_LABEL` | the header's network badge (`Mainnet`) |
+| `NEXT_PUBLIC_NETWORK_LABEL` | the network tag in the strip above the header (`Mainnet`) |
 | `NEXT_PUBLIC_PINGPUB_URL` | the Ping.pub explorer link |
 | `NEXT_PUBLIC_SITE_URL` | the site's own URL, base of absolute links and previews |
 | `NEXT_PUBLIC_TX_PENDING_WINDOW_MS` | how long the transaction page looks for a hash the API does not know yet; empty means two minutes (`pnpm build:e2e` sets 4 s) |
@@ -92,7 +93,7 @@ numbers itself:
 | --- | --- | --- |
 | `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 7 s, refetched every 7 s, paused in background tabs |
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
-| `status` | the status light, the parameters page | refetched every 60 s |
+| `status` | the footer's health pill, the parameters page | refetched every 60 s |
 | `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
@@ -237,7 +238,7 @@ and `JsonSkeleton`.
 - A lazily loaded section (raw JSON, holders) shows its own skeleton.
 - An error replaces the skeleton with the error state; a skeleton is never
   left on screen.
-- The status light's loading state is its grey dot.
+- The health pill's loading state is its grey dot ("Unknown").
 
 ## Container image
 

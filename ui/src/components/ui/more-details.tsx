@@ -23,9 +23,14 @@ export function MoreDetails({ hint, children }: MoreDetailsProps) {
   return (
     <Box>
       <Button
-        variant="ghost"
+        variant="plain"
         size="sm"
         minH="44px"
+        px="0"
+        gap="1.5"
+        color="accent.fg"
+        fontSize="13px"
+        fontWeight="500"
         // A long hint wraps on phones instead of widening the page.
         h="auto"
         py="2"
@@ -44,7 +49,7 @@ export function MoreDetails({ hint, children }: MoreDetailsProps) {
           <LuChevronDown />
         </Box>
       </Button>
-      <Box id={id} hidden={!open} mt="3">
+      <Box id={id} hidden={!open} mt="2.5">
         {mounted && children}
       </Box>
     </Box>

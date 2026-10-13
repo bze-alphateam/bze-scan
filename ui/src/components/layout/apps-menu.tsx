@@ -10,7 +10,7 @@ export function AppsMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <Button variant="ghost" size="md" minH="44px">
+        <Button variant="outline" size="md" px="3" gap="1.5" fontWeight="500">
           Apps
           <LuChevronDown />
         </Button>

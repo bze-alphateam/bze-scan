@@ -10,7 +10,7 @@ import behind from "../../../test/fixtures/variants/status-behind.json";
 
 import { StatusLight } from "./status-light";
 
-const trigger = () => screen.getByRole("button", { name: /^Explorer status/ });
+const trigger = () => screen.getByRole("button", { name: /^Explorer health/ });
 
 describe("StatusLight", () => {
   it("is grey before the first answer", () => {
@@ -19,36 +19,40 @@ describe("StatusLight", () => {
     expect(trigger()).toHaveTextContent("Unknown");
   });
 
-  it("is green when live indexing keeps up, with the heights in its popover", async () => {
+  it("is Healthy when live indexing keeps up, with the heights in its popover", async () => {
     renderWithProviders(<StatusLight />, { api: fakeApi({ status: async () => healthy as Status }) });
     await waitFor(() => expect(trigger()).toHaveAttribute("data-light", "green"));
-    expect(trigger()).toHaveTextContent("Up to date");
+    expect(trigger()).toHaveTextContent("Healthy");
 
     await userEvent.click(trigger());
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Explorer height25,120,450");
-    expect(dialog).toHaveTextContent("Node height25,120,451");
-    expect(dialog).toHaveTextContent("History from block 24,998,316, older blocks still loading");
-    expect(dialog).toHaveTextContent(/checked .+ ago/);
+    const dialog = await screen.findByRole("dialog", { name: "Explorer health" });
+    expect(dialog).toHaveTextContent("Node25,120,451");
+    expect(dialog).toHaveTextContent("Live indexer25,120,450");
+    expect(dialog).toHaveTextContent("Archive25,120,451");
+    expect(dialog).toHaveTextContent("History from block24,998,316");
+    expect(dialog).toHaveTextContent("BackfillRunning");
+    expect(dialog).toHaveTextContent("The explorer keeps up with the chain. Checked once a minute.");
   });
 
-  it("is red when behind, a missing height as a dash", async () => {
+  it("is Stalled when behind, with the gap and a missing height as a dash", async () => {
     renderWithProviders(<StatusLight />, { api: fakeApi({ status: async () => behind as Status }) });
     await waitFor(() => expect(trigger()).toHaveAttribute("data-light", "red"));
-    expect(trigger()).toHaveTextContent("Behind");
+    expect(trigger()).toHaveTextContent("Stalled");
 
     await userEvent.click(trigger());
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Archive height—");
-    expect(dialog).toHaveTextContent("History from block 1");
-    expect(dialog).not.toHaveTextContent("still loading");
+    expect(dialog).toHaveTextContent("Live indexer25,120,100 · 351 blocks behind");
+    expect(dialog).toHaveTextContent("Archive—");
+    expect(dialog).toHaveTextContent("History from block1");
+    expect(dialog).toHaveTextContent("BackfillDone");
+    expect(dialog).toHaveTextContent("The explorer is behind the chain.");
   });
 
   it("is grey when the request fails", async () => {
     renderWithProviders(<StatusLight />, {
       api: fakeApi({ status: () => Promise.reject(new TypeError("Failed to fetch")) }),
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Explorer status/ })).toBeInTheDocument());
+    await waitFor(() => expect(trigger()).toBeInTheDocument());
     // Wait until the query has settled on its error.
     await new Promise((r) => setTimeout(r, 0));
     expect(trigger()).toHaveAttribute("data-light", "unknown");

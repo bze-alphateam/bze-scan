@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, HStack, Input, Skeleton, Text, type StackProps } from "@chakra-ui/react";
+import { Box, HStack, IconButton, Input, Skeleton, Text, type StackProps } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
 import { LuSearch } from "react-icons/lu";
@@ -79,9 +79,24 @@ export function SearchBox({ size = "md", autoFocus, onSubmitted, ...props }: Sea
   const optionId = (i: number) => `${id}-result-${i}`;
 
   return (
-    <HStack asChild gap="2" w="full" {...props}>
+    <HStack
+      asChild
+      gap="2.5"
+      w="full"
+      h={size === "lg" ? "44px" : "40px"}
+      ps="14px"
+      pe="6px"
+      bg="bg.page"
+      borderWidth="1px"
+      borderColor="border.panel"
+      rounded="l2"
+      position="relative"
+      _focusWithin={{ borderColor: "accent.fg" }}
+      css={{ "&:focus-within .search-go": { color: "accent.fg", borderColor: "accent.fg" } }}
+      {...props}
+    >
       <form role="search" action="/search" method="get" onSubmit={submit}>
-        <Box position="relative" flex="1" minW="0">
+        <Box flex="1" minW="0" alignSelf="stretch" display="flex">
           <Input
             name="q"
             type="search"
@@ -106,16 +121,20 @@ export function SearchBox({ size = "md", autoFocus, onSubmitted, ...props }: Sea
             placeholder="Search by block, transaction hash, address or validator"
             aria-label="Search the explorer"
             autoFocus={autoFocus}
-            size={size}
-            minH="44px"
-            bg="bg.panel"
-            borderColor="border.panel"
+            unstyled
+            flex="1"
+            minW="0"
+            h="full"
+            bg="transparent"
+            color="fg"
+            outline="none"
+            _placeholder={{ color: "fg.muted" }}
           />
           {open && (
             <Box
               position="absolute"
               top="calc(100% + 4px)"
-              insetX="0"
+              insetX="-1px"
               zIndex="dropdown"
               bg="bg.panel"
               borderWidth="1px"
@@ -167,10 +186,22 @@ export function SearchBox({ size = "md", autoFocus, onSubmitted, ...props }: Sea
             </Box>
           )}
         </Box>
-        <Button type="submit" size={size} minH="44px" colorPalette="blue" flexShrink={0}>
+        <IconButton
+          type="submit"
+          aria-label="Search"
+          className="search-go"
+          variant="outline"
+          flex="none"
+          boxSize="28px"
+          minW="28px"
+          h="28px"
+          rounded="l1"
+          color="fg.muted"
+          borderColor="border.panel"
+          _hover={{ color: "accent.fg", borderColor: "accent.fg", bg: "transparent" }}
+        >
           <LuSearch />
-          Search
-        </Button>
+        </IconButton>
       </form>
     </HStack>
   );

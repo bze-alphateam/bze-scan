@@ -1,18 +1,27 @@
 import { Container, Flex } from "@chakra-ui/react";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
+import { NetworkStrip } from "@/components/layout/network-strip";
 import { env } from "@/lib/env";
 
 import { Providers } from "./providers";
 
-const inter = Inter({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: "--font-inter",
+  variable: "--font-plex-sans",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+  variable: "--font-plex-mono",
 });
 
 const description =
@@ -34,10 +43,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Providers>
           <Flex direction="column" minH="100dvh">
+            <NetworkStrip />
             <Header />
             <Container as="main" maxW="7xl" px={{ base: "4", md: "6" }} py={{ base: "6", md: "10" }} flex="1">
               {children}
