@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { noHorizontalScroll } from "./layout";
 import { mockApi } from "./mock-api";
 
 test.describe("site shell", () => {
@@ -89,5 +90,22 @@ test.describe("phone header", () => {
 
     await expect(page).toHaveURL(/\/validators$/);
     await expect(page.getByRole("dialog")).toBeHidden();
+  });
+});
+
+test.describe("not found", () => {
+  test("shows the 404 tag, the way back and a search box", async ({ page }) => {
+    await page.goto("/nowhere-at-all");
+    const main = page.getByRole("main");
+    await expect(main.getByTestId("lost-code")).toHaveText("404");
+    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Nothing here");
+    await expect(main.getByRole("link", { name: "Back to the explorer" })).toHaveAttribute("href", "/");
+    const box = main.getByRole("combobox", { name: "Search the explorer" });
+    await expect(box).toHaveAttribute("placeholder", "Or search by block, transaction hash, address or validator");
+    await noHorizontalScroll(page);
+    await box.fill("hon");
+    await expect(main.getByRole("option").first()).toBeVisible();
+    await box.press("Enter");
+    await expect(page).toHaveURL(/\/validators\//);
   });
 });
