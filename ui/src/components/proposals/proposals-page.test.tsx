@@ -49,15 +49,16 @@ describe("ProposalsPage", () => {
     expect(within(card).getByRole("link", { name: "Upgrade network to v8.2.0" })).toHaveAttribute("href", "/proposals/48");
     expect(await within(card).findByText(/If passed, this proposal upgrades the chain to v8.2.0/)).toBeInTheDocument();
     expect(card).toHaveTextContent("byHOHoneycomb");
-    expect(card).toHaveTextContent("ends Oct 14, 2099, 14:00:00 UTC (in 3 days 4 h)");
+    expect(card).toHaveTextContent("ends Oct 14, 2099, 14:00 UTC (in 3 days 4 h)");
     expect(within(card).getAllByTestId("tally-row").map((r) => r.textContent)).toEqual([
       "Yes89.6%",
       "No6.0%",
       "Abstain3.0%",
       "Veto1.5%",
     ]);
-    expect(await within(card).findByText("82.7% of staked BZE voted · quorum of 33.4% reached")).toBeInTheDocument();
+    await waitFor(() => expect(card).toHaveTextContent("82.7% of staked BZE voted · quorum of 33.4% reached"));
     expect(within(card).getByTestId("verdict")).toHaveTextContent("On track to pass");
+    expect(within(card).getByTestId("verdict")).toHaveAttribute("data-tag", "ok");
     expect(within(card).queryByTestId("historical-turnout")).toBeNull();
   });
 
@@ -73,8 +74,15 @@ describe("ProposalsPage", () => {
       "#43Add ⚛️ Cosmos Ecosystem ⚛️  as Publisher",
     ]);
     const [p49, p48row, , p46, p45row, p43row] = screen.getAllByTestId("proposal-row");
-    expect(p49).toHaveTextContent("Deposit period");
-    expect(p48row).toHaveTextContent("Voting now");
+    // Statuses are tags in their tone.
+    const tag = (row: HTMLElement) => within(row).getByTestId("proposal-status");
+    expect(tag(p49)).toHaveTextContent("Deposit period");
+    expect(tag(p49)).toHaveAttribute("data-tag", "warn");
+    expect(tag(p48row)).toHaveTextContent(/^Voting$/);
+    expect(tag(p48row)).toHaveAttribute("data-tag", "accent");
+    expect(tag(p46)).toHaveAttribute("data-tag", "bad");
+    expect(tag(p45row)).toHaveTextContent("Passed");
+    expect(tag(p45row)).toHaveAttribute("data-tag", "ok");
     expect(p48row).toHaveTextContent("Yes 89.6%");
     expect(p48row).toHaveTextContent("ends in 4 days");
     expect(p46).toHaveTextContent("Rejected");
@@ -110,7 +118,7 @@ describe("ProposalsPage", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Find a proposal" }), "liquidity");
     expect(titles()).toEqual(["#45Fund Liquidity Pools"]);
     await userEvent.click(screen.getByRole("button", { name: "Rejected" }));
-    expect(await screen.findByText("No proposal has that title.")).toBeInTheDocument();
+    expect(await screen.findByText("No proposal matches “liquidity”.")).toBeInTheDocument();
   });
 
   it("shows skeleton rows while a chip loads a different list", async () => {
@@ -141,6 +149,11 @@ describe("ProposalsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show older proposals" }));
     await waitFor(() => expect(screen.getAllByTestId("proposal-row")).toHaveLength(all.items.length));
     expect(proposals).toHaveBeenCalledWith({ cursor: "c1", limit: 20, status: undefined }, expect.anything());
+  });
+
+  it("links the intro to the governance parameters", () => {
+    renderWithProviders(<ProposalsPage />, { api: pendingApi() });
+    expect(screen.getByRole("link", { name: "See the voting rules" })).toHaveAttribute("href", "/parameters?group=gov");
   });
 
   it("offers a retry when the API fails", async () => {

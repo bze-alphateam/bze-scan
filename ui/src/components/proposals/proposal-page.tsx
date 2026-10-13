@@ -1,9 +1,9 @@
 "use client";
 
-import { Box, Button, Grid, Heading, HStack, Link, Skeleton, Stack, Tabs, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Grid, Heading, Link, Skeleton, Stack, Text, type BoxProps } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useState, type ReactNode } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { useId, useState, type ReactNode } from "react";
+import { LuChevronDown, LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import {
@@ -19,14 +19,21 @@ import {
 } from "@/api/hooks";
 import type { Proposal, ProposalVote, TokenSummary, VoteOption } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
-import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
+import { FilterPills } from "@/components/ui/filter-pills";
 import { JsonBlock } from "@/components/ui/json-block";
+import { ListPanel } from "@/components/ui/list";
 import { Markdown } from "@/components/ui/markdown";
 import { MoreDetails } from "@/components/ui/more-details";
-import { CardSkeleton, ListSkeleton } from "@/components/ui/skeleton";
+import { Breadcrumb, PanelHead } from "@/components/ui/page-head";
+import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
+import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
-import { formatCount, formatDateTime, formatPct } from "@/lib/format";
+import { VTabs, VTabPanel, VTabsBar } from "@/components/ui/vtabs";
+import { formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
 import { pingPubProposal, voteDestinations } from "@/lib/links";
 import {
   checks,
@@ -40,144 +47,238 @@ import {
   metadataView,
   notVoted,
   optionText,
-  resultLine,
+  statusInfo,
+  tallyShares,
   timeline,
   upgradeEta,
   verdict,
   votesSummary,
+  votingLength,
+  votingSpan,
   type Action,
   type Checks,
 } from "@/render/proposals";
 
-import { ChecksList, HistoricalChip, ProposalStatusBadge, TallyBars, VerdictChip } from "./parts";
+import { ChecksList, HistoricalChip, OPTION_COLORS, ProposalStatusTag, TallyBars, VerdictTag } from "./parts";
 import { ActionView } from "./what-it-does";
 
-const SUMMARY_FOLD = 600;
-const listItem = (i: number) => ({ borderTopWidth: i === 0 ? "0" : "1px", borderColor: "border.panel" }) as const;
+// Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
+// Five tiles in a row from c3, three below, two on phones with the last one full width.
+const TILES = { base: "repeat(2, minmax(0, 1fr))", c2: "repeat(3, minmax(0, 1fr))", c3: "repeat(4, minmax(0, 1fr)) minmax(0, 1.25fr)" };
+const LAST_TILE = { base: "1 / -1", c2: "auto" };
+// The page's two columns (1.6fr | 1fr) from 1000px, one below.
+const TWO_COLUMNS = { "@media (min-width: 1000px)": { gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)" } };
+// Validator · Vote · Share of stake (c2) · Time; Account · Vote · Time.
+const VALIDATOR_VOTE = { base: "minmax(0, 1fr) auto auto", c2: "minmax(0, 1fr) 100px 110px 100px" };
+const VOTE = { base: "minmax(0, 1fr) auto auto", c2: "minmax(0, 1fr) 100px 100px" };
 
-function Breadcrumb({ id }: { id: number }) {
+const blockHref = (height: number) => `/blocks/${height}`;
+
+/** A panel with the small upper-case head and a padded body. */
+function Section({ id, title, note, children, ...props }: { id: string; title: string; note?: ReactNode; children: ReactNode } & Omit<BoxProps, "title">) {
   return (
-    <HStack as="nav" aria-label="Breadcrumb" gap="2" fontSize="sm" color="fg.muted">
-      <Link asChild color="fg.muted">
-        <NextLink href="/proposals">Proposals</NextLink>
-      </Link>
-      <Text as="span" aria-hidden>
-        /
-      </Text>
-      <Text as="span" aria-current="page">
-        #{id}
-      </Text>
-    </HStack>
+    <ListPanel as="section" aria-labelledby={id} {...props}>
+      <PanelHead id={id} title={title} note={note} />
+      <Box px="4" pt="14px" pb="4" fontSize="13px">
+        {children}
+      </Box>
+    </ListPanel>
   );
 }
 
 function Header({ p, now }: { p: Proposal; now: Date }) {
   return (
-    <Stack gap="3">
-      <Breadcrumb id={p.id} />
-      <HStack gap="2" wrap="wrap" fontSize="sm" color="fg.muted">
-        <ProposalStatusBadge p={p} now={now} />
-        <Text as="span">
+    <Box pb="5">
+      <Breadcrumb path={[{ label: "Proposals", href: "/proposals" }]} current={`#${p.id}`} mono />
+      <Flex align="center" gap="10px" wrap="wrap" fontSize="13px" mt="3" mb="2">
+        <ProposalStatusTag p={p} now={now} />
+        <Text as="span" color="fg.muted">
           {kindLabel(p.kind)}
-          {p.expedited ? " · expedited" : ""} · #{p.id}
+          {p.expedited ? " · expedited" : ""} ·{" "}
+          <Text as="span" fontFamily="mono">
+            #{p.id}
+          </Text>
         </Text>
-      </HStack>
-      <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
+      </Flex>
+      <Heading as="h1" fontSize="24px" fontWeight="600" letterSpacing="-0.01em" lineHeight="1.25" overflowWrap="anywhere">
         {p.title}
       </Heading>
-      <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted" data-testid="proposal-meta">
-        {p.proposer && (
-          <>
-            <Text as="span">Proposed by</Text>
-            <AccountChip address={p.proposer} label={p.proposer_label} />
-            <Text as="span">·</Text>
-          </>
-        )}
-        <Text as="span">Submitted {formatDateTime(p.submit_time)}</Text>
-      </HStack>
-      {p.status === "voting_period" && p.voting_end_time && (
-        <Text fontSize="sm" fontWeight="medium" data-testid="proposal-when">
-          Voting ends {endsIn(p.voting_end_time, now)} · {formatDateTime(p.voting_end_time)}
-        </Text>
-      )}
-      {!isOpen(p.status) && p.voting_start_time && p.voting_end_time && (
-        <Stack gap="0.5" fontSize="sm" data-testid="proposal-when">
-          <Text color="fg.muted">
-            Voting {formatDateTime(p.voting_start_time)} to {formatDateTime(p.voting_end_time)}
-          </Text>
-          <HStack gap="1.5" wrap="wrap">
-            <Text fontWeight="medium" data-testid="result-line">
-              {resultLine(p, now)}
-            </Text>
-            <HistoricalChip p={p} />
-          </HStack>
-        </Stack>
-      )}
-    </Stack>
+    </Box>
   );
 }
 
-function FromProposer({ p }: { p: Proposal }) {
+const Mono = ({ children }: { children: ReactNode }) => (
+  <Text as="span" fontFamily="mono">
+    {children}
+  </Text>
+);
+
+const join = (parts: ReactNode[]) =>
+  parts
+    .filter((x) => x != null && x !== false && x !== "")
+    .flatMap((x, i) => (i === 0 ? [x] : [" · ", x]))
+    .map((x, i) => <span key={i}>{x}</span>);
+
+/**
+ * The five tiles under the title. Resolved: Result · Yes · Turnout · Voting ·
+ * Proposed by. Voting: If it ended now · Yes so far · Turnout so far · Voting
+ * ends · Proposed by. Exact times stay in the Timeline.
+ */
+function SummaryTiles({ p, c, now, denoms }: { p: Proposal; c: Checks | null; now: Date; denoms?: Map<string, TokenSummary> }) {
+  const voting = p.status === "voting_period";
+  const yesPct = c?.yes.value ?? tallyShares(p.tally)[0].pct;
+  const yesAmount = p.tally ? coinsText([{ denom: "ubze", amount: p.tally.yes }], denoms, true) : null;
+  const yes = (
+    <Tile
+      label={voting ? "Yes so far" : "Yes"}
+      value={p.tally && yesPct != null ? formatPct(yesPct) : null}
+      sub={join([yesAmount && <Mono>{yesAmount}</Mono>, c && `more than ${formatPct(c.yes.need, { trim: true })} needed`])}
+    />
+  );
+  const turnout = (
+    <Tile
+      label={voting ? "Turnout so far" : "Turnout"}
+      value={p.turnout_pct != null ? formatPct(p.turnout_pct) : null}
+      sub={join([
+        c && `${formatPct(c.turnout.need, { trim: true })} needed`,
+        voting && c && (c.turnout.ok ? "reached" : "not reached yet"),
+        p.tally_source === "archive" && <HistoricalChip p={p} />,
+      ])}
+    />
+  );
+  const proposer = (
+    <Tile
+      label="Proposed by"
+      small
+      gridColumn={LAST_TILE}
+      value={p.proposer ? <AccountChip address={p.proposer} label={p.proposer_label} /> : null}
+      sub={`Submitted ${formatDateTime(p.submit_time, { seconds: false })}`}
+    />
+  );
+
+  if (voting) {
+    const v = c && verdict(c);
+    return (
+      <Grid as="section" aria-label="Summary" templateColumns={TILES} gap="3" mb="6" data-testid="summary-tiles">
+        <Tile
+          label="If it ended now"
+          value={v ? (v.pass ? "Passes" : "Fails") : null}
+          valueColor={v ? (v.pass ? "pos.fg" : "neg.fg") : undefined}
+          sub={v ? (v.pass ? "all three checks met" : v.text.replace(/^Would fail: /, "")) : undefined}
+        />
+        {yes}
+        {turnout}
+        <Tile
+          label="Voting ends"
+          small
+          highlight
+          value={p.voting_end_time ? endsIn(p.voting_end_time, now) : null}
+          sub={p.voting_end_time && formatDateTime(p.voting_end_time, { seconds: false })}
+        />
+        {proposer}
+      </Grid>
+    );
+  }
+
+  const status = statusInfo(p, now);
+  const resolvedIn =
+    p.resolved_height != null ? (
+      <>
+        {p.status === "passed" ? "executed in block " : "in block "}
+        <Link asChild color="accent.fg" fontFamily="mono">
+          <NextLink href={blockHref(p.resolved_height)}>{formatCount(p.resolved_height)}</NextLink>
+        </Link>
+      </>
+    ) : null;
+  const ended = p.voting_end_time && new Date(p.voting_end_time) <= now;
+  return (
+    <Grid as="section" aria-label="Summary" templateColumns={TILES} gap="3" mb="6" data-testid="summary-tiles">
+      <Tile
+        label="Result"
+        value={status.text}
+        valueColor={status.tone === "green" ? "pos.fg" : status.tone === "red" ? "neg.fg" : undefined}
+        sub={join([ended && formatDate(p.voting_end_time!), resolvedIn])}
+      />
+      {yes}
+      {turnout}
+      <Tile
+        label="Voting"
+        small
+        value={p.voting_start_time && p.voting_end_time ? votingSpan(p.voting_start_time, p.voting_end_time) : null}
+        sub={
+          p.voting_start_time && p.voting_end_time
+            ? `${votingLength(p.voting_start_time, p.voting_end_time)} · ${ended ? "ended" : status.text.toLowerCase()}`
+            : p.status === "deposit_period" && status.text === "Deposit period"
+              ? "opens once the deposit is reached"
+              : "never opened"
+        }
+      />
+      {proposer}
+    </Grid>
+  );
+}
+
+const SUMMARY_FOLD = 600;
+
+function FromProposer({ p, divided }: { p: Proposal; divided: boolean }) {
   const [open, setOpen] = useState(false);
   const summary = p.summary?.trim() ?? "";
   const long = summary.length > SUMMARY_FOLD;
   const meta = metadataView(p.metadata);
   if (!summary && !meta) return null;
   return (
-    <Stack gap="2" data-testid="from-proposer">
-      <Heading as="h3" size="sm">
+    <Box mt={divided ? "18px" : "0"} pt={divided ? "14px" : "0"} borderTopWidth={divided ? "1px" : "0"} borderColor="border.panel" data-testid="from-proposer">
+      <Heading as="h3" textStyle="tileLabel" fontWeight="600" mb="2">
         From the proposer
       </Heading>
       {summary && (
         // Folded by height, not by cutting the text, so the Markdown stays whole.
         <Box
           position="relative"
-          maxH={long && !open ? "48" : undefined}
+          maxH={long && !open ? "150px" : undefined}
           overflow="hidden"
+          fontSize="13.5px"
+          lineHeight="1.6"
           data-testid="proposer-text"
           data-folded={long && !open ? "" : undefined}
         >
           <Markdown text={summary} />
           {long && !open && (
-            <Box position="absolute" insetX="0" bottom="0" h="12" bgGradient="to-b" gradientFrom="transparent" gradientTo="bg.panel" />
+            <Box position="absolute" insetX="0" bottom="0" h="48px" bgGradient="to-b" gradientFrom="transparent" gradientTo="bg.panel" />
           )}
         </Box>
       )}
       {long && (
-        <Button variant="ghost" size="sm" minH="44px" alignSelf="start" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Button variant="plain" size="sm" px="0" mt="1.5" color="accent.fg" fontWeight="500" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? "Show less" : "Read the full text"}
         </Button>
       )}
       {meta &&
         ("href" in meta ? (
-          <Link href={meta.href} target="_blank" rel="noopener noreferrer nofollow" fontSize="sm" wordBreak="break-all">
-            {meta.href} <LuExternalLink aria-hidden />
+          <Link href={meta.href} target="_blank" rel="noopener noreferrer nofollow" display="block" mt="2" color="accent.fg" wordBreak="break-all">
+            {meta.href} ↗
           </Link>
         ) : (
-          <Text fontSize="sm" color="fg.muted" wordBreak="break-word">
+          <Text mt="2" color="fg.muted" wordBreak="break-word">
             {meta.text}
           </Text>
         ))}
-    </Stack>
+    </Box>
   );
 }
 
 function WhatItDoes({ p, actions, denoms, eta }: { p: Proposal; actions: Action[]; denoms?: Map<string, TokenSummary>; eta: Date | null }) {
   const shown = actions.filter((a) => a.type !== "text");
   return (
-    <Card title={shown.length > 0 ? "What this proposal does" : "What this proposal asks"} data-testid="what-it-does">
-      <Stack gap="5">
-        {shown.length === 0 && (
-          <Text fontSize="sm" color="fg.muted">
-            A text proposal: it changes nothing on the chain by itself.
-          </Text>
-        )}
+    <Section id="what-it-does-title" title={shown.length > 0 ? "What this proposal does" : "What this proposal asks"} data-testid="what-it-does">
+      <Stack gap="4">
+        {shown.length === 0 && <Text color="fg.muted">A text proposal: it changes nothing on the chain by itself.</Text>}
         {shown.map((a, i) => (
           <ActionView key={i} a={a} p={p} denoms={denoms} upgradeEta={eta} />
         ))}
-        <FromProposer p={p} />
       </Stack>
-    </Card>
+      <FromProposer p={p} divided />
+    </Section>
   );
 }
 
@@ -188,104 +289,169 @@ const MEANINGS: [string, string][] = [
   ["No with veto", "you think it is harmful or spam. Too many vetoes reject it and burn its deposit."],
 ];
 
+/** What each vote option means, collapsed until asked for. */
+function OptionsMeaning() {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <Box mt="2">
+      <Button
+        variant="plain"
+        size="sm"
+        px="0"
+        gap="1.5"
+        color="accent.fg"
+        fontWeight="500"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((o) => !o)}
+      >
+        What the options mean
+        <Box as="span" display="inline-flex" transition="transform 0.15s" transform={open ? "rotate(180deg)" : undefined}>
+          <LuChevronDown size={12} />
+        </Box>
+      </Button>
+      <Grid as="dl" id={id} hidden={!open} templateColumns="max-content minmax(0, 1fr)" columnGap="3" rowGap="1" m="0" mt="1.5" data-testid="vote-options">
+        {MEANINGS.map(([o, m]) => (
+          <Box key={o} display="contents">
+            <Text as="dt" fontWeight="600">
+              {o}
+            </Text>
+            <Text as="dd" m="0" color="fg.muted">
+              {m}
+            </Text>
+          </Box>
+        ))}
+      </Grid>
+    </Box>
+  );
+}
+
 function Votes({ p, c, denoms, historical }: { p: Proposal; c: Checks | null; denoms?: Map<string, TokenSummary>; historical: boolean }) {
   const voting = p.status === "voting_period";
   if (p.status === "deposit_period" || p.status === "canceled" || p.status === "dropped") {
     return (
-      <Card title="Votes">
-        <Text fontSize="sm" color="fg.muted">
+      <Section id="votes-title" title="Votes" data-testid="votes-card">
+        <Text color="fg.muted">
           {p.status === "canceled"
             ? "The proposer withdrew this proposal before voting ended."
             : p.status === "dropped"
               ? "The deposit was not reached in time, so voting never opened."
               : "Voting opens once the deposit is reached."}
         </Text>
-      </Card>
+      </Section>
     );
   }
   return (
-    <Card
-      title={
-        <HStack justify="space-between" wrap="wrap" gap="2">
-          <span>{voting ? "Votes · can change until voting ends" : "Final result"}</span>
-          {voting && c && <VerdictChip v={verdict(c)} />}
-        </HStack>
-      }
-      data-testid="votes-card"
-    >
-      <Stack gap="4">
-        {p.tally ? <TallyBars tally={p.tally} denoms={denoms} amounts /> : <Text fontSize="sm" color="fg.muted">Not tallied yet.</Text>}
-        {c ? (
-          <ChecksList c={c} p={p} />
-        ) : (
-          p.tally && (
-            <Text fontSize="sm" color="fg.muted">
-              The voting rules could not be loaded, so the checks are not shown.
-            </Text>
-          )
-        )}
-        <Text fontSize="sm" color="fg.muted">
-          A validator&apos;s vote counts for everyone staking with it, unless the staker votes themselves.{" "}
-          {formatCount(p.votes_count)} {p.votes_count === 1 ? "account has" : "accounts have"} voted{voting ? " so far" : ""}.
-        </Text>
-        <Stack gap="1" fontSize="sm">
-          <Text fontWeight="medium">What the options mean</Text>
-          {MEANINGS.map(([o, m]) => (
-            <Text key={o} color="fg.muted">
-              <Text as="span" color="fg" fontWeight="medium">
-                {o}
-              </Text>
-              : {m}
-            </Text>
-          ))}
-        </Stack>
-        {historical && (
-          <Text fontSize="sm" color="fg.muted" data-testid="historical-explainer">
-            Some votes were read from the chain&apos;s state at the end of voting (marked historical). The chain deletes votes once a
-            proposal is tallied, so these show the final choice but not when it was made.
+    <Section id="votes-title" title={voting ? "Votes so far" : "Final result"} note={voting ? "refreshed every minute" : undefined} data-testid="votes-card">
+      {p.tally ? <TallyBars tally={p.tally} denoms={denoms} amounts /> : <Text color="fg.muted">Not tallied yet.</Text>}
+      {voting && c && (
+        <Flex align="center" gap="2" wrap="wrap" mt="3">
+          <VerdictTag v={verdict(c)} />
+          <Text as="span" color="fg.muted">
+            if voting ended now
           </Text>
-        )}
-      </Stack>
-    </Card>
+        </Flex>
+      )}
+      {c ? (
+        <ChecksList c={c} p={p} />
+      ) : (
+        p.tally && <Text mt="3" color="fg.muted">The voting rules could not be loaded, so the checks are not shown.</Text>
+      )}
+      <Text mt="2" color="fg.muted" lineHeight="1.55">
+        A validator&apos;s vote counts for everyone staking with it, unless the staker votes themselves.{" "}
+        <Mono>{formatCount(p.votes_count)}</Mono> {p.votes_count === 1 ? "account has" : "accounts have"} voted{voting ? " so far" : ""}.
+      </Text>
+      <OptionsMeaning />
+      {historical && (
+        <Text mt="2" color="fg.muted" lineHeight="1.55" data-testid="historical-explainer">
+          Some votes were read from the chain&apos;s state at the end of voting (marked <Chip variant="hist">historical</Chip>). The chain
+          deletes votes once a proposal is tallied, so these show the final choice but not when it was made.
+        </Text>
+      )}
+    </Section>
   );
 }
 
 function WantToVote({ p }: { p: Proposal }) {
   return (
-    <Card title="Want to vote?" data-testid="want-to-vote">
-      <Stack gap="3" fontSize="sm">
-        <Text>
-          The explorer only shows the vote. Vote from a wallet with the account you stake from: your vote then counts for
-          your stake instead of your validator&apos;s, and you can change it until voting ends.
-        </Text>
-        <Stack gap="2" role="list" aria-label="Where to vote">
-          {voteDestinations(p.id).map((d) => (
-            <Box key={d.href} role="listitem">
-              <Button asChild colorPalette="blue" minH="44px">
-                <a href={d.href} target="_blank" rel="noopener noreferrer">
-                  {d.label} <LuExternalLink aria-hidden />
-                </a>
-              </Button>
-            </Box>
-          ))}
-        </Stack>
-        <Text color="fg.muted">More places to vote will be listed here as they open.</Text>
+    <Section id="want-to-vote-title" title="Want to vote?" data-testid="want-to-vote">
+      <Text lineHeight="1.55">
+        The explorer only shows the vote. Vote from a wallet with the account you stake from: your vote then counts for your stake
+        instead of your validator&apos;s, and you can change it until voting ends.
+      </Text>
+      <Stack gap="2" mt="3" role="list" aria-label="Where to vote">
+        {voteDestinations(p.id).map((d) => (
+          <Box key={d.href} role="listitem">
+            <Button asChild colorPalette="blue" size="sm" h="36px">
+              <a href={d.href} target="_blank" rel="noopener noreferrer">
+                {d.label} ↗
+              </a>
+            </Button>
+          </Box>
+        ))}
       </Stack>
-    </Card>
+      <Text mt="2.5" color="fg.muted">
+        More places to vote will be listed here as they open.
+      </Text>
+    </Section>
   );
 }
 
-function VoteRow({ v, i, validator }: { v: ProposalVote; i: number; validator?: boolean }) {
+const HISTORICAL_VOTE = "Vote as recorded on chain when voting ended; the voting transaction itself is not indexed.";
+
+/** When a vote was cast: its transaction's age, or the historical chip linking to the tally block. */
+function VoteTime({ v }: { v: ProposalVote }) {
+  if (v.source === "archive") {
+    // The time is the tally block's, not the vote's: never shown.
+    return (
+      <Link asChild _hover={{ textDecoration: "none" }}>
+        <NextLink href={blockHref(v.height)} title={HISTORICAL_VOTE} data-testid="historical-vote">
+          <Chip variant="hist">historical</Chip>
+        </NextLink>
+      </Link>
+    );
+  }
+  if (v.tx_hash) {
+    return (
+      <Link asChild color="fg.muted">
+        <NextLink href={`/txs/${v.tx_hash.toUpperCase()}`}>
+          <TimeAgo time={v.time} />
+        </NextLink>
+      </Link>
+    );
+  }
+  return <TimeAgo time={v.time} />;
+}
+
+const optionColor = (o: VoteOption | null) => (o ? OPTION_COLORS[o] : "fg.muted");
+
+function VoteHead({ validator }: { validator?: boolean }) {
+  return (
+    <Grid templateColumns={validator ? VALIDATOR_VOTE : VOTE} gap="3" py="2" borderBottomWidth="1px" borderColor="border.panel" textStyle="tableHead" aria-hidden>
+      <Text>{validator ? "Validator" : "Account"}</Text>
+      <Text>Vote</Text>
+      {validator && (
+        <Text hideBelow="c2" textAlign="end">
+          Share of stake
+        </Text>
+      )}
+      <Text textAlign="end">Time</Text>
+    </Grid>
+  );
+}
+
+function VoteRow({ v, validator }: { v: ProposalVote; validator?: boolean }) {
   return (
     <Grid
       role="listitem"
-      templateColumns={{ base: "minmax(0, 1fr) auto", md: validator ? "minmax(0, 1fr) 120px 140px 120px" : "minmax(0, 1fr) 120px 120px" }}
-      gap={{ base: "1", md: "3" }}
+      templateColumns={validator ? VALIDATOR_VOTE : VOTE}
+      gap="3"
       alignItems="center"
-      py="2"
-      minH="44px"
-      fontSize="sm"
-      {...listItem(i)}
+      py="9px"
+      borderBottomWidth="1px"
+      borderColor="border.panel"
+      _last={{ borderBottomWidth: "0" }}
       data-testid={validator ? "validator-vote" : "vote-row"}
     >
       <Box minW="0">
@@ -295,38 +461,22 @@ function VoteRow({ v, i, validator }: { v: ProposalVote; i: number; validator?: 
           <AccountChip address={v.voter} label={v.voter_label ?? (v.validator ? { name: v.validator, kind: "validator_owner" } : null)} />
         )}
       </Box>
-      <Text fontWeight="medium" justifySelf={{ base: "end", md: "start" }}>
+      <Text fontWeight="600" color={optionColor(v.option)}>
         {optionText(v.option)}
       </Text>
       {validator && (
-        <Text color="fg.muted" gridColumn={{ base: "1 / -1", md: "auto" }}>
-          {v.voting_power_pct != null ? `${formatPct(v.voting_power_pct)} of all stake` : "—"}
+        <Text hideBelow="c2" textAlign="end" fontFamily="mono" color="fg.muted">
+          {v.voting_power_pct != null ? formatPct(v.voting_power_pct) : "—"}
         </Text>
       )}
-      <HStack gap="1" color="fg.muted" fontSize="xs" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        {v.source === "archive" ? (
-          // The time is the tally block's, not the vote's: never shown.
-          <Link asChild color="fg.muted">
-            <NextLink href={`/blocks/${v.height}`} title={HISTORICAL_VOTE} data-testid="historical-vote">
-              historical
-            </NextLink>
-          </Link>
-        ) : v.tx_hash ? (
-          <Link asChild color="fg.muted">
-            <NextLink href={`/txs/${v.tx_hash.toUpperCase()}`}>
-              <TimeAgo time={v.time} />
-            </NextLink>
-          </Link>
-        ) : (
-          <TimeAgo time={v.time} />
-        )}
-      </HStack>
+      <Box textAlign="end" fontSize="12px" color="fg.muted" whiteSpace="nowrap">
+        <VoteTime v={v} />
+      </Box>
     </Grid>
   );
 }
 
 const NOT_VOTED_SHOWN = 5;
-const HISTORICAL_VOTE = "Vote as recorded on chain when voting ended; the voting transaction itself is not indexed.";
 
 function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | undefined }) {
   const validators = useAllValidators();
@@ -337,39 +487,48 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
   const missing = voting && validators.data ? notVoted(validators.data.items, votes) : [];
   const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
   return (
-    <Stack gap="3">
+    <Box>
       {votes.length === 0 ? (
-        <Text fontSize="sm" color="fg.muted">
+        <Text color="fg.muted" py="2">
           No validator has voted{voting ? " yet" : ""}.
         </Text>
       ) : (
-        <Stack gap="0" role="list" aria-label="Validator votes">
-          {votes.map((v, i) => (
-            <VoteRow key={v.voter} v={v} i={i} validator />
-          ))}
-        </Stack>
+        <>
+          <VoteHead validator />
+          <Box role="list" aria-label="Validator votes">
+            {votes.map((v) => (
+              <VoteRow key={v.voter} v={v} validator />
+            ))}
+          </Box>
+        </>
       )}
       {missing.length > 0 && (
-        <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted" data-testid="not-voted">
-          <Text as="span">
-            {missing.length} {missing.length === 1 ? "validator has" : "validators have"} {voting ? "not voted yet" : "not voted"}:
+        <Flex align="center" gap="6px 10px" wrap="wrap" mt="3" pt="3" borderTopWidth="1px" borderColor="border.panel" data-testid="not-voted">
+          <Text as="span" color="fg.muted">
+            <Mono>{missing.length}</Mono> {missing.length === 1 ? "validator has" : "validators have"} {voting ? "not voted yet" : "not voted"}:
           </Text>
           {shown.map((v) => (
             <ValidatorChip key={v.operator_address} operator={v.operator_address} moniker={v.moniker} />
           ))}
           {missing.length > shown.length && (
-            <Button variant="ghost" size="xs" minH="44px" onClick={() => setAll(true)}>
+            <Button variant="plain" size="xs" px="0" color="accent.fg" onClick={() => setAll(true)}>
               Show all
             </Button>
           )}
-          {voting && <Text as="span">· their stakers can still vote for themselves</Text>}
-        </HStack>
+          {voting && (
+            <Text as="span" color="fg.muted">
+              · their stakers can still vote for themselves
+            </Text>
+          )}
+        </Flex>
       )}
-    </Stack>
+    </Box>
   );
 }
 
-const VOTE_FILTERS: { label: string; value: VoteOption | "weighted" | null }[] = [
+type VoteFilter = VoteOption | "weighted" | null;
+
+const VOTE_FILTERS: { label: string; value: VoteFilter }[] = [
   { label: "All", value: null },
   { label: "Yes", value: "yes" },
   { label: "No", value: "no" },
@@ -379,137 +538,147 @@ const VOTE_FILTERS: { label: string; value: VoteOption | "weighted" | null }[] =
 ];
 
 function EveryoneTab({ p }: { p: Proposal }) {
-  const [option, setOption] = useState<VoteOption | "weighted" | null>(null);
+  const [option, setOption] = useState<VoteFilter>(null);
   const votes = useProposalVotes(p.id, option, isOpen(p.status));
   const items = votes.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <Stack gap="3">
-      <HStack gap="2" wrap="wrap" role="group" aria-label="Show votes">
-        {VOTE_FILTERS.map((f) => (
-          <Button
-            key={f.label}
-            size="xs"
-            minH="44px"
-            rounded="full"
-            variant={option === f.value ? "subtle" : "outline"}
-            aria-pressed={option === f.value}
-            onClick={() => setOption(f.value)}
-          >
-            {f.label}
-          </Button>
-        ))}
-      </HStack>
+    <Box>
+      <FilterPills label="Show votes" options={VOTE_FILTERS} value={option} onChange={setOption} mb="1.5" />
       {!votes.data ? (
         votes.error ? (
-          <Text fontSize="sm" color="fg.muted">
+          <Text color="fg.muted" py="2">
             The votes could not be loaded.
           </Text>
         ) : (
           <ListSkeleton rows={5} />
         )
       ) : items.length === 0 ? (
-        <Text fontSize="sm" color="fg.muted">
+        <Text color="fg.muted" py="2">
           No votes here.
         </Text>
       ) : (
-        <Stack gap="0" role="list" aria-label="Votes">
-          {items.map((v, i) => (
-            <VoteRow key={v.voter} v={v} i={i} />
-          ))}
-        </Stack>
+        <>
+          <VoteHead />
+          <Box role="list" aria-label="Votes">
+            {items.map((v) => (
+              <VoteRow key={v.voter} v={v} />
+            ))}
+          </Box>
+        </>
       )}
       {votes.isFetchingNextPage && <ListSkeleton rows={5} />}
       {votes.hasNextPage && !votes.isFetchingNextPage && (
-        <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => void votes.fetchNextPage()}>
+        <Button variant="outline" size="sm" mt="2.5" onClick={() => void votes.fetchNextPage()}>
           Show more votes
         </Button>
       )}
-    </Stack>
+    </Box>
   );
 }
+
+type VoteTab = "validators" | "everyone";
 
 function WhoVoted({ p }: { p: Proposal }) {
   const open = isOpen(p.status);
   const validatorVotes = useValidatorVotes(p.id, open);
   const validators = useAllValidators();
   const [expanded, setExpanded] = useState(open);
+  const [tab, setTab] = useState<VoteTab>("validators");
   // Who did not vote is measured against today's active set: only right while voting is open.
   const missing = open ? (validatorVotes.data && validators.data ? notVoted(validators.data.items, validatorVotes.data).length : null) : 0;
+  const tabs = [
+    {
+      value: "validators" as const,
+      label: "Validators",
+      count: p.validators_voted.total != null ? `${p.validators_voted.voted} of ${p.validators_voted.total}` : p.validators_voted.voted,
+    },
+    { value: "everyone" as const, label: "Everyone", count: formatCount(p.votes_count) },
+  ];
   return (
-    <Card title="Who voted" data-testid="who-voted">
-      <Stack gap="3">
-        {!open && (
-          <Text fontSize="sm" data-testid="votes-summary">
-            {validatorVotes.data && missing != null ? votesSummary(validatorVotes.data, missing, p.votes_count) : <Skeleton as="span" h="4" w="64" display="inline-block" />}
-          </Text>
-        )}
-        {!expanded ? (
-          <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => setExpanded(true)}>
-            See every vote
-          </Button>
-        ) : (
-          <Tabs.Root defaultValue="validators" variant="line" lazyMount>
-            <Tabs.List>
-              <Tabs.Trigger value="validators" minH="44px">
-                Validators ·{" "}
-                {p.validators_voted.total != null ? `${p.validators_voted.voted} of ${p.validators_voted.total}` : p.validators_voted.voted}
-              </Tabs.Trigger>
-              <Tabs.Trigger value="everyone" minH="44px">
-                Everyone · {formatCount(p.votes_count)}
-              </Tabs.Trigger>
-            </Tabs.List>
-            <Tabs.Content value="validators" pt="3">
-              <ValidatorsTab p={p} votes={validatorVotes.data} />
-            </Tabs.Content>
-            <Tabs.Content value="everyone" pt="3">
-              <EveryoneTab p={p} />
-            </Tabs.Content>
-          </Tabs.Root>
-        )}
-      </Stack>
-    </Card>
+    <Section id="who-voted-title" title="Who voted" data-testid="who-voted">
+      {!open && (
+        <Text fontSize="14px" mb="3" data-testid="votes-summary">
+          {validatorVotes.data && missing != null ? (
+            votesSummary(validatorVotes.data, missing, p.votes_count)
+          ) : (
+            <Skeleton as="span" h="4" w="64" maxW="full" display="inline-block" />
+          )}
+        </Text>
+      )}
+      {!expanded ? (
+        <Button variant="outline" size="sm" onClick={() => setExpanded(true)}>
+          See every vote
+        </Button>
+      ) : (
+        <>
+          <VTabsBar mb="1.5">
+            <VTabs id="votes" label="Votes" tabs={tabs} value={tab} onChange={setTab} />
+          </VTabsBar>
+          <VTabPanel id="votes" value={tab}>
+            {tab === "validators" ? <ValidatorsTab p={p} votes={validatorVotes.data} /> : <EveryoneTab p={p} />}
+          </VTabPanel>
+        </>
+      )}
+    </Section>
   );
 }
 
 function Timeline({ items }: { items: ReturnType<typeof timeline> }) {
   return (
-    <Card title="Timeline">
-      <Stack gap="0" role="list" aria-label="Timeline">
-        {items.map((item) => (
-          <HStack key={item.label} role="listitem" gap="3" align="start" py="2" data-testid="timeline-item" data-done={item.done}>
-            <Box mt="1.5" boxSize="2.5" rounded="full" flexShrink="0" bg={item.done ? "blue.solid" : "transparent"} borderWidth="2px" borderColor="blue.solid" aria-hidden />
-            <Stack gap="0" fontSize="sm" minW="0">
-              <Text fontWeight="medium">{item.label}</Text>
-              <Text color="fg.muted" fontSize="xs">
+    <ListPanel as="section" aria-labelledby="timeline-title">
+      <PanelHead id="timeline-title" title="Timeline" />
+      <Box as="ol" listStyleType="none" m="0" px="4" pt="3" pb="14px" aria-label="Timeline">
+        {items.map((item, i) => (
+          <Flex
+            as="li"
+            key={item.label}
+            gap="3"
+            align="flex-start"
+            position="relative"
+            pt="6px"
+            pb="10px"
+            fontSize="13px"
+            // The line joining a step to the next one.
+            _before={
+              i < items.length - 1
+                ? { content: '""', position: "absolute", left: "4px", top: "18px", bottom: "-4px", w: "2px", bg: "border.panel" }
+                : undefined
+            }
+            data-testid="timeline-item"
+            data-done={item.done}
+          >
+            <Box
+              flex="none"
+              boxSize="10px"
+              mt="4px"
+              rounded="full"
+              borderWidth="2px"
+              borderColor="accent.fg"
+              bg={item.done ? "accent.fg" : "bg.panel"}
+              position="relative"
+              zIndex="1"
+              aria-hidden
+            />
+            <Box minW="0">
+              <Text fontWeight="500" color={item.done ? "fg" : "fg.muted"}>
+                {item.label}
+              </Text>
+              <Text mt="1px" fontFamily="mono" fontSize="12px" color="fg.muted">
                 {item.time && `${item.done ? "" : "about "}${formatDateTime(item.time)}`}
                 {item.height != null && (
                   <>
                     {item.time ? " · " : ""}block{" "}
                     <Link asChild color="fg.muted">
-                      <NextLink href={`/blocks/${item.height}`}>{formatCount(item.height)}</NextLink>
+                      <NextLink href={blockHref(item.height)}>{formatCount(item.height)}</NextLink>
                     </Link>
                   </>
                 )}
               </Text>
-            </Stack>
-          </HStack>
+            </Box>
+          </Flex>
         ))}
-      </Stack>
-    </Card>
-  );
-}
-
-/** A label/value row of a details list; stacks on phones. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Grid templateColumns={{ base: "minmax(0, 1fr)", md: "180px minmax(0, 1fr)" }} gap={{ base: "0.5", md: "4" }} py="2">
-      <Text fontSize="sm" color="fg.muted">
-        {label}
-      </Text>
-      <Box fontSize="sm" minW="0" wordBreak="break-word">
-        {children}
       </Box>
-    </Grid>
+    </ListPanel>
   );
 }
 
@@ -518,58 +687,75 @@ function Details({ p, actions, vetoed, denoms }: { p: Proposal; actions: Action[
   const returned = depositsReturned(p.status, vetoed);
   const upgrade = actions.find((a) => a.type === "upgrade");
   return (
-    <Stack gap="4">
-      <Card>
-        <Stack gap="0">
-          <Row label="Message types">
+    <Stack gap="3">
+      <ListPanel fontSize="13px">
+        <DetailList>
+          <DetailRow label="Message types">
             <Stack gap="0.5">
-              {p.message_types.length === 0 ? "none" : p.message_types.map((t, i) => (
-                <Text key={`${t}-${i}`} fontFamily="mono" fontSize="xs" wordBreak="break-all">
-                  {t}
-                </Text>
-              ))}
+              {p.message_types.length === 0
+                ? "none"
+                : p.message_types.map((t, i) => (
+                    <Text key={`${t}-${i}`} fontFamily="mono" fontSize="12px" wordBreak="break-all">
+                      {t}
+                    </Text>
+                  ))}
             </Stack>
-          </Row>
+          </DetailRow>
           {upgrade && (
-            <Row label="Upgrade">
-              {upgrade.name}
-              {upgrade.height != null && ` at block ${formatCount(upgrade.height)}`}
-            </Row>
+            <DetailRow label="Upgrade">
+              <Text as="span">
+                {upgrade.name}
+                {upgrade.height != null && (
+                  <>
+                    {" "}
+                    at block{" "}
+                    <Link asChild color="accent.fg" fontFamily="mono">
+                      <NextLink href={blockHref(upgrade.height)}>{formatCount(upgrade.height)}</NextLink>
+                    </Link>
+                  </>
+                )}
+              </Text>
+            </DetailRow>
           )}
-          <Row label="Deposits">
+          <DetailRow label="Deposits">
             {!deposits.data ? (
-              deposits.error ? "could not be loaded" : <Skeleton h="4" w="48" />
+              deposits.error ? (
+                "could not be loaded"
+              ) : (
+                <Skeleton h="4" w="48" />
+              )
             ) : deposits.data.length === 0 ? (
               "none indexed"
             ) : (
               <Stack gap="1" data-testid="deposits">
                 {deposits.data.map((d, i) => (
-                  <HStack key={`${d.depositor}-${d.height}-${i}`} gap="1.5" wrap="wrap">
+                  <Flex key={`${d.depositor}-${d.height}-${i}`} gap="1.5" align="center" wrap="wrap">
                     <Text as="span">
-                      {coinsText(d.amount, denoms)}
+                      <Mono>{coinsText(d.amount, denoms)}</Mono>
                       {d.source === "archive" && " in total · historical ·"} by
                     </Text>
                     <AccountChip address={d.depositor} label={d.depositor_label} />
-                    {returned && <Text as="span" color="fg.muted">· returned</Text>}
-                  </HStack>
+                    {returned && (
+                      <Text as="span" color="fg.muted">
+                        · returned
+                      </Text>
+                    )}
+                  </Flex>
                 ))}
               </Stack>
             )}
-          </Row>
-          <Row label="Tally source">
-            {isOpen(p.status) ? "Live from the chain, refreshed every minute" : "The chain's final tally"}
-            {p.tally_updated_at && ` · as of ${formatDateTime(p.tally_updated_at)}`}
-          </Row>
-        </Stack>
-      </Card>
-      <Stack gap="2">
-        <Heading as="h3" size="sm">
-          Raw proposal
-        </Heading>
-        <JsonBlock value={p} />
-      </Stack>
-      <Link href={pingPubProposal(p.id)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-        Open on Ping.pub <LuExternalLink aria-hidden />
+          </DetailRow>
+          <DetailRow label="Tally source" last>
+            <Text as="span" color="fg.muted">
+              {isOpen(p.status) ? "Live from the chain, refreshed every minute" : "The chain's final tally"}
+              {p.tally_updated_at && ` · as of ${formatDateTime(p.tally_updated_at)}`}
+            </Text>
+          </DetailRow>
+        </DetailList>
+      </ListPanel>
+      <JsonBlock value={p} />
+      <Link href={pingPubProposal(p.id)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" alignSelf="start">
+        Open on Ping.pub ↗
       </Link>
     </Stack>
   );
@@ -610,47 +796,71 @@ export function ProposalView({ p }: { p: Proposal }) {
   const items = timeline(p, depositText, upgrade?.height != null ? { height: upgrade.height, eta, reached } : null, now);
   const historical = useHasHistoricalRows(p);
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
+    <Box>
       <Header p={p} now={now} />
-      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "minmax(0, 1.6fr) minmax(0, 1fr)" }} gap="6" alignItems="start">
-        <Stack gap="6" minW="0">
+      <SummaryTiles p={p} c={c} now={now} denoms={denoms.data} />
+      <Grid templateColumns="minmax(0, 1fr)" css={TWO_COLUMNS} gap="5" alignItems="start">
+        <Stack gap="5" minW="0">
           <WhatItDoes p={p} actions={actions} denoms={denoms.data} eta={eta} />
           <WhoVoted p={p} />
         </Stack>
-        <Stack gap="6" minW="0">
+        <Stack gap="5" minW="0">
           <Votes p={p} c={c} denoms={denoms.data} historical={historical} />
           {p.status === "voting_period" && <WantToVote p={p} />}
           <Timeline items={items} />
         </Stack>
       </Grid>
-      <MoreDetails hint="message types, deposits, raw proposal">
-        <Details p={p} actions={actions} vetoed={c != null && !c.veto.ok} denoms={denoms.data} />
-      </MoreDetails>
-    </Stack>
+      <Box mt="4">
+        <MoreDetails hint="message types, deposits, raw proposal">
+          <Details p={p} actions={actions} vetoed={c != null && !c.veto.ok} denoms={denoms.data} />
+        </MoreDetails>
+      </Box>
+    </Box>
   );
 }
 
 export function ProposalSkeleton() {
   return (
-    <Stack gap="6" aria-busy data-testid="proposal-skeleton">
-      <Stack gap="3">
-        <Skeleton h="4" w="32" />
-        <Skeleton h="6" w="48" />
-        <Skeleton h="9" w="96" maxW="full" />
-        <Skeleton h="4" w="72" maxW="full" />
+    <Box aria-busy data-testid="proposal-skeleton">
+      <Stack gap="3" pt="6" pb="5">
+        <Skeleton h="3" w="28" />
+        <Skeleton h="4" w="48" />
+        <Skeleton h="7" w="96" maxW="full" />
       </Stack>
-      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "minmax(0, 1.6fr) minmax(0, 1fr)" }} gap="6">
-        <Stack gap="6">
+      <Grid templateColumns={TILES} gap="3" mb="6">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Box key={i} gridColumn={i === 4 ? LAST_TILE : undefined}>
+            <TileSkeleton />
+          </Box>
+        ))}
+      </Grid>
+      <Grid templateColumns="minmax(0, 1fr)" css={TWO_COLUMNS} gap="5">
+        <Stack gap="5">
           <CardSkeleton lines={5} />
           <ListSkeleton rows={5} />
         </Stack>
-        <Stack gap="2" p="5" borderWidth="1px" borderColor="border.panel" rounded="l3" aria-hidden>
+        <Stack gap="2" p="5" bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" aria-hidden>
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} h="3" w="full" data-testid="tally-skeleton" />
+            <Skeleton key={i} h="1.5" w="full" data-testid="tally-skeleton" />
           ))}
         </Stack>
       </Grid>
-    </Stack>
+    </Box>
+  );
+}
+
+/** The breadcrumb and title of a proposal that did not load. */
+function MissingHead({ id }: { id: number }) {
+  return (
+    <Box pb="6">
+      <Breadcrumb path={[{ label: "Proposals", href: "/proposals" }]} current={`#${id}`} mono />
+      <Heading as="h1" fontSize="24px" fontWeight="600" letterSpacing="-0.01em" lineHeight="1.25" mt="2">
+        Proposal{" "}
+        <Text as="span" fontFamily="mono">
+          #{id}
+        </Text>
+      </Heading>
+    </Box>
   );
 }
 
@@ -660,31 +870,37 @@ export function ProposalPage({ id }: { id: number }) {
   if (data) return <ProposalView p={data} />;
   if (isNotFound(error)) {
     return (
-      <Card title="Proposal not found">
-        <Text fontSize="sm" color="fg.muted">
+      <Box>
+        <MissingHead id={id} />
+        <StateBox icon={<LuCircleHelp size={20} />} title="Proposal not found" data-testid="proposal-not-found">
           The explorer does not know proposal #{id}. Check the link, or find it in the{" "}
-          <Link asChild>
+          <Link asChild color="accent.fg">
             <NextLink href="/proposals">proposals list</NextLink>
           </Link>
           .
-        </Text>
-      </Card>
+        </StateBox>
+      </Box>
     );
   }
   if (error) {
     return (
-      <Card title="This proposal could not be loaded">
-        <HStack justify="space-between" wrap="wrap" gap="3">
-          <Text color="fg.muted" fontSize="sm">
-            The explorer did not answer. Try again in a moment.
-          </Text>
-          <Button colorPalette="blue" minH="44px" onClick={() => void refetch()}>
-            Try again
-          </Button>
-        </HStack>
-      </Card>
+      <Box>
+        <MissingHead id={id} />
+        <StateBox
+          tone="error"
+          icon={<LuTriangleAlert size={20} />}
+          title="This proposal could not be loaded"
+          actions={
+            <Button size="sm" colorPalette="blue" onClick={() => void refetch()}>
+              Try again
+            </Button>
+          }
+          data-testid="proposal-error"
+        >
+          The explorer did not answer. Try again in a moment.
+        </StateBox>
+      </Box>
     );
   }
   return <ProposalSkeleton />;
 }
-

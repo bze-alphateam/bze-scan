@@ -27,6 +27,8 @@ const p48 = p48Json as Proposal;
 const p45 = p45Json as Proposal;
 // 43 was tallied before the explorer ran: the snapshots command read its turnout, votes and deposit from the archive.
 const p43 = p43Json as Proposal;
+// 45 again, rejected by a No majority.
+const rejected: Proposal = { ...p45, status: "rejected", tally: { yes: "0", no: p45.tally!.yes, abstain: "0", no_with_veto: "0" } };
 const VOTES: Record<number, Page<ProposalVote>> = {
   48: votes48 as Page<ProposalVote>,
   45: votes45 as Page<ProposalVote>,
@@ -62,6 +64,11 @@ function api(p: Proposal = p48, extra: Partial<ExplorerApi> = {}): ExplorerApi {
     ...extra,
   });
 }
+
+const tiles = async () => {
+  const summary = await screen.findByTestId("summary-tiles");
+  return () => within(summary).getAllByTestId("tile").map((t) => t.textContent);
+};
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: new Date("2099-10-11T10:00:00Z") });
@@ -99,9 +106,20 @@ describe("ProposalPage", () => {
   it("renders a proposal being voted on: header, upgrade, checks and where to vote", async () => {
     renderWithProviders(<ProposalPage id={48} />, { api: api() });
     expect(await screen.findByRole("heading", { level: 1, name: "Upgrade network to v8.2.0" })).toBeInTheDocument();
-    expect(screen.getByTestId("proposal-status")).toHaveTextContent("Voting now");
-    expect(screen.getByTestId("proposal-meta")).toHaveTextContent("Proposed byHOHoneycomb·Submitted Oct 9, 2099, 10:00:00 UTC");
-    expect(screen.getByTestId("proposal-when")).toHaveTextContent("Voting ends in 3 days 4 h · Oct 14, 2099, 14:00:00 UTC");
+    expect(screen.getByTestId("proposal-status")).toHaveTextContent(/^Voting$/);
+    expect(screen.getByTestId("proposal-status")).toHaveAttribute("data-tag", "accent");
+    // Yes is counted without Abstain: 300M of 325M.
+    const texts = await tiles();
+    await waitFor(() =>
+      expect(texts()).toEqual([
+        "If it ended nowPassesall three checks met",
+        "Yes so far92.3%300M BZE · more than 50% needed",
+        "Turnout so far82.7%33.4% needed · reached",
+        "Voting endsin 3 days 4 hOct 14, 2099, 14:00 UTC",
+        "Proposed byHOHoneycombSubmitted Oct 9, 2099, 10:00 UTC",
+      ]),
+    );
+    expect(screen.queryByTestId("historical-turnout")).not.toBeInTheDocument();
 
     const what = screen.getByTestId("what-it-does");
     // 79,550 blocks left at 5.9 s a block.
@@ -116,7 +134,8 @@ describe("ProposalPage", () => {
     expect(within(what).getByTestId("from-proposer")).toHaveTextContent("It adds halted denoms on the DEX");
 
     const votes = screen.getByTestId("votes-card");
-    expect(votes).toHaveTextContent("Votes · can change until voting ends");
+    expect(votes).toHaveTextContent("Votes so far");
+    expect(votes).toHaveTextContent("refreshed every minute");
     expect(await within(votes).findByTestId("verdict")).toHaveTextContent("On track to pass");
     expect(within(votes).getAllByTestId("check").map((c) => c.getAttribute("data-ok"))).toEqual(["true", "true", "true"]);
     expect(votes).toHaveTextContent("82.7% of staked BZE voted · 33.4% needed");
@@ -139,17 +158,17 @@ describe("ProposalPage", () => {
   it("lists the validators' votes, the ones that have not voted, and everyone's votes", async () => {
     renderWithProviders(<ProposalPage id={48} />, { api: api() });
     const who = await screen.findByTestId("who-voted");
-    expect(within(who).getByRole("tab", { name: "Validators · 2 of 3" })).toBeInTheDocument();
+    expect(within(who).getByRole("tab", { name: "Validators 2 of 3" })).toHaveAttribute("aria-selected", "true");
     const rows = await within(who).findAllByTestId("validator-vote");
     expect(rows.map((r) => r.textContent?.replace(/\d+ \w+ ago|in \d+ \w+/, ""))).toEqual([
-      "TNThamar NodeYes10.4% of all stake",
-      "HOHoneycombYes12.3% of all stake",
+      "TNThamar NodeYes10.4%",
+      "HOHoneycombYes12.3%",
     ]);
     expect(await within(who).findByTestId("not-voted")).toHaveTextContent(
       "1 validator has not voted yet:DFDeep Fields· their stakers can still vote for themselves",
     );
 
-    await userEvent.click(within(who).getByRole("tab", { name: "Everyone · 5" }));
+    await userEvent.click(within(who).getByRole("tab", { name: "Everyone 5" }));
     expect(await within(who).findAllByTestId("vote-row")).toHaveLength(5);
     expect(within(who).getAllByTestId("vote-row")[0]).toHaveTextContent("Split vote");
     await userEvent.click(within(who).getByRole("button", { name: "No" }));
@@ -158,7 +177,18 @@ describe("ProposalPage", () => {
 
   it("renders a passed community pool spend with its funds box, block and final result", async () => {
     renderWithProviders(<ProposalPage id={45} />, { api: api(p45) });
-    expect(await screen.findByTestId("result-line")).toHaveTextContent("Passed Dec 13, 2025 · 100% Yes · 70.4% turnout");
+    const texts = await tiles();
+    expect(screen.getByTestId("proposal-status")).toHaveAttribute("data-tag", "ok");
+    await waitFor(() =>
+      expect(texts().slice(0, 4)).toEqual([
+        "ResultPassedDec 13, 2025 · executed in block 21,512,345",
+        "Yes100.0%103.5M BZE · more than 50% needed",
+        "Turnout70.4%33.4% needed",
+        "VotingDec 8 → Dec 13, 20255 days · ended",
+      ]),
+    );
+    expect(texts()[4]).toMatch(/^Proposed by.*bze1m3k…9ds4Submitted Dec 8, 2025, 10:20 UTC$/);
+    expect(within(screen.getByTestId("summary-tiles")).getByRole("link", { name: "21,512,345" })).toHaveAttribute("href", "/blocks/21512345");
     expect(screen.getByTestId("funds-box")).toHaveTextContent("Community pool module3,000,000 BZE");
     const done = screen.getByTestId("spend-done");
     expect(done).toHaveTextContent("Done by the chain in block 21,512,345, right when voting ended.");
@@ -169,10 +199,10 @@ describe("ProposalPage", () => {
       "1 validator voted Yes. 2 accounts voted on their own.",
     );
     await userEvent.click(screen.getByRole("button", { name: "See every vote" }));
-    expect(await screen.findByRole("tab", { name: "Everyone · 3" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Everyone 3" })).toBeInTheDocument();
     // Voting ended: today's active set is not the one that could vote, so no
     // "of N" and no "did not vote" (the summary and the tab once disagreed).
-    expect(screen.getByRole("tab", { name: "Validators · 1" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Validators 1" })).toBeInTheDocument();
     expect(screen.queryByTestId("not-voted")).not.toBeInTheDocument();
 
     // Indexed votes and a synced turnout: nothing is marked historical.
@@ -184,11 +214,12 @@ describe("ProposalPage", () => {
 
   it("marks what the archive read as historical: the turnout, the votes and the deposit", async () => {
     renderWithProviders(<ProposalPage id={43} />, { api: api(p43) });
-    expect(await screen.findByTestId("result-line")).toHaveTextContent("Passed May 6, 2025 · 100% Yes · 67.3% turnout");
-    // The header's chip, then the turnout check's once the voting rules load.
+    const texts = await tiles();
+    // The Turnout tile's chip, then the turnout check's once the voting rules load.
     await waitFor(() => expect(screen.getAllByTestId("historical-turnout")).toHaveLength(2));
-    const [header, check] = screen.getAllByTestId("historical-turnout");
-    expect(header).toHaveAttribute("title", expect.stringContaining("after the fact"));
+    expect(texts()[2]).toBe("Turnout67.3%33.4% needed · historical");
+    const [tile, check] = screen.getAllByTestId("historical-turnout");
+    expect(tile).toHaveAttribute("title", expect.stringContaining("after the fact"));
     expect(within(screen.getByTestId("votes-card")).getByTestId("historical-turnout")).toBe(check);
     expect(await screen.findByTestId("historical-explainer")).toHaveTextContent(
       "Some votes were read from the chain's state at the end of voting (marked historical).",
@@ -202,7 +233,7 @@ describe("ProposalPage", () => {
     expect(mark).toHaveAttribute("title", "Vote as recorded on chain when voting ended; the voting transaction itself is not indexed.");
     expect(validatorVote).not.toHaveTextContent(/ago/);
 
-    await userEvent.click(within(who).getByRole("tab", { name: "Everyone · 27" }));
+    await userEvent.click(within(who).getByRole("tab", { name: "Everyone 27" }));
     const rows = await within(who).findAllByTestId("vote-row");
     expect(rows).toHaveLength(3);
     for (const row of rows) {
@@ -224,6 +255,32 @@ describe("ProposalPage", () => {
     expect(screen.queryByTestId("historical-turnout")).not.toBeInTheDocument();
   });
 
+  it("sums up a rejected proposal in red, with no execution", async () => {
+    renderWithProviders(<ProposalPage id={45} />, { api: api(rejected) });
+    const texts = await tiles();
+    await waitFor(() =>
+      expect(texts().slice(0, 3)).toEqual([
+        "ResultRejectedDec 13, 2025 · in block 21,512,345",
+        "Yes0.0%0 BZE · more than 50% needed",
+        "Turnout70.4%33.4% needed",
+      ]),
+    );
+    expect(screen.getByTestId("proposal-status")).toHaveTextContent("Rejected");
+    expect(screen.getByTestId("proposal-status")).toHaveAttribute("data-tag", "bad");
+  });
+
+  it("keeps what the options mean collapsed until asked", async () => {
+    renderWithProviders(<ProposalPage id={45} />, { api: api(p45) });
+    const votes = await screen.findByTestId("votes-card");
+    const options = within(votes).getByTestId("vote-options");
+    const button = within(votes).getByRole("button", { name: "What the options mean" });
+    expect(options).not.toBeVisible();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(options).toBeVisible();
+    expect(options).toHaveTextContent("No with vetoyou think it is harmful or spam.");
+  });
+
   it("keeps message types, deposits and the raw proposal in More details", async () => {
     renderWithProviders(<ProposalPage id={45} />, { api: api(p45) });
     await userEvent.click(await screen.findByRole("button", { name: /More details/ }));
@@ -239,6 +296,9 @@ describe("ProposalPage", () => {
     const proposal = vi.fn(() => Promise.reject(new ApiError(404, "not_found", "proposal 99 is not known")));
     renderWithProviders(<ProposalPage id={99} />, { api: api(p48, { proposal }) });
     expect(await screen.findByRole("heading", { name: "Proposal not found" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Proposal #99");
+    expect(screen.getByTestId("proposal-not-found")).toHaveTextContent("The explorer does not know proposal #99.");
+    expect(screen.getByRole("link", { name: "proposals list" })).toHaveAttribute("href", "/proposals");
   });
 
   it("offers a retry when the API fails", async () => {

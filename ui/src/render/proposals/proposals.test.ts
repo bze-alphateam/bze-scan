@@ -20,13 +20,14 @@ import {
   kindLabel,
   metadataView,
   notVoted,
-  resultLine,
   resultText,
   statusInfo,
   tallyShares,
   timeline,
   upgradeEta,
   verdict,
+  votingLength,
+  votingSpan,
   votesSummary,
 } from "./index";
 
@@ -241,8 +242,12 @@ describe("dates and status", () => {
     expect(items.map((p) => endedText(p, now))).toEqual([null, "ends in 4 days", "Jul 21, 2026", "May 7, 2026", "Dec 13, 2025", "May 6, 2025"]);
   });
 
-  it("words the result line", () => {
-    expect(resultLine(p45, now)).toBe("Passed Dec 13, 2025 · 100% Yes · 70.4% turnout");
+  it("words the voting period's dates and length", () => {
+    expect(votingSpan("2025-12-08T10:21:17Z", "2025-12-13T10:21:17Z")).toBe("Dec 8 → Dec 13, 2025");
+    expect(votingSpan("2025-12-29T10:00:00Z", "2026-01-03T10:00:00Z")).toBe("Dec 29, 2025 → Jan 3, 2026");
+    expect(votingLength("2025-12-08T10:21:17Z", "2025-12-13T10:21:17Z")).toBe("5 days");
+    expect(votingLength("2025-12-08T10:00:00Z", "2025-12-09T10:00:00Z")).toBe("1 day");
+    expect(votingLength("2025-12-08T10:00:00Z", "2025-12-08T22:00:00Z")).toBe("12 h");
   });
 
   it("estimates the upgrade's date from the blocks left and the block time", () => {
