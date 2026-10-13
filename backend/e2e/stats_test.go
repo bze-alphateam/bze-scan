@@ -73,6 +73,11 @@ func TestChainStateParamsAndStats(t *testing.T) {
 		"validators": `{"active":22,"total":57}`, "max_validators": "40", "unbonding_period": "1814400",
 		"price_usd": `"` + priceUSD + `"`, "price_change_24h_pct": `"` + change + `"`,
 		"community_pool": `"34939146569152"`, "supply": `"281824500438386"`, "daily": "[]",
+		"block_time_windows": `[
+			{"blocks":10000,"from_height":24988316,"avg_block_time_ms":null},
+			{"blocks":30000,"from_height":24968316,"avg_block_time_ms":null},
+			{"blocks":50000,"from_height":24948316,"avg_block_time_ms":null},
+			{"blocks":100000,"from_height":24898316,"avg_block_time_ms":null}]`,
 	} {
 		assert.JSONEq(t, want, string(stats[k]), k)
 	}
@@ -179,6 +184,18 @@ func TestStatsWindowsAnchorOnTheLatestBlock(t *testing.T) {
 	assert.Equal(t, int64(5250), *s.AvgBlockTimeMs, "the six blocks of the last hour, not the one 2 h back")
 	assert.Equal(t, int64(3), s.Txs24h, "across midnight, the 24 h line excluded")
 
+	// Block-time windows: the two ends looked up by height, (time(L) − time(L−N)) ÷ N.
+	windows, err := repository.NewExplorer(pool).BlockTimeWindows(context.Background(), []int64{2, 5, 105, 50, 1005})
+	require.NoError(t, err)
+	ms := func(v int64) *int64 { return &v }
+	assert.Equal(t, []repository.BlockTimeWindow{
+		{Blocks: 2, FromHeight: 1003, AvgBlockTimeMs: ms(5000)},
+		{Blocks: 5, FromHeight: 1000, AvgBlockTimeMs: ms(5000)},
+		{Blocks: 105, FromHeight: 900, AvgBlockTimeMs: ms(68571)}, // 7,200,000 ms ÷ 105, rounded
+		{Blocks: 50, FromHeight: 955},                             // block 955 is not indexed
+		{Blocks: 1005, FromHeight: 0},                             // below height 1
+	}, windows, "in the order asked")
+
 	empty := freshDatabase(t, true)
 	migrateUp(t, empty)
 	emptyPool, err := pgxpool.New(context.Background(), empty)
@@ -187,4 +204,7 @@ func TestStatsWindowsAnchorOnTheLatestBlock(t *testing.T) {
 	s, err = repository.NewExplorer(emptyPool).BlockStats(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, &repository.BlockStats{}, s)
+	windows, err = repository.NewExplorer(emptyPool).BlockTimeWindows(context.Background(), []int64{2})
+	require.NoError(t, err)
+	assert.Empty(t, windows, "before the first block")
 }

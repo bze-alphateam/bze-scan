@@ -58,7 +58,7 @@ func TestStatsBeforeAnythingIsSynced(t *testing.T) {
 	}, "ubze")
 	raw, err := json.Marshal(s)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"latest_height":null,"latest_time":null,"avg_block_time_ms":null,"txs_24h":0,
+	assert.JSONEq(t, `{"latest_height":null,"latest_time":null,"avg_block_time_ms":null,"txs_24h":0,"block_time_windows":[],
 		"bonded_tokens":null,"staked_share":null,"inflation":null,"reward_rate":null,"validators":null,
 		"max_validators":null,"price_usd":null,"price_change_24h_pct":null,"unbonding_period":null,
 		"community_pool":null,"supply":null,"daily":[],"today":null}`, string(raw))

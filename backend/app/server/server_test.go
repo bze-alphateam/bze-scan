@@ -382,6 +382,10 @@ func (noStats) BlockStats(context.Context) (*repository.BlockStats, error) {
 	return &repository.BlockStats{}, nil
 }
 
+func (noStats) BlockTimeWindows(context.Context, []int64) ([]repository.BlockTimeWindow, error) {
+	return nil, nil
+}
+
 func (noStats) ChainState(context.Context) (map[string]json.RawMessage, error) { return nil, nil }
 
 func (noStats) TopBondedTokens(context.Context, int) (string, error) { return "0", nil }

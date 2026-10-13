@@ -27,9 +27,14 @@ const TopValidators = 5
 // by repository.Explorer.
 type StatsReader interface {
 	BlockStats(ctx context.Context) (*repository.BlockStats, error)
+	BlockTimeWindows(ctx context.Context, sizes []int64) ([]repository.BlockTimeWindow, error)
 	ChainState(ctx context.Context) (map[string]json.RawMessage, error)
 	TopBondedTokens(ctx context.Context, n int) (string, error)
 }
+
+// blockTimeWindowSizes are the windows, in blocks, of the stats'
+// block_time_windows, in this order.
+var blockTimeWindowSizes = []int64{10000, 30000, 50000, 100000}
 
 // DefaultDays and MaxDays bound the closed days of the stats' daily
 // series (?days=).
@@ -81,7 +86,12 @@ func (h *StatsController) Stats(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	windows, err := h.repo.BlockTimeWindows(ctx, blockTimeWindowSizes)
+	if err != nil {
+		return err
+	}
 	out := dto.NewStats(blocks, state, BondDenom)
+	out.BlockTimeWindows = dto.NewBlockTimeWindows(windows)
 	if h.daily != nil {
 		series, err := h.daily.DailyStats(ctx, days)
 		if err != nil {
