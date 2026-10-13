@@ -65,10 +65,10 @@ interface HashLinkProps extends StackProps {
 }
 
 /** `3F9A…C21E` linking to its transaction (or `href`), with a copy button. */
-export function HashLink({ hash, href, noCopy, ...props }: HashLinkProps) {
+export function HashLink({ hash, href, noCopy, fontSize = "sm", ...props }: HashLinkProps) {
   return (
     <HStack as="span" gap="1" display="inline-flex" {...props}>
-      <Link asChild fontFamily="mono" fontSize="sm">
+      <Link asChild fontFamily="mono" fontSize={fontSize}>
         <NextLink href={href ?? `/txs/${encodeURIComponent(hash.toUpperCase())}`} title={hash.toUpperCase()}>
           {shortHash(hash)}
         </NextLink>
