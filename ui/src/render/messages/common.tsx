@@ -1,10 +1,11 @@
-import { Box, Grid, HStack, Text } from "@chakra-ui/react";
+import { Box, HStack, Text } from "@chakra-ui/react";
 import BigNumber from "bignumber.js";
 import type { ReactNode } from "react";
 import { LuArrowRight } from "react-icons/lu";
 
 import type { Coin, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatAmount, formatUsd, shortAddress } from "@/lib/format";
 
@@ -118,22 +119,21 @@ export interface Field {
   value: ReactNode;
 }
 
-/** Label/value rows; rows whose value is null or undefined are left out. */
+// A 140px label column from c2 up, one column on phones (hoisted: custom breakpoints are not in Chakra's types).
+const FIELD_COLUMNS = { base: "minmax(0, 1fr)", c2: "140px minmax(0, 1fr)" };
+
+/** Label/value rows in a bordered list; rows whose value is null or undefined are left out. */
 export function Fields({ rows }: { rows: (Field | null | false)[] }) {
   const shown = rows.filter((r): r is Field => !!r && r.value != null && r.value !== "");
+  if (shown.length === 0) return null;
   return (
-    <Grid templateColumns={{ base: "1fr", sm: "minmax(8rem, max-content) 1fr" }} columnGap="4" rowGap={{ base: "1", sm: "2" }} as="dl">
-      {shown.map((r) => (
-        <Box key={r.label} display="contents">
-          <Text as="dt" fontSize="sm" color="fg.muted" mt={{ base: "2", sm: "0" }}>
-            {r.label}
-          </Text>
-          <Box as="dd" fontSize="sm" minW="0" wordBreak="break-word">
-            {r.value}
-          </Box>
-        </Box>
+    <DetailList templateColumns={FIELD_COLUMNS} borderWidth="1px" borderColor="border.panel" rounded="l2" fontSize="13px">
+      {shown.map((r, i) => (
+        <DetailRow key={r.label} label={r.label} last={i === shown.length - 1}>
+          {r.value}
+        </DetailRow>
       ))}
-    </Grid>
+    </DetailList>
   );
 }
 

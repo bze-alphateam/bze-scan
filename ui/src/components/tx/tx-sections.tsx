@@ -1,17 +1,20 @@
 "use client";
 
-import { Badge, Box, Grid, HStack, Heading, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, HStack, Heading, Link, Text, type LinkProps } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { LuExternalLink } from "react-icons/lu";
+import type { ReactNode } from "react";
 
 import { useBlock, useRawTx, useStatus } from "@/api/hooks";
 import type { Tx } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
 import { JsonBlock } from "@/components/ui/json-block";
+import { ListPanel } from "@/components/ui/list";
+import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle } from "@/components/ui/page-head";
 import { JsonSkeleton } from "@/components/ui/skeleton";
-import { StatusPill } from "@/components/ui/status-pill";
+import { StatusPill, Tag } from "@/components/ui/status-pill";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatCount, formatDateTime, ordinal, shortHash } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
@@ -26,64 +29,63 @@ export function pingPubTxUrl(hash: string): string {
 
 /** "Transactions / 3F9A…C21E". */
 export function Breadcrumb({ hash }: { hash: string }) {
-  return (
-    <HStack as="nav" aria-label="Breadcrumb" gap="2" fontSize="sm" color="fg.muted">
-      <Link asChild color="fg.muted">
-        <NextLink href="/txs">Transactions</NextLink>
-      </Link>
-      <Text as="span" aria-hidden>
-        /
-      </Text>
-      <Text as="span" fontFamily="mono" aria-current="page">
-        {shortHash(hash)}
-      </Text>
-    </HStack>
-  );
+  return <Breadcrumbs path={[{ label: "Transactions", href: "/txs" }]} current={shortHash(hash)} mono />;
 }
 
 /** The full hash, wrapping on phones, with a copy button. */
 export function FullHash({ hash }: { hash: string }) {
   return (
-    <HStack gap="1" align="start">
-      <Text fontFamily="mono" fontSize="sm" wordBreak="break-all" data-testid="tx-hash">
+    <DetailMeta align="flex-start" gap="2">
+      <Text as="span" fontFamily="mono" fontSize="12px" color="fg" overflowWrap="anywhere" minW="0" data-testid="tx-hash">
         {hash.toUpperCase()}
       </Text>
       <CopyButton value={hash.toUpperCase()} label="Copy hash" />
-    </HStack>
+    </DetailMeta>
+  );
+}
+
+/** The breadcrumb, "Transaction" with `children` beside it (the status) and the full hash. */
+export function TxHead({ hash, children, meta }: { hash: string; children?: ReactNode; meta?: ReactNode }) {
+  return (
+    <Box>
+      <Breadcrumb hash={hash} />
+      <DetailTitle title="Transaction">{children}</DetailTitle>
+      {meta}
+      <FullHash hash={hash} />
+    </Box>
   );
 }
 
 export function TxHeader({ tx }: { tx: Tx }) {
   return (
-    <Stack gap="3">
-      <Breadcrumb hash={tx.hash} />
-      <HStack gap="3" wrap="wrap">
-        <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-          Transaction
-        </Heading>
-        <StatusPill success={tx.success} />
-      </HStack>
-      <Text color="fg.muted" fontSize="sm">
-        <TimeAgo time={tx.time} />, in block{" "}
-        <Link asChild>
-          <NextLink href={blockHref(tx.height)}>{formatCount(tx.height)}</NextLink>
-        </Link>
-      </Text>
-      <FullHash hash={tx.hash} />
-    </Stack>
+    <TxHead
+      hash={tx.hash}
+      meta={
+        <DetailMeta data-testid="tx-when">
+          <Text as="span">
+            <TimeAgo time={tx.time} />, in block{" "}
+            <Link asChild fontFamily="mono" color="accent.fg">
+              <NextLink href={blockHref(tx.height)}>{formatCount(tx.height)}</NextLink>
+            </Link>
+          </Text>
+        </DetailMeta>
+      }
+    >
+      <StatusPill success={tx.success} />
+    </TxHead>
   );
 }
 
 /** "Why it failed": the plain-word reason, the chain's log under it when it says more. */
 export function FailureCard({ reason, log }: { reason: string; log: string | null }) {
   return (
-    <Box bg="red.subtle" borderWidth="1px" borderColor="red.muted" rounded="l3" p={{ base: "4", md: "5" }} role="alert">
-      <Heading as="h2" size="md" color="red.fg" mb="1">
+    <Box mt="6" bg="neg.subtle" borderWidth="1px" borderColor="neg.fg" rounded="l3" px="5" py="4" role="alert">
+      <Heading as="h2" fontSize="15px" fontWeight="600" color="neg.fg" mb="1">
         Why it failed
       </Heading>
-      <Text>{reason}</Text>
+      <Text fontSize="13px">{reason}</Text>
       {log && log !== reason && (
-        <Text mt="2" fontSize="xs" fontFamily="mono" color="fg.muted" wordBreak="break-word">
+        <Text mt="2" fontSize="12px" fontFamily="mono" color="fg.muted" wordBreak="break-word">
           {log}
         </Text>
       )}
@@ -91,23 +93,11 @@ export function FailureCard({ reason, log }: { reason: string; log: string | nul
   );
 }
 
-interface RowProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-function Row({ label, children }: RowProps) {
-  return (
-    <>
-      <Text as="dt" fontSize="sm" color="fg.muted" mt={{ base: "2", sm: "0" }}>
-        {label}
-      </Text>
-      <Box as="dd" fontSize="sm" minW="0">
-        {children}
-      </Box>
-    </>
-  );
-}
+const Muted = ({ children }: { children: ReactNode }) => (
+  <Text as="span" color="fg.muted">
+    {children}
+  </Text>
+);
 
 /** "3rd of 7 transactions in the block", once the block is loaded. */
 function Position({ height, index }: { height: number; index: number }) {
@@ -126,69 +116,49 @@ function Confirmations({ height }: { height: number }) {
   if (tip == null || tip < height) return null;
   const n = tip - height;
   return (
-    <Text as="span" color="fg.muted">
-      {" "}
+    <Muted>
       · {formatCount(n)} confirmation{n === 1 ? "" : "s"}
-    </Text>
+    </Muted>
   );
 }
 
 export function Overview({ tx, ctx }: { tx: Tx; ctx: RenderContext }) {
   return (
-    <Card title="Overview">
-      <Grid as="dl" templateColumns={{ base: "1fr", sm: "minmax(8rem, max-content) 1fr" }} columnGap="6" rowGap={{ base: "1", sm: "3" }}>
-        <Row label="Block">
-          <Link asChild>
+    <Card title="Overview" p="0" mt="8" data-testid="tx-overview">
+      <DetailList>
+        <DetailRow label="Block">
+          <Link asChild fontFamily="mono" color="accent.fg">
             <NextLink href={blockHref(tx.height)}>{formatCount(tx.height)}</NextLink>
           </Link>
           <Confirmations height={tx.height} />
-        </Row>
-        <Row label="Time">
+        </DetailRow>
+        <DetailRow label="Time">
           <TimeAgo time={tx.time} />
-          <Text as="span" color="fg.muted">
-            {" "}
-            · {formatDateTime(tx.time)}
+          <Muted>· {formatDateTime(tx.time)}</Muted>
+        </DetailRow>
+        <DetailRow label="Fee">
+          <Text as="span" fontFamily="mono">
+            {tx.fee.length ? coinsText(tx.fee, ctx) : "none"}
           </Text>
-        </Row>
-        <Row label="Fee">
-          <HStack gap="2" wrap="wrap">
-            <Text as="span">{tx.fee.length ? coinsText(tx.fee, ctx) : "none"}</Text>
-            {tx.fee_payer && (
-              <>
-                <Text as="span" color="fg.muted">
-                  · paid by
-                </Text>
-                <AccountChip address={tx.fee_payer} label={ctx.label(tx.fee_payer)} />
-              </>
-            )}
-          </HStack>
-        </Row>
-        <Row label="Memo">
-          {tx.memo ? (
-            <Text as="span" wordBreak="break-word">
-              {tx.memo}
-            </Text>
-          ) : (
-            <Text as="span" color="fg.muted">
-              none
-            </Text>
+          {tx.fee_payer && (
+            <>
+              <Muted>· paid by</Muted>
+              <AccountChip address={tx.fee_payer} label={ctx.label(tx.fee_payer)} />
+            </>
           )}
-        </Row>
-        <Row label="Signed by">
-          <HStack gap="2" wrap="wrap">
-            {tx.signers.length ? (
-              tx.signers.map((s) => <AccountChip key={s} address={s} label={ctx.label(s)} />)
-            ) : (
-              <Text as="span" color="fg.muted">
-                unknown
-              </Text>
-            )}
-          </HStack>
-        </Row>
-        <Row label="Position">
+        </DetailRow>
+        <DetailRow label="Memo">{tx.memo ? <Text as="span">{tx.memo}</Text> : <Muted>none</Muted>}</DetailRow>
+        <DetailRow label="Signed by">
+          {tx.signers.length ? (
+            tx.signers.map((s) => <AccountChip key={s} address={s} label={ctx.label(s)} />)
+          ) : (
+            <Muted>unknown</Muted>
+          )}
+        </DetailRow>
+        <DetailRow label="Position" last>
           <Position height={tx.height} index={tx.tx_index} />
-        </Row>
-      </Grid>
+        </DetailRow>
+      </DetailList>
     </Card>
   );
 }
@@ -205,37 +175,67 @@ function RawTx({ hash }: { hash: string }) {
   return data ? <JsonBlock value={data} /> : <JsonSkeleton />;
 }
 
+/** "Open on Ping.pub ↗": on the raw bar from c2 up, under the JSON on phones. */
+function PingPubOpen({ hash, ...props }: { hash: string } & Omit<LinkProps, "href" | "children">) {
+  return (
+    <Link href={pingPubTxUrl(hash)} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub ↗
+    </Link>
+  );
+}
+
 /** The content of "More details": gas, message types, the raw transaction and Ping.pub. */
 export function TxDetails({ tx }: { tx: Tx }) {
   return (
-    <Stack gap="5" bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" p={{ base: "4", md: "5" }}>
-      <Grid as="dl" templateColumns={{ base: "1fr", sm: "minmax(8rem, max-content) 1fr" }} columnGap="6" rowGap={{ base: "1", sm: "3" }}>
-        <Row label="Gas">
-          {tx.gas_used != null && tx.gas_wanted != null
-            ? `${formatCount(tx.gas_used)} of ${formatCount(tx.gas_wanted)}`
-            : tx.gas_used != null
-              ? formatCount(tx.gas_used)
-              : "unknown"}
-        </Row>
-        <Row label="Messages">
-          <HStack gap="2" wrap="wrap">
-            {tx.msg_types.map((t, i) => (
-              <Badge key={i} variant="outline" fontFamily="mono" textTransform="none" maxW="full" truncate>
-                {t}
-              </Badge>
-            ))}
-          </HStack>
-        </Row>
-      </Grid>
-      <Stack gap="2">
-        <Heading as="h3" size="sm">
+    <ListPanel>
+      <DetailList>
+        <DetailRow label="Gas">
+          {tx.gas_used != null ? (
+            <>
+              <Text as="span" fontFamily="mono">
+                {formatCount(tx.gas_used)}
+              </Text>
+              {tx.gas_wanted != null && (
+                <>
+                  <Muted>of</Muted>
+                  <Text as="span" fontFamily="mono">
+                    {formatCount(tx.gas_wanted)}
+                  </Text>
+                </>
+              )}
+            </>
+          ) : (
+            <Muted>unknown</Muted>
+          )}
+        </DetailRow>
+        <DetailRow label="Messages" last>
+          {tx.msg_types.map((t, i) => (
+            <Tag key={i} bg="transparent" color="fg" borderWidth="1px" borderColor="border.panel" fontFamily="mono" textTransform="none" letterSpacing="0" maxW="full" truncate>
+              {t}
+            </Tag>
+          ))}
+        </DetailRow>
+      </DetailList>
+      <HStack gap="0.5" px="2" borderTopWidth="1px" borderColor="border.panel">
+        <Heading
+          as="h3"
+          px="2.5"
+          py="10px"
+          fontSize="13px"
+          fontWeight="500"
+          borderBottomWidth="2px"
+          borderColor="accent.fg"
+          whiteSpace="nowrap"
+        >
           Raw transaction
         </Heading>
+        <Box flex="1" />
+        <PingPubOpen hash={tx.hash} hideBelow="c2" px="2" />
+      </HStack>
+      <Box p="4" pt="3" borderTopWidth="1px" borderColor="border.panel">
         <RawTx hash={tx.hash} />
-      </Stack>
-      <Link href={pingPubTxUrl(tx.hash)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-        Open on Ping.pub <LuExternalLink aria-hidden />
-      </Link>
-    </Stack>
+      </Box>
+      <PingPubOpen hash={tx.hash} hideFrom="c2" display="inline-block" px="4" pb="4" />
+    </ListPanel>
   );
 }

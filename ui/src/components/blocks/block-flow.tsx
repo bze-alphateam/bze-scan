@@ -119,7 +119,7 @@ function Group({ g, height }: { g: FlowGroupView; height: number }) {
         </HStack>
       </Flex>
       {open && (
-        <Box px="4" ps="7">
+        <Box ps="3">
           <Steps rows={g.rows} height={height} />
         </Box>
       )}
@@ -183,7 +183,7 @@ export function BlockFlow({ height, count }: { height: number; count: number }) 
             </Toggle>
           </Box>
           {all && (
-            <ListPanel mt="1" px="4" data-testid="block-flow-all">
+            <ListPanel mt="1" data-testid="block-flow-all">
               <Steps rows={data} height={height} />
             </ListPanel>
           )}

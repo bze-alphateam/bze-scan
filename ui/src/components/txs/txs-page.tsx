@@ -1,14 +1,20 @@
 "use client";
 
-import { Box, Button, Grid, Heading, HStack, Stack, Text } from "@chakra-ui/react";
-import { useState } from "react";
+import { Box, Button, HStack, Link, Text } from "@chakra-ui/react";
+import NextLink from "next/link";
+import { useRef, useState } from "react";
+import { LuTriangleAlert } from "react-icons/lu";
 
-import { useTransactionList } from "@/api/hooks";
-import type { TxStatusFilter, TxSummary } from "@/api/types";
+import { useTransactions } from "@/api/hooks";
+import type { TxListParams, TxStatusFilter, TxSummary } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
-import { Card } from "@/components/ui/card";
+import { FilterPills } from "@/components/ui/filter-pills";
 import { HashLink } from "@/components/ui/links";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
+import { PageTitle } from "@/components/ui/page-head";
+import { PagerPill, PrevNextPager } from "@/components/ui/pager";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
 import { StatusPill } from "@/components/ui/status-pill";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatCount } from "@/lib/format";
@@ -18,182 +24,202 @@ import { txOneLine } from "@/render/txs";
 
 import { useListRenderContext } from "./list-context";
 
+export const TXS_PER_PAGE = 25;
+
+// Hash (c2) · What happened · By (c2) · Status · Fee (c3) · Time.
+// (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
 const COLUMNS = {
-  base: "minmax(0, 1fr) auto",
-  md: "110px minmax(0, 2fr) minmax(0, 1fr) 104px minmax(0, 0.8fr) 120px",
+  base: "minmax(0, 1fr) auto auto",
+  c2: "110px minmax(0, 1fr) minmax(0, 170px) auto 116px",
+  c3: "110px minmax(0, 1fr) minmax(0, 170px) auto 110px 116px",
 };
 
-/** The status chips and the `status` each asks the list for. */
+/** The status pills and the `status` each asks the list for. */
 export const STATUS_FILTERS: { label: string; value: TxStatusFilter | null }[] = [
   { label: "All", value: null },
   { label: "Success", value: "success" },
   { label: "Failed", value: "failed" },
 ];
 
-function PhoneLabel({ children }: { children: string }) {
-  return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
-  );
+/** Where a transaction stands in the chain: the list's order, newest first. */
+type TxKey = Pick<TxSummary, "height" | "tx_index">;
+
+const newer = (a: TxKey, b: TxKey) => a.height > b.height || (a.height === b.height && a.tx_index > b.tx_index);
+
+/**
+ * How many rows of the live first page are newer than the pinned top
+ * transaction: "25+" when the whole (full) page is.
+ */
+export function newTxCount(live: TxKey[], top: TxKey): string | null {
+  const n = live.filter((t) => newer(t, top)).length;
+  if (n === 0) return null;
+  return n === live.length && n >= TXS_PER_PAGE ? `${TXS_PER_PAGE}+` : formatCount(n);
 }
 
 function TxRow({ tx, ctx }: { tx: TxSummary; ctx: RenderContext }) {
   return (
-    <Grid
-      role="listitem"
-      templateColumns={COLUMNS}
-      gap={{ base: "1", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="tx-row"
-    >
-      <HashLink hash={tx.hash} noCopy />
-      <Box gridRow={{ base: "1", md: "auto" }} gridColumn={{ base: "2", md: "4" }} justifySelf={{ base: "end", md: "start" }}>
-        <StatusPill success={tx.success} />
+    <ListRow role="listitem" templateColumns={COLUMNS} data-testid="tx-row">
+      <Box hideBelow="c2" minW="0">
+        <HashLink hash={tx.hash} noCopy />
       </Box>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "2" }} gridRow={{ md: "1" }} data-testid="tx-what">
-        {txOneLine(tx, ctx)}
-      </Text>
-      <Box minW="0" gridColumn={{ base: "1 / -1", md: "3" }} gridRow={{ md: "1" }}>
-        <PhoneLabel>By</PhoneLabel>
+      <Link asChild color="fg" fontSize="13px" minW="0" _hover={{ color: "accent.fg" }}>
+        <NextLink href={`/txs/${tx.hash}`} data-testid="tx-what">
+          {txOneLine(tx, ctx)}
+        </NextLink>
+      </Link>
+      <Box hideBelow="c2" minW="0">
         {tx.signer ? (
-          <AccountChip address={tx.signer} />
+          <AccountChip address={tx.signer} label={ctx.label(tx.signer)} />
         ) : (
           <Text as="span" color="fg.muted">
             —
           </Text>
         )}
       </Box>
-      <Text fontSize="sm" color="fg.muted" gridColumn={{ base: "1 / -1", md: "5" }} gridRow={{ md: "1" }}>
-        <PhoneLabel>Fee</PhoneLabel>
+      <Box>
+        <StatusPill success={tx.success} />
+      </Box>
+      <Text hideBelow="c3" textAlign="right" fontFamily="mono" fontSize="13px" color="fg.muted" truncate>
         {tx.fee.length ? coinsText(tx.fee, ctx) : "none"}
       </Text>
-      <Stack gap="0" gridColumn={{ base: "1 / -1", md: "6" }} gridRow={{ md: "1" }}>
-        <TimeAgo time={tx.time} fontSize="sm" />
-        <Text fontSize="xs" color="fg.muted" data-testid="tx-height">
-          block {formatCount(tx.height)}
+      <Box textAlign="right" whiteSpace="nowrap">
+        <TimeAgo time={tx.time} fontSize="13px" />
+        <Text fontSize="11px" color="fg.muted" mt="2px" data-testid="tx-height">
+          block{" "}
+          <Link asChild fontFamily="mono" color="accent.fg">
+            <NextLink href={`/blocks/${tx.height}`}>{formatCount(tx.height)}</NextLink>
+          </Link>
         </Text>
-      </Stack>
-    </Grid>
+      </Box>
+    </ListRow>
   );
 }
 
 function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
-    <Card title="The transactions could not be loaded">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text color="fg.muted" fontSize="sm">
-          The explorer did not answer. Try again in a moment.
-        </Text>
-        <Button colorPalette="blue" minH="44px" onClick={onRetry}>
+    <StateBox
+      tone="error"
+      icon={<LuTriangleAlert size={20} />}
+      title="The transactions could not be loaded"
+      actions={
+        <Button size="sm" colorPalette="blue" onClick={onRetry}>
           Try again
         </Button>
-      </HStack>
-    </Card>
+      }
+    >
+      The explorer did not answer. Try again in a moment.
+    </StateBox>
   );
 }
 
-/** `/txs`: the latest transactions of a status, polled, until older ones are loaded. */
+/** Where the list is: the cursors of the pages after the first, and the top transaction they hang from. */
+interface Place {
+  cursors: string[];
+  top: TxKey | null;
+}
+
+const LIVE: Place = { cursors: [], top: null };
+
+/**
+ * `/txs`: 25 transactions a page, newest first. Page 1 is live (polled);
+ * "next" pins the list to its top transaction and pages by the API cursor,
+ * kept as a stack so "previous" returns exactly. The pin lives in the
+ * component, never in the URL: a reload is back on the live page.
+ */
 export function TxsPage() {
   const [status, setStatus] = useState<TxStatusFilter | null>(null);
-  const list = useTransactionList(status);
+  const [place, setPlace] = useState<Place>(LIVE);
+  const listTop = useRef<HTMLDivElement>(null);
   const ctx = useListRenderContext();
-  const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+
+  const base: TxListParams = { limit: TXS_PER_PAGE, status: status ?? undefined };
+  const cursor = place.cursors.at(-1);
+  // The live first page always polls: it is page 1, or the background check behind the pill.
+  const live = useTransactions(base);
+  const shown = useTransactions(cursor ? { ...base, cursor } : base);
+  const page = place.cursors.length + 1;
+  const items = shown.data?.items ?? [];
+  const next = shown.data?.next_cursor ?? null;
+
+  const go = (to: Place) => {
+    setPlace(to);
+    // Back on the live page: the latest now, not the last poll's.
+    if (to === LIVE) void live.refetch();
+    listTop.current?.scrollIntoView?.({ block: "start" });
+  };
+  const fresh = place.top && live.data ? newTxCount(live.data.items, place.top) : null;
+
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
-      <Stack gap="2">
-        <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-          Transactions
-        </Heading>
-        <Text color="fg.muted" maxW="3xl">
-          Everything people did on the chain, newest first, each in one line.
-        </Text>
-      </Stack>
-      <HStack gap="2" wrap="wrap" role="group" aria-label="Show transactions">
-        {STATUS_FILTERS.map((f) => (
-          <Button
-            key={f.label}
-            size="sm"
-            minH="44px"
-            rounded="full"
-            variant={status === f.value ? "subtle" : "outline"}
-            aria-pressed={status === f.value}
-            onClick={() => setStatus(f.value)}
-          >
-            {f.label}
-          </Button>
-        ))}
-      </HStack>
-      {list.snapshot && (
-        <HStack justify="space-between" wrap="wrap" gap="3" data-testid="txs-snapshot">
-          <Text fontSize="sm" color="fg.muted">
-            Showing older transactions: the list stopped updating.
-          </Text>
-          <Button
-            variant="outline"
-            size="sm"
-            minH="44px"
-            onClick={() => {
-              list.latest();
-              window.scrollTo({ top: 0 });
-            }}
-          >
-            Back to the latest transactions
-          </Button>
-        </HStack>
-      )}
-      {!list.data ? (
-        list.error ? (
-          <LoadError onRetry={() => void list.refetch()} />
+    <Box>
+      <PageTitle title="Transactions" intro="Everything people did on the chain, newest first, each in one line." />
+      <Box ref={listTop} scrollMarginTop="4">
+        <FilterPills
+          label="Filter by status"
+          options={STATUS_FILTERS}
+          value={status}
+          onChange={(v) => {
+            setStatus(v);
+            setPlace(LIVE);
+          }}
+        />
+      </Box>
+      {!shown.data ? (
+        shown.error ? (
+          <LoadError onRetry={() => void shown.refetch()} />
         ) : (
-          // A chip change is a different list: its rows load as skeletons.
+          // A pill change or a new page is a different list: its rows load as skeletons.
           <TableSkeleton rows={10} columns={6} />
         )
       ) : (
-        <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-          <Grid
-            hideBelow="md"
-            templateColumns={COLUMNS}
-            gap="4"
-            px="4"
-            h="10"
-            alignItems="center"
-            fontSize="xs"
-            color="fg.muted"
-            textTransform="uppercase"
-            letterSpacing="wide"
-            aria-hidden
-          >
-            <Text>Hash</Text>
+        <ListPanel>
+          <ListHead templateColumns={COLUMNS} aria-hidden>
+            <Text hideBelow="c2">Hash</Text>
             <Text>What happened</Text>
-            <Text>By</Text>
+            <Text hideBelow="c2">By</Text>
             <Text>Status</Text>
-            <Text>Fee</Text>
-            <Text>Time</Text>
-          </Grid>
+            <Text hideBelow="c3" textAlign="right">
+              Fee
+            </Text>
+            <Text textAlign="right">Time</Text>
+          </ListHead>
           <Box role="list" aria-label="Transactions">
             {items.map((tx) => (
               <TxRow key={tx.hash} tx={tx} ctx={ctx} />
             ))}
           </Box>
           {items.length === 0 && (
-            <Text px="4" py="6" color="fg.muted" fontSize="sm" borderTopWidth="1px" borderColor="border.panel">
-              {status === "failed" ? "No failed transactions." : "No transactions indexed yet."}
+            <Text px="4" py="6" color="fg.muted" fontSize="sm">
+              {page > 1 ? "No older transactions." : status === "failed" ? "No failed transactions." : "No transactions indexed yet."}
             </Text>
           )}
-        </Box>
+          <PrevNextPager
+            page={page}
+            onFirst={page > 1 ? () => go(LIVE) : null}
+            onPrev={page > 1 ? () => go(page === 2 ? LIVE : { ...place, cursors: place.cursors.slice(0, -1) }) : null}
+            onNext={
+              next
+                ? () => go({ cursors: [...place.cursors, next], top: place.top ?? (items[0] ? { height: items[0].height, tx_index: items[0].tx_index } : null) })
+                : null
+            }
+          >
+            <HStack as="span" gap="1" color="fg.muted">
+              Newest first ·{" "}
+              <Text as="span" fontFamily="mono">
+                {TXS_PER_PAGE}
+              </Text>{" "}
+              per page
+            </HStack>
+            {fresh && (
+              <PagerPill onClick={() => go(LIVE)} testId="txs-new">
+                <Text as="span" fontFamily="mono">
+                  {fresh}
+                </Text>{" "}
+                new transaction{fresh === "1" ? "" : "s"} · back to latest
+              </PagerPill>
+            )}
+          </PrevNextPager>
+        </ListPanel>
       )}
-      {list.isFetchingNextPage && <TableSkeleton rows={5} columns={6} />}
-      {list.hasNextPage && !list.isFetchingNextPage && (
-        <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => void list.fetchNextPage()}>
-          Show older transactions
-        </Button>
-      )}
-    </Stack>
+    </Box>
   );
 }

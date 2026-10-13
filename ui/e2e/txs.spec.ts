@@ -21,21 +21,28 @@ async function listRoutes(page: Page) {
 const rows = (page: Page) => page.getByTestId("tx-row");
 
 test.describe("transactions list", () => {
-  test("lists the latest transactions, filters by Failed and loads an older page", async ({ page }) => {
+  test("lists the latest transactions, pages by cursor and back, and filters by Failed", async ({ page }) => {
     await listRoutes(page);
     await page.goto("/txs");
     await expect(page).toHaveTitle("Transactions · BZE Explorer");
     await expect(rows(page)).toHaveCount(10);
     await expect(rows(page).first().getByTestId("tx-what")).toHaveText("Send 25 BZE to bze1m3k…9ds4");
     await expect(rows(page).first().getByTestId("tx-height")).toHaveText("block 25,120,449");
+    await expect(page.getByTestId("pager")).toContainText("Newest first · 25 per page");
+    await expect(page.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
-    await page.getByRole("button", { name: "Show older transactions" }).click();
-    await expect(rows(page)).toHaveCount(11);
-    await expect(page.getByTestId("txs-snapshot")).toBeVisible();
-    await page.getByRole("button", { name: "Back to the latest transactions" }).click();
+    await page.getByRole("button", { name: "Next page" }).click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.getByTestId("pager-current")).toHaveText("2");
+    await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await page.getByRole("button", { name: "Previous page" }).click();
     await expect(rows(page)).toHaveCount(10);
+    await expect(page.getByTestId("pager-current")).toHaveText("1");
 
+    await page.getByRole("button", { name: "Next page" }).click();
+    await expect(rows(page)).toHaveCount(1);
     await page.getByRole("button", { name: "Failed" }).click();
+    await expect(page.getByTestId("pager-current")).toHaveText("1");
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).getByText("Failed", { exact: true })).toHaveCount(2);
     await noHorizontalScroll(page);

@@ -24,8 +24,6 @@ import type {
   TokenSummary,
   Tx,
   TxListParams,
-  TxStatusFilter,
-  TxSummary,
   ValidatorList,
   ValidatorListParams,
   VoteOption,
@@ -39,7 +37,6 @@ export const queryKeys = {
   blockTransfers: (height: number) => ["block-transfers", height] as const,
   blockEvents: (height: number, p: PageParams) => ["block-events", height, p] as const,
   transactions: (p: TxListParams) => ["txs", p] as const,
-  transactionList: (status: TxStatusFilter | null) => ["txs", "list", status ?? "all"] as const,
   transaction: (hash: string) => ["tx", hash.toUpperCase()] as const,
   validators: (p: ValidatorListParams) => ["validators", p] as const,
   allValidators: () => ["validators", "all-pages"] as const,
@@ -117,14 +114,6 @@ function useLiveList<T>(queryKey: readonly unknown[], read: (p: PageParams, sign
   return { ...query, snapshot: isSnapshot(query.data), latest };
 }
 
-/** The transactions list of one status (every one for null): live until an older page is loaded. */
-export function useTransactionList(status: TxStatusFilter | null) {
-  const api = useApi();
-  return useLiveList<TxSummary>(queryKeys.transactionList(status), (p, signal) =>
-    api.transactions({ ...p, status: status ?? undefined }, signal),
-  );
-}
-
 const isSnapshot = (d: InfiniteData<unknown> | undefined) => (d?.pages.length ?? 0) > 1;
 
 /** Sets `expired` once `active` has held for the pending window (two minutes). */
@@ -176,6 +165,7 @@ export function useBlockEvents(height: number, params: PageParams = {}) {
   });
 }
 
+/** One page of transactions: the latest (home, the list's live page) live, a page after a cursor immutable. */
 export function useTransactions(params: TxListParams = {}) {
   const api = useApi();
   return useQuery({

@@ -41,7 +41,7 @@ test.describe("transaction page", () => {
     await expect(overview).toContainText("rent for October");
 
     await page.getByRole("button", { name: /More details/ }).click();
-    await expect(page.getByText("81,234 of 200,000")).toBeVisible();
+    await expect(page.locator("dt", { hasText: "Gas" }).locator("xpath=following-sibling::dd[1]")).toHaveText(/^81,234\s*of\s*200,000$/);
     await expect(page.getByText(/"gas_used": "81234"/)).toBeVisible();
     await expect(page.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", `https://explorer.getbze.com/beezee/tx/${SEND}`);
 
@@ -63,7 +63,7 @@ test.describe("transaction page", () => {
     await page.goto(`/txs/${UNKNOWN}`);
     await expect(page).toHaveTitle(/· Pending · BZE Explorer$/);
     await expect(page.getByTestId("tx-looking")).toContainText("Looking for this transaction…");
-    await expect(page.getByTestId("tx-not_found")).toContainText("Not found.", { timeout: 15_000 });
+    await expect(page.getByTestId("tx-not_found")).toContainText("Not found", { timeout: 15_000 });
     await expect(page.getByTestId("tx-not_found").getByRole("link", { name: /Ping.pub/ })).toHaveAttribute(
       "href",
       `https://explorer.getbze.com/beezee/tx/${UNKNOWN}`,
