@@ -22,6 +22,13 @@ type List[T any] struct {
 	NextCursor *string `json:"next_cursor"`
 }
 
+// PagedList is a List with the number of rows across every page, for
+// numbered pages; Total is only set when a page number was asked for.
+type PagedList[T any] struct {
+	List[T]
+	Total *int64 `json:"total,omitempty"`
+}
+
 // ErrInvalidCursor is returned for a cursor this API did not produce.
 var ErrInvalidCursor = errors.New("invalid cursor")
 

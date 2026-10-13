@@ -373,6 +373,37 @@ func TestBlocksLastPageHasNullCursor(t *testing.T) {
 	assert.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String(), "an empty list is [] not null")
 }
 
+func TestBlocksBeforeHeight(t *testing.T) {
+	f := &fakeReader{blocks: blocksDown(100, 5)}
+	e := newAPI(f)
+
+	rec := get(t, e, "/blocks?before=101&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	require.NotNil(t, f.gotBefore)
+	assert.Equal(t, int64(101), *f.gotBefore, "before is passed through as the exclusive bound")
+	assert.Equal(t, 3, f.gotLimit)
+	page := decode[dto.List[dto.BlockSummary]](t, rec)
+	require.NotNil(t, page.NextCursor, "a numbered page still hands out the cursor to the next one")
+	keys, err := dto.DecodeCursor(*page.NextCursor, 1)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{99}, keys)
+
+	for path, msg := range map[string]string{
+		"/blocks?before=0":   "before must be a block height",
+		"/blocks?before=-5":  "before must be a block height",
+		"/blocks?before=+5":  "before must be a block height",
+		"/blocks?before=1e3": "before must be a block height",
+		"/blocks?before=10&cursor=" + dto.EncodeCursor(5): "use either before or cursor",
+	} {
+		rec := get(t, e, path)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, path)
+		body := decode[middleware.ErrorBody](t, rec)
+		assert.Equal(t, "bad_request", body.Error.Code, path)
+		assert.Equal(t, msg, body.Error.Message, path)
+	}
+}
+
 func decodeRaw(t *testing.T, rec *httptest.ResponseRecorder) map[string]json.RawMessage {
 	return decode[map[string]json.RawMessage](t, rec)
 }

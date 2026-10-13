@@ -34,6 +34,11 @@ type fakeAccounts struct {
 	gotCategory *string
 	gotBefore   *repository.ActivityKey
 	gotLimit    int
+	// total is what ActivityTotal answers; gotOffset records ActivityPage's
+	// offset.
+	total     int64
+	totalErr  error
+	gotOffset int64
 	// orders and fills are what AccountOrders and AccountFills answer.
 	orders         []repository.Order
 	fills          []repository.OrderFill
@@ -70,6 +75,17 @@ func (f *fakeAccounts) Activity(_ context.Context, _ string, category *string, b
 	limit int) ([]repository.Activity, error) {
 	f.gotCategory, f.gotBefore, f.gotLimit = category, before, limit
 	return f.activity, f.activityErr
+}
+
+func (f *fakeAccounts) ActivityPage(_ context.Context, _ string, category *string, offset int64,
+	limit int) ([]repository.Activity, error) {
+	f.gotCategory, f.gotOffset, f.gotLimit = category, offset, limit
+	return f.activity[min(int(offset), len(f.activity)):], f.activityErr
+}
+
+func (f *fakeAccounts) ActivityTotal(_ context.Context, _ string, category *string) (int64, error) {
+	f.gotCategory = category
+	return f.total, f.totalErr
 }
 
 func (f *fakeAccounts) Account(_ context.Context, address string) (*repository.Account, error) {

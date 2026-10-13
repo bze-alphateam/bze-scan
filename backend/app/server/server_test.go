@@ -87,6 +87,14 @@ func (noAccounts) Activity(context.Context, string, *string, *repository.Activit
 	return nil, nil
 }
 
+func (noAccounts) ActivityPage(context.Context, string, *string, int64, int) ([]repository.Activity, error) {
+	return nil, nil
+}
+
+func (noAccounts) ActivityTotal(context.Context, string, *string) (int64, error) {
+	return 0, nil
+}
+
 func (noAccounts) AccountOrders(context.Context, string, *string, *repository.OrderKey, int) ([]repository.Order, error) {
 	return nil, nil
 }
