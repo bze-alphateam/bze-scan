@@ -59,7 +59,13 @@ test.describe("search", () => {
   test("the search page lists the matches and opens an identifier's page", async ({ page }) => {
     await page.goto("/search?q=hon");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Results for “hon”");
+    await expect(page.getByTestId("search-count")).toHaveText("2 matches · validators first");
     await expect(page.getByTestId("search-result").first()).toHaveAttribute("href", `/validators/${HONEYCOMB}`);
+    await expect(page.getByTestId("search-result").first().getByText("validator", { exact: true })).toBeVisible();
+
+    await page.goto("/search?q=h");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Search");
+    await expect(page.getByTestId("search-state")).toContainText("Type a little more");
 
     await page.goto("/search?q=25120440");
     await expect(page).toHaveURL(/\/blocks\/25120440$/);

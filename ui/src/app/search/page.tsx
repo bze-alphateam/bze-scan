@@ -33,11 +33,19 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   return { title: q ? `Search “${q}”` : "Search", robots: { index: false } };
 }
 
-/** `/search?q=`: an identifier opens its page, other text lists the validators and known accounts it matches. */
+/**
+ * `/search?q=`: an identifier opens its page, other text lists the validators and known accounts it matches.
+ * A full address the explorer has not seen stays here as its "Open account" row, saying so.
+ */
 export default async function SearchRoute({ searchParams }: Props) {
   const q = await queryOf(searchParams);
   const kind = classifyQuery(q);
-  if (kind.kind === "go") redirect(kind.href);
+  if (kind.kind === "go") {
+    const { account } = kind;
+    const unseen = account != null && (await fetchResults(account))?.find((r) => r.id === account)?.indexed === false;
+    if (unseen) return <SearchResultsPage q={q} results={[]} account={account} />;
+    redirect(kind.href);
+  }
   const results = kind.kind === "search" ? await fetchResults(kind.q) : [];
   return <SearchResultsPage q={q} results={results} />;
 }

@@ -1,16 +1,20 @@
-import { Button, Heading, Stack, Text } from "@chakra-ui/react";
+import { Button } from "@chakra-ui/react";
 import NextLink from "next/link";
+
+import { LostPage } from "@/components/layout/lost-page";
 
 export default function NotFound() {
   return (
-    <Stack gap="4" align="center" textAlign="center" py="16">
-      <Heading as="h1" size="2xl">
-        Nothing here
-      </Heading>
-      <Text color="fg.muted">This page does not exist, or not yet.</Text>
-      <Button asChild colorPalette="blue" minH="44px">
-        <NextLink href="/">Back to the explorer</NextLink>
-      </Button>
-    </Stack>
+    <LostPage
+      code="404"
+      title="Nothing here"
+      actions={
+        <Button asChild colorPalette="blue" h="40px">
+          <NextLink href="/">Back to the explorer</NextLink>
+        </Button>
+      }
+    >
+      This page does not exist, or not yet.
+    </LostPage>
   );
 }

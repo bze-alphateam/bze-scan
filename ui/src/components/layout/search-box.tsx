@@ -16,6 +16,7 @@ interface SearchBoxProps extends StackProps {
   autoFocus?: boolean;
   /** Called after a search is submitted (closes the phone drawer or box). */
   onSubmitted?: () => void;
+  placeholder?: string;
 }
 
 /** How long typing must pause before the box asks the search route. */
@@ -27,7 +28,13 @@ export const SEARCH_DEBOUNCE_MS = 250;
  * matches listed under the box (arrows, Enter, Escape), Enter picking the
  * first one. Without JavaScript the form submits to `/search?q=`.
  */
-export function SearchBox({ size = "md", autoFocus, onSubmitted, ...props }: SearchBoxProps) {
+export function SearchBox({
+  size = "md",
+  autoFocus,
+  onSubmitted,
+  placeholder = "Search by block, transaction hash, address or validator",
+  ...props
+}: SearchBoxProps) {
   const router = useRouter();
   const id = useId();
   const [q, setQ] = useState("");
@@ -118,7 +125,7 @@ export function SearchBox({ size = "md", autoFocus, onSubmitted, ...props }: Sea
               setActive(-1);
             }}
             onKeyDown={keyDown}
-            placeholder="Search by block, transaction hash, address or validator"
+            placeholder={placeholder}
             aria-label="Search the explorer"
             autoFocus={autoFocus}
             unstyled
