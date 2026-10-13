@@ -8,7 +8,7 @@ import { hopsExplainer, isObsolete, OBSOLETE_EXPLAINER, tokenSymbol } from "./to
 // through), the hops, and the warnings (stranded, obsolete). Pure, so they
 // are tested without rendering.
 
-export type BadgeKind = "kind" | "direct" | "home" | "hops" | "stranded" | "obsolete" | "dex" | "fame";
+export type BadgeKind = "kind" | "direct" | "home" | "hops" | "stranded" | "obsolete" | "dex";
 
 export interface ExplainedBadge {
   kind: BadgeKind;

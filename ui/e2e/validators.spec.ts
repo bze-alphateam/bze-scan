@@ -20,7 +20,7 @@ test.describe("validators list", () => {
     await expect(page.getByTestId("tile").first()).toContainText("405M BZE");
 
     // The Hall of Fame opens first, smallest first, and ends with a way to every active validator.
-    await expect(page.getByRole("tab", { name: "Hall of Fame · 2" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Hall of Fame 2" })).toHaveAttribute("aria-selected", "true");
     const fame = page.getByTestId("hall-of-fame-row");
     await expect(fame).toHaveCount(2);
     await expect(fame.first()).toContainText("Thamar Node");
@@ -28,17 +28,27 @@ test.describe("validators list", () => {
     await noHorizontalScroll(page);
     await page.getByRole("button", { name: "See all active validators" }).click();
 
-    await expect(page.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Active 3" })).toHaveAttribute("aria-selected", "true");
     await expect(rows(page)).toHaveCount(3);
     await expect(rows(page).first()).toContainText("Honeycomb");
-    await expect(rows(page).first().getByTestId("fame-tag")).toBeVisible();
+    // Members are marked with a crown whose card says why, and links back to the Hall of Fame.
+    const crown = rows(page).first().getByRole("button", { name: "Hall of Fame member" });
+    await expect(crown).toBeVisible();
+    await expect(rows(page).nth(2).getByRole("button", { name: "Hall of Fame member" })).toHaveCount(0);
+    await crown.hover();
+    const card = rows(page).first().getByRole("tooltip");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("Missed 1 of the last 10,000 blocks (10 allowed)");
+    await card.getByRole("button", { name: "See the Hall of Fame →" }).click();
+    await expect(page.getByRole("tab", { name: "Hall of Fame 2" })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "Active 3" }).click();
 
-    await page.getByRole("tab", { name: "Inactive · 2" }).click();
+    await page.getByRole("tab", { name: "Inactive 2" }).click();
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
 
-    await page.getByRole("tab", { name: "Active · 3" }).click();
+    await page.getByRole("tab", { name: "Active 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page).first()).toContainText("Thamar Node");
@@ -68,6 +78,7 @@ test.describe("validator page", () => {
     await expect(page.getByTestId("recent-block")).toHaveCount(3);
     await expect(page.getByTestId("history-item").first()).toContainText("Commission changed from 4% to 5%");
     await expect(page.getByText("Never jailed, never penalised since Apr 17, 2022")).toBeVisible();
+    await expect(page.getByTestId("fame-crown")).toBeVisible();
     await expect(page.getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
 
     await page.getByRole("button", { name: /More details/ }).click();
@@ -93,12 +104,13 @@ test.describe("validators on a phone", () => {
   test("stacks each validator into a card and keeps the pages within the screen", async ({ page }) => {
     await page.goto("/validators");
     await noHorizontalScroll(page); // the Hall of Fame, open first
-    await page.getByRole("tab", { name: "Active · 3" }).click();
+    await page.getByRole("tab", { name: "Active 3" }).click();
     const row = rows(page).first();
     await expect(row).toBeVisible();
     const [name, staked] = await Promise.all([
       row.getByRole("link", { name: "Honeycomb", exact: true }).boundingBox(),
-      row.getByText("50M BZE").boundingBox(),
+      // The stake moves under the name on phones; the desktop column is hidden.
+      row.getByText("50M BZE").filter({ visible: true }).boundingBox(),
     ]);
     expect(name && staked && staked.y > name.y).toBe(true);
     await noHorizontalScroll(page);

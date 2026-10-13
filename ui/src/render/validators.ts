@@ -1,6 +1,6 @@
 import BigNumber from "bignumber.js";
 
-import type { ChainParams, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
+import type { ChainParams, HallOfFameRules, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
 import { formatAmount, formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
 
 // The validators pages' words and numbers, kept pure so they are tested
@@ -32,12 +32,26 @@ export interface FameRule {
   window: number;
 }
 
-/** What earns a validator its place in the Hall of Fame, in one sentence. */
-export function hallOfFameExplainer({ proposals, maxMissed, window }: FameRule): string {
-  return (
-    `In the Hall of Fame: it voted on every one of the last ${formatCount(proposals)} proposals and missed no more than ` +
-    `${formatCount(maxMissed)} of the last ${formatCount(window)} blocks.`
-  );
+/**
+ * The crown card's signing line, with the rule's allowance: "Missed 4 of the
+ * last 10,000 blocks (10 allowed)". The window is the rule's, else the validator's.
+ */
+export function fameMissedText(v: Pick<Validator, "missed_blocks" | "signed_blocks_window">, rules: HallOfFameRules): string {
+  const allowed = `(${formatCount(rules.max_missed_blocks)} allowed)`;
+  const window = rules.signed_blocks_window ?? v.signed_blocks_window;
+  const last = window != null ? ` the last ${formatCount(window)}` : "";
+  if (v.missed_blocks == null) return `Signing record not known yet ${allowed}`;
+  if (v.missed_blocks === 0) return `Missed no blocks in${last || " the window"} ${allowed}`;
+  return `Missed ${formatCount(v.missed_blocks)} of${last || " the window's"} blocks ${allowed}`;
+}
+
+/** An uptime's tone in the lists: red under 99.5%, muted at a full 100%, plain between. */
+export function uptimeTone(uptime: string | null | undefined): "bad" | "muted" | null {
+  if (uptime == null) return null;
+  const n = Number(uptime);
+  if (!Number.isFinite(n)) return null;
+  if (n < 99.5) return "bad";
+  return n >= 100 ? "muted" : null;
 }
 
 /** "Didn't miss a block in the last 10,000 blocks", or how many it missed. */

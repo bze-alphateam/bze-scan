@@ -1,25 +1,26 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Tabs, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useMemo, useState } from "react";
-import { LuExternalLink, LuSearch } from "react-icons/lu";
+import { useId, useMemo, useRef, useState } from "react";
+import { LuSearch, LuTriangleAlert } from "react-icons/lu";
 
 import { useAllValidators, useHallOfFame, useParams } from "@/api/hooks";
-import type { HallOfFame as Fame, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
+import type { HallOfFame, HallOfFameRules, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
-import { ExplainedBadge } from "@/components/ui/explained-badge";
+import { Chip } from "@/components/ui/chip";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
+import { PageTitle } from "@/components/ui/page-head";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
+import { Tag } from "@/components/ui/status-pill";
 import { Tile } from "@/components/ui/tile";
+import { VTabPanel, VTabs, VTabsBar } from "@/components/ui/vtabs";
 import { formatCount } from "@/lib/format";
 import { externalLinks, stakeHref } from "@/lib/links";
 import {
   bondCompact,
-  type FameRule,
   filterByMoniker,
-  hallOfFameExplainer,
-  inactiveLabel,
   pctText,
   rateText,
   recentVotesText,
@@ -28,13 +29,18 @@ import {
   splitValidators,
   unbondingText,
   uptimeText,
+  uptimeTone,
 } from "@/render/validators";
+
+import { Crown, CrownMark, Moniker } from "./hall-of-fame";
+
+type Fame = Pick<HallOfFame, "items" | "rules">;
 
 /** The four header tiles; each tolerates a null summary field. */
 export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null }) {
   const s = summary;
   return (
-    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" data-testid="summary-tiles">
+    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" mb="7" data-testid="summary-tiles">
       <Tile
         label="Staked BZE"
         value={s?.bonded_tokens ? bondCompact(s.bonded_tokens) : null}
@@ -44,7 +50,7 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
         label="Reward rate"
         value={s?.reward_rate ? `≈ ${pctText(s.reward_rate)}` : null}
         sub={
-          <Link asChild>
+          <Link asChild color="accent.fg">
             <NextLink href="/parameters#inflation">per year before the validator&apos;s commission</NextLink>
           </Link>
         }
@@ -55,26 +61,34 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
         sub={
           <>
             no rewards while unstaking ·{" "}
-            <Link asChild>
+            <Link asChild color="accent.fg">
               <NextLink href="/parameters#staking">see parameters</NextLink>
             </Link>
           </>
         }
       />
-      <Tile
-        label="Top 5 validators hold"
-        value={s?.top5_share ? pctText(s.top5_share) : null}
-        sub="a healthier network keeps this low"
-      />
+      <Tile label="Top 5 validators hold" value={s?.top5_share ? pctText(s.top5_share) : null} sub="a healthier network keeps this low" />
     </SimpleGrid>
   );
 }
 
-const COLUMNS = { base: "1fr auto", md: "56px minmax(0, 2.2fr) 1.5fr 1fr 1fr 88px" };
+// # · Validator · Staked (c2) · Commission (c2) · Uptime (c3) · Stake. On phones the stake sits under the name.
+// (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
+const COLUMNS = {
+  base: "24px minmax(0, 1fr) auto",
+  c2: "28px minmax(0, 1fr) 170px 100px auto",
+  c3: "28px minmax(0, 1fr) 170px 100px 80px auto",
+};
+const FAME_COLUMNS = {
+  base: "24px minmax(0, 1fr) auto",
+  c2: "28px minmax(0, 1fr) auto",
+};
+// The crown's card hangs below its row, so the table panel cannot clip; the last row keeps the rounded corners.
+const LAST_ROW = { borderBottomWidth: "0", roundedBottom: "l3" };
 
 function StakeButton({ moniker, operator }: { moniker: string; operator: string }) {
   return (
-    <Button asChild size="sm" variant="outline" minH="44px">
+    <Button asChild size="xs" variant="outline" h="30px" px="3" fontSize="13px" fontWeight="500" borderColor="border.panel">
       <a href={stakeHref(operator)} target="_blank" rel="noopener noreferrer" aria-label={`Stake with ${moniker}`}>
         Stake
       </a>
@@ -82,161 +96,145 @@ function StakeButton({ moniker, operator }: { moniker: string; operator: string 
   );
 }
 
-/** A label shown above a value on phones, where the header row is hidden. */
-function PhoneLabel({ children }: { children: string }) {
+const validatorHref = (operator: string) => `/validators/${encodeURIComponent(operator)}`;
+
+/** "50M BZE · 12.3%": the stake and its share. */
+function Staked({ v }: { v: Validator }) {
   return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
+    <>
+      {bondCompact(v.tokens)}
+      {v.voting_power_pct && (
+        <Text as="span" color="fg.muted">
+          {" "}
+          · {pctText(v.voting_power_pct)}
+        </Text>
+      )}
+    </>
   );
 }
 
-function ValidatorRow({ v, fame }: { v: Validator; fame?: FameRule }) {
-  const href = `/validators/${encodeURIComponent(v.operator_address)}`;
+/** What the lists know of the Hall of Fame: each member's own figures, and the rule. Null while unknown. */
+interface FameMarks {
+  members: Map<string, Validator>;
+  rules: HallOfFameRules;
+  seeAll: () => void;
+}
+
+function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
+  const member = fame?.members.get(v.operator_address);
+  const tone = uptimeTone(v.uptime);
   return (
-    <Grid
-      role="listitem"
-      templateColumns={COLUMNS}
-      gap={{ base: "2", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="validator-row"
-    >
-      <Text hideBelow="md" color="fg.muted" fontSize="sm">
-        {v.status === "bonded" ? v.rank ?? "—" : inactiveLabel(v.status)}
+    <ListRow role="listitem" templateColumns={COLUMNS} _last={LAST_ROW} data-testid="validator-row" data-fame={member ? "" : undefined}>
+      <Text fontFamily="mono" color="fg.muted" fontSize="13px">
+        {v.status === "bonded" ? (v.rank ?? "—") : "–"}
       </Text>
-      <HStack gap="3" minW="0">
-        <Avatar name={v.moniker} src={v.logo_url} />
-        <Stack gap="0.5" minW="0">
-          <HStack gap="2" minW="0">
-            <Link asChild fontWeight="medium" truncate>
-              <NextLink href={href}>{v.moniker}</NextLink>
+      <HStack gap="2" minW="0">
+        <Avatar name={v.moniker} src={v.logo_url} ring={member ? "gold" : undefined} />
+        <Box minW="0">
+          <Box wordBreak="break-word">
+            <Link asChild fontWeight="500" color="fg" _hover={{ color: "accent.fg" }}>
+              <NextLink href={validatorHref(v.operator_address)}>
+                <Moniker name={v.moniker} gold={!!member} />
+              </NextLink>
             </Link>
+            {member && fame && <CrownMark v={member} rules={fame.rules} seeAll={{ onClick: fame.seeAll }} />}
             {v.jailed && (
-              <Badge colorPalette="red" variant="subtle" size="sm">
+              <Tag tone="bad" ms="2" verticalAlign="1px">
                 Jailed
-              </Badge>
+              </Tag>
             )}
-            {fame && (
-              <ExplainedBadge
-                badge={{
-                  kind: "fame",
-                  text: "Hall of Fame",
-                  tone: "yellow",
-                  variant: "subtle",
-                  explainer: hallOfFameExplainer(fame),
-                }}
-              />
+            {v.status === "unbonding" && (
+              <Chip ms="2" verticalAlign="1px">
+                Unbonding
+              </Chip>
             )}
-          </HStack>
-          <Text hideFrom="md" fontSize="xs" color="fg.muted">
-            {v.status === "bonded" ? `#${v.rank ?? "—"}` : inactiveLabel(v.status)}
+          </Box>
+          <Text hideFrom="c2" fontFamily="mono" fontSize="12px" mt="2px">
+            <Staked v={v} />
           </Text>
-        </Stack>
+        </Box>
       </HStack>
-      <Box hideFrom="md" gridRow="span 1">
-        <StakeButton moniker={v.moniker} operator={v.operator_address} />
-      </Box>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        <PhoneLabel>Staked</PhoneLabel>
-        {bondCompact(v.tokens)}
-        {v.voting_power_pct && (
-          <Text as="span" color="fg.muted">
-            {" "}
-            · {pctText(v.voting_power_pct)}
-          </Text>
-        )}
+      <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
+        <Staked v={v} />
       </Text>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        <PhoneLabel>Commission</PhoneLabel>
+      <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
         {rateText(v.commission_rate)}
       </Text>
-      <Text fontSize="sm" gridColumn={{ base: "1 / -1", md: "auto" }}>
-        <PhoneLabel>Uptime</PhoneLabel>
+      <Text
+        hideBelow="c3"
+        textAlign="right"
+        fontFamily="mono"
+        fontSize="13px"
+        color={tone === "bad" ? "neg.fg" : tone === "muted" ? "fg.muted" : "fg"}
+      >
         {uptimeText(v.uptime)}
       </Text>
-      <Box hideBelow="md">
+      <Box textAlign="right">
         <StakeButton moniker={v.moniker} operator={v.operator_address} />
       </Box>
-    </Grid>
+    </ListRow>
   );
 }
 
-interface FameMarks {
-  /** The operator addresses in the Hall of Fame. */
-  operators: Set<string>;
-  rule: FameRule;
-}
-
-function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame?: FameMarks }) {
+function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame: FameMarks | null }) {
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-      <Grid
-        hideBelow="md"
-        templateColumns={COLUMNS}
-        gap="4"
-        px="4"
-        h="10"
-        alignItems="center"
-        fontSize="xs"
-        color="fg.muted"
-        textTransform="uppercase"
-        letterSpacing="wide"
-        aria-hidden
-      >
+    <ListPanel overflow="visible">
+      <ListHead templateColumns={COLUMNS} aria-hidden>
         <Text>#</Text>
         <Text>Validator</Text>
-        <Text>Staked with them</Text>
-        <Text>Commission</Text>
-        <Text>Uptime</Text>
+        <Text hideBelow="c2" textAlign="right">
+          Staked with them
+        </Text>
+        <Text hideBelow="c2" textAlign="right">
+          Commission
+        </Text>
+        <Text hideBelow="c3" textAlign="right">
+          Uptime
+        </Text>
         <span />
-      </Grid>
+      </ListHead>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} fame={fame?.operators.has(v.operator_address) ? fame.rule : undefined} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame} />
         ))}
       </Box>
       {items.length === 0 && (
-        <Text px="4" py="6" color="fg.muted" fontSize="sm" borderTopWidth="1px" borderColor="border.panel">
+        <Text px="4" py="6" color="fg.muted" fontSize="sm">
           {empty}
         </Text>
       )}
-    </Box>
+    </ListPanel>
   );
 }
 
-function PickingCard({ seats }: { seats: number | null }) {
+function PickingPanel({ seats }: { seats: number | null }) {
   return (
-    <Card title="Picking a validator">
-      <Stack gap="3" fontSize="sm">
-        <Text>
-          Any active validator pays the same base reward. Lower commission means more for you, and staking with validators
-          outside the top 5 keeps the network harder to attack.
-        </Text>
-        <Text color="fg.muted">
-          Inactive validators are outside the {seats ? formatCount(seats) : "active"} seats or were jailed, and pay no
-          rewards.
-        </Text>
-        <HStack gap="4" wrap="wrap">
-          <Link href={externalLinks.staking} target="_blank" rel="noopener noreferrer" minH="44px">
-            Stake on the Staking app <LuExternalLink aria-hidden />
-          </Link>
-          <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" minH="44px">
-            How staking works, in the docs <LuExternalLink aria-hidden />
-          </Link>
-        </HStack>
-      </Stack>
-    </Card>
+    <Box as="section" bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" px="5" py="18px" mt="6">
+      <Heading as="h2" fontSize="15px" fontWeight="600" mb="2">
+        Picking a validator
+      </Heading>
+      <Text lineHeight="1.55" maxW="760px" mb="2">
+        Any active validator pays the same base reward. Lower commission means more for you, and staking with validators outside the top 5
+        keeps the network harder to attack.
+      </Text>
+      <Text color="fg.muted" fontSize="13px" lineHeight="1.55">
+        Inactive validators are outside the {seats ? formatCount(seats) : "active"} seats or were jailed, and pay no rewards.
+      </Text>
+      <Flex gap="5" wrap="wrap" mt="3" fontSize="13px">
+        <Link href={externalLinks.staking} target="_blank" rel="noopener noreferrer" color="accent.fg">
+          Stake on the Staking app ↗
+        </Link>
+        <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" color="accent.fg">
+          How staking works, in the docs ↗
+        </Link>
+      </Flex>
+    </Box>
   );
 }
 
 export function ValidatorsSkeleton() {
   return (
-    <Stack gap="6" aria-busy data-testid="validators-skeleton">
+    <Stack gap="7" aria-busy data-testid="validators-skeleton">
       <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3">
         {Array.from({ length: 4 }).map((_, i) => (
           <TileSkeleton key={i} />
@@ -247,180 +245,233 @@ export function ValidatorsSkeleton() {
   );
 }
 
-function LoadError({ onRetry }: { onRetry: () => void }) {
+function LoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
-    <Card title="The validators could not be loaded">
-      <HStack justify="space-between" wrap="wrap" gap="3">
-        <Text color="fg.muted" fontSize="sm">
-          The explorer did not answer. Try again in a moment.
-        </Text>
-        <Button colorPalette="blue" minH="44px" onClick={onRetry}>
+    <StateBox
+      tone="error"
+      icon={<LuTriangleAlert size={20} />}
+      title={`${what} could not be loaded`}
+      actions={
+        <Button size="sm" colorPalette="blue" onClick={onRetry}>
           Try again
         </Button>
-      </HStack>
-    </Card>
+      }
+    >
+      The explorer did not answer. Try again in a moment.
+    </StateBox>
   );
 }
 
 /** A Hall of Fame row: the validator, its stake and what earned it the place. */
-function HallOfFameRow({ v, place, window }: { v: Validator; place: number; window: number }) {
-  const href = `/validators/${encodeURIComponent(v.operator_address)}`;
+function HallOfFameRow({ v, place, rules, window }: { v: Validator; place: number; rules: HallOfFameRules; window: number }) {
+  const within = v.missed_blocks != null && v.missed_blocks <= rules.max_missed_blocks;
   return (
-    <HStack
-      role="listitem"
-      gap="3"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      align="center"
-      data-testid="hall-of-fame-row"
-    >
-      <Text color="fg.muted" fontSize="sm" w="6" flexShrink={0}>
+    <ListRow role="listitem" templateColumns={FAME_COLUMNS} _last={LAST_ROW} data-testid="hall-of-fame-row">
+      <Text fontFamily="mono" color="fg.muted" fontSize="13px">
         {place}
       </Text>
-      <Avatar name={v.moniker} src={v.logo_url} />
-      <Stack gap="0.5" minW="0" flex="1">
-        <Link asChild fontWeight="medium" truncate>
-          <NextLink href={href}>{v.moniker}</NextLink>
-        </Link>
-        <Text fontSize="sm" color="fg.muted">
-          {bondCompact(v.tokens)}
-          {v.voting_power_pct ? ` · ${pctText(v.voting_power_pct)} of the voting power` : ""}
-        </Text>
-        <HStack gap="1.5" wrap="wrap">
-          <Badge colorPalette="green" variant="subtle" size="sm" whiteSpace="normal" h="auto" data-testid="hall-of-fame-signing">
-            {signingText(v, window)}
-          </Badge>
-          <Badge colorPalette="purple" variant="subtle" size="sm" whiteSpace="normal" h="auto" data-testid="hall-of-fame-votes">
-            {recentVotesText(v)}
-          </Badge>
-        </HStack>
-      </Stack>
+      <HStack gap="2" minW="0" align="flex-start">
+        <Avatar name={v.moniker} src={v.logo_url} ring="gold" />
+        <Box minW="0">
+          <Link asChild fontWeight="500" wordBreak="break-word">
+            <NextLink href={validatorHref(v.operator_address)}>
+              <Moniker name={v.moniker} gold />
+            </NextLink>
+          </Link>
+          <Text fontFamily="mono" fontSize="12px" color="fg.muted" mt="2px">
+            {bondCompact(v.tokens)}
+            {v.voting_power_pct ? ` · ${pctText(v.voting_power_pct)} of the voting power` : ""}
+          </Text>
+          <Flex gap="6px" wrap="wrap" mt="6px">
+            <Chip variant={within ? "ok" : "warn"} whiteSpace="normal" data-testid="hall-of-fame-signing">
+              {signingText(v, rules.signed_blocks_window ?? window)}
+            </Chip>
+            <Chip variant="acc" whiteSpace="normal" data-testid="hall-of-fame-votes">
+              {recentVotesText(v)}
+            </Chip>
+          </Flex>
+        </Box>
+      </HStack>
       <StakeButton moniker={v.moniker} operator={v.operator_address} />
-    </HStack>
+    </ListRow>
   );
 }
 
-function HallOfFame({ items, rule, query, onSeeAll }: { items: Validator[]; rule: FameRule; query: string; onSeeAll: () => void }) {
+/** The Hall of Fame tab: the rule in words, the members in the API's order (the smallest first). */
+function HallOfFameList({ fame, query, window }: { fame: Fame; query: string; window: number }) {
+  const { items, rules } = fame;
   const rows = filterByMoniker(items, query);
+  // While fewer proposals have closed than the rule counts, the members voted on all of those.
+  const proposals = Math.min(rules.proposals, items[0]?.recent_votes.of ?? rules.proposals);
   return (
-    <Stack gap="3">
-      <Text fontSize="sm" color="fg.muted" maxW="3xl" data-testid="hall-of-fame-intro">
-        Active validators that voted on every one of the last {formatCount(rule.proposals)} proposals, whatever their vote,
-        and missed no more than {formatCount(rule.maxMissed)} of the last {formatCount(rule.window)}{" "}
-        blocks. The smallest come first: staking with them spreads the voting power.
+    <>
+      <Text color="fg.muted" fontSize="13px" maxW="720px" mb="14px" lineHeight="1.55" data-testid="hall-of-fame-intro">
+        Active validators that voted on every one of the last {formatCount(proposals)} proposals, whatever their vote, and missed no more
+        than {formatCount(rules.max_missed_blocks)}
+        {rules.signed_blocks_window != null ? ` of the last ${formatCount(rules.signed_blocks_window)}` : ""} blocks. The smallest come
+        first: staking with them spreads the voting power.
       </Text>
-      <Card p="0">
+      <ListPanel>
         {rows.length === 0 ? (
-          <Text px="4" py="6" color="fg.muted" textAlign="center">
+          <Text px="4" py="6" color="fg.muted" fontSize="sm">
             {query ? "No Hall of Fame validator has that name." : "No validator meets the bar right now."}
           </Text>
         ) : (
           <Box role="list" aria-label="Hall of Fame">
             {rows.map((v) => (
-              <HallOfFameRow key={v.operator_address} v={v} place={items.indexOf(v) + 1} window={rule.window} />
+              <HallOfFameRow key={v.operator_address} v={v} place={items.indexOf(v) + 1} rules={rules} window={window} />
             ))}
           </Box>
         )}
-      </Card>
-      <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={onSeeAll}>
-        See all active validators
-      </Button>
-    </Stack>
+      </ListPanel>
+    </>
   );
 }
 
 type Tab = "fame" | "active" | "inactive";
 
-/** The list once loaded: intro, tiles, tabs with the filter, the table and the footnotes. */
-export function ValidatorsView({ list, hallOfFame }: { list: ValidatorList; hallOfFame: Pick<Fame, "items" | "rules"> }) {
+interface FameQuery {
+  data: Fame | null;
+  failed: boolean;
+  retry: () => void;
+}
+
+/**
+ * The list once loaded: tiles, the tabs with the filter, the table and the
+ * footnotes. The Hall of Fame loads on its own: until it answers, nobody is
+ * marked and its tab waits, and the rest of the page works.
+ */
+export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: FameQuery }) {
   const [tab, setTab] = useState<Tab>("fame");
   const [query, setQuery] = useState("");
+  const id = useId();
+  const bar = useRef<HTMLDivElement>(null);
   const params = useParams();
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
-  const { items: fame, rules } = hallOfFame;
   const seats = list.summary?.max_validators ?? null;
-  const window = signedBlocksWindow(params.data) ?? rules.signed_blocks_window ?? 10_000;
-  // While fewer proposals have closed than the rule counts, the members voted on all of those.
-  const fameRule: FameRule = {
-    proposals: Math.min(rules.proposals, fame[0]?.recent_votes.of ?? rules.proposals),
-    maxMissed: rules.max_missed_blocks,
-    window: rules.signed_blocks_window ?? window,
+  const window = signedBlocksWindow(params.data) ?? fame.data?.rules.signed_blocks_window ?? 10_000;
+
+  const showFame = () => {
+    setTab("fame");
+    bar.current?.scrollIntoView?.({ block: "start" });
   };
-  const fameOperators = useMemo(() => new Set(fame.map((v) => v.operator_address)), [fame]);
-  // Each panel filters its own list: the panel leaving keeps its rows while its exit animation runs.
-  const activeRows = filterByMoniker(active, query);
-  const inactiveRows = filterByMoniker(inactive, query);
+  const fameItems = fame.data?.items;
+  const members = useMemo(() => new Map((fameItems ?? []).map((v) => [v.operator_address, v])), [fameItems]);
+  const marks: FameMarks | null = fame.data ? { members, rules: fame.data.rules, seeAll: showFame } : null;
+
+  const footnote = (
+    <Text color="fg.muted" fontSize="13px">
+      Commission is the share of your rewards the validator keeps. Uptime is the share of the last {formatCount(window)} blocks the
+      validator signed.
+    </Text>
+  );
 
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
-      <Text color="fg.muted" maxW="3xl">
-        {formatCount(active.length)} validators produce blocks right now
-        {seats ? `, out of ${formatCount(seats)} seats` : ""}. Validators run the chain and earn rewards for the people who
-        stake BZE with them. They do not hold your BZE: staked coins stay in your account.
-      </Text>
+    <Box>
       <SummaryTiles summary={list.summary} />
-      <Stack gap="3">
-        <Tabs.Root value={tab} onValueChange={(e) => setTab(e.value as Tab)} variant="line" lazyMount unmountOnExit>
-          <HStack justify="space-between" wrap="wrap" gap="3">
-            <Tabs.List>
-              <Tabs.Trigger value="fame" minH="44px">
-                Hall of Fame · {formatCount(fame.length)}
-              </Tabs.Trigger>
-              <Tabs.Trigger value="active" minH="44px">
-                Active · {formatCount(active.length)}
-              </Tabs.Trigger>
-              <Tabs.Trigger value="inactive" minH="44px">
-                Inactive · {formatCount(inactive.length)}
-              </Tabs.Trigger>
-            </Tabs.List>
-            <HStack
-              gap="2"
-              px="3"
-              borderWidth="1px"
-              borderColor="border.panel"
-              rounded="l2"
-              w={{ base: "full", sm: "64" }}
-              color="fg.muted"
-            >
-              <LuSearch aria-hidden />
-              <Input
-                aria-label="Find a validator"
-                placeholder="Find a validator"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                variant="flushed"
-                border="0"
-                minH="44px"
-              />
-            </HStack>
+      <Box ref={bar} scrollMarginTop="4">
+        <VTabsBar>
+          <VTabs
+            id={id}
+            label="Validators"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              {
+                value: "fame",
+                icon: <Crown />,
+                label: "Hall of Fame",
+                count: fame.data ? formatCount(fame.data.items.length) : null,
+              },
+              {
+                value: "active",
+                label: "Active",
+                count: formatCount(active.length),
+              },
+              {
+                value: "inactive",
+                label: "Inactive",
+                count: formatCount(inactive.length),
+              },
+            ]}
+          />
+          <HStack
+            as="form"
+            role="search"
+            onSubmit={(e) => e.preventDefault()}
+            gap="2"
+            h="34px"
+            w={{ base: "full", sm: "260px" }}
+            mb="2"
+            px="3"
+            bg="bg.panel"
+            borderWidth="1px"
+            borderColor="border.panel"
+            rounded="l2"
+            color="fg.muted"
+            _focusWithin={{ borderColor: "accent.fg" }}
+          >
+            <LuSearch size={14} aria-hidden />
+            <Input
+              aria-label="Find a validator"
+              placeholder="Find a validator"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              unstyled
+              flex="1"
+              minW="0"
+              h="full"
+              bg="transparent"
+              color="fg"
+              fontSize="13px"
+              outline="none"
+            />
           </HStack>
-          <Tabs.Content value="fame" pt="3">
-            <HallOfFame items={fame} rule={fameRule} query={query} onSeeAll={() => setTab("active")} />
-          </Tabs.Content>
-          <Tabs.Content value="active" pt="3">
-            <ValidatorTable
-              items={activeRows}
-              empty={query ? "No active validator has that name." : "No active validators."}
-              fame={{ operators: fameOperators, rule: fameRule }}
-            />
-          </Tabs.Content>
-          <Tabs.Content value="inactive" pt="3">
-            <ValidatorTable
-              items={inactiveRows}
-              empty={query ? "No inactive validator has that name." : "Every validator is active."}
-            />
-          </Tabs.Content>
-        </Tabs.Root>
-        <Text fontSize="sm" color="fg.muted">
-          Commission is the share of your rewards the validator keeps. Uptime is the share of the last{" "}
-          {formatCount(window)} blocks the validator signed.
-        </Text>
-      </Stack>
-      <PickingCard seats={seats} />
-    </Stack>
+        </VTabsBar>
+      </Box>
+      <VTabPanel id={id} value={tab}>
+        {tab === "fame" ? (
+          fame.data ? (
+            <HallOfFameList fame={fame.data} query={query} window={window} />
+          ) : fame.failed ? (
+            <LoadError what="The Hall of Fame" onRetry={fame.retry} />
+          ) : (
+            <TableSkeleton rows={5} columns={3} />
+          )
+        ) : (
+          <ValidatorTable
+            items={filterByMoniker(tab === "active" ? active : inactive, query)}
+            empty={
+              tab === "active"
+                ? query
+                  ? "No active validator has that name."
+                  : "No active validators."
+                : query
+                  ? "No inactive validator has that name."
+                  : "Every validator is active."
+            }
+            fame={marks}
+          />
+        )}
+      </VTabPanel>
+      <Flex direction="column" align="flex-start" gap="14px" mt="3">
+        {tab === "fame" && (
+          <Button
+            variant="outline"
+            h="36px"
+            px="14px"
+            fontSize="13px"
+            fontWeight="500"
+            borderColor="border.panel"
+            onClick={() => setTab("active")}
+          >
+            See all active validators
+          </Button>
+        )}
+        {footnote}
+      </Flex>
+      <PickingPanel seats={seats} />
+    </Box>
   );
 }
 
@@ -428,23 +479,37 @@ export function ValidatorsView({ list, hallOfFame }: { list: ValidatorList; hall
 export function ValidatorsPage() {
   const list = useAllValidators();
   const fame = useHallOfFame();
+  const data = list.data;
+  const activeCount = data ? splitValidators(data.items).active.length : 0;
+  const seats = data?.summary?.max_validators ?? null;
   return (
-    <Stack gap="6">
-      <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-        Validators
-      </Heading>
-      {list.data && fame.data ? (
-        <ValidatorsView list={list.data} hallOfFame={fame.data} />
-      ) : list.error || fame.error ? (
-        <LoadError
-          onRetry={() => {
-            if (list.error) void list.refetch();
-            if (fame.error) void fame.refetch();
+    <Box>
+      <PageTitle
+        title="Validators"
+        intro={
+          data ? (
+            <>
+              {formatCount(activeCount)} validators produce blocks right now
+              {seats ? `, out of ${formatCount(seats)} seats` : ""}. Validators run the chain and earn rewards for the people who stake BZE
+              with them. They do not hold your BZE: staked coins stay in your account.
+            </>
+          ) : undefined
+        }
+      />
+      {data ? (
+        <ValidatorsView
+          list={data}
+          fame={{
+            data: fame.data ?? null,
+            failed: !!fame.error && !fame.data,
+            retry: () => void fame.refetch(),
           }}
         />
+      ) : list.error ? (
+        <LoadError what="The validators" onRetry={() => void list.refetch()} />
       ) : (
         <ValidatorsSkeleton />
       )}
-    </Stack>
+    </Box>
   );
 }

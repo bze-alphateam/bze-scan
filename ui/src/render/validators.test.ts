@@ -7,7 +7,8 @@ import list from "../../test/fixtures/api/v1/validators.json";
 import params from "../../test/fixtures/api/v1/params.json";
 
 import {
-  hallOfFameExplainer,
+  fameMissedText,
+  uptimeTone,
   recentVotesText,
   signingText,
   cleanRecord,
@@ -156,10 +157,23 @@ describe("history", () => {
 });
 
 describe("hall of fame", () => {
-  it("words the rule in one sentence", () => {
-    expect(hallOfFameExplainer({ proposals: 10, maxMissed: 10, window: 10_000 })).toBe(
-      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 10 of the last 10,000 blocks.",
+  it("words the crown card's signing line with the rule's allowance", () => {
+    const rules = { proposals: 10, max_missed_blocks: 10, signed_blocks_window: 10_000 };
+    expect(fameMissedText({ missed_blocks: 4, signed_blocks_window: 5 }, rules)).toBe("Missed 4 of the last 10,000 blocks (10 allowed)");
+    expect(fameMissedText({ missed_blocks: 0, signed_blocks_window: null }, rules)).toBe("Missed no blocks in the last 10,000 (10 allowed)");
+    // The rule's window first, the validator's while the rule's is unknown.
+    const noWindow = { ...rules, signed_blocks_window: null };
+    expect(fameMissedText({ missed_blocks: 2, signed_blocks_window: 20_000 }, noWindow)).toBe("Missed 2 of the last 20,000 blocks (10 allowed)");
+    expect(fameMissedText({ missed_blocks: 2, signed_blocks_window: null }, { ...noWindow, max_missed_blocks: 5 })).toBe(
+      "Missed 2 of the window's blocks (5 allowed)",
     );
+  });
+
+  it("tones an uptime: red under 99.5%, muted at 100%", () => {
+    expect(uptimeTone("99.40000")).toBe("bad");
+    expect(uptimeTone("99.90000")).toBeNull();
+    expect(uptimeTone("100.00000")).toBe("muted");
+    expect(uptimeTone(null)).toBeNull();
   });
 
   it("says how it signed and voted", () => {
