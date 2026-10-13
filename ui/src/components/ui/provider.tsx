@@ -98,8 +98,6 @@ export const system = createSystem(defaultConfig, {
         bg: {
           DEFAULT: v(T.pan),
           page: v(T.bg),
-          // The other theme's page colour: behind a Hall of Fame picture, so a round logo sits on a solid square inside the ring.
-          inverse: v({ base: T.bg._dark, _dark: T.bg.base }),
           panel: v(T.pan),
           hover: v(T.pan2),
           subtle: v(T.pan2),

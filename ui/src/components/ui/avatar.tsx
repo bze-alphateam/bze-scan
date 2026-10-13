@@ -28,17 +28,19 @@ function shape(size: string) {
 }
 
 /**
- * A square avatar: a picture, else the fallback picture, else two initials
- * on a colour of the hash palette derived from the name.
+ * An avatar: a round picture, else the round fallback picture, else two
+ * initials on a square of the hash palette colour derived from the name.
  */
 export function Avatar({ name, src, fallbackSrc, size, variant = "default", ring, ...props }: AvatarProps) {
   const [failed, setFailed] = useState<string[]>([]);
   const box = size ?? (variant === "token" ? "30px" : "8");
   const look = shape(box);
-  const rounded = variant === "token" ? "full" : look.rounded;
   const isModule = variant === "module";
 
   const shown = [src, fallbackSrc].find((u): u is string => !!u && !failed.includes(u));
+  // Pictures are round: Keybase serves JPEGs, so a round logo's corners are
+  // painted in (mostly white) and no background behind them can show.
+  const rounded = variant === "token" || shown ? "full" : look.rounded;
   const face = shown ? (
     <Image
       src={shown}
@@ -47,9 +49,6 @@ export function Avatar({ name, src, fallbackSrc, size, variant = "default", ring
       rounded={rounded}
       flexShrink={0}
       objectFit="cover"
-      // Inside the gold ring a round logo would leave the ring's corners floating:
-      // the other theme's page colour fills them. Elsewhere nothing shows behind it.
-      bg={ring ? "bg.inverse" : "transparent"}
       onError={() => setFailed((f) => [...f, shown])}
       data-testid="avatar-image"
       {...(ring ? {} : props)}

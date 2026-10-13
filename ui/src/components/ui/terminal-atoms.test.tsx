@@ -94,16 +94,21 @@ describe("Avatar variants", () => {
     expect(screen.getByTestId("avatar-image").parentElement).toHaveAttribute("data-ring", "gold");
   });
 
-  it("backs a ringed picture with the other theme's page colour, and nothing else", () => {
+  it("rounds pictures, the gold ring with them, and keeps the initials square", () => {
     renderWithProviders(
       <>
         <Avatar name="Honeycomb" src="https://pictures.example/h.jpg" ring="gold" />
         <Avatar name="Thamar Node" src="https://pictures.example/t.jpg" />
+        <Avatar name="Pluton Node" ring="gold" />
       </>,
     );
     const [ringed, plain] = screen.getAllByTestId("avatar-image");
-    expect(ringed).toHaveStyle({ background: "var(--chakra-colors-bg-inverse)" });
-    expect(plain).toHaveStyle({ background: "var(--chakra-colors-transparent)" });
+    const round = "var(--chakra-radii-full)";
+    expect(ringed).toHaveStyle({ borderRadius: round });
+    expect(ringed.parentElement).toHaveStyle({ borderRadius: round });
+    expect(plain).toHaveStyle({ borderRadius: round });
+    expect(screen.getByText("PN")).not.toHaveStyle({ borderRadius: round });
+    expect(screen.getByText("PN").parentElement).not.toHaveStyle({ borderRadius: round });
   });
 });
 
