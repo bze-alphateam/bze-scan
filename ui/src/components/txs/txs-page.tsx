@@ -28,10 +28,12 @@ export const TXS_PER_PAGE = 25;
 
 // Hash (c2) · What happened · By (c2) · Status · Fee (c3) · Time.
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
+// Status is a fixed 90px from c2: an `auto` column sizes to each row's own tag,
+// so a "Failed" row would shift the columns after it.
 const COLUMNS = {
   base: "minmax(0, 1fr) auto auto",
-  c2: "110px minmax(0, 1fr) minmax(0, 170px) auto 116px",
-  c3: "110px minmax(0, 1fr) minmax(0, 170px) auto 110px 116px",
+  c2: "110px minmax(0, 1fr) minmax(0, 170px) 90px 116px",
+  c3: "110px minmax(0, 1fr) minmax(0, 170px) 90px 110px 116px",
 };
 
 /** The status pills and the `status` each asks the list for. */

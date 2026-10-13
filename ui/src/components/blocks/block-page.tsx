@@ -172,11 +172,12 @@ function Overview({ block, ctx }: { block: Block; ctx: RenderContext }) {
   );
 }
 
-// Hash (c2) · What happened · By (c2) · Status · Fee (c3).
+// Hash (c2) · What happened · By (c2) · Status · Fee (c3). Status is a fixed
+// 90px from c2: an `auto` column sizes to each row's own tag.
 const TX_COLUMNS = {
   base: "minmax(0, 1fr) auto",
-  c2: "110px minmax(0, 2fr) minmax(0, 1fr) auto",
-  c3: "110px minmax(0, 2fr) minmax(0, 1fr) auto minmax(0, 0.8fr)",
+  c2: "110px minmax(0, 2fr) minmax(0, 1fr) 90px",
+  c3: "110px minmax(0, 2fr) minmax(0, 1fr) 90px minmax(0, 0.8fr)",
 };
 
 function TxRow({ tx, ctx }: { tx: BlockTx; ctx: RenderContext }) {

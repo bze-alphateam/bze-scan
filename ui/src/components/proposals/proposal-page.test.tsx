@@ -201,9 +201,11 @@ describe("ProposalPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "See every vote" }));
     expect(await screen.findByRole("tab", { name: "Everyone 3" })).toBeInTheDocument();
     // Voting ended: today's active set is not the one that could vote, so no
-    // "of N" and no "did not vote" (the summary and the tab once disagreed).
+    // "of N" and no "did not vote" in the counts (the summary and the tab once
+    // disagreed); the validators that did not vote are still named, as today's set.
     expect(screen.getByRole("tab", { name: "Validators 1" })).toBeInTheDocument();
-    expect(screen.queryByTestId("not-voted")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("not-voted")).toHaveTextContent(/^\d+ of today's active validators did not vote:/);
+    expect(screen.getByTestId("not-voted")).not.toHaveTextContent("their stakers can still vote");
 
     // Indexed votes and a synced turnout: nothing is marked historical.
     expect(await screen.findAllByTestId("validator-vote")).toHaveLength(1);

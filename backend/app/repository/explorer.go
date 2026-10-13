@@ -495,12 +495,13 @@ func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 		SELECT row_number() OVER (ORDER BY tokens, operator_address),
 		       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
 		       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
-		  FROM explorer.validators
+		  FROM explorer.validators v
 		 WHERE status = 'bonded' AND NOT jailed AND missed_blocks <= $1
 		   AND EXISTS (SELECT 1 FROM recent)
 		   AND NOT EXISTS (SELECT 1 FROM recent r WHERE NOT EXISTS (
 		       SELECT 1 FROM explorer.proposal_votes pv WHERE pv.voter = account_address AND pv.proposal_id = r.id))
-		 ORDER BY tokens, operator_address`, HallOfFameMaxMissedBlocks)
+		 -- v.tokens: a bare "tokens" names the tokens::text output column, which sorts as text.
+		 ORDER BY v.tokens, v.operator_address`, HallOfFameMaxMissedBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("hall of fame: %w", err)
 	}

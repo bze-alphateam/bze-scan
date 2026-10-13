@@ -483,8 +483,10 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
   const [all, setAll] = useState(false);
   if (!votes) return <ListSkeleton rows={5} />;
   const voting = p.status === "voting_period";
-  // Today's active set is the one that can vote only while voting is open.
-  const missing = voting && validators.data ? notVoted(validators.data.items, votes) : [];
+  // Measured against today's active set: the voters while voting is open; once it
+  // closed, said as today's set (it may differ from the set at the time), and kept
+  // out of the summary's counts.
+  const missing = validators.data ? notVoted(validators.data.items, votes) : [];
   const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
   return (
     <Box>
@@ -505,7 +507,15 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
       {missing.length > 0 && (
         <Flex align="center" gap="6px 10px" wrap="wrap" mt="3" pt="3" borderTopWidth="1px" borderColor="border.panel" data-testid="not-voted">
           <Text as="span" color="fg.muted">
-            <Mono>{missing.length}</Mono> {missing.length === 1 ? "validator has" : "validators have"} {voting ? "not voted yet" : "not voted"}:
+            {voting ? (
+              <>
+                <Mono>{missing.length}</Mono> {missing.length === 1 ? "validator has" : "validators have"} not voted yet:
+              </>
+            ) : (
+              <>
+                <Mono>{missing.length}</Mono> of today&apos;s active validators did not vote:
+              </>
+            )}
           </Text>
           {shown.map((v) => (
             <ValidatorChip key={v.operator_address} operator={v.operator_address} moniker={v.moniker} />

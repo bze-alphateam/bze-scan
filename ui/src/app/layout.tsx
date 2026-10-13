@@ -49,7 +49,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Flex direction="column" minH="100dvh">
             <NetworkStrip />
             <Header />
-            <Container as="main" maxW="7xl" px={{ base: "4", md: "6" }} py={{ base: "6", md: "10" }} flex="1">
+            {/* No vertical padding: each page head brings its own (32px title, 24px breadcrumb), the footer its 40px. */}
+            <Container as="main" maxW="7xl" px={{ base: "4", md: "6" }} flex="1">
               {children}
             </Container>
             <Footer />

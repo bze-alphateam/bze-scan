@@ -35,10 +35,12 @@ import {
 
 // Token · Origin (c2; under the token on phones) · Supply (c2) · Holders (c3) · Price · 24h · DEX (c3).
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
+// Every row is its own grid, so from c2 no column may be `auto`: it would size
+// to each row's content and the columns would not line up.
 const COLUMNS = {
   base: "minmax(0, 1fr) auto",
-  c2: "minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto",
-  c3: "minmax(0, 1.2fr) minmax(150px, 1.4fr) minmax(0, 1fr) 80px auto 110px",
+  c2: "minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr) 150px",
+  c3: "minmax(0, 1fr) minmax(150px, 1.8fr) minmax(0, 1fr) 80px 150px 110px",
 };
 // On phones the origin chips take a row of their own under the token and its price.
 const ORIGIN_COLUMN = { base: "1 / -1", c2: "auto" };
