@@ -1,14 +1,15 @@
 "use client";
 
-import { Box, Button, Flex, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Heading, HStack, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useId, useMemo, useRef, useState } from "react";
-import { LuSearch, LuTriangleAlert } from "react-icons/lu";
+import { LuTriangleAlert } from "react-icons/lu";
 
 import { useAllValidators, useHallOfFame, useParams } from "@/api/hooks";
 import type { HallOfFame, HallOfFameRules, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Chip } from "@/components/ui/chip";
+import { FindBox } from "@/components/ui/find-box";
 import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
 import { PageTitle } from "@/components/ui/page-head";
 import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
@@ -395,38 +396,7 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
               },
             ]}
           />
-          <HStack
-            as="form"
-            role="search"
-            onSubmit={(e) => e.preventDefault()}
-            gap="2"
-            h="34px"
-            w={{ base: "full", sm: "260px" }}
-            mb="2"
-            px="3"
-            bg="bg.panel"
-            borderWidth="1px"
-            borderColor="border.panel"
-            rounded="l2"
-            color="fg.muted"
-            _focusWithin={{ borderColor: "accent.fg" }}
-          >
-            <LuSearch size={14} aria-hidden />
-            <Input
-              aria-label="Find a validator"
-              placeholder="Find a validator"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              unstyled
-              flex="1"
-              minW="0"
-              h="full"
-              bg="transparent"
-              color="fg"
-              fontSize="13px"
-              outline="none"
-            />
-          </HStack>
+          <FindBox label="Find a validator" value={query} onChange={setQuery} mb="2" />
         </VTabsBar>
       </Box>
       <VTabPanel id={id} value={tab}>

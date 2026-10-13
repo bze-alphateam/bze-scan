@@ -1,4 +1,4 @@
-import type { Label, OriginChain, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
+import type { Label, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
 import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
@@ -31,9 +31,12 @@ export function denomFromSegments(segments: string | string[]): string | null {
 /** The name a token goes by: its symbol, else its denom. */
 export const tokenSymbol = (t: Pick<TokenSummary, "symbol" | "denom">) => t.symbol ?? t.denom;
 
-/** "2 hops via Osmosis": the chains a multi-hop token crossed to reach BZE. */
-export function hopsText(hop: { hops: number; via: string | null }): string {
-  return `${hop.hops} hops${hop.via ? ` via ${hop.via}` : ""}`;
+/** "factory/bze1…/uxyz", "ibc/82931180…": a denom short enough for a breadcrumb. */
+export function shortDenom(denom: string): string {
+  return denom
+    .split("/")
+    .map((s) => (s.length <= 20 ? s : s.startsWith("bze1") ? "bze1…" : `${s.slice(0, 8)}…`))
+    .join("/");
 }
 
 /**
@@ -53,47 +56,96 @@ export function hopsExplainer(t: Pick<TokenSummary, "ibc_hops" | "via_chain" | "
   );
 }
 
-export interface RouteChain {
-  name: string;
-  logoUrl: string | null;
+/**
+ * The amber callout of a multi-hop token: it is not the token of the same
+ * name sent straight from its home chain. Null for a one-hop token and the
+ * other kinds.
+ */
+export function multiHopCallout(
+  t: Pick<TokenSummary, "ibc_hops" | "via_chain" | "origin_chain" | "symbol" | "denom">,
+): { title: string; body: string } | null {
+  const hop = multiHop(t);
+  if (!hop) return null;
+  const symbol = tokenSymbol(t);
+  const home = t.origin_chain?.name || t.origin_chain?.chain_id || "its home chain";
+  return {
+    title: `Not the same token as ${symbol} sent straight from ${home}`,
+    body:
+      `It came through ${hop.via ?? "another chain"}, so BZE sees it as a different token from the ${symbol} that came directly: ` +
+      `the two are not interchangeable on BZE.`,
+  };
 }
 
-export interface RouteHop {
-  /** port/channel, as the path writes it. */
+/** A chain on a token's way to BZE, as the "How it got here" route draws it. */
+export interface RouteStop {
+  name: string;
+  /** `origin` minted here · `through` passed through · `counted` chains the explorer cannot name · `here` BZE. */
+  role: "origin" | "through" | "counted" | "here";
+  /** The token's name there: the base denom at home, the symbol on BZE. */
+  detail: string | null;
+}
+
+/** The link between two stops: the receiving chain's channels ("channel-0 on BZE"). */
+export interface RouteLink {
+  channels: string[];
+  on: string;
+}
+
+/** One port/channel pair of the path, on the chain it is on, leading toward the next one out. */
+export interface RoutePath {
   channel: string;
-  /** The chain the channel is on, and the one it leads to. */
   on: string;
   toward: string;
 }
 
+export interface IbcRoute {
+  hops: number;
+  /** From the home chain to BZE; `links[i]` sits between `stops[i]` and `stops[i + 1]`. */
+  stops: RouteStop[];
+  links: RouteLink[];
+  /** The path's pairs from BZE outwards, as `ibc_path` lists them. */
+  paths: RoutePath[];
+}
+
 /**
- * The way an IBC token came to BZE: the chains from its home to BZE, and each
- * hop of its path. A multi-hop path names the chain of its first hop (`via`)
- * and the home chain; a chain between them is "another chain" (the explorer
- * knows only BZE's channels). Null for the other kinds and an unknown path.
+ * The way an IBC token came to BZE, from `ibc_path` (BZE's pair first): pair
+ * 1 is BZE's channel toward `via_chain`, pair 2 that chain's channel toward
+ * the next one, and so on to the home chain. The API names only the home
+ * chain and `via_chain`, so the chains between them are counted in one box,
+ * never named. Null for the other kinds and an unknown path.
  */
 export function ibcRoute(
-  t: Pick<TokenSummary, "kind" | "via_chain" | "origin_chain"> & { ibc_path: string | null; origin_chain_id: string | null },
-): { chains: RouteChain[]; hops: RouteHop[] } | null {
+  t: Pick<Token, "kind" | "via_chain" | "origin_chain" | "origin_chain_id" | "ibc_path" | "ibc_base_denom" | "symbol" | "denom">,
+): IbcRoute | null {
   if (t.kind !== "ibc" || !t.ibc_path) return null;
   const parts = t.ibc_path.split("/");
   if (parts.length < 2 || parts.length % 2 !== 0) return null;
   const pairs: string[] = [];
   for (let i = 0; i < parts.length; i += 2) pairs.push(`${parts[i]}/${parts[i + 1]}`);
-  const named = (c: OriginChain | null, fallback: string): RouteChain => ({
-    name: c?.name || c?.chain_id || fallback,
-    logoUrl: c?.logo_url ?? null,
-  });
-  const home = named(t.origin_chain, t.origin_chain_id || "its home chain");
+  const channel = (pair: string) => pair.split("/")[1];
+  const n = pairs.length;
+  const home = t.origin_chain?.name || t.origin_chain?.chain_id || t.origin_chain_id || "its home chain";
+  const via = t.via_chain?.name || t.via_chain?.chain_id || "another chain";
   // From BZE outwards: BZE, the first hop's chain, …, home.
-  const outward: RouteChain[] = [{ name: "BZE", logoUrl: null }];
-  for (let i = 1; i < pairs.length; i++) {
-    outward.push(i === 1 ? named(t.via_chain, "another chain") : { name: "another chain", logoUrl: null });
-  }
-  outward.push(home);
-  const hops = pairs.map((channel, i) => ({ channel, on: outward[i].name, toward: outward[i + 1].name }));
-  return { chains: [...outward].reverse(), hops };
+  const outward = ["BZE", ...pairs.slice(1).map((_, i) => (i === 0 ? via : "another chain")), home];
+  const paths = pairs.map((p, i) => ({ channel: p, on: outward[i], toward: outward[i + 1] }));
+
+  const origin: RouteStop = { name: home, role: "origin", detail: t.ibc_base_denom };
+  const here: RouteStop = { name: "BZE", role: "here", detail: n > 1 ? `${tokenSymbol(t)} · via ${via}` : tokenSymbol(t) };
+  const toBze: RouteLink = { channels: [channel(pairs[0])], on: "BZE" };
+  if (n === 1) return { hops: n, stops: [origin, here], links: [toBze], paths };
+  const through: RouteStop = { name: via, role: "through", detail: null };
+  const toVia: RouteLink = { channels: [channel(pairs[1])], on: via };
+  if (n === 2) return { hops: n, stops: [origin, through, here], links: [toVia, toBze], paths };
+  const unknown = n - 2;
+  const counted: RouteStop = { name: `${unknown} more ${unknown === 1 ? "chain" : "chains"}`, role: "counted", detail: null };
+  // The unknown chains' channels, in the route's direction (home first).
+  const between: RouteLink = { channels: pairs.slice(2).reverse().map(channel), on: unknown === 1 ? "another chain" : "the chains between" };
+  return { hops: n, stops: [origin, counted, through, here], links: [between, toVia, toBze], paths };
 }
+
+/** The route panel's note: "direct · 1 hop" or "2 hops · not direct". */
+export const routeNote = (hops: number) => (hops === 1 ? "direct · 1 hop" : `${formatCount(hops)} hops · not direct`);
 
 /**
  * Denoms the BZE apps no longer list (the dapps' `EXCLUDED_ASSETS`, kept in

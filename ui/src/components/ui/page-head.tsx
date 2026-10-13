@@ -70,3 +70,19 @@ export function SectionHead({ id, title, children }: { id?: string; title: React
     </HStack>
   );
 }
+
+/** A panel's head row: the small upper-case title, a muted note on the right. */
+export function PanelHead({ id, title, note }: { id: string; title: string; note?: ReactNode }) {
+  return (
+    <Flex justify="space-between" align="center" gap="3" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
+      <Heading as="h2" textStyle="label" id={id}>
+        {title}
+      </Heading>
+      {note && (
+        <Text fontSize="12px" color="fg.muted" textAlign="right">
+          {note}
+        </Text>
+      )}
+    </Flex>
+  );
+}

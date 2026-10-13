@@ -1,26 +1,31 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Image, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Grid, Heading, HStack, Image, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuArrowRight, LuExternalLink } from "react-icons/lu";
+import { LuCircleHelp, LuExternalLink, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
-import type { LpPair, Token, TokenEvent } from "@/api/types";
+import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
-import { Card } from "@/components/ui/card";
+import { Callout, type CalloutTone } from "@/components/ui/callout";
+import { Chip } from "@/components/ui/chip";
 import { CopyButton } from "@/components/ui/copy-button";
-import { ExplainedBadge } from "@/components/ui/explained-badge";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
+import { ExplainedBadges } from "@/components/ui/explained-badge";
 import { JsonBlock } from "@/components/ui/json-block";
+import { ListPanel, ListRow } from "@/components/ui/list";
 import { MoreDetails } from "@/components/ui/more-details";
+import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle, PanelHead } from "@/components/ui/page-head";
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
 import { externalLinks, websiteLink } from "@/lib/links";
 import { dexAssetUrl, multiHop } from "@/render/account";
-import { connectionHealthy, connectionText, headerChips, isDeadChain, strandedExplainer } from "@/render/badges";
+import { connectionChip, headerChips, isDeadChain, strandedExplainer } from "@/render/badges";
 import {
   activityItems,
   adminNote,
@@ -28,13 +33,14 @@ import {
   changeText,
   eventLine,
   holdersSub,
-  hopsExplainer,
-  hopsText,
   ibcRoute,
   mergeEvents,
   mintBurnText,
+  multiHopCallout,
   onDex,
   priceText,
+  routeNote,
+  shortDenom,
   supplyState,
   supplyText,
   supplyTileSub,
@@ -43,29 +49,48 @@ import {
   topHoldersText,
   transferLine,
   type ActivityItem,
+  type IbcRoute,
   type Party,
+  type RouteStop,
+  type SupplyState,
 } from "@/render/tokens";
 
 import { TokenLogo } from "./tokens-page";
 
-function Breadcrumb({ name }: { name: string }) {
-  return (
-    <HStack as="nav" aria-label="Breadcrumb" gap="2" fontSize="sm" color="fg.muted" minW="0">
-      <Link asChild color="fg.muted">
-        <NextLink href="/tokens">Tokens</NextLink>
-      </Link>
-      <Text as="span" aria-hidden>
-        /
-      </Text>
-      <Text as="span" aria-current="page" truncate>
-        {name}
-      </Text>
-    </HStack>
-  );
+// Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
+const ROUTE_DIRECTION = { base: "column", c2: "row" } as const;
+const LINK_MAX_W = { base: "none", c2: "220px" };
+const LINK_MIN_H = { base: "56px", c2: "0" };
+const TWO_COLUMNS = { base: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" };
+const TILE_COLUMNS = { base: 1, sm: 2, lg: 4 };
+
+const Muted = ({ children }: { children: ReactNode }) => (
+  <Text as="span" color="fg.muted">
+    {children}
+  </Text>
+);
+
+const Mono = ({ children }: { children: ReactNode }) => (
+  <Text as="span" fontFamily="mono">
+    {children}
+  </Text>
+);
+
+/** "Tokens / HONEY". */
+function Breadcrumb({ current, mono }: { current: string; mono?: boolean }) {
+  return <Breadcrumbs path={[{ label: "Tokens", href: "/tokens" }]} current={current} mono={mono} />;
 }
 
-function Chip({ party }: { party: Party }) {
-  return <AccountChip address={party.address} label={party.label} />;
+const chainName = (c: OriginChain | null, fallback: string) => c?.name || c?.chain_id || fallback;
+
+/** An origin chain's outlined chip, "(shut down)" when the registry says so. */
+function ChainChip({ chain, fallback, look = "ch" }: { chain: OriginChain | null; fallback: string; look?: "ch" | "via" }) {
+  return (
+    <Chip variant={look}>
+      {chain?.logo_url && <Image src={chain.logo_url} alt="" boxSize="3" rounded="full" />}
+      {chainName(chain, fallback)}
+    </Chip>
+  );
 }
 
 /** An LP token's two pool assets, each linking to its page. */
@@ -74,13 +99,13 @@ function PoolPair({ pair }: { pair: LpPair }) {
   const side = (denom: string) => {
     const t = denoms.data?.get(denom);
     return (
-      <Link asChild>
+      <Link asChild color="accent.fg">
         <NextLink href={tokenHref(denom)}>{t ? tokenSymbol(t) : denom}</NextLink>
       </Link>
     );
   };
   return (
-    <Text fontSize="sm" color="fg.muted" data-testid="pool-pair">
+    <Text data-testid="pool-pair">
       A share of the DEX pool of {side(pair.base)} and {side(pair.quote)}.
     </Text>
   );
@@ -91,59 +116,68 @@ function Header({ t }: { t: Token }) {
   const site = websiteLink(t.website);
   const symbol = tokenSymbol(t);
   return (
-    <Stack gap="3">
-      <Breadcrumb name={symbol} />
-      <HStack gap="4" align="start" wrap="wrap" justify="space-between">
-        <HStack gap="3" minW="0" align="start">
-          <TokenLogo t={t} denoms={denoms.data} size="12" />
-          <Stack gap="1.5" minW="0">
-            <HStack gap="2" wrap="wrap" align="baseline">
-              <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
-                {symbol}
-              </Heading>
-              {t.name && (
-                <Text color="fg.muted" fontSize="lg">
-                  {t.name}
-                </Text>
-              )}
-            </HStack>
-            <HStack gap="2" wrap="wrap" data-testid="token-chips">
-              {headerChips(t).map((c) => (
-                <ExplainedBadge key={c.kind} badge={c} size="md" />
-              ))}
-              {site && (
-                <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" fontSize="sm">
-                  {site.text} <LuExternalLink aria-hidden />
-                </Link>
-              )}
-            </HStack>
-            {strandedExplainer(t) && (
-              <Text fontSize="sm" color="orange.fg" maxW="2xl" data-testid="stranded-explainer">
-                {strandedExplainer(t)}
+    <Box>
+      <Breadcrumb current={symbol} />
+      <Flex gap="4" align="flex-start" wrap="wrap" mt="3">
+        <TokenLogo t={t} denoms={denoms.data} size="56px" />
+        <Box flex="1" minW="240px">
+          <DetailTitle title={symbol}>
+            {t.name && (
+              <Text color="fg.muted" fontSize="18px">
+                {t.name}
               </Text>
             )}
-            {hopsExplainer(t) && (
-              <Text fontSize="sm" color="fg.muted" maxW="2xl" data-testid="hops-explainer">
-                {hopsExplainer(t)}
-              </Text>
+          </DetailTitle>
+          <DetailMeta data-testid="token-chips">
+            <ExplainedBadges badges={headerChips(t)} />
+            {site && (
+              <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" color="accent.fg">
+                {site.text} ↗
+              </Link>
             )}
-            {t.lp_pair && <PoolPair pair={t.lp_pair} />}
-            {t.kind === "factory" && t.creator && (
-              <HStack gap="1.5" wrap="wrap" fontSize="sm" color="fg.muted" data-testid="token-created">
-                <Text as="span">{t.created_time ? `Created ${formatDate(t.created_time)} by` : "Created by"}</Text>
-                <AccountChip address={t.creator} label={t.creator_label} />
-              </HStack>
-            )}
-          </Stack>
-        </HStack>
+          </DetailMeta>
+          {t.kind === "factory" && t.creator && (
+            <DetailMeta mt="6px" gap="2" data-testid="token-created">
+              <Text as="span">{t.created_time ? `Created ${formatDate(t.created_time)} by` : "Created by"}</Text>
+              <AccountChip address={t.creator} label={t.creator_label} />
+              <CopyButton value={t.creator} label="Copy creator address" />
+            </DetailMeta>
+          )}
+          {t.lp_pair && (
+            <DetailMeta mt="6px">
+              <PoolPair pair={t.lp_pair} />
+            </DetailMeta>
+          )}
+        </Box>
         {onDex(t) && (
-          <Button asChild colorPalette="blue" minH="44px">
+          <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
             <a href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer">
               View on the DEX <LuExternalLink aria-hidden />
             </a>
           </Button>
         )}
-      </HStack>
+      </Flex>
+    </Box>
+  );
+}
+
+/** The warnings under the header: a multi-hop token is not the direct one; a stranded one cannot go back. */
+function Warnings({ t }: { t: Token }) {
+  const hop = multiHopCallout(t);
+  const stranded = strandedExplainer(t);
+  if (!hop && !stranded) return null;
+  return (
+    <Stack gap="3" mt="5">
+      {hop && (
+        <Callout tone="warn" title={hop.title} data-testid="hops-callout">
+          {hop.body}
+        </Callout>
+      )}
+      {stranded && (
+        <Callout tone="warn" title={`${tokenSymbol(t)} is stranded on BZE`} data-testid="stranded-explainer">
+          {stranded}
+        </Callout>
+      )}
     </Stack>
   );
 }
@@ -151,26 +185,31 @@ function Header({ t }: { t: Token }) {
 function Tiles({ t }: { t: Token }) {
   const change = changeText(t.price_change_24h_pct);
   const symbol = tokenSymbol(t);
+  const tone = change ? { green: "pos.fg", red: "neg.fg", gray: "fg.muted" }[change.tone] : undefined;
   return (
-    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" data-testid="token-tiles">
+    <SimpleGrid columns={TILE_COLUMNS} gap="3" mt="6" data-testid="token-tiles">
       <Tile label="Total supply" value={supplyText(t)} sub={supplyTileSub(supplyState(t))} />
-      <Tile
-        label="Holders"
-        value={t.holders_count != null ? formatCount(t.holders_count) : null}
-        sub={holdersSub(t)}
-      />
+      <Tile label="Holders" value={t.holders_count != null ? formatCount(t.holders_count) : null} sub={holdersSub(t)} />
       <Tile
         label="Price"
-        value={t.price_usd != null ? priceText(t.price_usd) : "no price"}
+        value={
+          t.price_usd != null ? (
+            priceText(t.price_usd)
+          ) : (
+            <Text as="span" color="fg.muted">
+              no price
+            </Text>
+          )
+        }
         sub={
           t.halted ? (
-            <Text as="span" color="red.fg">
+            <Text as="span" color="neg.fg">
               halted on the DEX
             </Text>
           ) : t.price_usd != null ? (
             <>
               {change && (
-                <Text as="span" color={`${change.tone}.fg`}>
+                <Text as="span" fontFamily="mono" color={tone}>
                   {change.text}{" "}
                 </Text>
               )}
@@ -184,288 +223,373 @@ function Tiles({ t }: { t: Token }) {
       <Tile
         label="Moved in 24h"
         value={formatAmount(t.transfers_24h.amount, t.exponent, symbol, { compact: true })}
-        sub={`${formatCount(t.transfers_24h.count)} ${t.transfers_24h.count === 1 ? "transfer" : "transfers"}`}
+        sub={
+          <>
+            <Mono>{formatCount(t.transfers_24h.count)}</Mono> {t.transfers_24h.count === 1 ? "transfer" : "transfers"}
+          </>
+        }
       />
     </SimpleGrid>
   );
 }
 
-const SUPPLY_TONE = { admin: "orange", fixed: "green", elsewhere: "green", inflation: "blue", pool: "gray" } as const;
+const SUPPLY_TONE: Record<SupplyState, CalloutTone> = { admin: "warn", fixed: "ok", elsewhere: "ok", inflation: "acc", pool: "acc" };
 
 /** Says out loud whether the supply can change, and who decides. */
-function SupplyBox({ t, events, complete }: { t: Token; events: TokenEvent[]; complete: boolean }) {
+function SupplyCallout({ t, events, complete }: { t: Token; events: TokenEvent[]; complete: boolean }) {
   const state = supplyState(t);
   if (!state) return null;
   const symbol = tokenSymbol(t);
-  const chain = t.origin_chain?.name || t.origin_chain?.chain_id || "its own chain";
+  const chain = chainName(t.origin_chain, "its own chain");
   const via = multiHop(t)?.via;
-  let body: ReactNode;
-  switch (state) {
-    case "admin":
-      body = (
+  const body: Record<SupplyState, { title: string; text: ReactNode }> = {
+    admin: {
+      title: `The supply of ${symbol} can change`,
+      text: (
         <>
-          <Text fontWeight="semibold">The supply of {symbol} can change</Text>
-          <Text as="div">
-            The token&apos;s admin,{" "}
-            <AccountChip address={t.admin!} label={t.admin_label} verticalAlign="middle" />, can create more {symbol} or
-            destroy some at any time. {complete && mintBurnText(events, t)}
-          </Text>
+          The token&apos;s admin, <AccountChip address={t.admin ?? ""} label={t.admin_label} verticalAlign="middle" />, can create more {symbol}{" "}
+          or destroy some at any time. {complete && mintBurnText(events, t)}
         </>
-      );
-      break;
-    case "fixed":
-      body = (
+      ),
+    },
+    fixed: {
+      title: `The supply of ${symbol} is fixed`,
+      text: (
         <>
-          <Text fontWeight="semibold">The supply of {symbol} is fixed</Text>
-          <Text>The admin renounced: nobody can create more {symbol} or destroy any. {complete && mintBurnText(events, t)}</Text>
+          The admin renounced: nobody can create more {symbol} or destroy any. {complete && mintBurnText(events, t)}
         </>
-      );
-      break;
-    case "elsewhere":
-      body = (
+      ),
+    },
+    elsewhere: {
+      title: `The supply of ${symbol} is fixed on BZE`,
+      text: `${symbol} is minted on ${chain}${via ? ` and reached BZE through ${via}` : ""}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the same way.`,
+    },
+    inflation: {
+      title: `The supply of ${symbol} grows with inflation`,
+      text: (
         <>
-          <Text fontWeight="semibold">The supply of {symbol} is fixed on BZE</Text>
-          <Text>
-            {symbol} is minted on {chain}
-            {via ? ` and reached BZE through ${via}` : ""}. Nobody on BZE can create more: it arrives over a cross-chain transfer and leaves the
-            same way.
-          </Text>
+          New {symbol} is minted every block and paid to the people who stake.{" "}
+          <Link asChild color="accent.fg">
+            <NextLink href="/parameters#inflation">See the inflation parameters</NextLink>
+          </Link>
+          .
         </>
-      );
-      break;
-    case "inflation":
-      body = (
-        <>
-          <Text fontWeight="semibold">The supply of {symbol} grows with inflation</Text>
-          <Text>
-            New {symbol} is minted every block and paid to the people who stake.{" "}
-            <Link asChild>
-              <NextLink href="/parameters#inflation">See the inflation parameters</NextLink>
-            </Link>
-            .
-          </Text>
-        </>
-      );
-      break;
-    case "pool":
-      body = (
-        <>
-          <Text fontWeight="semibold">Pool shares follow the pool</Text>
-          <Text>
-            {symbol} is created when someone adds liquidity to its DEX pool and destroyed when it is taken out.
-          </Text>
-        </>
-      );
-      break;
-  }
-  const tone = SUPPLY_TONE[state];
+      ),
+    },
+    pool: {
+      title: "Pool shares follow the pool",
+      text: `${symbol} is created when someone adds liquidity to its DEX pool and destroyed when it is taken out.`,
+    },
+  };
   return (
-    <Stack
-      gap="1"
-      p="4"
-      rounded="l3"
+    <Callout tone={SUPPLY_TONE[state]} title={body[state].title} mt="4" data-testid="supply-box" data-state={state}>
+      {body[state].text}
+    </Callout>
+  );
+}
+
+const STOP_LOOK: Record<RouteStop["role"], { border: string; borderStyle?: string; bg: string; roleColor: string; role: string }> = {
+  origin: { border: "accent.fg", bg: "bg", roleColor: "accent.fg", role: "minted here" },
+  through: { border: "border.panel", bg: "bg", roleColor: "fg.muted", role: "passed through" },
+  counted: { border: "fg.muted", borderStyle: "dashed", bg: "bg", roleColor: "fg.muted", role: "not named by the explorer" },
+  here: { border: "pos.fg", bg: "pos.subtle", roleColor: "pos.fg", role: "this token" },
+};
+
+function Stop({ stop }: { stop: RouteStop }) {
+  const look = STOP_LOOK[stop.role];
+  return (
+    <Flex
+      direction="column"
+      gap="3px"
+      flex="none"
+      minW="130px"
+      px="14px"
+      py="10px"
       borderWidth="1px"
-      borderColor={`${tone}.muted`}
-      bg={`${tone}.subtle`}
-      fontSize="sm"
-      data-testid="supply-box"
-      data-state={state}
+      borderStyle={look.borderStyle}
+      borderColor={look.border}
+      rounded="l2"
+      bg={look.bg}
+      data-testid="route-stop"
+      data-role={stop.role}
     >
-      {body}
-    </Stack>
-  );
-}
-
-/** A label/value row of a details list; stacks on phones. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Grid templateColumns={{ base: "minmax(0, 1fr)", md: "180px minmax(0, 1fr)" }} gap={{ base: "0.5", md: "4" }} py="2">
-      <Text fontSize="sm" color="fg.muted">
-        {label}
+      <Text as="span" fontWeight="600">
+        {stop.name}
       </Text>
-      <Box fontSize="sm" minW="0" wordBreak="break-word">
-        {children}
-      </Box>
-    </Grid>
+      <Text as="span" fontSize="11px" textTransform="uppercase" letterSpacing="0.06em" color={look.roleColor}>
+        {look.role}
+      </Text>
+      {stop.detail && (
+        <Text as="span" fontFamily="mono" fontSize="12px" color="fg.muted" wordBreak="break-all">
+          {stop.detail}
+        </Text>
+      )}
+    </Flex>
   );
 }
 
-function About({ t }: { t: Token }) {
-  const route = ibcRoute(t);
-  const hop = multiHop(t);
+/** "How it got here": the chains from the token's home to BZE, each link with its channel. */
+function Route({ t, route }: { t: Token; route: IbcRoute }) {
+  const state = t.ibc_channel ? connectionChip(t.ibc_channel).text.toLowerCase() : null;
   return (
-    <Card title="About">
-      <Stack gap="0" data-testid="token-about">
-        {t.name && <Row label="Name">{t.name}</Row>}
-        {t.created_time && (
-          <Row label="Created">
-            {formatDate(t.created_time)}
-            {t.created_tx_hash && (
-              <>
-                {" · "}
-                <Link asChild>
-                  <NextLink href={`/txs/${t.created_tx_hash.toUpperCase()}`}>see transaction</NextLink>
-                </Link>
-              </>
-            )}
-          </Row>
-        )}
-        {t.creator && (
-          <Row label="Created by">
-            <AccountChip address={t.creator} label={t.creator_label} />
-          </Row>
-        )}
-        {t.kind === "factory" && (
-          <Row label="Admin">
-            <HStack gap="1.5" wrap="wrap">
-              {t.admin && <AccountChip address={t.admin} label={t.admin_label} />}
-              <Text as="span" color="fg.muted">
-                {adminNote(t)}
-              </Text>
-            </HStack>
-          </Row>
-        )}
-        <Row label="Decimals">{t.exponent}</Row>
-        {t.kind === "ibc" && (
-          <>
-            <Row label="Origin chain">
-              <HStack gap="1.5" wrap="wrap">
-                {t.origin_chain?.logo_url && <Image src={t.origin_chain.logo_url} alt="" boxSize="5" rounded="full" />}
-                <Text as="span">{t.origin_chain?.name || t.origin_chain?.chain_id || t.origin_chain_id || "not known yet"}</Text>
-                {isDeadChain(t.origin_chain) && (
-                  <Badge colorPalette="red" variant="subtle" size="sm" data-testid="chain-dead">
-                    shut down
-                  </Badge>
-                )}
-                {hop && (
-                  <Text as="span" color="fg.muted">
-                    · {hopsText(hop)}
-                  </Text>
-                )}
-              </HStack>
-            </Row>
-            {route && route.hops.length > 1 && (
-              <Row label="Route">
-                <HStack gap="1.5" wrap="wrap" data-testid="ibc-route">
-                  {route.chains.map((c, i) => (
-                    <HStack key={i} gap="1.5" as="span">
-                      {i > 0 && <LuArrowRight aria-label="then" />}
-                      {c.logoUrl && <Image src={c.logoUrl} alt="" boxSize="5" rounded="full" />}
-                      <Text as="span">{c.name}</Text>
-                    </HStack>
-                  ))}
-                </HStack>
-              </Row>
-            )}
-            <Row label="Base denom there">
-              <Text fontFamily="mono">{t.ibc_base_denom ?? "—"}</Text>
-            </Row>
-            <Row label="Path">
-              {route ? (
-                <Stack gap="1" data-testid="ibc-path">
-                  {route.hops.map((h) => (
-                    <Text key={h.channel}>
-                      <Text as="span" fontFamily="mono">
-                        {h.channel}
-                      </Text>
-                      <Text as="span" color="fg.muted">
-                        {" "}
-                        on {h.on}, to {h.toward}
-                      </Text>
-                    </Text>
-                  ))}
-                </Stack>
-              ) : (
-                <Text fontFamily="mono">{t.ibc_path ?? "—"}</Text>
-              )}
-            </Row>
-            {t.ibc_channel && (
-              <Row label="Connection">
-                <Text data-testid="ibc-connection">
+    <ListPanel as="section" aria-labelledby="token-route" mt="7" data-testid="ibc-route">
+      <PanelHead id="token-route" title="How it got here" note={routeNote(route.hops)} />
+      <Flex direction={ROUTE_DIRECTION} align="stretch" p="4" overflowX="auto">
+        {route.stops.map((stop, i) => {
+          const link = route.links[i];
+          return (
+            <Flex key={i} direction={ROUTE_DIRECTION} align="stretch" flex={link ? "1" : "none"}>
+              <Stop stop={stop} />
+              {link && (
+                <Flex
+                  direction="column"
+                  justify="center"
+                  align="center"
+                  gap="2px"
+                  flex="1"
+                  minW="110px"
+                  maxW={LINK_MAX_W}
+                  minH={LINK_MIN_H}
+                  px="10px"
+                  fontSize="12px"
+                  color="fg.muted"
+                  data-testid="route-link"
+                >
                   <Text as="span" fontFamily="mono">
-                    {t.ibc_channel.channel_id}
+                    {link.channels.join(", ")}
                   </Text>
-                  <Text as="span" color={connectionHealthy(t.ibc_channel) ? "fg.muted" : "orange.fg"}>
-                    {" "}
-                    {connectionText(t.ibc_channel)}
+                  <Box hideBelow="c2" w="full" borderTopWidth="1px" borderStyle="dashed" borderColor="fg.muted" my="6px" position="relative" aria-hidden>
+                    <Text as="span" position="absolute" right="-2px" top="-11px" fontSize="14px">
+                      →
+                    </Text>
+                  </Box>
+                  <Text as="span" hideFrom="c2" fontSize="14px" aria-hidden>
+                    ↓
                   </Text>
-                </Text>
-              </Row>
-            )}
+                  <Text as="span" fontSize="11px">
+                    on {link.on}
+                    {link.on === "BZE" && state ? ` · ${state}` : ""}
+                  </Text>
+                </Flex>
+              )}
+            </Flex>
+          );
+        })}
+      </Flex>
+    </ListPanel>
+  );
+}
+
+/** A cross-chain token's About rows: where it was minted, the way it came, its channels. */
+function ibcRows(t: Token, route: IbcRoute | null): [string, ReactNode][] {
+  const hop = multiHop(t);
+  const home = (
+    <>
+      <ChainChip chain={t.origin_chain} fallback={t.origin_chain_id || "not known yet"} />
+      {isDeadChain(t.origin_chain) && (
+        <Chip variant="bad" data-testid="chain-dead">
+          shut down
+        </Chip>
+      )}
+    </>
+  );
+  const rows: [string, ReactNode][] = [];
+  if (hop) {
+    rows.push([
+      "Minted on",
+      <>
+        {home}
+        {t.ibc_base_denom && (
+          <>
+            <Muted>as</Muted> <Mono>{t.ibc_base_denom}</Mono>
           </>
         )}
-        {t.description && (
-          <Row label="Description">
-            <Text whiteSpace="pre-line">{t.description}</Text>
-          </Row>
+      </>,
+    ]);
+    rows.push([
+      "Came through",
+      <>
+        <ChainChip chain={t.via_chain} fallback="another chain" look="via" />
+        <Muted>· {formatCount(hop.hops)} hops, not direct</Muted>
+      </>,
+    ]);
+  } else {
+    rows.push(["Origin chain", home]);
+    rows.push(["Base denom there", <Mono key="base">{t.ibc_base_denom ?? "—"}</Mono>]);
+  }
+  if (!route) rows.push(["Path", <Mono key="path">{t.ibc_path ?? "—"}</Mono>]);
+  else if (!hop) {
+    const p = route.paths[0];
+    rows.push([
+      "Path",
+      <Box key="path" data-testid="ibc-path">
+        <Mono>{p.channel}</Mono> <Muted>on BZE, to {p.toward}</Muted>
+      </Box>,
+    ]);
+  } else {
+    for (const p of route.paths) {
+      rows.push([
+        `Path on ${p.on}`,
+        <Box key={p.channel} data-testid="ibc-path">
+          <Mono>{p.channel}</Mono> <Muted>· {p.on} to {p.toward}</Muted>
+        </Box>,
+      ]);
+    }
+  }
+  if (t.ibc_channel) {
+    const c = connectionChip(t.ibc_channel);
+    rows.push([
+      "Connection",
+      <Flex key="connection" align="center" gap="2" wrap="wrap" data-testid="ibc-connection">
+        <Mono>{t.ibc_channel.channel_id}</Mono>
+        <Chip variant={c.look}>{c.text}</Chip>
+        {c.note && <Muted>{c.note}</Muted>}
+      </Flex>,
+    ]);
+  }
+  return rows;
+}
+
+function About({ t, route }: { t: Token; route: IbcRoute | null }) {
+  const rows: [string, ReactNode][] = [];
+  if (t.name) rows.push(["Name", t.name]);
+  if (t.created_time) {
+    rows.push([
+      "Created",
+      <>
+        {formatDate(t.created_time)}
+        {t.created_tx_hash && (
+          <>
+            <Muted>·</Muted>
+            <Link asChild color="accent.fg">
+              <NextLink href={`/txs/${t.created_tx_hash.toUpperCase()}`}>see transaction</NextLink>
+            </Link>
+          </>
         )}
-      </Stack>
-    </Card>
+      </>,
+    ]);
+  }
+  if (t.creator) {
+    rows.push([
+      "Created by",
+      <>
+        <AccountChip address={t.creator} label={t.creator_label} />
+        <CopyButton value={t.creator} label="Copy creator address" />
+      </>,
+    ]);
+  }
+  if (t.kind === "factory") {
+    rows.push([
+      "Admin",
+      <>
+        {t.admin ? <AccountChip address={t.admin} label={t.admin_label} /> : <Chip variant="ok">Renounced</Chip>}
+        <Muted>{t.admin ? adminNote(t) : "nobody can mint or burn"}</Muted>
+      </>,
+    ]);
+  }
+  rows.push(["Decimals", <Mono key="decimals">{t.exponent}</Mono>]);
+  if (t.kind === "ibc") rows.push(...ibcRows(t, route));
+  if (t.description) {
+    rows.push([
+      "Description",
+      <Text key="description" as="span" whiteSpace="pre-line">
+        {t.description}
+      </Text>,
+    ]);
+  }
+  return (
+    <ListPanel as="section" aria-labelledby="token-about-head" mt="7" data-testid="token-about">
+      <PanelHead id="token-about-head" title="About" />
+      <DetailList>
+        {rows.map(([label, value], i) => (
+          <DetailRow key={`${label}-${i}`} label={label} last={i === rows.length - 1}>
+            {value}
+          </DetailRow>
+        ))}
+      </DetailList>
+    </ListPanel>
   );
 }
 
-const listItem = (i: number) => ({ borderTopWidth: i === 0 ? "0" : "1px", borderColor: "border.panel" }) as const;
+/** A section that failed on its own: the red line and Try again, inside its panel. */
+function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <Flex align="center" gap="2" wrap="wrap" px="4" py="14px" fontSize="13px" data-testid="section-error">
+      <Text as="span" color="neg.fg">
+        {what} could not be loaded.
+      </Text>
+      <Button variant="plain" size="xs" h="auto" p="0" color="accent.fg" fontSize="13px" fontWeight="500" onClick={onRetry}>
+        Try again
+      </Button>
+    </Flex>
+  );
+}
+
+/** The quiet button under a panel's rows: more holders, older activity. */
+function PanelFoot({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <Box px="4" py="10px" borderTopWidth="1px" borderColor="border.panel">
+      <Button variant="outline" size="xs" h="30px" px="3" fontSize="12px" onClick={onClick}>
+        {children}
+      </Button>
+    </Box>
+  );
+}
 
 function TopHolders({ t }: { t: Token }) {
   const holders = useTokenHolders(t.denom);
   const items = holders.data?.pages.flatMap((p) => p.items) ?? [];
   const symbol = tokenSymbol(t);
   return (
-    <Card title="Top holders" meta={topHoldersText(items) ?? undefined}>
+    <ListPanel as="section" aria-labelledby="token-holders">
+      <PanelHead id="token-holders" title="Top holders" note={topHoldersText(items) ?? undefined} />
       {!holders.data ? (
         holders.error ? (
-          <Text fontSize="sm" color="fg.muted">
-            The holders could not be loaded.
-          </Text>
+          <SectionError what="The holders" onRetry={() => void holders.refetch()} />
         ) : (
-          <ListSkeleton rows={5} />
+          <Box px="4" py="2">
+            <ListSkeleton rows={5} />
+          </Box>
         )
       ) : items.length === 0 ? (
-        <Text fontSize="sm" color="fg.muted">
+        <Text px="4" py="14px" fontSize="13px" color="fg.muted">
           Nobody holds {symbol} yet, or the holders were not counted yet.
         </Text>
       ) : (
-        <Stack gap="3">
-          <Stack gap="0" role="list" aria-label="Top holders">
-            {items.map((h, i) => (
-              <Grid
-                key={h.address}
-                role="listitem"
-                templateColumns="32px minmax(0, 1fr) auto"
-                gap="3"
-                alignItems="center"
-                py="2"
-                minH="44px"
-                fontSize="sm"
-                {...listItem(i)}
-                data-testid="holder-row"
-              >
-                <Text color="fg.muted">{h.rank}</Text>
+        <>
+          <Box role="list" aria-label="Top holders">
+            {items.map((h) => (
+              <ListRow key={h.address} role="listitem" templateColumns="28px minmax(0, 1fr) auto" gap="3" data-testid="holder-row">
+                <Text fontFamily="mono" color="fg.muted">
+                  {h.rank}
+                </Text>
                 <Box minW="0">
                   <AccountChip address={h.address} label={h.label} />
                 </Box>
-                <Stack gap="0" align="end">
-                  <Text fontVariantNumeric="tabular-nums">{formatAmount(h.balance, t.exponent, symbol, { compact: true })}</Text>
+                <Box textAlign="right">
+                  <Text fontFamily="mono">{formatAmount(h.balance, t.exponent, symbol, { compact: true })}</Text>
                   {h.share_pct != null && (
-                    <Text fontSize="xs" color="fg.muted">
+                    <Text fontFamily="mono" fontSize="12px" color="fg.muted">
                       {formatPct(h.share_pct)}
                     </Text>
                   )}
-                </Stack>
-              </Grid>
+                </Box>
+              </ListRow>
             ))}
-          </Stack>
-          {holders.isFetchingNextPage && <ListSkeleton rows={5} />}
-          {holders.hasNextPage && !holders.isFetchingNextPage && (
-            <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => void holders.fetchNextPage()}>
-              {items.length <= 10 && t.holders_count != null
-                ? `Show all ${formatCount(t.holders_count)} holders`
-                : "Show more holders"}
-            </Button>
+          </Box>
+          {holders.isFetchingNextPage && (
+            <Box px="4" py="2">
+              <ListSkeleton rows={5} />
+            </Box>
           )}
-        </Stack>
+          {holders.hasNextPage && !holders.isFetchingNextPage && (
+            <PanelFoot onClick={() => void holders.fetchNextPage()}>
+              {items.length <= 10 && t.holders_count != null ? `Show all ${formatCount(t.holders_count)} holders` : "Show more holders"}
+            </PanelFoot>
+          )}
+        </>
       )}
-    </Card>
+    </ListPanel>
   );
 }
 
@@ -475,7 +599,7 @@ function ActivityLine({ item, t }: { item: ActivityItem; t: Token }) {
     return (
       <HStack gap="1.5" wrap="wrap">
         <Text as="span">{line.text}</Text>
-        {line.party && <Chip party={line.party} />}
+        {line.party && <PartyChip party={line.party} />}
       </HStack>
     );
   }
@@ -484,28 +608,34 @@ function ActivityLine({ item, t }: { item: ActivityItem; t: Token }) {
     case "sent":
       return (
         <HStack gap="1.5" wrap="wrap">
-          <Text as="span">Sent</Text>
-          {line.from && <Chip party={line.from} />}
-          <Text as="span" aria-hidden>
+          <Muted>Sent</Muted>
+          {line.from && <PartyChip party={line.from} />}
+          <Text as="span" color="fg.muted" aria-hidden>
             →
           </Text>
-          <Text as="span" fontWeight="medium">
+          <Text as="span" fontFamily="mono" fontWeight="500">
             {line.amount}
           </Text>
-          <Text as="span" aria-hidden>
+          <Text as="span" color="fg.muted" aria-hidden>
             →
           </Text>
-          {line.to && <Chip party={line.to} />}
+          {line.to && <PartyChip party={line.to} />}
         </HStack>
       );
     case "traded":
       return (
         <HStack gap="1.5" wrap="wrap">
-          <Text as="span">Traded {line.amount} on the DEX</Text>
+          <Text as="span">
+            Traded{" "}
+            <Text as="span" fontFamily="mono" fontWeight="500">
+              {line.amount}
+            </Text>{" "}
+            on the DEX
+          </Text>
           {line.party && (
             <>
-              <Text as="span">by</Text>
-              <Chip party={line.party} />
+              <Muted>by</Muted>
+              <PartyChip party={line.party} />
             </>
           )}
         </HStack>
@@ -517,92 +647,120 @@ function ActivityLine({ item, t }: { item: ActivityItem; t: Token }) {
           <Text as="span">
             {line.kind === "minted" ? "Minted" : "Burned"} {line.amount} {line.party ? (line.kind === "minted" ? "to" : "from") : ""}
           </Text>
-          {line.party && <Chip party={line.party} />}
+          {line.party && <PartyChip party={line.party} />}
         </HStack>
       );
   }
 }
 
+const PartyChip = ({ party }: { party: Party }) => <AccountChip address={party.address} label={party.label} />;
+
 function RecentActivity({ t, events }: { t: Token; events: TokenEvent[] }) {
   const transfers = useTokenTransfers(t.denom);
   const loaded = transfers.data?.pages.flatMap((p) => p.items) ?? [];
   const items = activityItems(events, loaded, transfers.hasNextPage);
+  const failed = !!transfers.error && !transfers.isFetching;
   return (
-    <Card title="Recent activity">
+    <ListPanel as="section" aria-labelledby="token-activity">
+      <PanelHead id="token-activity" title="Recent activity" />
       {!transfers.data && !transfers.error ? (
-        <ListSkeleton rows={5} />
+        <Box px="4" py="2">
+          <ListSkeleton rows={5} />
+        </Box>
       ) : (
-        <Stack gap="3">
-          {items.length === 0 ? (
-            <Text fontSize="sm" color="fg.muted">
-              No activity indexed yet.
-            </Text>
-          ) : (
-            <Stack gap="0" role="list" aria-label="Recent activity">
-              {items.map((item, i) => (
-                <Stack key={item.key} role="listitem" gap="0.5" py="2" fontSize="sm" {...listItem(i)} data-testid="activity-item">
+        <>
+          {items.length > 0 && (
+            <Box role="list" aria-label="Recent activity">
+              {items.map((item) => (
+                <Box
+                  key={item.key}
+                  role="listitem"
+                  px="4"
+                  py="10px"
+                  fontSize="13px"
+                  borderBottomWidth="1px"
+                  borderColor="border.panel"
+                  _last={{ borderBottomWidth: "0" }}
+                  data-testid="activity-item"
+                >
                   <ActivityLine item={item} t={t} />
-                  <HStack gap="1" color="fg.muted" fontSize="xs">
+                  <HStack gap="1" color="fg.muted" fontSize="12px" mt="3px">
                     <TimeAgo time={item.time} />
                     {item.txHash && (
                       <>
                         <Text as="span">·</Text>
-                        <Link asChild color="fg.muted">
+                        <Link asChild color="accent.fg">
                           <NextLink href={`/txs/${item.txHash.toUpperCase()}`}>see transaction</NextLink>
                         </Link>
                       </>
                     )}
                   </HStack>
-                </Stack>
+                </Box>
               ))}
-            </Stack>
+            </Box>
           )}
-          {transfers.error && (
-            <Text fontSize="sm" color="fg.muted">
-              The transfers could not be loaded.
-            </Text>
+          {failed ? (
+            <Box borderTopWidth={items.length > 0 ? "1px" : "0"} borderColor="border.panel">
+              <SectionError what="The transfers" onRetry={() => void transfers.refetch()} />
+            </Box>
+          ) : (
+            items.length === 0 && (
+              <Text px="4" py="14px" fontSize="13px" color="fg.muted">
+                No activity indexed yet.
+              </Text>
+            )
           )}
-          {transfers.isFetchingNextPage && <ListSkeleton rows={5} />}
+          {transfers.isFetchingNextPage && (
+            <Box px="4" py="2">
+              <ListSkeleton rows={5} />
+            </Box>
+          )}
           {transfers.hasNextPage && !transfers.isFetchingNextPage && (
-            <Button variant="outline" size="sm" minH="44px" alignSelf="start" onClick={() => void transfers.fetchNextPage()}>
-              Show older activity
-            </Button>
+            <PanelFoot onClick={() => void transfers.fetchNextPage()}>Show older activity</PanelFoot>
           )}
-        </Stack>
+        </>
       )}
-    </Card>
+    </ListPanel>
+  );
+}
+
+function PingPubOpen(props: { hideBelow?: "c2"; hideFrom?: "c2"; display?: string; px?: string; pb?: string }) {
+  return (
+    <Link href={externalLinks.pingPub} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub ↗
+    </Link>
   );
 }
 
 function Details({ t }: { t: Token }) {
   return (
-    <Stack gap="4">
-      <Card>
-        <Stack gap="0">
-          <Row label="Full name on chain">
-            <HStack gap="1" align="start">
-              <Text fontFamily="mono" wordBreak="break-all" data-testid="token-denom">
-                {t.denom}
-              </Text>
-              <CopyButton value={t.denom} label="Copy full name" />
-            </HStack>
-          </Row>
-          <Row label="Base unit">{baseUnitText(t)}</Row>
-          <Row label="Branding">
-            Its font and colours are set on the chain for the BZE apps; the explorer lists only when they change.
-          </Row>
-        </Stack>
-      </Card>
-      <Stack gap="2">
-        <Heading as="h3" size="sm">
+    <ListPanel>
+      <DetailList>
+        <DetailRow label="Full name on chain">
+          <Text as="span" fontFamily="mono" fontSize="12px" wordBreak="break-all" data-testid="token-denom">
+            {t.denom}
+          </Text>
+          <CopyButton value={t.denom} label="Copy full name" />
+        </DetailRow>
+        <DetailRow label="Base unit">
+          <Mono>{baseUnitText(t)}</Mono>
+        </DetailRow>
+        <DetailRow label="Branding" last>
+          <Muted>Its font and colours are set on the chain for the BZE apps; the explorer lists only when they change.</Muted>
+        </DetailRow>
+      </DetailList>
+      <HStack gap="0.5" px="2" borderTopWidth="1px" borderColor="border.panel">
+        <Heading as="h3" px="2.5" py="10px" fontSize="13px" fontWeight="500" borderBottomWidth="2px" borderColor="accent.fg" whiteSpace="nowrap">
           Raw metadata
         </Heading>
+        <Box flex="1" />
+        <PingPubOpen hideBelow="c2" px="2" />
+      </HStack>
+      <Box p="4" pt="3" borderTopWidth="1px" borderColor="border.panel">
         <JsonBlock value={t.metadata} />
-      </Stack>
-      <Link href={externalLinks.pingPub} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-        Open on Ping.pub <LuExternalLink aria-hidden />
-      </Link>
-    </Stack>
+      </Box>
+      <PingPubOpen hideFrom="c2" display="inline-block" px="4" pb="4" />
+    </ListPanel>
   );
 }
 
@@ -611,47 +769,63 @@ export function TokenView({ t }: { t: Token }) {
   const older = useTokenEventsAfter(t.denom, t.events_next_cursor);
   const events = mergeEvents(t.events, older.data);
   const complete = t.events_next_cursor == null || older.data != null;
+  const route = ibcRoute(t);
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
+    <Box>
       <Header t={t} />
+      <Warnings t={t} />
       <Tiles t={t} />
-      <SupplyBox t={t} events={events} complete={complete} />
-      <About t={t} />
-      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" }} gap="6" alignItems="start">
+      <SupplyCallout t={t} events={events} complete={complete} />
+      {route && <Route t={t} route={route} />}
+      <About t={t} route={route} />
+      <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />
         <RecentActivity t={t} events={events} />
       </Grid>
-      <MoreDetails hint="full name on chain, base unit, raw metadata">
-        <Details t={t} />
-      </MoreDetails>
-    </Stack>
+      <Box mt="8">
+        <MoreDetails hint="full name on chain, base unit, raw metadata">
+          <Details t={t} />
+        </MoreDetails>
+      </Box>
+    </Box>
   );
 }
 
 export function TokenSkeleton() {
   return (
     <Stack gap="6" aria-busy data-testid="token-skeleton">
-      <Stack gap="3">
+      <Stack gap="3" pt="6">
         <Skeleton h="4" w="32" />
-        <HStack gap="3">
-          <SkeletonCircle size="12" />
+        <HStack gap="4">
+          <SkeletonCircle size="14" />
           <Stack gap="2" flex="1">
             <Skeleton h="8" w="48" maxW="full" />
             <Skeleton h="5" w="64" maxW="full" />
           </Stack>
         </HStack>
       </Stack>
-      <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3">
+      <SimpleGrid columns={TILE_COLUMNS} gap="3">
         {Array.from({ length: 4 }).map((_, i) => (
           <TileSkeleton key={i} />
         ))}
       </SimpleGrid>
       <CardSkeleton lines={5} />
-      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" }} gap="6">
+      <Grid templateColumns={TWO_COLUMNS} gap="4">
         <ListSkeleton rows={5} />
         <ListSkeleton rows={5} />
       </Grid>
     </Stack>
+  );
+}
+
+/** The breadcrumb and "Token" over a state box: not found, or the load error. */
+function Missing({ denom, children }: { denom: string; children: ReactNode }) {
+  return (
+    <Box>
+      <Breadcrumb current={shortDenom(denom)} mono />
+      <DetailTitle title="Token" />
+      <Box mt="6">{children}</Box>
+    </Box>
   );
 }
 
@@ -661,29 +835,34 @@ export function TokenPage({ denom }: { denom: string }) {
   if (data) return <TokenView t={data} />;
   if (isNotFound(error)) {
     return (
-      <Card title="Token not found">
-        <Text fontSize="sm" color="fg.muted">
+      <Missing denom={denom}>
+        <StateBox icon={<LuCircleHelp size={20} />} title="Token not found" data-testid="token-not_found">
           The explorer does not know this token. Check the link, or find it in the{" "}
-          <Link asChild>
+          <Link asChild color="accent.fg">
             <NextLink href="/tokens">tokens list</NextLink>
           </Link>
           .
-        </Text>
-      </Card>
+        </StateBox>
+      </Missing>
     );
   }
   if (error) {
     return (
-      <Card title="This token could not be loaded">
-        <HStack justify="space-between" wrap="wrap" gap="3">
-          <Text color="fg.muted" fontSize="sm">
-            The explorer did not answer. Try again in a moment.
-          </Text>
-          <Button colorPalette="blue" minH="44px" onClick={() => void refetch()}>
-            Try again
-          </Button>
-        </HStack>
-      </Card>
+      <Missing denom={denom}>
+        <StateBox
+          tone="error"
+          icon={<LuTriangleAlert size={20} />}
+          title="This token could not be loaded"
+          actions={
+            <Button size="sm" colorPalette="blue" onClick={() => void refetch()}>
+              Try again
+            </Button>
+          }
+          data-testid="token-error"
+        >
+          The explorer did not answer. Try again in a moment.
+        </StateBox>
+      </Missing>
     );
   }
   return <TokenSkeleton />;

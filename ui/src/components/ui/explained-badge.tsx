@@ -4,26 +4,7 @@ import { Box, HStack, Image, Popover, Portal, Text } from "@chakra-ui/react";
 
 import type { ExplainedBadge as Explained } from "@/render/badges";
 
-import { Chip, type ChipVariant } from "./chip";
-
-/** The chip look of a badge's tone: outlined ones become outlined chips. */
-function chipVariant({ tone, variant }: Pick<Explained, "tone" | "variant">): ChipVariant {
-  if (variant === "outline") return tone === "blue" || tone === "cyan" ? "ln" : "ch";
-  switch (tone) {
-    case "green":
-      return "ok";
-    case "red":
-      return "bad";
-    case "orange":
-    case "yellow":
-      return "warn";
-    case "blue":
-    case "cyan":
-      return "acc";
-    default:
-      return "default";
-  }
-}
+import { Chip } from "./chip";
 
 /**
  * A badge, drawn as a chip, that says what it means: the explainer is its tooltip on hover and
@@ -35,7 +16,7 @@ export function ExplainedBadge({ badge, size = "sm" }: { badge: Explained; size?
       <Popover.Trigger asChild>
         <Box asChild maxW="full" cursor="help" textAlign="start">
           <button type="button" title={badge.explainer} aria-label={`${badge.text}: ${badge.explainer}`} data-testid={`${badge.kind}-tag`}>
-            <Chip variant={chipVariant(badge)} whiteSpace="normal" fontSize={size === "md" ? "12px" : "11px"}>
+            <Chip variant={badge.look} whiteSpace="normal" fontSize={size === "md" ? "12px" : "11px"}>
               {badge.logoUrl && <Image src={badge.logoUrl} alt="" boxSize="3" rounded="full" />}
               {badge.text}
             </Chip>

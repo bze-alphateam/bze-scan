@@ -1,16 +1,20 @@
 "use client";
 
-import { Box, Button, Grid, Heading, HStack, Input, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Link, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo, useState } from "react";
-import { LuExternalLink, LuSearch } from "react-icons/lu";
+import { LuTriangleAlert } from "react-icons/lu";
 
 import { useAllTokens } from "@/api/hooks";
 import type { LpPair, TokenSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
-import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { ExplainedBadges } from "@/components/ui/explained-badge";
+import { FilterPills } from "@/components/ui/filter-pills";
+import { FindBox } from "@/components/ui/find-box";
+import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
+import { PageTitle } from "@/components/ui/page-head";
+import { TableSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
 import { Tile } from "@/components/ui/tile";
 import { formatCount } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
@@ -29,19 +33,17 @@ import {
   type TokenFilter,
 } from "@/render/tokens";
 
+// Token · Origin (c2; under the token on phones) · Supply (c2) · Holders (c3) · Price · 24h · DEX (c3).
+// (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
 const COLUMNS = {
-  base: "minmax(0, 1fr)",
-  md: "minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.3fr) 120px",
+  base: "minmax(0, 1fr) auto",
+  c2: "minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto",
+  c3: "minmax(0, 1.2fr) minmax(150px, 1.4fr) minmax(0, 1fr) 80px auto 110px",
 };
-
-/** A label shown before a value on phones, where the header row is hidden. */
-function PhoneLabel({ children }: { children: string }) {
-  return (
-    <Text as="span" hideFrom="md" fontSize="xs" color="fg.muted" me="1">
-      {children}
-    </Text>
-  );
-}
+// On phones the origin chips take a row of their own under the token and its price.
+const ORIGIN_COLUMN = { base: "1 / -1", c2: "auto" };
+const ORIGIN_ROW = { base: "2", c2: "auto" };
+const TILE_COLUMNS = { base: 1, sm: 2, lg: 4 };
 
 type LogoToken = Pick<TokenSummary, "logo_url" | "symbol" | "denom"> & { lp_pair?: LpPair | null };
 
@@ -49,7 +51,7 @@ type LogoToken = Pick<TokenSummary, "logo_url" | "symbol" | "denom"> & { lp_pair
  * A token's logo, else its avatar; a pool share shows its two assets' logos,
  * one over the other's corner, looked up in `denoms` (the caller's tokens).
  */
-export function TokenLogo({ t, denoms, size = "9" }: { t: LogoToken; denoms?: Map<string, TokenSummary>; size?: string }) {
+export function TokenLogo({ t, denoms, size = "30px" }: { t: LogoToken; denoms?: Map<string, TokenSummary>; size?: string }) {
   if (t.lp_pair) {
     const side = (denom: string) => denoms?.get(denom) ?? { denom, symbol: null, logo_url: null };
     return (
@@ -78,6 +80,7 @@ function SingleLogo({ t, size }: { t: Pick<TokenSummary, "logo_url" | "symbol" |
       name={tokenSymbol(t)}
       src={t.denom === BOND_DENOM ? BZE_LOGO : t.logo_url}
       fallbackSrc={TOKEN_LOGO_PLACEHOLDER}
+      variant="token"
       size={size}
       fontSize={size === "full" ? "2xs" : undefined}
     />
@@ -87,14 +90,14 @@ function SingleLogo({ t, size }: { t: Pick<TokenSummary, "logo_url" | "symbol" |
 function Tiles({ tokens }: { tokens: TokenSummary[] }) {
   const tiles = tokensTiles(tokens, new Date());
   return (
-    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" data-testid="tokens-tiles">
+    <SimpleGrid columns={TILE_COLUMNS} gap="3" mb="7" data-testid="tokens-tiles">
       <Tile label="Tokens on BZE" value={formatCount(tiles.count)} sub={tiles.byKind} />
       <Tile
         label="On the DEX"
         value={formatCount(tiles.onDex)}
         sub={
-          <Link href={externalLinks.dex} target="_blank" rel="noopener noreferrer">
-            with a price on the DEX <LuExternalLink aria-hidden />
+          <Link href={externalLinks.dex} target="_blank" rel="noopener noreferrer" color="accent.fg">
+            with a price on the DEX ↗
           </Link>
         }
       />
@@ -102,8 +105,8 @@ function Tiles({ tokens }: { tokens: TokenSummary[] }) {
         label="Created this month"
         value={formatCount(tiles.createdThisMonth)}
         sub={
-          <Link href={externalLinks.factory} target="_blank" rel="noopener noreferrer">
-            on Factory <LuExternalLink aria-hidden />
+          <Link href={externalLinks.factory} target="_blank" rel="noopener noreferrer" color="accent.fg">
+            on Factory ↗
           </Link>
         }
       />
@@ -120,20 +123,18 @@ function PriceCell({ t }: { t: TokenSummary }) {
   const none = noPriceText(t);
   if (none) {
     return (
-      <Text fontSize="sm" color={t.halted ? "red.fg" : "fg.muted"}>
-        <PhoneLabel>Price</PhoneLabel>
+      <Text textAlign="right" fontSize="13px" color={t.halted ? "neg.fg" : "fg.muted"} whiteSpace="nowrap">
         {none}
       </Text>
     );
   }
   const change = changeText(t.price_change_24h_pct);
+  const tone = change ? { green: "pos.fg", red: "neg.fg", gray: "fg.muted" }[change.tone] : undefined;
   return (
-    <Text fontSize="sm">
-      <PhoneLabel>Price</PhoneLabel>
+    <Text textAlign="right" fontFamily="mono" fontSize="13px" whiteSpace="nowrap">
       {priceText(t.price_usd!)}
       {change && (
-        <Text as="span" color={`${change.tone}.fg`}>
-          {" "}
+        <Text as="span" color={tone} ms="6px">
           {change.text}
         </Text>
       )}
@@ -143,154 +144,97 @@ function PriceCell({ t }: { t: TokenSummary }) {
 
 function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSummary> }) {
   return (
-    <Grid
-      role="listitem"
-      templateColumns={COLUMNS}
-      gap={{ base: "1.5", md: "4" }}
-      alignItems="center"
-      px="4"
-      py="3"
-      minH="56px"
-      borderTopWidth="1px"
-      borderColor="border.panel"
-      data-testid="token-list-row"
-    >
-      <HStack gap="3" minW="0">
+    <ListRow role="listitem" templateColumns={COLUMNS} rowGap="2" data-testid="token-list-row">
+      <Flex align="center" gap="10px" minW="0">
         <TokenLogo t={t} denoms={denoms} />
-        <Stack gap="0" minW="0">
-          <Link asChild fontWeight="medium" truncate>
+        <Box minW="0">
+          <Link asChild display="block" fontWeight="500" color="accent.fg" truncate>
             <NextLink href={tokenHref(t.denom)} data-testid="token-link">
               {tokenSymbol(t)}
             </NextLink>
           </Link>
           {t.name && (
-            <Text fontSize="xs" color="fg.muted" truncate>
+            <Text fontSize="12px" color="fg.muted" truncate>
               {t.name}
             </Text>
           )}
-        </Stack>
-      </HStack>
-      <ExplainedBadges badges={tokenBadges(t)} />
-      <Text fontSize="sm" wordBreak="break-word">
-        <PhoneLabel>Supply</PhoneLabel>
+        </Box>
+      </Flex>
+      <Box gridColumn={ORIGIN_COLUMN} gridRow={ORIGIN_ROW} minW="0">
+        <ExplainedBadges badges={tokenBadges(t)} />
+      </Box>
+      <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px" wordBreak="break-word">
         {supplyText(t) ?? "—"}
       </Text>
-      <Text fontSize="sm">
-        <PhoneLabel>Holders</PhoneLabel>
+      <Text hideBelow="c3" textAlign="right" fontFamily="mono" fontSize="13px" color={t.holders_count ? undefined : "fg.muted"}>
         {t.holders_count != null ? formatCount(t.holders_count) : "—"}
       </Text>
       <PriceCell t={t} />
-      <Box>
+      <Box hideBelow="c3" textAlign="right">
         {t.price_usd != null && (
-          <Link href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer" fontSize="sm" minH="44px">
-            View on DEX <LuExternalLink aria-hidden />
+          <Link href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" whiteSpace="nowrap">
+            View on DEX ↗
           </Link>
         )}
       </Box>
-    </Grid>
+    </ListRow>
   );
 }
 
 function TokenTable({ rows, denoms, empty }: { rows: TokenSummary[]; denoms: Map<string, TokenSummary>; empty: string }) {
   return (
-    <Box bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3" overflow="hidden">
-      <Grid
-        hideBelow="md"
-        templateColumns={COLUMNS}
-        gap="4"
-        px="4"
-        h="10"
-        alignItems="center"
-        fontSize="xs"
-        color="fg.muted"
-        textTransform="uppercase"
-        letterSpacing="wide"
-        aria-hidden
-      >
+    <ListPanel>
+      <ListHead templateColumns={COLUMNS} aria-hidden>
         <Text>Token</Text>
-        <Text>Origin</Text>
-        <Text>Supply on BZE</Text>
-        <Text>Holders</Text>
-        <Text>Price · 24h</Text>
-        <span />
-      </Grid>
+        <Text hideBelow="c2">Origin</Text>
+        <Text hideBelow="c2" textAlign="right">
+          Supply on BZE
+        </Text>
+        <Text hideBelow="c3" textAlign="right">
+          Holders
+        </Text>
+        <Text textAlign="right">Price · 24h</Text>
+        <Box hideBelow="c3" />
+      </ListHead>
       <Box role="list" aria-label="Tokens">
         {rows.map((t) => (
           <TokenRow key={t.denom} t={t} denoms={denoms} />
         ))}
       </Box>
       {rows.length === 0 && (
-        <Text px="4" py="6" color="fg.muted" fontSize="sm" borderTopWidth="1px" borderColor="border.panel">
+        <Text px="4" py="6" color="fg.muted" fontSize="13px">
           {empty}
         </Text>
       )}
-    </Box>
+    </ListPanel>
   );
 }
 
-/** The list once loaded: intro, tiles, chips with the filter, the table and the footnote. */
+/** The list once loaded: tiles, the kind pills with the search box, the table and the footnote. */
 export function TokensView({ tokens }: { tokens: TokenSummary[] }) {
   const [filter, setFilter] = useState<TokenFilter>("all");
   const [query, setQuery] = useState("");
   const rows = filterTokens(tokens, filter, query);
   const denoms = useMemo(() => new Map(tokens.map((t) => [t.denom, t])), [tokens]);
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
-      <Text color="fg.muted" maxW="3xl">
-        Every token on BZE. Prices come from the BZE DEX.
-      </Text>
+    <Box>
       <Tiles tokens={tokens} />
-      <Stack gap="3">
-        <HStack justify="space-between" wrap="wrap" gap="3">
-          <HStack gap="2" wrap="wrap" role="group" aria-label="Show tokens">
-            {TOKEN_FILTERS.map((f) => (
-              <Button
-                key={f.value}
-                size="sm"
-                minH="44px"
-                rounded="full"
-                variant={filter === f.value ? "subtle" : "outline"}
-                aria-pressed={filter === f.value}
-                onClick={() => setFilter(f.value)}
-              >
-                {f.label}
-              </Button>
-            ))}
-          </HStack>
-          <HStack
-            gap="2"
-            px="3"
-            borderWidth="1px"
-            borderColor="border.panel"
-            rounded="l2"
-            w={{ base: "full", sm: "64" }}
-            color="fg.muted"
-          >
-            <LuSearch aria-hidden />
-            <Input
-              aria-label="Find a token"
-              placeholder="Find a token"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              variant="flushed"
-              border="0"
-              minH="44px"
-            />
-          </HStack>
-        </HStack>
-        <TokenTable rows={rows} denoms={denoms} empty={query ? "No token has that name." : "No tokens of this kind yet."} />
-        <Text fontSize="sm" color="fg.muted">
-          Raw names (factory/…, ibc/…) are in each token&apos;s More details.
-        </Text>
-      </Stack>
-    </Stack>
+      <Flex justify="space-between" align="center" columnGap="4" rowGap="3" wrap="wrap" mb="14px">
+        <FilterPills label="Filter by origin" options={TOKEN_FILTERS} value={filter} onChange={setFilter} mb="0" />
+        <FindBox label="Find a token" value={query} onChange={setQuery} />
+      </Flex>
+      <TokenTable rows={rows} denoms={denoms} empty={query ? "No token has that name." : "No tokens of this kind yet."} />
+      <Text mt="3" fontSize="12px" color="fg.muted">
+        Raw names (factory/…, ibc/…) are in each token&apos;s More details.
+      </Text>
+    </Box>
   );
 }
 
 export function TokensSkeleton() {
   return (
-    <Stack gap="6" aria-busy data-testid="tokens-skeleton">
-      <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3">
+    <Stack gap="7" aria-busy data-testid="tokens-skeleton">
+      <SimpleGrid columns={TILE_COLUMNS} gap="3">
         {Array.from({ length: 4 }).map((_, i) => (
           <TileSkeleton key={i} />
         ))}
@@ -304,26 +248,27 @@ export function TokensSkeleton() {
 export function TokensPage() {
   const { data, error, refetch } = useAllTokens();
   return (
-    <Stack gap="6">
-      <Heading as="h1" size={{ base: "2xl", md: "3xl" }}>
-        Tokens
-      </Heading>
+    <Box>
+      <PageTitle title="Tokens" intro="Every token on BZE. Prices come from the BZE DEX." />
       {data ? (
         <TokensView tokens={data} />
       ) : error ? (
-        <Card title="The tokens could not be loaded">
-          <HStack justify="space-between" wrap="wrap" gap="3">
-            <Text color="fg.muted" fontSize="sm">
-              The explorer did not answer. Try again in a moment.
-            </Text>
-            <Button colorPalette="blue" minH="44px" onClick={() => void refetch()}>
+        <StateBox
+          tone="error"
+          icon={<LuTriangleAlert size={20} />}
+          title="The tokens could not be loaded"
+          actions={
+            <Button size="sm" colorPalette="blue" onClick={() => void refetch()}>
               Try again
             </Button>
-          </HStack>
-        </Card>
+          }
+          data-testid="tokens-error"
+        >
+          The explorer did not answer. Try again in a moment.
+        </StateBox>
       ) : (
         <TokensSkeleton />
       )}
-    </Stack>
+    </Box>
   );
 }

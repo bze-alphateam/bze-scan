@@ -11,14 +11,17 @@ import holdersJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40
 import transfersJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/transfers.json";
 import list from "../../../test/fixtures/api/v1/tokens.json";
 import usdcJson from "../../../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
+import atoneJson from "../../../test/fixtures/api/v1/tokens/ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1.json";
 
 import { TokenPage } from "./token-page";
 
 const honey = honeyJson as Token;
 const usdc = usdcJson as Token;
+const atone = atoneJson as Token;
 const holders = holdersJson as Page<TokenHolder>;
 const transfers = transfersJson as Page<TokenTransfer>;
 const empty = { items: [], next_cursor: null };
+const texts = (testId: string) => screen.getAllByTestId(testId).map((e) => e.textContent);
 
 function api(token: Token = honey, extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
@@ -46,27 +49,54 @@ describe("TokenPage", () => {
     expect(screen.getAllByTestId("list-skeleton-row")).toHaveLength(10);
   });
 
-  it("explains a multi-hop token and names a pool share's two assets", async () => {
-    const twoHop = {
-      ...usdc,
-      ibc_path: "transfer/channel-1/transfer/channel-750",
-      ibc_hops: 2,
-      via_chain: { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null },
-    };
-    const { unmount } = renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(twoHop) });
-    expect(await screen.findByTestId("hops-explainer")).toHaveTextContent(
-      "This USDC came to BZE through Osmosis (2 hops), not straight from Noble.",
-    );
-    expect(screen.getByTestId("token-chips")).toHaveTextContent("Cross-chainOsmosisNoble2 hopsTrading on the DEX");
-    const about = screen.getByTestId("token-about");
-    expect(within(about).getByTestId("ibc-route")).toHaveTextContent("NobleOsmosisBZE");
-    expect(within(about).getByTestId("ibc-path")).toHaveTextContent(
-      "transfer/channel-1 on BZE, to Osmosistransfer/channel-750 on Osmosis, to Noble",
-    );
-    expect(about).toHaveTextContent("Origin chainNoble· 2 hops via Osmosis");
-    expect(screen.getByText(/minted on Noble and reached BZE through Osmosis\./)).toBeInTheDocument();
-    unmount();
+  it("draws a one-hop token's way from its home chain, without the multi-hop callout", async () => {
+    renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(usdc) });
+    const route = await screen.findByTestId("ibc-route");
+    expect(route).toHaveTextContent("How it got heredirect · 1 hop");
+    expect(screen.getAllByTestId("route-stop").map((s) => s.getAttribute("data-role"))).toEqual(["origin", "here"]);
+    expect(texts("route-stop")).toEqual(["Nobleminted hereuusdc", "BZEthis tokenUSDC"]);
+    expect(texts("route-link")).toEqual(["channel-1→↓on BZE · open"]);
+    expect(screen.queryByTestId("hops-callout")).not.toBeInTheDocument();
+  });
 
+  it("tells a two-hop token apart from the direct one and draws the chain it came through", async () => {
+    renderWithProviders(<TokenPage denom={atone.denom} />, { api: api(atone) });
+    const callout = await screen.findByTestId("hops-callout");
+    expect(callout).toHaveAttribute("data-tone", "warn");
+    expect(callout).toHaveTextContent(
+      "Not the same token as ATONE sent straight from AtomOneIt came through Osmosis, so BZE sees it as a different token from the ATONE that came directly: the two are not interchangeable on BZE.",
+    );
+    expect(screen.getByTestId("token-chips")).toHaveTextContent(/^Cross-chainfrom AtomOnevia Osmosis2 hops$/);
+    expect(screen.getByTestId("ibc-route")).toHaveTextContent("2 hops · not direct");
+    expect(texts("route-stop")).toEqual(["AtomOneminted hereuatone", "Osmosispassed through", "BZEthis tokenATONE · via Osmosis"]);
+    expect(texts("route-link")).toEqual(["channel-94814→↓on Osmosis", "channel-0→↓on BZE · open"]);
+    const about = screen.getByTestId("token-about");
+    expect(about).toHaveTextContent("Minted onAtomOneas uatone");
+    expect(about).toHaveTextContent("Came throughOsmosis· 2 hops, not direct");
+    expect(texts("ibc-path")).toEqual(["transfer/channel-0 · BZE to Osmosis", "transfer/channel-94814 · Osmosis to AtomOne"]);
+    expect(about).toHaveTextContent("Path on BZE");
+    expect(about).toHaveTextContent("Path on Osmosis");
+    expect(about).not.toHaveTextContent("Origin chain");
+    expect(screen.getByText(/minted on AtomOne and reached BZE through Osmosis\./)).toBeInTheDocument();
+    expect(await screen.findByText("No activity indexed yet.")).toBeInTheDocument();
+  });
+
+  it("counts the chains between on a three-hop route instead of naming them", async () => {
+    const three = { ...atone, ibc_hops: 3, ibc_path: "transfer/channel-0/transfer/channel-94814/transfer/channel-7" };
+    renderWithProviders(<TokenPage denom={atone.denom} />, { api: api(three) });
+    await screen.findByTestId("ibc-route");
+    expect(screen.getAllByTestId("route-stop").map((s) => [s.getAttribute("data-role"), s.firstChild?.textContent])).toEqual([
+      ["origin", "AtomOne"],
+      ["counted", "1 more chain"],
+      ["through", "Osmosis"],
+      ["here", "BZE"],
+    ]);
+    expect(texts("route-link")).toEqual(["channel-7→↓on another chain", "channel-94814→↓on Osmosis", "channel-0→↓on BZE · open"]);
+    expect(screen.getByTestId("hops-callout")).toBeInTheDocument();
+    expect(texts("ibc-path")).toHaveLength(3);
+  });
+
+  it("names a pool share's two assets", async () => {
     const lp = {
       ...usdc,
       denom: "ulp/7E2E1C1A9E41C35A4F3B0CBA6A5F1C0E8D9B6A1F4C3E2D1B0A9F8E7D6C5B4A39",
@@ -80,7 +110,8 @@ describe("TokenPage", () => {
       api: api(lp, { tokens: () => Promise.resolve(list as Page<TokenSummary>) }),
     });
     const pair = await screen.findByTestId("pool-pair");
-    expect(screen.queryByTestId("hops-explainer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("hops-callout")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ibc-route")).not.toBeInTheDocument();
     await within(pair).findByRole("link", { name: "BZE" });
     expect(pair).toHaveTextContent("A share of the DEX pool of BZE and USDC.");
     expect(within(pair).getByRole("link", { name: "USDC" })).toHaveAttribute("href", `/tokens/${encodeURIComponent(usdc.denom)}`);
@@ -102,13 +133,14 @@ describe("TokenPage", () => {
 
     const box = screen.getByTestId("supply-box");
     expect(box).toHaveAttribute("data-state", "admin");
+    expect(box).toHaveAttribute("data-tone", "warn");
     expect(box).toHaveTextContent(
       "The supply of HONEY can changeThe token's admin, 3Gbze13gz…yhqk, can create more HONEY or destroy some at any time. So far: 2 mints adding 1,000,500 HONEY, 1 burn removing 200 HONEY.",
     );
 
     const about = screen.getByTestId("token-about");
     expect(about).toHaveTextContent("NameHoney");
-    expect(about).toHaveTextContent("CreatedOct 2, 2099 · see transaction");
+    expect(about).toHaveTextContent("CreatedOct 2, 2099·see transaction");
     expect(about).toHaveTextContent("Admin3Gbze13gz…yhqksame account · can mint, burn and change the branding");
     expect(about).toHaveTextContent("Decimals6");
     expect(about).toHaveTextContent("DescriptionThe sweetest token on BZE.");
@@ -191,7 +223,8 @@ describe("TokenPage", () => {
     expect(box).toHaveAttribute("data-state", "fixed");
     expect(box).toHaveTextContent("The supply of HONEY is fixed");
     expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("Total supply500K HONEYfixed");
-    expect(screen.getByTestId("token-about")).toHaveTextContent("Adminrenounced: nobody can mint or burn");
+    expect(screen.getByTestId("token-about")).toHaveTextContent("AdminRenouncednobody can mint or burn");
+    expect(box).toHaveAttribute("data-tone", "ok");
   });
 
   it("renders a cross-chain token with its origin chain", async () => {
@@ -207,7 +240,8 @@ describe("TokenPage", () => {
     expect(about).toHaveTextContent("Origin chainNoble");
     expect(about).toHaveTextContent("Base denom thereuusdc");
     expect(about).toHaveTextContent("Pathtransfer/channel-1");
-    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1 open and active");
+    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1Openand active");
+    expect(within(about).getByTestId("ibc-path")).toHaveTextContent("transfer/channel-1 on BZE, to Noble");
     expect(about).not.toHaveTextContent("Admin");
     expect(await screen.findByText("No activity indexed yet.")).toBeInTheDocument();
   });
@@ -227,7 +261,8 @@ describe("TokenPage", () => {
     );
     const about = screen.getByTestId("token-about");
     expect(within(about).getByTestId("chain-dead")).toHaveTextContent("shut down");
-    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1 expired: no relayer kept it updated");
+    expect(within(about).getByTestId("ibc-connection")).toHaveTextContent("channel-1Expiredno relayer kept it updated");
+    expect(screen.getByTestId("route-link")).toHaveTextContent("on BZE · expired");
     // Every badge explains itself on tap, not only on hover.
     await userEvent.click(screen.getByTestId("stranded-tag"));
     expect(await screen.findByRole("dialog")).toHaveTextContent("can never be sent back");
@@ -239,19 +274,45 @@ describe("TokenPage", () => {
     expect(screen.getByTestId("token-denom")).toHaveTextContent(honey.denom);
     expect(screen.getByText("1 HONEY = 1,000,000 uhoney")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy JSON" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open on Ping.pub/ })).toBeInTheDocument();
+    // On the raw bar from c2 up, under the JSON on phones.
+    expect(screen.getAllByRole("link", { name: /Open on Ping.pub/ })).toHaveLength(2);
+  });
+
+  it("says inside its own panel when the holders fail, and retries them", async () => {
+    const tokenHolders = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
+    renderWithProviders(<TokenPage denom={honey.denom} />, { api: api(honey, { tokenHolders }) });
+    const error = await screen.findByTestId("section-error");
+    expect(error).toHaveTextContent("The holders could not be loaded.Try again");
+    // The rest of the page stays.
+    expect(screen.getAllByTestId("activity-item")).toHaveLength(7);
+    const calls = tokenHolders.mock.calls.length;
+    await userEvent.click(within(error).getByRole("button", { name: "Try again" }));
+    expect(tokenHolders.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("keeps the events when the transfers fail and offers to retry them", async () => {
+    const tokenTransfers = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
+    renderWithProviders(<TokenPage denom={honey.denom} />, { api: api(honey, { tokenTransfers }) });
+    expect(await screen.findByTestId("section-error")).toHaveTextContent("The transfers could not be loaded.");
+    expect(screen.getAllByTestId("activity-item").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No activity indexed yet.")).not.toBeInTheDocument();
   });
 
   it("answers not found for a denom the API does not know", async () => {
     const token = vi.fn(() => Promise.reject(new ApiError(404, "not_found", "unknown denom")));
-    renderWithProviders(<TokenPage denom="uzzz" />, { api: api(honey, { token }) });
+    renderWithProviders(<TokenPage denom="factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uzzz" />, { api: api(honey, { token }) });
     expect(await screen.findByRole("heading", { name: "Token not found" })).toBeInTheDocument();
+    expect(screen.getByTestId("token-not_found")).toHaveAttribute("data-state", "neutral");
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Tokens/factory/bze1…/uzzz");
+    expect(screen.getByRole("heading", { level: 1, name: "Token" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "tokens list" })).toHaveAttribute("href", "/tokens");
   });
 
   it("offers a retry when the API fails", async () => {
     const token = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<TokenPage denom={honey.denom} />, { api: api(honey, { token }) });
-    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByTestId("token-error")).toHaveAttribute("data-state", "error");
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(token).toHaveBeenCalledTimes(2);
   });
 });

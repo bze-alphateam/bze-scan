@@ -4,6 +4,7 @@ import { noHorizontalScroll } from "./layout";
 
 import honey from "../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
 import usdc from "../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
+import atone from "../test/fixtures/api/v1/tokens/ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1.json";
 
 // The mock API answers /tokens from test/fixtures/api/v1/tokens.json (every
 // kind; the query is ignored, so the chips filter on the page) and a token's
@@ -65,18 +66,35 @@ test.describe("token page", () => {
     await expect(page.getByRole("heading", { level: 1, name: "HONEY" })).toBeVisible();
   });
 
-  test("a cross-chain token shows its origin chain", async ({ page }) => {
+  test("a cross-chain token shows its origin chain and the way it came", async ({ page }) => {
     await page.goto(tokenPath(usdc.denom));
     await expect(page.getByTestId("token-chips")).toContainText("Cross-chainNoble");
-    await expect(page.getByTestId("ibc-connection")).toContainText("open and active");
+    await expect(page.getByTestId("ibc-connection")).toContainText("Openand active");
+    await expect(page.getByTestId("ibc-route")).toContainText("direct · 1 hop");
+    await expect(page.getByTestId("route-stop")).toHaveCount(2);
+    await expect(page.getByTestId("hops-callout")).toHaveCount(0);
     await expect(page.getByTestId("supply-box")).toContainText("USDC is minted on Noble");
     await expect(page.getByTestId("token-about")).toContainText("Base denom thereuusdc");
     await expect(page.getByText("No activity indexed yet.")).toBeVisible();
   });
 
+  test("a token that came through another chain says it is not the direct one", async ({ page }) => {
+    await page.goto(tokenPath(atone.denom));
+    await expect(page.getByRole("heading", { level: 1, name: "ATONE" })).toBeVisible();
+    await expect(page.getByTestId("token-chips")).toContainText("Cross-chainfrom AtomOnevia Osmosis2 hops");
+    await expect(page.getByTestId("hops-callout")).toContainText("Not the same token as ATONE sent straight from AtomOne");
+    await expect(page.getByTestId("ibc-route")).toContainText("2 hops · not direct");
+    await expect(page.getByTestId("route-stop")).toHaveText([/AtomOne.*minted here/i, /Osmosis.*passed through/i, /BZE.*this token/i]);
+    await expect(page.getByTestId("token-about")).toContainText("Path on Osmosis");
+    await expect(page.getByText("No activity indexed yet.")).toBeVisible();
+    await noHorizontalScroll(page);
+  });
+
   test("an unknown token answers not found", async ({ page }) => {
     await page.goto(tokenPath("factory/bze1nobody/uzz"));
     await expect(page.getByRole("heading", { name: "Token not found" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Tokens");
+    await expect(page.getByRole("heading", { level: 1, name: "Token" })).toBeVisible();
   });
 });
 
@@ -90,6 +108,14 @@ test.describe("tokens on a phone", () => {
 
     await page.goto(tokenPath(honey.denom));
     await expect(page.getByTestId("activity-item")).toHaveCount(7);
+    await noHorizontalScroll(page);
+
+    // The route stacks: each chain under the one before.
+    await page.goto(tokenPath(atone.denom));
+    const stops = page.getByTestId("route-stop");
+    await expect(stops).toHaveCount(3);
+    const [first, second] = [await stops.nth(0).boundingBox(), await stops.nth(1).boundingBox()];
+    expect(second!.y).toBeGreaterThan(first!.y + first!.height);
     await noHorizontalScroll(page);
   });
 });
