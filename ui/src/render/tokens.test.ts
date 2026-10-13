@@ -18,12 +18,14 @@ import {
   eventLine,
   filterTokens,
   hopsExplainer,
-  hopsText,
   ibcRoute,
   mergeEvents,
   mintBurnText,
+  multiHopCallout,
   noPriceText,
   priceText,
+  routeNote,
+  shortDenom,
   supplyState,
   supplyTileSub,
   tokenHref,
@@ -56,8 +58,6 @@ describe("tokens list", () => {
     const osmosis = { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null };
     const direct = bySymbol("ATOM");
     const twoHop = { ...direct, ibc_hops: 2, via_chain: osmosis };
-    expect(hopsText({ hops: 2, via: "Osmosis" })).toBe("2 hops via Osmosis");
-    expect(hopsText({ hops: 3, via: null })).toBe("3 hops");
     expect(hopsExplainer(direct)).toBeNull();
     expect(hopsExplainer(twoHop)).toBe(
       "This ATOM came to BZE through Osmosis (2 hops), not straight from Cosmos Hub. " +
@@ -65,39 +65,99 @@ describe("tokens list", () => {
         "To swap one for the other, send it back the way it came.",
     );
     expect(hopsExplainer({ ...twoHop, via_chain: null })).toContain("through another chain (2 hops)");
+    // The amber callout says the same in a title and one line, only from two hops on.
+    expect(multiHopCallout(direct)).toBeNull();
+    expect(multiHopCallout(twoHop)).toEqual({
+      title: "Not the same token as ATOM sent straight from Cosmos Hub",
+      body: "It came through Osmosis, so BZE sees it as a different token from the ATOM that came directly: the two are not interchangeable on BZE.",
+    });
+    expect(multiHopCallout({ ...twoHop, via_chain: null })?.body).toMatch(/^It came through another chain,/);
   });
 
-  it("traces an IBC token's route from its home chain to BZE", () => {
+  it("shortens a denom for a breadcrumb", () => {
+    expect(shortDenom("factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney")).toBe("factory/bze1…/uhoney");
+    expect(shortDenom("ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011")).toBe("ibc/82931180…");
+    expect(shortDenom("ubze")).toBe("ubze");
+  });
+
+  it("draws a one-hop token's route: home, then BZE over BZE's channel", () => {
     const injective = { chain_id: "injective-1", name: "Injective", logo_url: "inj.png", status: null };
-    const hub = { chain_id: "cosmoshub-4", name: "Cosmos Hub", logo_url: "hub.png", status: null };
-    const base = { kind: "ibc", origin_chain: injective, origin_chain_id: "injective-1", via_chain: null };
+    const base = { kind: "ibc", symbol: "INJ", denom: "ibc/INJ", origin_chain: injective, origin_chain_id: "injective-1", ibc_base_denom: "inj", via_chain: null };
     expect(ibcRoute({ ...base, ibc_path: "transfer/channel-13" })).toEqual({
-      chains: [
-        { name: "Injective", logoUrl: "inj.png" },
-        { name: "BZE", logoUrl: null },
+      hops: 1,
+      stops: [
+        { name: "Injective", role: "origin", detail: "inj" },
+        { name: "BZE", role: "here", detail: "INJ" },
       ],
-      hops: [{ channel: "transfer/channel-13", on: "BZE", toward: "Injective" }],
+      links: [{ channels: ["channel-13"], on: "BZE" }],
+      paths: [{ channel: "transfer/channel-13", on: "BZE", toward: "Injective" }],
     });
-    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-11/transfer/channel-220" })).toEqual({
-      chains: [
-        { name: "Injective", logoUrl: "inj.png" },
-        { name: "Cosmos Hub", logoUrl: "hub.png" },
-        { name: "BZE", logoUrl: null },
+    expect(routeNote(1)).toBe("direct · 1 hop");
+    expect(ibcRoute({ ...base, ibc_path: null })).toBeNull();
+    expect(ibcRoute({ ...base, ibc_path: "transfer" })).toBeNull();
+    expect(ibcRoute({ ...base, kind: "factory", ibc_path: "transfer/channel-1" })).toBeNull();
+    // Without a known home chain the route still says where it starts.
+    expect(ibcRoute({ ...base, origin_chain: null, origin_chain_id: null, ibc_path: "transfer/channel-13" })?.stops[0].name).toBe("its home chain");
+  });
+
+  it("draws a two-hop token's route through the chain it came by, each link with that chain's channel", () => {
+    const atomone = { chain_id: "atomone-1", name: "AtomOne", logo_url: null, status: null };
+    const osmosis = { chain_id: "osmosis-1", name: "Osmosis", logo_url: null, status: null };
+    const atone = {
+      kind: "ibc",
+      symbol: "ATONE",
+      denom: "ibc/E7CF",
+      origin_chain: atomone,
+      origin_chain_id: "atomone-1",
+      ibc_base_denom: "uatone",
+      via_chain: osmosis,
+      ibc_path: "transfer/channel-0/transfer/channel-94814",
+    };
+    expect(ibcRoute(atone)).toEqual({
+      hops: 2,
+      stops: [
+        { name: "AtomOne", role: "origin", detail: "uatone" },
+        { name: "Osmosis", role: "through", detail: null },
+        { name: "BZE", role: "here", detail: "ATONE · via Osmosis" },
       ],
-      hops: [
-        { channel: "transfer/channel-11", on: "BZE", toward: "Cosmos Hub" },
-        { channel: "transfer/channel-220", on: "Cosmos Hub", toward: "Injective" },
+      links: [
+        { channels: ["channel-94814"], on: "Osmosis" },
+        { channels: ["channel-0"], on: "BZE" },
+      ],
+      paths: [
+        { channel: "transfer/channel-0", on: "BZE", toward: "Osmosis" },
+        { channel: "transfer/channel-94814", on: "Osmosis", toward: "AtomOne" },
       ],
     });
-    // Beyond the first hop the explorer knows only the home chain.
-    expect(ibcRoute({ ...base, via_chain: hub, ibc_path: "transfer/channel-1/transfer/channel-2/transfer/channel-3" })?.hops).toEqual([
+    expect(routeNote(2)).toBe("2 hops · not direct");
+  });
+
+  it("counts the chains it cannot name on a longer route, never inventing them", () => {
+    const injective = { chain_id: "injective-1", name: "Injective", logo_url: null, status: null };
+    const hub = { chain_id: "cosmoshub-4", name: "Cosmos Hub", logo_url: null, status: null };
+    const base = { kind: "ibc", symbol: "INJ", denom: "ibc/INJ", origin_chain: injective, origin_chain_id: "injective-1", ibc_base_denom: "inj", via_chain: hub };
+    const three = ibcRoute({ ...base, ibc_path: "transfer/channel-1/transfer/channel-2/transfer/channel-3" })!;
+    expect(three.stops.map((s) => [s.name, s.role])).toEqual([
+      ["Injective", "origin"],
+      ["1 more chain", "counted"],
+      ["Cosmos Hub", "through"],
+      ["BZE", "here"],
+    ]);
+    expect(three.links).toEqual([
+      { channels: ["channel-3"], on: "another chain" },
+      { channels: ["channel-2"], on: "Cosmos Hub" },
+      { channels: ["channel-1"], on: "BZE" },
+    ]);
+    expect(three.paths).toEqual([
       { channel: "transfer/channel-1", on: "BZE", toward: "Cosmos Hub" },
       { channel: "transfer/channel-2", on: "Cosmos Hub", toward: "another chain" },
       { channel: "transfer/channel-3", on: "another chain", toward: "Injective" },
     ]);
-    expect(ibcRoute({ ...base, ibc_path: null })).toBeNull();
-    expect(ibcRoute({ ...base, ibc_path: "transfer" })).toBeNull();
-    expect(ibcRoute({ ...base, kind: "factory", ibc_path: "transfer/channel-1" })).toBeNull();
+    const four = ibcRoute({ ...base, ibc_path: "transfer/channel-1/transfer/channel-2/transfer/channel-3/transfer/channel-4" })!;
+    expect(four.stops[1].name).toBe("2 more chains");
+    expect(four.links[0]).toEqual({ channels: ["channel-4", "channel-3"], on: "the chains between" });
+    // An unknown chain it came through is not named either.
+    expect(ibcRoute({ ...base, via_chain: null, ibc_path: "transfer/channel-1/transfer/channel-2" })!.stops[1].name).toBe("another chain");
   });
 
   it("filters by chip, then on symbol or name", () => {

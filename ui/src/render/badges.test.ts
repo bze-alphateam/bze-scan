@@ -6,7 +6,7 @@ import list from "../../test/fixtures/api/v1/tokens.json";
 import honeyJson from "../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
 import usdcJson from "../../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
 
-import { connectionHealthy, connectionText, headerChips, strandedExplainer, tokenBadges } from "./badges";
+import { connectionChip, headerChips, strandedExplainer, tokenBadges } from "./badges";
 import { isObsolete } from "./tokens";
 
 const honey = honeyJson as Token;
@@ -34,17 +34,21 @@ describe("token badges", () => {
     }
   });
 
-  it("shows a multi-hop token's chain it came through, then its home in another color, then the hops", () => {
+  it("draws each kind and a one-hop token's chain in its own look", () => {
+    expect(tokens.map((t) => tokenBadges(t).map((b) => b.look))).toEqual([["acc"], ["default"], ["default"], ["default", "ch"], ["default", "ch"], ["default"]]);
+  });
+
+  it("shows a multi-hop token's home chain, the chain it came through dashed, then the hops", () => {
     const twoHop = { ...bySymbol("ATOM"), ibc_hops: 2, via_chain: osmosis };
     const badges = tokenBadges(twoHop);
-    expect(badges.map((b) => [b.kind, b.text, b.tone])).toEqual([
-      ["kind", "Cross-chain", "blue"],
-      ["direct", "Osmosis", "blue"],
-      ["home", "Cosmos Hub", "purple"],
-      ["hops", "2 hops", "cyan"],
+    expect(badges.map((b) => [b.kind, b.text, b.look])).toEqual([
+      ["kind", "Cross-chain", "default"],
+      ["home", "from Cosmos Hub", "ch"],
+      ["direct", "via Osmosis", "via"],
+      ["hops", "2 hops", "ln"],
     ]);
-    expect(badges[1].explainer).toBe("BZE received ATOM from Osmosis, which it had reached from its home chain first.");
-    expect(badges[2].explainer).toBe("ATOM was minted on Cosmos Hub, then travelled through Osmosis before reaching BZE.");
+    expect(badges[1].explainer).toBe("ATOM was minted on Cosmos Hub, then travelled through Osmosis before reaching BZE.");
+    expect(badges[2].explainer).toBe("BZE received ATOM from Osmosis, which it had reached from its home chain first.");
     expect(badges[3].explainer).toContain("not interchangeable");
   });
 
@@ -58,7 +62,7 @@ describe("token badges", () => {
     };
     const badges = tokenBadges(vdl);
     expect(badges.map((b) => `${b.kind}:${b.text}`)).toEqual(["kind:Cross-chain", "direct:Vidulum (shut down)", "stranded:Stranded"]);
-    expect(badges[2]).toMatchObject({ tone: "orange", variant: "solid" });
+    expect(badges[2].look).toBe("warn");
     expect(badges[2].explainer).toBe(
       "Vidulum, where it was minted, has shut down. " +
         "BZE's connection to Vidulum (channel-1) has expired: no relayer updated it in time, so nothing crosses it until a governance proposal revives it. " +
@@ -88,7 +92,7 @@ describe("token badges", () => {
     const corey = { ...bySymbol("HONEY"), denom: "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey" };
     const badges = tokenBadges(corey);
     expect(badges.map((b) => b.kind)).toEqual(["kind", "obsolete"]);
-    expect(badges[1]).toMatchObject({ text: "Obsolete", tone: "red", variant: "solid" });
+    expect(badges[1]).toMatchObject({ text: "Obsolete", look: "bad" });
   });
 });
 
@@ -96,9 +100,10 @@ describe("token page chips", () => {
   it("adds the DEX state to the origin badges", () => {
     expect(headerChips(honey).map((c) => c.text)).toEqual(["Factory", "Trading on the DEX"]);
     expect(headerChips(usdc).map((c) => c.text)).toEqual(["Cross-chain", "Noble", "Trading on the DEX"]);
+    expect(headerChips(usdc)[2].look).toBe("ok");
     const halted = headerChips({ ...usdc, halted: true });
     expect(halted.map((c) => c.text)).toEqual(["Cross-chain", "Noble", "Halted on the DEX"]);
-    expect(halted[2].explainer).toContain("halted");
+    expect(halted[2]).toMatchObject({ look: "bad", explainer: expect.stringContaining("halted") });
     expect(headerChips({ ...honey, kind: "native", markets: [] }).map((c) => c.text)).toEqual(["Native"]);
     const corey = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey";
     expect(headerChips({ ...honey, denom: corey }).map((c) => c.text)).toEqual(["Factory", "Obsolete", "Trading on the DEX"]);
@@ -108,15 +113,13 @@ describe("token page chips", () => {
 });
 
 describe("connection", () => {
-  it("says whether BZE's channel still carries transfers", () => {
+  it("says whether BZE's channel still carries transfers, as a chip and the words after it", () => {
     const open = { channel_id: "channel-3", state: "open", client_status: "active" };
-    expect(connectionHealthy(open)).toBe(true);
-    expect(connectionText(open)).toBe("open and active");
-    const expired = { ...open, client_status: "expired" };
-    expect(connectionHealthy(expired)).toBe(false);
-    expect(connectionText(expired)).toContain("expired");
-    expect(connectionHealthy({ ...open, client_status: "frozen" })).toBe(false);
-    expect(connectionText({ ...open, state: "closed" })).toContain("closed");
-    expect(connectionText({ ...open, client_status: null })).toBe("open");
+    expect(connectionChip(open)).toEqual({ look: "ok", text: "Open", note: "and active" });
+    expect(connectionChip({ ...open, client_status: "expired" })).toMatchObject({ look: "warn", text: "Expired", note: expect.stringContaining("no relayer") });
+    expect(connectionChip({ ...open, client_status: "frozen" })).toMatchObject({ look: "warn", text: "Frozen" });
+    expect(connectionChip({ ...open, state: "closed" })).toMatchObject({ look: "bad", text: "Closed" });
+    expect(connectionChip({ ...open, client_status: null })).toEqual({ look: "default", text: "Open", note: "" });
+    expect(connectionChip({ ...open, state: null, client_status: null }).text).toBe("Not known yet");
   });
 });

@@ -1,0 +1,68 @@
+{
+  "denom": "ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1",
+  "symbol": "ATONE",
+  "name": "Atone",
+  "kind": "ibc",
+  "exponent": 6,
+  "supply": "100000",
+  "holders_count": 1,
+  "price_usd": null,
+  "price_change_24h_pct": null,
+  "halted": false,
+  "logo_url": null,
+  "origin_chain": {
+    "chain_id": "atomone-1",
+    "name": "AtomOne",
+    "logo_url": null,
+    "status": "live"
+  },
+  "created_time": null,
+  "description": "IBC token from transfer/channel-0/transfer/channel-94814/uatone",
+  "origin_chain_id": "atomone-1",
+  "ibc_base_denom": "uatone",
+  "ibc_path": "transfer/channel-0/transfer/channel-94814",
+  "creator": null,
+  "creator_label": null,
+  "admin": null,
+  "admin_label": null,
+  "created_height": null,
+  "created_tx_hash": null,
+  "website": null,
+  "markets": [],
+  "price_updated_at": "2099-10-11T09:59:00Z",
+  "metadata": {
+    "base": "ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1",
+    "name": "transfer/channel-0/transfer/channel-94814/uatone IBC token",
+    "symbol": "UATONE",
+    "display": "transfer/channel-0/transfer/channel-94814/uatone",
+    "denom_units": [
+      {
+        "denom": "uatone",
+        "exponent": 0,
+        "aliases": []
+      }
+    ],
+    "description": "IBC token from transfer/channel-0/transfer/channel-94814/uatone"
+  },
+  "updated_at": "2099-10-11T09:59:00Z",
+  "events": [],
+  "events_next_cursor": null,
+  "transfers_24h": {
+    "count": 0,
+    "amount": "0"
+  },
+  "ibc_hops": 2,
+  "via_chain": {
+    "chain_id": "osmosis-1",
+    "name": "Osmosis",
+    "logo_url": null,
+    "status": "live"
+  },
+  "lp_pair": null,
+  "ibc_channel": {
+    "channel_id": "channel-0",
+    "state": "open",
+    "client_status": "active"
+  },
+  "stranded": false
+}

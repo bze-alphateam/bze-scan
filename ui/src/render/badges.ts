@@ -10,13 +10,19 @@ import { hopsExplainer, isObsolete, OBSOLETE_EXPLAINER, tokenSymbol } from "./to
 
 export type BadgeKind = "kind" | "direct" | "home" | "hops" | "stranded" | "obsolete" | "dex";
 
+/**
+ * A badge's chip look: `acc` Native, `default` the other kinds, `ch` an
+ * origin chain (outlined), `via` the chain a token came through (dashed),
+ * `ln` the hops, `ok`/`warn`/`bad` the DEX state and the warnings.
+ */
+export type BadgeLook = "default" | "acc" | "ch" | "via" | "ln" | "ok" | "warn" | "bad";
+
 export interface ExplainedBadge {
   kind: BadgeKind;
   text: string;
   /** What the badge means, shown on hover and on tap. */
   explainer: string;
-  tone: "blue" | "purple" | "cyan" | "orange" | "red" | "green" | "yellow";
-  variant: "subtle" | "outline" | "solid";
+  look: BadgeLook;
   logoUrl?: string | null;
 }
 
@@ -57,23 +63,22 @@ export function strandedExplainer(t: StrandedInput): string | null {
 
 /**
  * The badges of a token, in reading order: how it was born; for a
- * cross-chain token the chain BZE received it from (same color) and, for a
- * multi-hop one, its home chain further away (another color) with the hops;
- * then the warnings, highlighted.
+ * cross-chain token its home chain ("from AtomOne" on a multi-hop one) and,
+ * for a multi-hop one, the chain BZE received it from ("via Osmosis") and the
+ * hops; then the warnings.
  */
 export function tokenBadges(t: TokenSummary): ExplainedBadge[] {
   const out: ExplainedBadge[] = [];
   const symbol = tokenSymbol(t);
   switch (t.kind) {
     case "native":
-      out.push({ kind: "kind", text: "Native", tone: "blue", variant: "subtle", explainer: `${symbol} is BZE's own coin, minted by the chain itself.` });
+      out.push({ kind: "kind", text: "Native", look: "acc", explainer: `${symbol} is BZE's own coin, minted by the chain itself.` });
       break;
     case "factory":
       out.push({
         kind: "kind",
         text: "Factory",
-        tone: "blue",
-        variant: "subtle",
+        look: "default",
         explainer: `${symbol} was created on BZE with the Token Factory, by an account rather than by the chain.`,
       });
       break;
@@ -81,8 +86,7 @@ export function tokenBadges(t: TokenSummary): ExplainedBadge[] {
       out.push({
         kind: "kind",
         text: "DEX pool share",
-        tone: "blue",
-        variant: "subtle",
+        look: "default",
         explainer: "A share of a liquidity pool on the BZE DEX, minted to whoever adds liquidity and burned when it is removed.",
       });
       break;
@@ -90,59 +94,54 @@ export function tokenBadges(t: TokenSummary): ExplainedBadge[] {
       out.push({
         kind: "kind",
         text: "Cross-chain",
-        tone: "blue",
-        variant: "subtle",
+        look: "default",
         explainer: `${symbol} was minted on another chain and sent to BZE over IBC, the protocol Cosmos chains use to move tokens between them.`,
       });
       const hop = multiHop(t);
+      if (hop && t.origin_chain) {
+        const home = chainName(t.origin_chain, "its home chain");
+        out.push({
+          kind: "home",
+          text: `from ${home}` + (isDeadChain(t.origin_chain) ? " (shut down)" : ""),
+          look: "ch",
+          logoUrl: t.origin_chain.logo_url,
+          explainer: `${symbol} was minted on ${home}, then travelled through ${hop.via ?? "another chain"} before reaching BZE.` + (isDeadChain(t.origin_chain) ? ` ${home} has shut down.` : ""),
+        });
+      }
       const direct = hop ? t.via_chain : t.origin_chain;
       if (direct) {
         const name = chainName(direct, "another chain");
         out.push({
           kind: "direct",
-          text: name + (isDeadChain(direct) ? " (shut down)" : ""),
-          tone: "blue",
-          variant: "subtle",
+          text: (hop ? `via ${name}` : name) + (isDeadChain(direct) ? " (shut down)" : ""),
+          look: hop ? "via" : "ch",
           logoUrl: direct.logo_url,
           explainer:
             (hop ? `BZE received ${symbol} from ${name}, which it had reached from its home chain first.` : `${symbol} comes from ${name}, sent straight to BZE.`) +
             (isDeadChain(direct) ? ` ${name} has shut down.` : ""),
         });
       }
-      if (hop && t.origin_chain) {
-        const home = chainName(t.origin_chain, "its home chain");
-        out.push({
-          kind: "home",
-          text: home + (isDeadChain(t.origin_chain) ? " (shut down)" : ""),
-          tone: "purple",
-          variant: "subtle",
-          logoUrl: t.origin_chain.logo_url,
-          explainer: `${symbol} was minted on ${home}, then travelled through ${hop.via ?? "another chain"} before reaching BZE.` + (isDeadChain(t.origin_chain) ? ` ${home} has shut down.` : ""),
-        });
-      }
       if (hop) {
         out.push({
           kind: "hops",
           text: `${hop.hops} hops`,
-          tone: "cyan",
-          variant: "outline",
+          look: "ln",
           explainer: hopsExplainer(t) ?? "",
         });
       }
       const stranded = strandedExplainer(t);
-      if (stranded) out.push({ kind: "stranded", text: "Stranded", tone: "orange", variant: "solid", explainer: stranded });
+      if (stranded) out.push({ kind: "stranded", text: "Stranded", look: "warn", explainer: stranded });
       break;
     }
     default:
       out.push({
         kind: "kind",
         text: "Other",
-        tone: "blue",
-        variant: "subtle",
+        look: "default",
         explainer: "A kind of token the explorer does not recognise; its raw denom is in the token's More details.",
       });
   }
-  if (isObsolete(t.denom)) out.push({ kind: "obsolete", text: "Obsolete", tone: "red", variant: "solid", explainer: OBSOLETE_EXPLAINER });
+  if (isObsolete(t.denom)) out.push({ kind: "obsolete", text: "Obsolete", look: "bad", explainer: OBSOLETE_EXPLAINER });
   return out;
 }
 
@@ -153,31 +152,26 @@ export function headerChips(t: Token): ExplainedBadge[] {
     out.push({
       kind: "dex",
       text: "Halted on the DEX",
-      tone: "red",
-      variant: "subtle",
+      look: "bad",
       explainer: `Governance halted ${tokenSymbol(t)} on the BZE DEX: its markets take no new orders or swaps.`,
     });
   } else if (t.markets.length > 0) {
     out.push({
       kind: "dex",
       text: "Trading on the DEX",
-      tone: "green",
-      variant: "subtle",
+      look: "ok",
       explainer: `${tokenSymbol(t)} has ${t.markets.length === 1 ? "a market" : `${t.markets.length} markets`} on the BZE DEX.`,
     });
   }
   return out;
 }
 
-/** Whether BZE's channel of a token still carries transfers, as far as the explorer knows. */
-export const connectionHealthy = (c: TokenIbcChannel) =>
-  c.state !== "closed" && c.client_status !== "expired" && c.client_status !== "frozen";
-
-/** BZE's channel of a token in words: open, or why nothing crosses it. */
-export function connectionText(c: TokenIbcChannel): string {
-  if (c.state === "closed") return "closed: it carries no more transfers";
-  if (c.client_status === "expired") return "expired: no relayer kept it updated, so nothing crosses it until governance revives it";
-  if (c.client_status === "frozen") return "frozen: nothing crosses it until governance revives it";
-  if (c.client_status === "active") return "open and active";
-  return c.state ?? "state not known yet";
+/** BZE's channel of a token as a chip and the words after it: "Open" and active, or why nothing crosses it. */
+export function connectionChip(c: TokenIbcChannel): { look: BadgeLook; text: string; note: string } {
+  if (c.state === "closed") return { look: "bad", text: "Closed", note: "it carries no more transfers" };
+  if (c.client_status === "expired")
+    return { look: "warn", text: "Expired", note: "no relayer kept it updated, so nothing crosses it until governance revives it" };
+  if (c.client_status === "frozen") return { look: "warn", text: "Frozen", note: "nothing crosses it until governance revives it" };
+  if (c.client_status === "active") return { look: "ok", text: "Open", note: "and active" };
+  return { look: "default", text: c.state ? c.state.charAt(0).toUpperCase() + c.state.slice(1) : "Not known yet", note: "" };
 }

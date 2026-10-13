@@ -6,12 +6,14 @@ interface FilterPillsProps<T> {
   options: { label: string; value: T }[];
   value: T;
   onChange: (value: T) => void;
+  /** The space under the pills; 0 when they share a bar with a search box. */
+  mb?: string;
 }
 
 /** The round filter buttons over a list: the chosen one in the accent tone. */
-export function FilterPills<T>({ label, options, value, onChange }: FilterPillsProps<T>) {
+export function FilterPills<T>({ label, options, value, onChange, mb = "4" }: FilterPillsProps<T>) {
   return (
-    <HStack gap="6px" wrap="wrap" mb="4" role="group" aria-label={label}>
+    <HStack gap="6px" wrap="wrap" mb={mb} role="group" aria-label={label}>
       {options.map((o) => {
         const on = o.value === value;
         return (

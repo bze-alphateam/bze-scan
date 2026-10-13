@@ -69,11 +69,17 @@ describe("TokensPage", () => {
     const direct = rows[3];
     const hop = rows[6];
     expect(within(direct).queryByTestId("hops-tag")).not.toBeInTheDocument();
-    // Born cross-chain, received from Osmosis (same color), minted on Cosmos Hub (another color), 2 hops.
-    expect(within(hop).getByTestId("token-badges")).toHaveTextContent("Cross-chainOsmosisCosmos Hub2 hops");
-    expect(within(hop).getByTestId("direct-tag")).toHaveTextContent("Osmosis");
-    expect(within(hop).getByTestId("home-tag")).toHaveTextContent("Cosmos Hub");
+    // Born cross-chain, minted on Cosmos Hub (outlined), received from Osmosis (dashed), 2 hops (accent outline).
+    expect(within(hop).getByTestId("token-badges")).toHaveTextContent("Cross-chainfrom Cosmos Hubvia Osmosis2 hops");
+    expect(within(hop).getByTestId("home-tag")).toHaveTextContent("from Cosmos Hub");
+    expect(within(hop).getByTestId("direct-tag")).toHaveTextContent("via Osmosis");
     expect(within(hop).getByTestId("hops-tag")).toHaveTextContent("2 hops");
+    const looks = (row: HTMLElement) => [...row.querySelectorAll("[data-chip]")].map((c) => c.getAttribute("data-chip"));
+    expect(looks(hop)).toEqual(["default", "ch", "via", "ln"]);
+    // A one-hop token names its chain plainly: no "from", no via, no hops.
+    expect(within(direct).getByTestId("token-badges")).toHaveTextContent(/^Cross-chainCosmos Hub$/);
+    expect(looks(direct)).toEqual(["default", "ch"]);
+    expect(looks(rows[0])).toEqual(["acc"]);
     expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
 
     const lp = within(rows[5]).getByTestId("lp-logo");
@@ -95,11 +101,12 @@ describe("TokensPage", () => {
 
   it("renders the tiles and every token with its origin, supply, holders and price", async () => {
     renderWithProviders(<TokensPage />, { api: api() });
-    expect(await screen.findByText("Every token on BZE. Prices come from the BZE DEX.")).toBeInTheDocument();
+    expect(screen.getByText("Every token on BZE. Prices come from the BZE DEX.")).toBeInTheDocument();
+    await screen.findAllByTestId("tile");
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Tokens on BZE61 native · 2 Factory · 2 cross-chain · 1 pool share",
-      "On the DEX4with a price on the DEX ",
-      "Created this month1on Factory ",
+      "On the DEX4with a price on the DEX ↗",
+      "Created this month1on Factory ↗",
       "Cross-chain2 chainsCosmos Hub, Noble",
     ]);
     expect(symbols()).toEqual(["BZE", "HONEY", "VDL", "ATOM", "USDC", "BZE/USDC LP"]);
@@ -107,7 +114,7 @@ describe("TokensPage", () => {
     expect(bze).toHaveTextContent("Native");
     expect(bze).toHaveTextContent("1B BZE");
     expect(bze).toHaveTextContent("12,000");
-    expect(bze).toHaveTextContent("$0.0015 +1.2%");
+    expect(bze).toHaveTextContent("$0.0015+1.2%");
     expect(within(honey).getByTestId("token-link")).toHaveAttribute(
       "href",
       "/tokens/factory%2Fbze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk%2Fuhoney",
@@ -153,7 +160,9 @@ describe("TokensPage", () => {
   it("offers a retry when the API fails", async () => {
     const tokens = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<TokensPage />, { api: api(tokens) });
-    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByTestId("tokens-error")).toHaveAttribute("data-state", "error");
+    expect(screen.getByRole("heading", { name: "The tokens could not be loaded" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(tokens).toHaveBeenCalledTimes(2);
   });
 });

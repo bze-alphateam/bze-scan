@@ -29,7 +29,7 @@ import { DetailList, DetailRow } from "@/components/ui/detail-list";
 import { JsonBlock } from "@/components/ui/json-block";
 import { ListPanel, ListRow } from "@/components/ui/list";
 import { MoreDetails } from "@/components/ui/more-details";
-import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle } from "@/components/ui/page-head";
+import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle, PanelHead } from "@/components/ui/page-head";
 import { CardSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
 import { Tag, type TagTone } from "@/components/ui/status-pill";
@@ -157,22 +157,6 @@ function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: Validators
       />
       <Tile label="Uptime" value={uptimeText(v.uptime)} sub={uptimeDetail(v.missed_blocks, signedWindow)} />
     </SimpleGrid>
-  );
-}
-
-/** A panel's head row: the small upper-case title, a muted note on the right. */
-function PanelHead({ id, title, note }: { id: string; title: string; note?: ReactNode }) {
-  return (
-    <Flex justify="space-between" align="center" gap="3" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
-      <Heading as="h2" textStyle="label" id={id}>
-        {title}
-      </Heading>
-      {note && (
-        <Text fontSize="12px" color="fg.muted" textAlign="right">
-          {note}
-        </Text>
-      )}
-    </Flex>
   );
 }
 
