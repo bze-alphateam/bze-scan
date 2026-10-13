@@ -30,6 +30,6 @@ describe("ActionView", () => {
     expect(screen.getByText("Taker fee")).toBeInTheDocument();
     expect(screen.getByText("0.1 BZE per order")).toBeInTheDocument();
     expect(screen.getByText("Native denom")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "see all DEX parameters" })).toHaveAttribute("href", "/parameters#dex");
+    expect(screen.getByRole("link", { name: "see all DEX parameters" })).toHaveAttribute("href", "/parameters?group=dex");
   });
 });

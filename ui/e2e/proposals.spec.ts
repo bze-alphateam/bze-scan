@@ -9,9 +9,10 @@ import { noHorizontalScroll } from "./layout";
 // proposal lie in 2099, so it stays open whenever the suite runs.
 
 test.describe("proposals list", () => {
-  test("puts the live vote on top and lists every proposal", async ({ page }) => {
+  test("puts the live vote on top and lists every proposal", async ({ page, isMobile }) => {
     await page.goto("/proposals");
     await expect(page).toHaveTitle("Proposals · BZE Explorer");
+    await expect(page.getByRole("link", { name: "See the voting rules" })).toHaveAttribute("href", "/parameters?group=gov");
     const card = page.getByTestId("voting-card");
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("#48 · Software upgrade");
@@ -21,9 +22,11 @@ test.describe("proposals list", () => {
 
     const rows = page.getByTestId("proposal-row");
     await expect(rows).toHaveCount(6);
-    await expect(rows.nth(3)).toContainText("Rejected");
+    await expect(rows.nth(3).getByTestId("proposal-status")).toHaveText("Rejected");
+    await expect(rows.nth(1).getByTestId("proposal-status")).toHaveText("Voting");
     await expect(page.getByTestId("historical-turnout")).toHaveCount(1);
-    await expect(rows.nth(5).getByTestId("historical-turnout")).toBeVisible();
+    // The Turnout column shows from c3 up.
+    if (!isMobile) await expect(rows.nth(5).getByTestId("historical-turnout")).toBeVisible();
 
     await page.getByRole("button", { name: "Passed", exact: true }).click();
     await expect(rows).toHaveCount(3);
@@ -40,7 +43,11 @@ test.describe("proposal page", () => {
   test("a proposal being voted on shows the checks, where to vote and who voted", async ({ page }) => {
     await page.goto("/proposals/48");
     await expect(page).toHaveTitle("#48 Upgrade network to v8.2.0 · Voting · BZE Explorer");
-    await expect(page.getByTestId("proposal-status")).toHaveText("Voting now");
+    await expect(page.getByTestId("proposal-status")).toHaveText("Voting");
+    const tiles = page.getByTestId("summary-tiles").getByTestId("tile");
+    await expect(tiles).toHaveCount(5);
+    await expect(tiles.first()).toContainText("If it ended nowPasses");
+    await expect(tiles.nth(3)).toContainText("Voting ends");
     await expect(page.getByTestId("action")).toContainText("Upgrades the chain software to v8.2.0 at block 25,200,000");
     const votes = page.getByTestId("votes-card");
     await expect(votes.getByTestId("check")).toHaveCount(3);
@@ -50,7 +57,7 @@ test.describe("proposal page", () => {
     const who = page.getByTestId("who-voted");
     await expect(who.getByTestId("validator-vote")).toHaveCount(2);
     await expect(who.getByTestId("not-voted")).toContainText("Deep Fields");
-    await who.getByRole("tab", { name: "Everyone · 5" }).click();
+    await who.getByRole("tab", { name: "Everyone 5" }).click();
     await expect(who.getByTestId("vote-row")).toHaveCount(5);
     await noHorizontalScroll(page);
   });
@@ -58,11 +65,20 @@ test.describe("proposal page", () => {
   test("a passed community pool spend shows the funds box and its block", async ({ page }) => {
     await page.goto("/proposals/45");
     await expect(page.getByTestId("proposal-status")).toHaveText("Passed");
-    await expect(page.getByTestId("result-line")).toHaveText("Passed Dec 13, 2025 · 100% Yes · 70.4% turnout");
+    const tiles = page.getByTestId("summary-tiles").getByTestId("tile");
+    await expect(tiles.first()).toHaveText("ResultPassedDec 13, 2025 · executed in block 21,512,345");
+    await expect(tiles.nth(3)).toHaveText("VotingDec 8 → Dec 13, 20255 days · ended");
     await expect(page.getByTestId("funds-box")).toContainText("3,000,000 BZE");
+    await expect(page.getByTestId("funds-box").getByRole("link", { name: "Community pool module · module" })).toHaveAttribute(
+      "href",
+      "/accounts/bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
+    );
     await expect(page.getByTestId("spend-done").getByRole("link", { name: "21,512,345" })).toHaveAttribute("href", "/blocks/21512345");
     await expect(page.getByTestId("votes-card")).toContainText("Final result");
     await expect(page.getByTestId("want-to-vote")).toHaveCount(0);
+    await expect(page.getByTestId("vote-options")).toBeHidden();
+    await page.getByRole("button", { name: "What the options mean" }).click();
+    await expect(page.getByTestId("vote-options")).toBeVisible();
     await expect(page.getByTestId("votes-summary")).toContainText("1 validator voted Yes");
 
     await page.getByRole("button", { name: "See every vote" }).click();
@@ -74,14 +90,14 @@ test.describe("proposal page", () => {
 
   test("a proposal tallied before the explorer ran marks its archive values historical", async ({ page }) => {
     await page.goto("/proposals/43");
-    await expect(page.getByTestId("result-line")).toHaveText("Passed May 6, 2025 · 100% Yes · 67.3% turnout");
+    await expect(page.getByTestId("summary-tiles").getByTestId("tile").nth(2)).toHaveText("Turnout67.3%33.4% needed · historical");
     await expect(page.getByTestId("historical-turnout")).toHaveCount(2);
     await expect(page.getByTestId("historical-explainer")).toBeVisible();
 
     const who = page.getByTestId("who-voted");
     await who.getByRole("button", { name: "See every vote" }).click();
     await expect(who.getByTestId("validator-vote").getByRole("link", { name: "historical" })).toHaveAttribute("href", "/blocks/17131436");
-    await who.getByRole("tab", { name: "Everyone · 27" }).click();
+    await who.getByRole("tab", { name: "Everyone 27" }).click();
     await expect(who.getByTestId("vote-row")).toHaveCount(3);
     await expect(who.getByTestId("vote-row").getByTestId("historical-vote")).toHaveCount(3);
     await expect(who.getByTestId("vote-row").filter({ hasText: "ago" })).toHaveCount(0);

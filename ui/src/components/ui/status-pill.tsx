@@ -1,13 +1,15 @@
 import { Box, type BoxProps } from "@chakra-ui/react";
 import type { ReactNode } from "react";
 
-export type TagTone = "accent" | "ok" | "bad" | "warn";
+export type TagTone = "accent" | "ok" | "bad" | "warn" | "muted";
 
 const TONES: Record<TagTone, BoxProps> = {
   accent: { bg: "accent.subtle", color: "accent.fg" },
   ok: { bg: "pos.subtle", color: "pos.fg" },
   bad: { bg: "neg.subtle", color: "neg.fg" },
   warn: { bg: "warn.subtle", color: "warn.fg" },
+  // Over and done with nothing to report: Dropped, Canceled.
+  muted: { bg: "bg.hover", color: "fg.muted" },
 };
 
 interface TagProps extends Omit<BoxProps, "children"> {

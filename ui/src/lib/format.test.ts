@@ -116,6 +116,7 @@ describe("times", () => {
   it("formats absolute times in UTC", () => {
     expect(formatDateTime("2026-10-06T14:32:11Z")).toBe("Oct 6, 2026, 14:32:11 UTC");
     expect(formatDateTime("2026-01-09T03:04:05.678+02:00")).toBe("Jan 9, 2026, 01:04:05 UTC");
+    expect(formatDateTime("2026-10-06T14:32:11Z", { seconds: false })).toBe("Oct 6, 2026, 14:32 UTC");
     expect(formatDateTime("not a date")).toBe("");
   });
 });

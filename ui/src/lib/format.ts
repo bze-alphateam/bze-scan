@@ -145,15 +145,15 @@ export function relativeTime(time: string | Date, now: Date = new Date()): strin
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** `Oct 6, 2026, 14:32:11 UTC`. */
-export function formatDateTime(time: string | Date): string {
+/** `Oct 6, 2026, 14:32:11 UTC`; `Oct 6, 2026, 14:32 UTC` without `seconds`. */
+export function formatDateTime(time: string | Date, { seconds = true }: { seconds?: boolean } = {}): string {
   const d = new Date(time);
   if (Number.isNaN(d.getTime())) {
     return "";
   }
   return (
     `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ` +
-    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${seconds ? `:${pad(d.getUTCSeconds())}` : ""} UTC`
   );
 }
 

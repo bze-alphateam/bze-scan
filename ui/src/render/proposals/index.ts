@@ -184,13 +184,23 @@ export function endedText(p: Pick<ProposalSummary, "status" | "voting_end_time">
   return formatDate(p.voting_end_time);
 }
 
-/** The header's result line: `Passed Oct 3, 2026 · 100% Yes · 70.4% turnout`. */
-export function resultLine(p: Pick<ProposalSummary, "status" | "voting_end_time" | "tally" | "turnout_pct" | "deposit_end_time">, now: Date): string {
-  const parts = [`${statusInfo(p, now).text}${p.voting_end_time ? ` ${formatDate(p.voting_end_time)}` : ""}`];
-  const yes = tallyShares(p.tally)[0];
-  if (p.tally && yes.pct != null) parts.push(`${formatPct(yes.pct, { trim: true })} Yes`);
-  if (p.turnout_pct != null) parts.push(`${formatPct(p.turnout_pct)} turnout`);
-  return parts.join(" · ");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayMonth = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+
+/** The voting period's dates: `Dec 8 → Dec 13, 2025`, both years when they differ (UTC). */
+export function votingSpan(start: string, end: string): string {
+  const a = new Date(start);
+  const b = new Date(end);
+  if (a.getUTCFullYear() === b.getUTCFullYear()) return `${dayMonth(a)} → ${formatDate(b)}`;
+  return `${formatDate(a)} → ${formatDate(b)}`;
+}
+
+/** How long voting lasts: `5 days`, `1 day`, `12 h` under a day. */
+export function votingLength(start: string, end: string): string {
+  const hours = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 3_600_000);
+  if (hours < 24) return `${Math.max(hours, 1)} h`;
+  const days = Math.round(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
 /** When the chain reaches `height`: now + blocks left × the average block time; null once reached or unknown. */

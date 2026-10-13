@@ -1,17 +1,22 @@
 "use client";
 
-import { Badge, Box, HStack, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Grid, HStack, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { LuArrowRight, LuExternalLink } from "react-icons/lu";
 
+import { useModules } from "@/api/hooks";
 import type { Proposal, TokenSummary } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
+import { Chip } from "@/components/ui/chip";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount, formatDate } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
 import { describeParam, groupOfModule, PARAM_GROUPS, plainKey } from "@/lib/parameters";
 import { coins, Fields, humanise } from "@/render/messages/common";
 import { coinsText, type Action, type Entry } from "@/render/proposals";
+
+// Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
+// A spend's transfer: module → amount → recipient in one row from c2, stacked on phones.
+const TRANSFER = { base: "minmax(0, 1fr)", c2: "auto auto 20px minmax(0, 1fr)" };
 
 const BECH32 = /^bze(valoper)?1[02-9ac-hj-np-z]{38,}$/;
 
@@ -66,8 +71,16 @@ function ParamTable({ module, entries, denoms }: { module: string; entries: Entr
   );
 }
 
+/** The community pool's module account (the distribution module's) as a chip; a plain module chip until `/modules` answers. */
+function CommunityPool() {
+  const modules = useModules();
+  const account = modules.data?.find((m) => m.module === "distribution");
+  if (!account) return <Chip variant="modc">Community pool module</Chip>;
+  return <AccountChip address={account.address} label={{ name: "Community pool module", kind: "module" }} />;
+}
+
 const blockLink = (height: number) => (
-  <Link asChild>
+  <Link asChild color="accent.fg" fontFamily="mono">
     <NextLink href={`/blocks/${height}`}>{formatCount(height)}</NextLink>
   </Link>
 );
@@ -98,12 +111,12 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
             Every validator must run the new version from that block. The chain pauses for a few minutes during the switch.
             Wallets, balances and tokens are not affected.
           </Text>
-          <HStack gap="4" wrap="wrap">
-            <Link href={`https://github.com/bze-alphateam/bze/releases/tag/${encodeURIComponent(a.name)}`} target="_blank" rel="noopener noreferrer" minH="44px">
-              Release notes on GitHub <LuExternalLink aria-hidden />
+          <HStack gap="18px" wrap="wrap" fontSize="13px">
+            <Link href={`https://github.com/bze-alphateam/bze/releases/tag/${encodeURIComponent(a.name)}`} target="_blank" rel="noopener noreferrer" color="accent.fg">
+              Release notes on GitHub ↗
             </Link>
-            <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" minH="44px">
-              How upgrades work, in the docs <LuExternalLink aria-hidden />
+            <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" color="accent.fg">
+              How upgrades work, in the docs ↗
             </Link>
           </HStack>
         </Stack>
@@ -117,26 +130,31 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
     case "spend":
       return (
         <Stack gap="2" fontSize="sm" data-testid="action" data-action={a.type}>
-          <HStack
-            gap="2"
-            wrap="wrap"
-            p="3"
+          <Grid
+            templateColumns={TRANSFER}
+            justifyContent="start"
+            alignItems="center"
+            columnGap="3"
+            rowGap="1"
+            px="3"
+            py="10px"
             rounded="l2"
             borderWidth="1px"
             borderColor="border.panel"
-            bg="bg.subtle"
+            bg="bg.page"
             data-testid="funds-box"
           >
-            <Badge variant="outline" rounded="full" borderStyle="dashed" size="md">
-              Community pool module
-            </Badge>
-            <LuArrowRight aria-hidden />
-            <Text as="span" fontWeight="semibold">
+            <Box minW="0">
+              <CommunityPool />
+            </Box>
+            <Text as="span" fontFamily="mono" fontWeight="500">
               {coinsText(a.amount, denoms)}
             </Text>
-            <LuArrowRight aria-hidden />
-            {a.recipient ? <AccountChip address={a.recipient} /> : <Text as="span">an unknown account</Text>}
-          </HStack>
+            <Text as="span" hideBelow="c2" color="fg.muted" textAlign="center" aria-hidden>
+              →
+            </Text>
+            <Box minW="0">{a.recipient ? <AccountChip address={a.recipient} /> : <Text as="span">an unknown account</Text>}</Box>
+          </Grid>
           {p.status === "passed" && p.resolved_height != null && (
             <Text color="fg.muted" data-testid="spend-done">
               Done by the chain in block {blockLink(p.resolved_height)}, right when voting ended. There is no transaction for it:
@@ -158,7 +176,7 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
           <Text color="fg.muted">
             Takes effect the moment the proposal passes ·{" "}
             <Link asChild>
-              <NextLink href={`/parameters#${group?.group ?? encodeURIComponent(a.module)}`}>
+              <NextLink href={`/parameters?group=${group?.group ?? encodeURIComponent(a.module)}`}>
                 see all {group?.label ?? a.module} parameters
               </NextLink>
             </Link>
