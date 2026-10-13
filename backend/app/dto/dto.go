@@ -255,6 +255,39 @@ func NewValidator(v repository.ValidatorSummary) Validator {
 	}
 }
 
+// HallOfFame is GET /api/v1/validators/hall-of-fame: the validators that
+// meet the rule, by voting power ascending, in one page, and the rule.
+type HallOfFame struct {
+	List[Validator]
+	Rules HallOfFameRules `json:"rules"`
+}
+
+// HallOfFameRules is the Hall of Fame rule, for clients to word it: a vote
+// on each of the last Proposals proposals whose voting ended, at most
+// MaxMissedBlocks missed of the last SignedBlocksWindow blocks (null until
+// known).
+type HallOfFameRules struct {
+	Proposals          int    `json:"proposals"`
+	MaxMissedBlocks    int    `json:"max_missed_blocks"`
+	SignedBlocksWindow *int64 `json:"signed_blocks_window"`
+}
+
+// NewHallOfFame maps the Hall of Fame and its rule.
+func NewHallOfFame(h *repository.HallOfFame) HallOfFame {
+	out := HallOfFame{
+		List: List[Validator]{Items: make([]Validator, 0, len(h.Members))},
+		Rules: HallOfFameRules{
+			Proposals:          repository.RecentProposals,
+			MaxMissedBlocks:    repository.HallOfFameMaxMissedBlocks,
+			SignedBlocksWindow: h.SignedBlocksWindow,
+		},
+	}
+	for _, v := range h.Members {
+		out.Items = append(out.Items, NewValidator(v))
+	}
+	return out
+}
+
 // uptime is 1 − missed / window in percent with five decimals, half up;
 // nil while the window is unknown.
 func uptime(missedBlocks, window *int64) *string {

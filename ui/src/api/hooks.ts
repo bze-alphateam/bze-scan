@@ -12,6 +12,7 @@ import type {
   ActivityCategory,
   BlockSummary,
   BlockTransfer,
+  HallOfFame,
   Page,
   PageParams,
   Proposal,
@@ -43,6 +44,7 @@ export const queryKeys = {
   transaction: (hash: string) => ["tx", hash.toUpperCase()] as const,
   validators: (p: ValidatorListParams) => ["validators", p] as const,
   allValidators: () => ["validators", "all-pages"] as const,
+  hallOfFame: () => ["validators", "hall-of-fame"] as const,
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
   account: (address: string) => ["account", address] as const,
@@ -258,6 +260,19 @@ export function useAllValidators() {
         cursor = next.next_cursor;
       }
       return { items, next_cursor: null, summary: first.summary };
+    },
+    ...live,
+  });
+}
+
+/** The Hall of Fame members, the smallest first, and the rule the API applied (polled like the list). */
+export function useHallOfFame() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.hallOfFame(),
+    queryFn: async ({ signal }): Promise<Pick<HallOfFame, "items" | "rules">> => {
+      const { items, rules } = await api.hallOfFame(signal);
+      return { items, rules };
     },
     ...live,
   });

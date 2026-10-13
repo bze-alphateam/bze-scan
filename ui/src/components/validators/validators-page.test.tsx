@@ -3,10 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ExplorerApi } from "@/api/client";
-import type { ChainParams, ValidatorList } from "@/api/types";
+import type { ChainParams, HallOfFame, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
+import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 
 import { SummaryTiles, ValidatorsPage } from "./validators-page";
@@ -14,6 +15,7 @@ import { SummaryTiles, ValidatorsPage } from "./validators-page";
 function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
     validators: () => Promise.resolve(list as ValidatorList),
+    hallOfFame: () => Promise.resolve(fame as HallOfFame),
     params: () => Promise.resolve(params as ChainParams),
     ...extra,
   });
@@ -111,6 +113,42 @@ describe("ValidatorsPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Hall of Fame · 2" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Find a validator" }), "zzz");
     expect(await screen.findByText("No Hall of Fame validator has that name.")).toBeInTheDocument();
+  });
+
+  it("words the Hall of Fame with the rule the API states", async () => {
+    const rules = { proposals: 10, max_missed_blocks: 5, signed_blocks_window: 20_000 };
+    renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => Promise.resolve({ ...fame, rules } as HallOfFame) }) });
+    expect(await screen.findByTestId("hall-of-fame-intro")).toHaveTextContent(
+      "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 5 of the last 20,000 blocks",
+    );
+    await openActive();
+    expect(within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-tag")).toHaveAttribute(
+      "title",
+      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 5 of the last 20,000 blocks.",
+    );
+  });
+
+  it("counts the closed proposals while fewer have closed than the rule asks", async () => {
+    const few = { ...fame, items: fame.items.map((v) => ({ ...v, recent_votes: { voted: 3, of: 3 } })) };
+    renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => Promise.resolve(few as HallOfFame) }) });
+    expect(await screen.findByTestId("hall-of-fame-intro")).toHaveTextContent("voted on every one of the last 3 proposals");
+  });
+
+  it("shows an empty Hall of Fame and marks nobody", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => Promise.resolve({ ...fame, items: [] } as HallOfFame) }) });
+    expect(await screen.findByRole("tab", { name: "Hall of Fame · 0" })).toBeInTheDocument();
+    expect(screen.getByText("No validator meets the bar right now.")).toBeInTheDocument();
+    await openActive();
+    expect(screen.queryByTestId("fame-tag")).not.toBeInTheDocument();
+  });
+
+  it("offers a retry when the Hall of Fame fails", async () => {
+    const hallOfFame = vi.fn(() => Promise.reject(new Error("boom")));
+    const validators = vi.fn(() => Promise.resolve(list as ValidatorList));
+    renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame, validators }) });
+    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(hallOfFame).toHaveBeenCalledTimes(2);
+    expect(validators).toHaveBeenCalledTimes(1);
   });
 
   it("shows each validator's picture, else its initials", async () => {

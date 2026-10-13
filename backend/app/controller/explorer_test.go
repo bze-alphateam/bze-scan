@@ -61,6 +61,7 @@ type fakeReader struct {
 	accounts map[string]bool
 	monikers map[string]string
 	vals     []repository.ValidatorSummary
+	fame     *repository.HallOfFame
 	err      error
 	// The validator page: one validator, its proposed blocks (newest
 	// first), events and votes.
@@ -306,6 +307,7 @@ func newAPI(r controller.ExplorerReader) *echo.Echo {
 	e.GET("/ibc/channels", h.IBCChannels)
 	e.GET("/modules", h.Modules)
 	e.GET("/validators", h.Validators)
+	e.GET("/validators/hall-of-fame", h.HallOfFame)
 	e.GET("/validators/:operator", h.Validator)
 	e.GET("/validators/:operator/blocks", h.ValidatorBlocks)
 	e.GET("/search", h.Search)

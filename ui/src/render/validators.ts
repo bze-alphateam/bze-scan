@@ -2,7 +2,6 @@ import BigNumber from "bignumber.js";
 
 import type { ChainParams, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
 import { formatAmount, formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
-import { compareDecimals } from "@/lib/math";
 
 // The validators pages' words and numbers, kept pure so they are tested
 // without rendering. Rates from the API: `commission_*` are fractions
@@ -26,34 +25,18 @@ export function splitValidators<T extends Pick<Validator, "status">>(items: T[])
   };
 }
 
-/** The most blocks a Hall of Fame validator may have missed in the signing window (99.9% of 10,000). */
-export const HALL_OF_FAME_MAX_MISSED = 10;
-
-/**
- * The Hall of Fame: active validators that voted, whatever the option, on
- * every one of the last proposals (ten, fewer while the chain has fewer)
- * and missed at most HALL_OF_FAME_MAX_MISSED blocks of the signing window;
- * the smallest first, so the stake can spread.
- */
-export function hallOfFame<T extends Pick<Validator, "status" | "jailed" | "recent_votes" | "missed_blocks" | "tokens">>(items: T[]): T[] {
-  return items
-    .filter(
-      (v) =>
-        v.status === "bonded" &&
-        !v.jailed &&
-        v.recent_votes.of > 0 &&
-        v.recent_votes.voted >= v.recent_votes.of &&
-        v.missed_blocks != null &&
-        v.missed_blocks <= HALL_OF_FAME_MAX_MISSED,
-    )
-    .sort((a, b) => compareDecimals(a.tokens, b.tokens));
+/** The Hall of Fame rule in the words the page uses: the proposals voted on, the most blocks missed of the window. */
+export interface FameRule {
+  proposals: number;
+  maxMissed: number;
+  window: number;
 }
 
 /** What earns a validator its place in the Hall of Fame, in one sentence. */
-export function hallOfFameExplainer(recentProposals: number, window: number): string {
+export function hallOfFameExplainer({ proposals, maxMissed, window }: FameRule): string {
   return (
-    `In the Hall of Fame: it voted on every one of the last ${formatCount(recentProposals)} proposals and missed no more than ` +
-    `${formatCount(HALL_OF_FAME_MAX_MISSED)} of the last ${formatCount(window)} blocks.`
+    `In the Hall of Fame: it voted on every one of the last ${formatCount(proposals)} proposals and missed no more than ` +
+    `${formatCount(maxMissed)} of the last ${formatCount(window)} blocks.`
   );
 }
 

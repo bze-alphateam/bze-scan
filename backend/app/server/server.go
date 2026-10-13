@@ -95,6 +95,7 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/ibc/channels", explorer.IBCChannels)
 	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
+	api.GET("/validators/hall-of-fame", explorer.HallOfFame)
 	api.GET("/validators/:operator", explorer.Validator)
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)

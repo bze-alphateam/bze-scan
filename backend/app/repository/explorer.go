@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -412,10 +413,19 @@ type ValidatorSummary struct {
 	RecentProposals int64
 }
 
-// recentProposals is the CTE of the last RecentProposalsCount (10)
-// proposals whose voting period ended.
-const recentProposals = `recent AS (SELECT id FROM explorer.proposals WHERE voting_end_time <= now()
-		ORDER BY id DESC LIMIT 10)`
+// RecentProposals is how many of the last proposals whose voting ended a
+// validator's votes are counted on (recent_votes), and the Hall of Fame
+// asks a vote on each of.
+const RecentProposals = 10
+
+// HallOfFameMaxMissedBlocks is the most blocks of the slashing signing
+// window a Hall of Fame validator may have missed (99.9% of 10,000).
+const HallOfFameMaxMissedBlocks = 10
+
+// recentProposals is the CTE of the last RecentProposals proposals whose
+// voting period ended.
+var recentProposals = `recent AS (SELECT id FROM explorer.proposals WHERE voting_end_time <= now()
+		ORDER BY id DESC LIMIT ` + strconv.Itoa(RecentProposals) + `)`
 
 // recentVoteCols counts a validators row's votes on the recent proposals,
 // then the recent proposals.
@@ -441,6 +451,16 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 	if err != nil {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
+	out, err := scanValidatorSummaries(rows)
+	if err != nil {
+		return nil, fmt.Errorf("validators: %w", err)
+	}
+	return out, nil
+}
+
+// scanValidatorSummaries reads rows of position, then the validator list
+// columns, then recentVoteCols.
+func scanValidatorSummaries(rows pgx.Rows) ([]ValidatorSummary, error) {
 	defer rows.Close()
 	var out []ValidatorSummary
 	for rows.Next() {
@@ -448,11 +468,52 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
 			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
 			&v.RecentVotes, &v.RecentProposals); err != nil {
-			return nil, fmt.Errorf("validators: %w", err)
+			return nil, err
 		}
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+// HallOfFame is the Hall of Fame and the signing window its missed blocks
+// are counted in.
+type HallOfFame struct {
+	Members []ValidatorSummary
+	// SignedBlocksWindow is the slashing signing window, nil until a
+	// validator's signing info is synced.
+	SignedBlocksWindow *int64
+}
+
+// HallOfFame returns the bonded, unjailed validators whose account voted,
+// whatever the option, on every one of the last RecentProposals proposals
+// whose voting ended (all of them while there are fewer; nobody while
+// none ended) and that missed at most HallOfFameMaxMissedBlocks blocks of
+// the signing window, by voting power ascending.
+func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH `+recentProposals+`
+		SELECT row_number() OVER (ORDER BY tokens, operator_address),
+		       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
+		       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
+		  FROM explorer.validators
+		 WHERE status = 'bonded' AND NOT jailed AND missed_blocks <= $1
+		   AND EXISTS (SELECT 1 FROM recent)
+		   AND NOT EXISTS (SELECT 1 FROM recent r WHERE NOT EXISTS (
+		       SELECT 1 FROM explorer.proposal_votes pv WHERE pv.voter = account_address AND pv.proposal_id = r.id))
+		 ORDER BY tokens, operator_address`, HallOfFameMaxMissedBlocks)
+	if err != nil {
+		return nil, fmt.Errorf("hall of fame: %w", err)
+	}
+	members, err := scanValidatorSummaries(rows)
+	if err != nil {
+		return nil, fmt.Errorf("hall of fame: %w", err)
+	}
+	h := &HallOfFame{Members: members}
+	if err := r.db.QueryRow(ctx, `SELECT max(signed_blocks_window) FROM explorer.validators`).
+		Scan(&h.SignedBlocksWindow); err != nil {
+		return nil, fmt.Errorf("hall of fame window: %w", err)
+	}
+	return h, nil
 }
 
 // ValidatorDetail is every column of a validators row. Numeric columns come

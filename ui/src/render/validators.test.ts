@@ -7,8 +7,7 @@ import list from "../../test/fixtures/api/v1/validators.json";
 import params from "../../test/fixtures/api/v1/params.json";
 
 import {
-  HALL_OF_FAME_MAX_MISSED,
-  hallOfFame,
+  hallOfFameExplainer,
   recentVotesText,
   signingText,
   cleanRecord,
@@ -157,21 +156,10 @@ describe("history", () => {
 });
 
 describe("hall of fame", () => {
-  const items = list.items as Validator[];
-  const base = items[0];
-
-  it("keeps the active validators that voted on every recent proposal and missed at most ten blocks, smallest first", () => {
-    expect(hallOfFame(items).map((v) => v.moniker)).toEqual(["Thamar Node", "Honeycomb"]);
-    const at = (v: Partial<Validator>) => hallOfFame([{ ...base, ...v }]).length;
-    expect(at({ missed_blocks: 10 })).toBe(1);
-    expect(at({ missed_blocks: 11 })).toBe(0);
-    expect(at({ missed_blocks: null })).toBe(0);
-    expect(at({ recent_votes: { voted: 9, of: 10 } })).toBe(0);
-    expect(at({ recent_votes: { voted: 3, of: 3 } })).toBe(1);
-    expect(at({ recent_votes: { voted: 0, of: 0 } })).toBe(0);
-    expect(at({ jailed: true })).toBe(0);
-    expect(at({ status: "unbonding" })).toBe(0);
-    expect(HALL_OF_FAME_MAX_MISSED).toBe(10);
+  it("words the rule in one sentence", () => {
+    expect(hallOfFameExplainer({ proposals: 10, maxMissed: 10, window: 10_000 })).toBe(
+      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 10 of the last 10,000 blocks.",
+    );
   });
 
   it("says how it signed and voted", () => {

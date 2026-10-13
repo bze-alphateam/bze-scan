@@ -278,6 +278,18 @@ export interface ValidatorList extends Page<Validator> {
   summary: ValidatorsSummary | null;
 }
 
+/** The Hall of Fame rule as the API states it: a vote on each of the last `proposals` closed proposals, at most `max_missed_blocks` missed of the last `signed_blocks_window` blocks (null until known). */
+export interface HallOfFameRules {
+  proposals: number;
+  max_missed_blocks: number;
+  signed_blocks_window: number | null;
+}
+
+/** `GET /v1/validators/hall-of-fame`: the members, the smallest first, in one page, and the rule. */
+export interface HallOfFame extends Page<Validator> {
+  rules: HallOfFameRules;
+}
+
 export interface ValidatorEvent {
   height: number;
   tx_index: number;

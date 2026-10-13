@@ -8,6 +8,7 @@ import type {
   BlockSummary,
   BlockTransfer,
   ErrorBody,
+  HallOfFame,
   IbcListParams,
   IbcTransfer,
   ModuleAccount,
@@ -55,6 +56,7 @@ export interface ExplorerApi {
   transaction(hash: string, signal?: AbortSignal): Promise<Tx>;
 
   validators(params: ValidatorListParams, signal?: AbortSignal): Promise<ValidatorList>;
+  hallOfFame(signal?: AbortSignal): Promise<HallOfFame>;
   validator(operator: string, signal?: AbortSignal): Promise<ValidatorDetail>;
   validatorBlocks(operator: string, params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
 
@@ -167,6 +169,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     transaction: (hash, signal) => get(`/txs/${seg(hash)}`, {}, signal),
 
     validators: (params, signal) => get("/validators", { ...page(params), status: params.status }, signal),
+    hallOfFame: (signal) => get("/validators/hall-of-fame", {}, signal),
     validator: (operator, signal) => get(`/validators/${seg(operator)}`, {}, signal),
     validatorBlocks: (operator, params, signal) => get(`/validators/${seg(operator)}/blocks`, page(params), signal),
 
