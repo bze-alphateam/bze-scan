@@ -124,6 +124,14 @@ export const system = createSystem(defaultConfig, {
         pos: { fg: v(T.pos), subtle: v(T.posbg) },
         neg: { fg: v(T.neg), subtle: v(T.negbg) },
         warn: { fg: v(T.warn), subtle: v(T.warnbg) },
+        // A Hall of Fame member's name: a gold gradient, darker on the light theme. Reserved for members.
+        gold: {
+          name: v({
+            base: "linear-gradient(100deg,#C98A12 0%,#A86A00 50%,#7A4B00 100%)",
+            _dark: "linear-gradient(100deg,#FBE29A 0%,#E9B64A 50%,#C98A12 100%)",
+          }),
+          border: v("rgba(233,182,74,.45)"),
+        },
         blue: {
           contrast: v("white"),
           fg: v(T.acc),

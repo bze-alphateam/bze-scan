@@ -1,23 +1,41 @@
 "use client";
 
-import { Badge, Box, Button, Grid, Heading, HStack, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Flex,
+  Grid,
+  Heading,
+  HStack,
+  Link,
+  SimpleGrid,
+  Skeleton,
+  SkeletonCircle,
+  Stack,
+  Text,
+  type LinkProps,
+} from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { LuCircleHelp, LuExternalLink, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useAllValidators, useParams, useValidator } from "@/api/hooks";
-import type { ValidatorDetail, ValidatorsSummary } from "@/api/types";
+import { useAllValidators, useHallOfFame, useParams, useValidator } from "@/api/hooks";
+import type { HallOfFame, ValidatorDetail, ValidatorsSummary, ValidatorVote } from "@/api/types";
+import { AccountChip } from "@/components/ui/account-chip";
 import { Avatar } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DetailList, DetailRow } from "@/components/ui/detail-list";
 import { JsonBlock } from "@/components/ui/json-block";
-import { AddressLink } from "@/components/ui/links";
+import { ListPanel, ListRow } from "@/components/ui/list";
 import { MoreDetails } from "@/components/ui/more-details";
+import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle } from "@/components/ui/page-head";
 import { CardSkeleton, TileSkeleton } from "@/components/ui/skeleton";
+import { StateBox } from "@/components/ui/state-box";
+import { Tag, type TagTone } from "@/components/ui/status-pill";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
-import { formatAmount, formatCount, formatDate } from "@/lib/format";
+import { formatAmount, formatCount, formatDate, shortAddress } from "@/lib/format";
 import { externalLinks, stakeHref, websiteLink } from "@/lib/links";
 import {
   bondCompact,
@@ -38,51 +56,60 @@ import {
   voteTone,
 } from "@/render/validators";
 
+import { CrownMark, Moniker } from "./hall-of-fame";
+
+type Fame = Pick<HallOfFame, "items" | "rules">;
+
 export function pingPubValidatorUrl(operator: string): string {
   return `${externalLinks.pingPub}/staking/${operator}`;
 }
 
-function Breadcrumb({ name }: { name: string }) {
-  return (
-    <HStack as="nav" aria-label="Breadcrumb" gap="2" fontSize="sm" color="fg.muted" minW="0">
-      <Link asChild color="fg.muted">
-        <NextLink href="/validators">Validators</NextLink>
-      </Link>
-      <Text as="span" aria-hidden>
-        /
-      </Text>
-      <Text as="span" aria-current="page" truncate>
-        {name}
-      </Text>
-    </HStack>
-  );
+const Muted = ({ children }: { children: ReactNode }) => (
+  <Text as="span" color="fg.muted">
+    {children}
+  </Text>
+);
+
+const Mono = ({ children }: { children: ReactNode }) => (
+  <Text as="span" fontFamily="mono">
+    {children}
+  </Text>
+);
+
+/** "Validators / Honeycomb". */
+function Breadcrumb({ current, mono }: { current: string; mono?: boolean }) {
+  return <Breadcrumbs path={[{ label: "Validators", href: "/validators" }]} current={current} mono={mono} />;
 }
 
-function Header({ v, activeCount }: { v: ValidatorDetail; activeCount: number | null }) {
+function statusTone(v: ValidatorDetail): TagTone {
+  if (v.jailed || v.tombstoned) return "bad";
+  return v.status === "bonded" ? "ok" : "warn";
+}
+
+function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: number | null; fame: Fame | null }) {
   const site = websiteLink(v.website);
-  const status = statusLine(v, activeCount);
-  const active = v.status === "bonded" && !v.jailed && !v.tombstoned;
+  const member = fame?.items.find((m) => m.operator_address === v.operator_address);
   return (
-    <Stack gap="3">
-      <Breadcrumb name={v.moniker} />
-      <HStack gap="4" align="start" wrap="wrap" justify="space-between">
-        <HStack gap="3" minW="0">
-          <Avatar name={v.moniker} src={v.logo_url} size="12" fontSize="md" />
-          <Stack gap="1" minW="0">
-            <Heading as="h1" size={{ base: "2xl", md: "3xl" }} wordBreak="break-word">
-              {v.moniker}
-            </Heading>
-            <HStack gap="2" wrap="wrap" fontSize="sm">
-              <Text color={active ? "green.fg" : v.jailed || v.tombstoned ? "red.fg" : "fg.muted"} fontWeight="medium" data-testid="validator-status">
-                {status}
-              </Text>
-              {site && (
-                <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow">
-                  {site.text} <LuExternalLink aria-hidden />
-                </Link>
-              )}
-            </HStack>
-            <Text fontSize="sm" color="fg.muted">
+    <Box>
+      <Breadcrumb current={v.moniker} />
+      <Flex gap="4" align="flex-start" wrap="wrap" mt="3">
+        <Avatar name={v.moniker} src={v.logo_url} size="56px" ring={member ? "gold" : undefined} />
+        <Box flex="1" minW="240px">
+          <DetailTitle title={<Moniker name={v.moniker} gold={!!member} />}>
+            {member && fame && <CrownMark v={member} rules={fame.rules} seeAll={{ href: "/validators" }} size={18} />}
+          </DetailTitle>
+          <DetailMeta>
+            <Tag tone={statusTone(v)} data-testid="validator-status">
+              {statusLine(v, activeCount)}
+            </Tag>
+            {site && (
+              <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" color="accent.fg">
+                {site.text} ↗
+              </Link>
+            )}
+          </DetailMeta>
+          <DetailMeta mt="1">
+            <Text as="span">
               {[
                 v.first_seen_time ? `Validating since ${formatDate(v.first_seen_time)}` : null,
                 v.delegator_count != null
@@ -92,15 +119,15 @@ function Header({ v, activeCount }: { v: ValidatorDetail; activeCount: number | 
                 .filter(Boolean)
                 .join(" · ")}
             </Text>
-          </Stack>
-        </HStack>
-        <Button asChild colorPalette="blue" minH="44px">
+          </DetailMeta>
+        </Box>
+        <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
           <a href={stakeHref(v.operator_address)} target="_blank" rel="noopener noreferrer">
             Stake with this validator <LuExternalLink aria-hidden />
           </a>
         </Button>
-      </HStack>
-    </Stack>
+      </Flex>
+    </Box>
   );
 }
 
@@ -108,7 +135,7 @@ function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: Validators
   const yours = rewardRateAfterCommission(summary?.reward_rate, v.commission_rate);
   const signedWindow = v.signed_blocks_window ?? window;
   return (
-    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" data-testid="validator-tiles">
+    <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" mt="6" data-testid="validator-tiles">
       <Tile
         label="Staked with them"
         value={bondCompact(v.tokens)}
@@ -133,95 +160,118 @@ function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: Validators
   );
 }
 
-/** A label/value row of a details list; stacks on phones. */
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** A panel's head row: the small upper-case title, a muted note on the right. */
+function PanelHead({ id, title, note }: { id: string; title: string; note?: ReactNode }) {
   return (
-    <Grid templateColumns={{ base: "minmax(0, 1fr)", md: "180px minmax(0, 1fr)" }} gap={{ base: "0.5", md: "4" }} py="2">
-      <Text fontSize="sm" color="fg.muted">
-        {label}
-      </Text>
-      <Box fontSize="sm" minW="0" wordBreak="break-word">
-        {children}
-      </Box>
-    </Grid>
+    <Flex justify="space-between" align="center" gap="3" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
+      <Heading as="h2" textStyle="label" id={id}>
+        {title}
+      </Heading>
+      {note && (
+        <Text fontSize="12px" color="fg.muted" textAlign="right">
+          {note}
+        </Text>
+      )}
+    </Flex>
   );
 }
 
 function About({ v }: { v: ValidatorDetail }) {
+  const rows: [string, ReactNode][] = [
+    [
+      "Validator address",
+      <>
+        <Text as="span" fontFamily="mono" fontSize="12px" wordBreak="break-all">
+          {v.operator_address}
+        </Text>
+        <CopyButton value={v.operator_address} label="Copy validator address" />
+      </>,
+    ],
+    [
+      "Owner account",
+      <>
+        <AccountChip address={v.account_address} />
+        <CopyButton value={v.account_address} label="Copy owner account" /> <Muted>· self-stake and commission land here</Muted>
+      </>,
+    ],
+    [
+      "Self-stake",
+      <>
+        <Mono>{v.self_delegation != null ? bondFull(v.self_delegation) : "—"}</Mono> <Muted>· the validator&apos;s own money at risk</Muted>
+      </>,
+    ],
+  ];
+  if (v.security_contact) rows.push(["Contact", <Text key="contact" as="span">{v.security_contact}</Text>]);
+  if (v.identity) rows.push(["Identity", <Mono key="identity">{v.identity}</Mono>]);
   return (
-    <Card title="About">
-      <Stack gap="0">
-        {v.details && (
-          <Text fontSize="sm" mb="3" whiteSpace="pre-line">
-            {v.details}
-          </Text>
-        )}
-        <Row label="Validator address">
-          <HStack gap="1" align="start">
-            <Text fontFamily="mono" wordBreak="break-all">
-              {v.operator_address}
-            </Text>
-            <CopyButton value={v.operator_address} label="Copy validator address" />
-          </HStack>
-        </Row>
-        <Row label="Owner account">
-          <AddressLink address={v.account_address} />
-          <Text as="span" color="fg.muted">
-            {" "}
-            · self-stake and commission land here
-          </Text>
-        </Row>
-        <Row label="Self-stake">
-          {v.self_delegation != null ? bondFull(v.self_delegation) : "—"}
-          <Text as="span" color="fg.muted">
-            {" "}
-            · the validator&apos;s own money at risk
-          </Text>
-        </Row>
-        {v.security_contact && <Row label="Contact">{v.security_contact}</Row>}
-        {v.identity && <Row label="Identity">{v.identity}</Row>}
-      </Stack>
-    </Card>
+    <ListPanel as="section" aria-labelledby="validator-about" mt="7">
+      <PanelHead id="validator-about" title="About" />
+      {v.details && (
+        <Text px="4" py="14px" lineHeight="1.55" whiteSpace="pre-line" borderBottomWidth="1px" borderColor="border.panel">
+          {v.details}
+        </Text>
+      )}
+      <DetailList>
+        {rows.map(([label, value], i) => (
+          <DetailRow key={label} label={label} last={i === rows.length - 1}>
+            {value}
+          </DetailRow>
+        ))}
+      </DetailList>
+    </ListPanel>
   );
 }
 
 function RecentBlocks({ v }: { v: ValidatorDetail }) {
   const blocks = v.recent_blocks;
   return (
-    <Card title="Recent blocks proposed" meta={proposalFrequency(v.voting_power_pct)}>
+    <ListPanel as="section" aria-labelledby="validator-blocks">
+      <PanelHead id="validator-blocks" title="Recent blocks proposed" note={proposalFrequency(v.voting_power_pct)} />
       {blocks.length === 0 ? (
-        <Text fontSize="sm" color="fg.muted">
+        <Text px="4" py="3" fontSize="13px" color="fg.muted">
           No blocks proposed yet.
         </Text>
       ) : (
-        <Stack gap="0" role="list">
-          {blocks.map((b, i) => (
-            <HStack
-              key={b.height}
-              role="listitem"
-              justify="space-between"
-              gap="3"
-              py="2"
-              minH="44px"
-              borderTopWidth={i === 0 ? "0" : "1px"}
-              borderColor="border.panel"
-              fontSize="sm"
-              data-testid="recent-block"
-            >
-              <HStack gap="2" wrap="wrap">
-                <Link asChild>
-                  <NextLink href={`/blocks/${b.height}`}>Block {formatCount(b.height)}</NextLink>
-                </Link>
-                <TimeAgo time={b.time} color="fg.muted" />
-              </HStack>
-              <Text color="fg.muted">
+        <Box role="list" aria-label="Recent blocks proposed">
+          {blocks.map((b) => (
+            <ListRow key={b.height} role="listitem" templateColumns="auto minmax(0, 1fr) auto" data-testid="recent-block">
+              <Link asChild fontFamily="mono" fontWeight="500" color="accent.fg">
+                <NextLink href={`/blocks/${b.height}`} aria-label={`Block ${formatCount(b.height)}`}>
+                  {formatCount(b.height)}
+                </NextLink>
+              </Link>
+              <TimeAgo time={b.time} color="fg.muted" fontSize="13px" />
+              <Text color="fg.muted" fontSize="13px" textAlign="right">
                 {b.tx_count === 0 ? "no transactions" : `${formatCount(b.tx_count)} ${b.tx_count === 1 ? "transaction" : "transactions"}`}
               </Text>
-            </HStack>
+            </ListRow>
           ))}
-        </Stack>
+        </Box>
       )}
-    </Card>
+    </ListPanel>
+  );
+}
+
+/** A vote's tag: Yes in green, No in red, veto in the warn tone, split in the accent, abstain muted. */
+function VoteTag({ vote }: { vote: ValidatorVote }) {
+  const tone = voteTone(vote);
+  const props =
+    tone === "gray"
+      ? { bg: "bg.hover", color: "fg.muted" }
+      : {
+          tone: (
+            {
+              green: "ok",
+              red: "bad",
+              orange: "warn",
+              purple: "accent",
+            } as const
+          )[tone],
+        };
+  return (
+    <Tag flex="none" minW="30px" justifyContent="center" {...props}>
+      {voteOption(vote)}
+    </Tag>
   );
 }
 
@@ -229,104 +279,135 @@ function History({ v }: { v: ValidatorDetail }) {
   const items = historyItems(v.events);
   const clean = cleanRecord(v);
   return (
-    <Card title="History" meta="changes worth knowing about">
-      <Stack gap="3" fontSize="sm">
-        {items.length > 0 && (
-          <Stack gap="0" role="list" aria-label="Validator history">
-            {items.map((h, i) => (
-              <Stack
-                key={h.key}
-                role="listitem"
-                gap="0.5"
-                py="2"
-                borderTopWidth={i === 0 ? "0" : "1px"}
-                borderColor="border.panel"
-                data-testid="history-item"
-              >
-                <Text>{h.text}</Text>
-                <HStack gap="1" color="fg.muted" fontSize="xs">
-                  <Text as="span">{h.date}</Text>
-                  {h.txHash && (
-                    <>
-                      <Text as="span">·</Text>
-                      <Link asChild color="fg.muted">
-                        <NextLink href={`/txs/${h.txHash.toUpperCase()}`}>see transaction</NextLink>
-                      </Link>
-                    </>
-                  )}
-                </HStack>
-              </Stack>
-            ))}
-          </Stack>
-        )}
-        {clean && <Text color="green.fg">{clean}</Text>}
-        <Stack gap="1" data-testid="validator-votes">
-          {v.votes.length === 0 ? (
-            <Text color="fg.muted">{v.moniker} has not voted yet.</Text>
-          ) : (
-            <>
-              <Text fontWeight="medium">Last governance votes</Text>
-              <Stack gap="0" role="list" aria-label="Last governance votes">
-                {v.votes.map((vote, i) => (
-                  <HStack
-                    key={`${vote.proposal_id}-${vote.height}`}
-                    role="listitem"
-                    gap="2"
-                    py="1.5"
-                    align="start"
-                    borderTopWidth={i === 0 ? "0" : "1px"}
-                    borderColor="border.panel"
-                    data-testid="validator-vote"
-                  >
-                    <Badge colorPalette={voteTone(vote)} variant="subtle" size="sm" flexShrink={0} minW="16" justifyContent="center">
-                      {voteOption(vote)}
-                    </Badge>
-                    <Link asChild minW="0">
-                      <NextLink href={`/proposals/${vote.proposal_id}`}>
-                        #{vote.proposal_id}
-                        {vote.title ? ` ${vote.title}` : ""}
-                      </NextLink>
+    <ListPanel as="section" aria-labelledby="validator-history">
+      <PanelHead id="validator-history" title="History" note="changes worth knowing about" />
+      {clean && (
+        <Flex align="center" gap="10px" wrap="wrap" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
+          <Tag tone="ok">Clean</Tag>
+          <Text as="span">{clean}</Text>
+        </Flex>
+      )}
+      {items.length > 0 && (
+        <Box role="list" aria-label="Validator history">
+          {items.map((h) => (
+            <Box key={h.key} role="listitem" px="4" py="10px" borderBottomWidth="1px" borderColor="border.panel" data-testid="history-item">
+              <Text>{h.text}</Text>
+              <HStack gap="1" color="fg.muted" fontSize="12px" mt="2px">
+                <Text as="span">{h.date}</Text>
+                {h.txHash && (
+                  <>
+                    <Text as="span">·</Text>
+                    <Link asChild color="accent.fg">
+                      <NextLink href={`/txs/${h.txHash.toUpperCase()}`}>see transaction</NextLink>
                     </Link>
-                  </HStack>
-                ))}
-              </Stack>
-            </>
-          )}
-        </Stack>
-      </Stack>
-    </Card>
+                  </>
+                )}
+              </HStack>
+            </Box>
+          ))}
+        </Box>
+      )}
+      <Box data-testid="validator-votes">
+        {v.votes.length === 0 ? (
+          <Text px="4" py="3" color="fg.muted" fontSize="13px">
+            {v.moniker} has not voted yet.
+          </Text>
+        ) : (
+          <>
+            <Text px="4" pt="3" pb="6px" fontSize="11px" fontWeight="600" letterSpacing="0.06em" textTransform="uppercase" color="fg.muted">
+              Last governance votes
+            </Text>
+            <Box role="list" aria-label="Last governance votes">
+              {v.votes.map((vote) => (
+                <Flex
+                  key={`${vote.proposal_id}-${vote.height}`}
+                  role="listitem"
+                  align="baseline"
+                  gap="10px"
+                  px="4"
+                  py="7px"
+                  borderTopWidth="1px"
+                  borderColor="border.panel"
+                  data-testid="validator-vote"
+                >
+                  <VoteTag vote={vote} />
+                  <Link asChild color="fg" minW="0" _hover={{ color: "accent.fg" }}>
+                    <NextLink href={`/proposals/${vote.proposal_id}`}>
+                      <Text as="span" fontFamily="mono" color="fg.muted">
+                        #{vote.proposal_id}
+                      </Text>
+                      {vote.title ? ` ${vote.title}` : ""}
+                    </NextLink>
+                  </Link>
+                </Flex>
+              ))}
+            </Box>
+          </>
+        )}
+      </Box>
+    </ListPanel>
+  );
+}
+
+/** "Open on Ping.pub ↗": on the raw bar from c2 up, under the JSON on phones. */
+function PingPubOpen({ operator, ...props }: { operator: string } & Omit<LinkProps, "href" | "children">) {
+  return (
+    <Link
+      href={pingPubValidatorUrl(operator)}
+      target="_blank"
+      rel="noopener noreferrer"
+      fontSize="12px"
+      color="accent.fg"
+      whiteSpace="nowrap"
+      {...props}
+    >
+      Open on Ping.pub ↗
+    </Link>
   );
 }
 
 function Details({ v }: { v: ValidatorDetail }) {
   return (
-    <Stack gap="4">
-      <Card>
-        <Stack gap="0">
-          <Row label="Consensus key">
-            <Text fontFamily="mono" wordBreak="break-all">
-              {v.consensus_pubkey ?? "—"}
-            </Text>
-          </Row>
-          <Row label="Commission limits">
-            max {rateText(v.commission_max_rate)} · max change {pointsText(v.commission_max_change_rate)} per day
-          </Row>
-          <Row label="Minimum self-stake">
-            {v.min_self_delegation != null ? formatAmount(v.min_self_delegation, 0, "ubze") : "—"}
-          </Row>
-          <Row label="Delegator shares">{formatAmount(v.delegator_shares, 6)}</Row>
-        </Stack>
-      </Card>
-      <Stack gap="2">
-        <Heading as="h3" size="sm">
+    <ListPanel>
+      <DetailList>
+        <DetailRow label="Consensus key">
+          <Text as="span" fontFamily="mono" fontSize="12px" wordBreak="break-all">
+            {v.consensus_pubkey ?? "—"}
+          </Text>
+          {v.consensus_pubkey && <CopyButton value={v.consensus_pubkey} label="Copy consensus key" />}
+        </DetailRow>
+        <DetailRow label="Commission limits">
+          <Muted>max</Muted> <Mono>{rateText(v.commission_max_rate)}</Mono> <Muted>· max change</Muted>{" "}
+          <Mono>{pointsText(v.commission_max_change_rate)}</Mono> <Muted>per day</Muted>
+        </DetailRow>
+        <DetailRow label="Minimum self-stake">
+          <Mono>{v.min_self_delegation != null ? formatAmount(v.min_self_delegation, 0, "ubze") : "—"}</Mono>
+        </DetailRow>
+        <DetailRow label="Delegator shares" last>
+          <Mono>{formatAmount(v.delegator_shares, 6)}</Mono>
+        </DetailRow>
+      </DetailList>
+      <HStack gap="0.5" px="2" borderTopWidth="1px" borderColor="border.panel">
+        <Heading
+          as="h3"
+          px="2.5"
+          py="10px"
+          fontSize="13px"
+          fontWeight="500"
+          borderBottomWidth="2px"
+          borderColor="accent.fg"
+          whiteSpace="nowrap"
+        >
           Raw validator
         </Heading>
+        <Box flex="1" />
+        <PingPubOpen operator={v.operator_address} hideBelow="c2" px="2" />
+      </HStack>
+      <Box p="4" pt="3" borderTopWidth="1px" borderColor="border.panel">
         <JsonBlock value={v} />
-      </Stack>
-      <Link href={pingPubValidatorUrl(v.operator_address)} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-        Open on Ping.pub <LuExternalLink aria-hidden />
-      </Link>
-    </Stack>
+      </Box>
+      <PingPubOpen operator={v.operator_address} hideFrom="c2" display="inline-block" px="4" pb="4" />
+    </ListPanel>
   );
 }
 
@@ -359,30 +440,43 @@ export function ValidatorSkeleton() {
 export function ValidatorView({ v }: { v: ValidatorDetail }) {
   const all = useAllValidators();
   const params = useParams();
+  // Membership marks wait for the Hall of Fame; the page never does.
+  const fame = useHallOfFame();
   const activeCount = all.data ? splitValidators(all.data.items).active.length : null;
   return (
-    <Stack gap={{ base: "6", md: "8" }}>
-      <Header v={v} activeCount={activeCount} />
+    <Box>
+      <Header v={v} activeCount={activeCount} fame={fame.data ?? null} />
       <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} />
       <About v={v} />
-      <Grid templateColumns={{ base: "minmax(0, 1fr)", lg: "repeat(2, minmax(0, 1fr))" }} gap="6" alignItems="start">
+      <Grid
+        templateColumns={{
+          base: "minmax(0, 1fr)",
+          lg: "repeat(2, minmax(0, 1fr))",
+        }}
+        gap="4"
+        alignItems="start"
+        mt="8"
+      >
         <RecentBlocks v={v} />
         <History v={v} />
       </Grid>
-      <MoreDetails hint="consensus key, limits, raw JSON">
-        <Details v={v} />
-      </MoreDetails>
-    </Stack>
+      <Box mt="8">
+        <MoreDetails hint="consensus key, limits, raw JSON">
+          <Details v={v} />
+        </MoreDetails>
+      </Box>
+    </Box>
   );
 }
 
-function Message({ title, children }: { title: string; children: ReactNode }) {
+/** The breadcrumb and "Validator" over a state box: not found, or the load error. */
+function Missing({ operator, children }: { operator: string; children: ReactNode }) {
   return (
-    <Card title={title}>
-      <Stack gap="3" fontSize="sm" color="fg.muted">
-        {children}
-      </Stack>
-    </Card>
+    <Box>
+      <Breadcrumb current={shortAddress(operator)} mono />
+      <DetailTitle title="Validator" />
+      <Box mt="6">{children}</Box>
+    </Box>
   );
 }
 
@@ -392,33 +486,40 @@ export function ValidatorPage({ operator }: { operator: string }) {
   if (data) return <ValidatorView v={data} />;
   if (isNotFound(error)) {
     return (
-      <Message title="Validator not found">
-        <Text>The explorer does not know this validator yet. Check the address, or look it up on Ping.pub.</Text>
-        <PingPubLink operator={operator} />
-      </Message>
+      <Missing operator={operator}>
+        <StateBox
+          icon={<LuCircleHelp size={20} />}
+          title="Validator not found"
+          actions={
+            <Link href={pingPubValidatorUrl(operator)} target="_blank" rel="noopener noreferrer" color="accent.fg">
+              Look it up on Ping.pub ↗
+            </Link>
+          }
+          data-testid="validator-not_found"
+        >
+          The explorer does not know this validator yet. Check the address, or look it up on Ping.pub.
+        </StateBox>
+      </Missing>
     );
   }
   if (error) {
     return (
-      <Card title="This validator could not be loaded">
-        <HStack justify="space-between" wrap="wrap" gap="3">
-          <Text color="fg.muted" fontSize="sm">
-            The explorer did not answer. Try again in a moment.
-          </Text>
-          <Button colorPalette="blue" minH="44px" onClick={() => void refetch()}>
-            Try again
-          </Button>
-        </HStack>
-      </Card>
+      <Missing operator={operator}>
+        <StateBox
+          tone="error"
+          icon={<LuTriangleAlert size={20} />}
+          title="This validator could not be loaded"
+          actions={
+            <Button size="sm" colorPalette="blue" onClick={() => void refetch()}>
+              Try again
+            </Button>
+          }
+          data-testid="validator-error"
+        >
+          The explorer did not answer. Try again in a moment.
+        </StateBox>
+      </Missing>
     );
   }
   return <ValidatorSkeleton />;
-}
-
-function PingPubLink({ operator }: { operator: string }) {
-  return (
-    <Link href={pingPubValidatorUrl(operator)} target="_blank" rel="noopener noreferrer" alignSelf="start">
-      Look it up on Ping.pub <LuExternalLink aria-hidden />
-    </Link>
-  );
 }

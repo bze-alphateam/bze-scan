@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,7 +23,7 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
 
 /** The Hall of Fame opens first: switch to the Active tab and wait for its rows. */
 async function openActive() {
-  await userEvent.click(await screen.findByRole("tab", { name: "Active · 3" }));
+  await userEvent.click(await screen.findByRole("tab", { name: "Active 3" }));
   await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(3));
 }
 
@@ -51,17 +51,21 @@ describe("ValidatorsPage", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Hall of Fame · 2", "Active · 3", "Inactive · 2"]);
-    expect(screen.getByRole("tab", { name: "Hall of Fame · 2" })).toHaveAttribute("aria-selected", "true");
+    expect(tabs).toEqual(["Hall of Fame 2", "Active 3", "Inactive 2"]);
+    expect(screen.getByRole("tab", { name: "Hall of Fame 2" })).toHaveAttribute("aria-selected", "true");
     await openActive();
     expect(monikers()).toEqual(["Honeycomb", "Thamar Node", "Deep Fields"]);
-    // The Hall of Fame validators are marked in the active list too, explained.
-    const marked = screen.getAllByTestId("validator-row").map((r) => within(r).queryByTestId("fame-tag") !== null);
-    expect(marked).toEqual([true, true, false]);
-    expect(within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-tag")).toHaveAttribute(
-      "title",
-      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 10 of the last 10,000 blocks.",
-    );
+    // The Hall of Fame members are marked in the active list too: a gold ring, a gold name and a crown.
+    const marks = screen.getAllByTestId("validator-row").map((r) => ({
+      ring: r.querySelector('[data-ring="gold"]') !== null,
+      gold: r.querySelector("[data-gold]") !== null,
+      crown: within(r).queryByTestId("fame-crown") !== null,
+    }));
+    expect(marks).toEqual([
+      { ring: true, gold: true, crown: true },
+      { ring: true, gold: true, crown: true },
+      { ring: false, gold: false, crown: false },
+    ]);
 
     const honeycomb = screen.getAllByTestId("validator-row")[0];
     expect(within(honeycomb).getByRole("link", { name: "Honeycomb" })).toHaveAttribute(
@@ -80,15 +84,15 @@ describe("ValidatorsPage", () => {
     expect(screen.getByRole("heading", { name: "Picking a validator" })).toBeInTheDocument();
   });
 
-  it("switches to the inactive tab, which shows the status instead of a rank", async () => {
+  it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
-    await userEvent.click(await screen.findByRole("tab", { name: "Inactive · 2" }));
-    // The Active panel unmounts once its exit animation ends, and until then it keeps its own rows.
+    await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
     await waitFor(() => expect(monikers()).toEqual(["Sleepy Node", "Old Timer"]));
     const [sleepy, old] = screen.getAllByTestId("validator-row");
-    expect(sleepy).toHaveTextContent("Unbonding");
-    expect(within(sleepy).getByText("Jailed")).toBeInTheDocument();
-    expect(old).toHaveTextContent("Not active");
+    expect(sleepy.firstChild).toHaveTextContent("–");
+    expect(within(sleepy).getByText("Jailed")).toHaveAttribute("data-tag", "bad");
+    expect(within(sleepy).getByText("Unbonding")).toBeInTheDocument();
+    expect(within(old).queryByText("Jailed")).not.toBeInTheDocument();
     expect(old).toHaveTextContent("—");
   });
 
@@ -102,15 +106,18 @@ describe("ValidatorsPage", () => {
     expect(rows.map((r) => within(r).getAllByRole("link")[0].textContent)).toEqual(["Thamar Node", "Honeycomb"]);
     expect(within(rows[0]).getByTestId("hall-of-fame-signing")).toHaveTextContent("Didn't miss a block in the last 10,000 blocks");
     expect(within(rows[1]).getByTestId("hall-of-fame-signing")).toHaveTextContent("Missed 1 of the last 10,000 blocks");
+    // Within the rule's allowance: the ok tone. Every member is gold.
+    expect(within(rows[1]).getByTestId("hall-of-fame-signing")).toHaveAttribute("data-chip", "ok");
+    expect(rows.every((r) => r.querySelector('[data-ring="gold"]') && r.querySelector("[data-gold]"))).toBe(true);
     expect(within(rows[1]).getByTestId("hall-of-fame-votes")).toHaveTextContent("Voted on all of the last 10 proposals");
     expect(rows[1]).toHaveTextContent("50M BZE · 12.3% of the voting power");
 
     // The list ends with a way to every active validator.
     await userEvent.click(screen.getByRole("button", { name: "See all active validators" }));
-    expect(screen.getByRole("tab", { name: "Active · 3" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Active 3" })).toHaveAttribute("aria-selected", "true");
     await waitFor(() => expect(monikers()).toEqual(["Honeycomb", "Thamar Node", "Deep Fields"]));
 
-    await userEvent.click(screen.getByRole("tab", { name: "Hall of Fame · 2" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Hall of Fame 2" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Find a validator" }), "zzz");
     expect(await screen.findByText("No Hall of Fame validator has that name.")).toBeInTheDocument();
   });
@@ -122,10 +129,9 @@ describe("ValidatorsPage", () => {
       "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 5 of the last 20,000 blocks",
     );
     await openActive();
-    expect(within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-tag")).toHaveAttribute(
-      "title",
-      "In the Hall of Fame: it voted on every one of the last 10 proposals and missed no more than 5 of the last 20,000 blocks.",
-    );
+    const crown = within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-crown");
+    await userEvent.hover(within(crown).getByRole("button", { name: "Hall of Fame member" }));
+    expect(within(crown).getByRole("tooltip")).toHaveTextContent("Missed 1 of the last 20,000 blocks (5 allowed)");
   });
 
   it("counts the closed proposals while fewer have closed than the rule asks", async () => {
@@ -136,19 +142,90 @@ describe("ValidatorsPage", () => {
 
   it("shows an empty Hall of Fame and marks nobody", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => Promise.resolve({ ...fame, items: [] } as HallOfFame) }) });
-    expect(await screen.findByRole("tab", { name: "Hall of Fame · 0" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Hall of Fame 0" })).toBeInTheDocument();
     expect(screen.getByText("No validator meets the bar right now.")).toBeInTheDocument();
     await openActive();
-    expect(screen.queryByTestId("fame-tag")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("fame-crown")).not.toBeInTheDocument();
   });
 
-  it("offers a retry when the Hall of Fame fails", async () => {
+  it("marks nobody while the Hall of Fame loads, and keeps the rest of the page working", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => new Promise(() => {}) }) });
+    // The tab waits without a count; its panel shows skeleton rows.
+    expect(await screen.findByRole("tab", { name: "Hall of Fame" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByTestId("table-skeleton-row").length).toBeGreaterThan(0);
+    await openActive();
+    expect(screen.queryByTestId("fame-crown")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-ring="gold"], [data-gold]')).toBeNull();
+  });
+
+  it("marks nobody when the Hall of Fame fails, and offers a retry in its tab only", async () => {
     const hallOfFame = vi.fn(() => Promise.reject(new Error("boom")));
     const validators = vi.fn(() => Promise.resolve(list as ValidatorList));
     renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame, validators }) });
-    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
-    expect(hallOfFame).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("heading", { name: "The Hall of Fame could not be loaded" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(hallOfFame).toHaveBeenCalledTimes(2));
     expect(validators).toHaveBeenCalledTimes(1);
+    await openActive();
+    expect(screen.queryByTestId("fame-crown")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-ring="gold"], [data-gold]')).toBeNull();
+  });
+
+  it("opens the crown's card on hover with the validator's own figures and the rule's thresholds", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await openActive();
+    const crown = within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-crown");
+    // Closed, the card is hidden from the accessibility tree too.
+    const card = within(crown).getByRole("tooltip", { hidden: true });
+    expect(card).not.toBeVisible();
+    const button = within(crown).getByRole("button", { name: "Hall of Fame member" });
+    expect(button).toHaveAttribute("aria-describedby", card.id);
+
+    await userEvent.hover(button);
+    expect(card).toBeVisible();
+    // Honeycomb: all 10 proposals voted on, 1 block missed of the rule's 10,000 window, 10 allowed.
+    expect(card).toHaveTextContent("Hall of Fame");
+    expect(card).toHaveTextContent("Voted on all of the last 10 proposals");
+    expect(card).toHaveTextContent("Missed 1 of the last 10,000 blocks (10 allowed)");
+    await userEvent.unhover(button);
+    expect(card).not.toBeVisible();
+  });
+
+  it("opens the crown's card on keyboard focus, and its link switches to the Hall of Fame tab", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await openActive();
+    const row = screen.getAllByTestId("validator-row")[1];
+    act(() => within(row).getByRole("link", { name: "Thamar Node" }).focus());
+    await userEvent.tab();
+    const button = within(row).getByRole("button", { name: "Hall of Fame member" });
+    expect(button).toHaveFocus();
+    const card = within(row).getByRole("tooltip");
+    expect(card).toBeVisible();
+    expect(card).toHaveTextContent("Missed no blocks in the last 10,000 (10 allowed)");
+
+    // Escape closes it; focus brings it back, and the link inside takes the tab key.
+    await userEvent.keyboard("{Escape}");
+    expect(card).not.toBeVisible();
+    await userEvent.tab({ shift: true });
+    await userEvent.tab();
+    expect(card).toBeVisible();
+    await userEvent.tab();
+    const see = within(card).getByRole("button", { name: "See the Hall of Fame →" });
+    expect(see).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("tab", { name: "Hall of Fame 2" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findAllByTestId("hall-of-fame-row")).toHaveLength(2);
+  });
+
+  it("opens the crown's card on a tap and closes it on a tap elsewhere", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await openActive();
+    const crown = within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-crown");
+    const card = within(crown).getByRole("tooltip", { hidden: true });
+    fireEvent.click(within(crown).getByRole("button", { name: "Hall of Fame member" }));
+    expect(card).toBeVisible();
+    fireEvent.pointerDown(document.body);
+    expect(card).not.toBeVisible();
   });
 
   it("shows each validator's picture, else its initials", async () => {
@@ -182,7 +259,7 @@ describe("ValidatorsPage", () => {
       ),
     );
     renderWithProviders(<ValidatorsPage />, { api: api({ validators }) });
-    expect(await screen.findByRole("tab", { name: "Active · 3" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Active 3" })).toBeInTheDocument();
     expect(validators).toHaveBeenCalledTimes(2);
     expect(validators.mock.calls[1][0]).toEqual({ status: "all", limit: 100, cursor: "c1" });
   });
@@ -195,7 +272,8 @@ describe("ValidatorsPage", () => {
   it("offers a retry when the API fails", async () => {
     const validators = vi.fn(() => Promise.reject(new Error("boom")));
     renderWithProviders(<ValidatorsPage />, { api: api({ validators }) });
-    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("heading", { name: "The validators could not be loaded" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(validators).toHaveBeenCalledTimes(2);
   });
 });
