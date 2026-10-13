@@ -108,8 +108,9 @@ func TestIndexesTransactionsAndMessages(t *testing.T) {
 	assert.Equal(t, "t|0|[{\"denom\": \"ubze\", \"amount\": \"2000\"}]|bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw|{bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw}|{/cosmos.bank.v1beta1.MsgSend}|",
 		ix.one(t, `SELECT concat_ws('|', success, code, fee, fee_payer, signers, msg_types, coalesce(memo, ''))
 			FROM explorer.transactions WHERE hash = 'E580BFA56DE28886E51DDB9BE50DD610C1C832C579CA08FCF9177B04D2F7B7B9'`))
-	assert.Equal(t, "bank|bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw|message|t", ix.one(t, `SELECT concat_ws('|',
-			module, sender, events->0->>'type', body ? 'to_address')
+	// A send emits only message, transfer and coin events: none is stored.
+	assert.Equal(t, "bank|bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw|0|t", ix.one(t, `SELECT concat_ws('|',
+			module, sender, jsonb_array_length(events), body ? 'to_address')
 			FROM explorer.messages WHERE height = $1 AND tx_index = 0`, hSend))
 
 	// The failed transaction: code, log, fee and signer from the ante
@@ -202,7 +203,7 @@ func TestMigrateMirrorsTheClassification(t *testing.T) {
 
 	res := migrateUp(t, url)
 	assert.False(t, res.Applied, "no SQL migration pending")
-	assert.Equal(t, []string{"partitions", "classification", "labels"}, res.Steps, "the steps run on every up")
+	assert.Equal(t, []string{"partitions", "classification", "labels", "message_events"}, res.Steps, "the steps run on every up")
 	assert.Equal(t, len(classify.Messages()), countRows(t, db, "explorer.message_kinds"))
 	assert.Equal(t, []string{"send"}, queryStrings(t, db,
 		`SELECT kind FROM explorer.message_kinds WHERE type_url = '/cosmos.bank.v1beta1.MsgSend'`))

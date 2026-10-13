@@ -38,45 +38,10 @@
       "Module": "",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.gov.v1beta1.MsgSubmitProposal",
-            "sender": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
-          }
-        },
-        {
           "type": "submit_proposal",
           "attrs": {
             "proposal_id": "44",
             "proposer": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "",
-            "spender": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "",
-            "receiver": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "",
-            "recipient": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
-            "sender": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
           }
         },
         {
@@ -85,13 +50,6 @@
             "amount": "",
             "depositor": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x",
             "proposal_id": "44"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "module": "governance",
-            "sender": "bze1k27v68x9gtppsgt9scr3649tpjfxnqlj04lk9x"
           }
         },
         {

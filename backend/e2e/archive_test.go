@@ -55,7 +55,8 @@ func TestBackfillOfALegacyHeight(t *testing.T) {
 			  WHERE e->>'type' = 'bze.tradebin.OrderCreateMessageEvent'))
 		FROM explorer.messages ORDER BY msg_index`),
 		"current type URL and module, the decoded body, and the renamed typed event with its JSON values decoded")
-	assert.Equal(t, []string{"10", "10"}, queryStrings(t, db,
+	assert.Equal(t, []string{"1", "1"}, queryStrings(t, db,
 		`SELECT jsonb_array_length(events)::text FROM explorer.messages ORDER BY msg_index`),
-		"each message holds exactly its own events, split by the reconstructed msg_index")
+		"each message holds exactly its own order event, split by the reconstructed msg_index "+
+			"(its message, transfer and coin events are not stored)")
 }

@@ -70,6 +70,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"schema", "notify_trigger", "history_tables", "state_tables", "operational", "functions", "dex_lookups", "ibc_lookups", "order_attribution", "daily_stats_lookups", "snapshot_sources", "checkpoint_resume", "dropped_proposals", "failed_txs_index", "denom_pairs_validator_logos",
 		"ibc_client_status_chain_status",
 		"order_cancel_lookup",
+		"lean_message_events",
 	}, idents)
 }
 

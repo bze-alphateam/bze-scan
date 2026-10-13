@@ -24,6 +24,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/serve"
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
 
@@ -75,6 +76,7 @@ func TestAPI(t *testing.T) {
 		"tx list paginates and filters": testTxListPaginatesAndFilters,
 		"block detail":                  testBlockDetailMatchesTheIndex,
 		"tx detail":                     testTxDetailMatchesTheIndex,
+		"tx events":                     testTxEventsKeepWhatThePageReads,
 		"transfers and block events":    testTransfersOnTheDetailPages,
 		"block transfers route":         testBlockTransfersListEveryRow,
 		"list items summarise":          testListItemsCarryTheFirstMessageAndGas,
@@ -234,6 +236,36 @@ func testTxDetailMatchesTheIndex(t *testing.T, base string, ix *indexer) {
 	require.Len(t, failed.Messages, 1)
 	assert.Equal(t, "/bze.tradebin.MsgCreateOrder", failed.Messages[0].TypeURL)
 	assert.JSONEq(t, `[]`, string(failed.Messages[0].Events))
+}
+
+// testTxEventsKeepWhatThePageReads walks every indexed transaction: no
+// message event the explorer keeps elsewhere comes back, and the events the
+// transaction page reads still do.
+func testTxEventsKeepWhatThePageReads(t *testing.T, base string, ix *indexer) {
+	seen := map[string]bool{}
+	for _, hash := range queryStrings(t, ix.db, `SELECT hash FROM explorer.transactions`) {
+		tx := into[dto.Tx](t, fetch(t, base+"/txs/"+hash))
+		for _, m := range tx.Messages {
+			var events []struct {
+				Type  string         `json:"type"`
+				Attrs map[string]any `json:"attrs"`
+			}
+			require.NoError(t, json.Unmarshal(m.Events, &events))
+			for _, ev := range events {
+				seen[ev.Type] = true
+				assert.NotContains(t, transform.UnstoredEventTypes, ev.Type, "tx %s", hash)
+				for _, a := range transform.UnstoredEventAttributes[ev.Type] {
+					assert.NotContains(t, ev.Attrs, a, "tx %s %s", hash, ev.Type)
+				}
+			}
+		}
+	}
+	for _, typ := range []string{
+		"bze.tradebin.OrderCreateMessageEvent", "bze.tradebin.OrderCancelMessageEvent",
+		"fungible_token_packet", "send_packet", "update_client",
+	} {
+		assert.True(t, seen[typ], "%s still served", typ)
+	}
 }
 
 func testErrors(t *testing.T, base string, _ *indexer) {

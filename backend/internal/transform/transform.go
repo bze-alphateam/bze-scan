@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -141,7 +142,8 @@ type Message struct {
 	Sender   string
 	Module   string
 	// Events are the transaction's events carrying this message's msg_index,
-	// in emission order; empty for a failed transaction.
+	// in emission order, without the UnstoredEventTypes and
+	// UnstoredEventAttributes; empty for a failed transaction.
 	Events []Event
 	// Body is the message as proto JSON; nil when it could not be decoded.
 	Body json.RawMessage
@@ -392,6 +394,11 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i in
 	if err := txActivity(ents, &tx, ents.Messages[firstMsg:], res.Events); err != nil {
 		return err
 	}
+	// Account activity reads the full events above; only the stored copy
+	// leaves out what other tables already hold.
+	for k := firstMsg; k < len(ents.Messages); k++ {
+		ents.Messages[k].Events = keptEvents(ents.Messages[k].Events)
+	}
 	return txTransfers(ents, b.Height, i, res)
 }
 
@@ -410,6 +417,40 @@ func eventsByMsgIndex(events []node.Event) map[int][]node.Event {
 			continue
 		}
 		out[j] = append(out[j], ev)
+	}
+	return out
+}
+
+// UnstoredEventTypes are the message event types left out of
+// explorer.messages.events because the explorer keeps them elsewhere:
+// message (the type_url, module and sender columns), and transfer,
+// coin_spent and coin_received (the explorer.transfers rows built from them).
+// `bze-scan reindex --heights` restores them should a feature need them.
+var UnstoredEventTypes = []string{"message", "transfer", "coin_spent", "coin_received"}
+
+// UnstoredEventAttributes are the attributes, by event type, left out of the
+// stored events: update_client's header, a deprecated hex copy of the header
+// the message body carries already.
+var UnstoredEventAttributes = map[string][]string{"update_client": {"header"}}
+
+// keptEvents returns events without the unstored types and attributes,
+// leaving the input as it is.
+func keptEvents(events []Event) []Event {
+	out := make([]Event, 0, len(events))
+	for _, ev := range events {
+		if slices.Contains(UnstoredEventTypes, ev.Type) {
+			continue
+		}
+		if drop := UnstoredEventAttributes[ev.Type]; len(drop) > 0 {
+			attrs := make(map[string]any, len(ev.Attrs))
+			for k, v := range ev.Attrs {
+				if !slices.Contains(drop, k) {
+					attrs[k] = v
+				}
+			}
+			ev = Event{Type: ev.Type, Attrs: attrs}
+		}
+		out = append(out, ev)
 	}
 	return out
 }

@@ -414,7 +414,13 @@ bze-scan migrate version    # print the current version (0 when none)
   row per module account the chain's app declares (the address derived as
   `authtypes.NewModuleAddress` does) and the `known` accounts (none yet);
   seed rows no longer listed are deleted. The state sync adds the
-  `validator_owner` rows.
+  `validator_owner` rows. The fourth, `message_events`, runs while
+  migration 000018's `explorer.pending_rewrites` row exists: it filters the
+  stored `explorer.messages.events` through `explorer.kept_events` (see
+  "Transactions and messages"), one UPDATE per 1,000,000 heights, each its
+  own transaction (a migration file runs in one), then deletes the row; an
+  interrupted run resumes at the next `up`, and once the row is gone the
+  step reads nothing.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -571,6 +577,18 @@ registers by hand. `go.mod` repeats the chain's `replace` directives.
   and `body` = the message as proto JSON. A failed transaction's messages
   have a body and no events. An authz `MsgExec` is one row whose body carries
   the nested messages.
+- `events` leaves out what the explorer keeps elsewhere
+  (`transform.UnstoredEventTypes` / `UnstoredEventAttributes`, mirrored by
+  the SQL function `explorer.kept_events`): the `message` event (the
+  `type_url`, `module` and `sender` columns), `transfer`, `coin_spent` and
+  `coin_received` (the `explorer.transfers` rows built from them) and the
+  `header` attribute of `update_client` (a hex copy of the header the body
+  carries). They are dropped only from what is stored: transfers and account
+  activity read the full events first. Every other event is kept, so a
+  future feature can read it without a reindex. Should one of the dropped
+  ones be needed, find the heights of the messages concerned
+  (`SELECT DISTINCT height FROM explorer.messages WHERE type_url = …`), stop
+  dropping it and run `bze-scan reindex --heights …` over them.
 - Attribute values of typed events (`bze.*`) are JSON-decoded once, here;
   SDK attribute values stay strings. Coin strings such as
   `70255ubze,12ibc/ED07…` are split by `chain.ParseCoins` (amount = leading

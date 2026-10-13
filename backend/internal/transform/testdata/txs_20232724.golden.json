@@ -38,14 +38,6 @@
       "Module": "cointrunk",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.cointrunk.MsgAddArticle",
-            "module": "cointrunk",
-            "sender": "bze1edwj9fhuugzggcv5magm9j4vnur4hzsf26s2ws"
-          }
-        },
-        {
           "type": "bze.cointrunk.ArticleAddedEvent",
           "attrs": {
             "article_id": "0",

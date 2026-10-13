@@ -74,14 +74,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -106,14 +98,6 @@
       "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "Module": "tradebin",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
         {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
@@ -140,14 +124,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -172,14 +148,6 @@
       "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "Module": "tradebin",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
         {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
@@ -206,14 +174,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -238,14 +198,6 @@
       "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "Module": "tradebin",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
         {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
@@ -272,14 +224,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -304,14 +248,6 @@
       "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "Module": "tradebin",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
         {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
@@ -338,14 +274,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -371,14 +299,6 @@
       "Module": "tradebin",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
-        {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {
             "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
@@ -403,14 +323,6 @@
       "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "Module": "tradebin",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgCancelOrder",
-            "module": "tradebin",
-            "sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-          }
-        },
         {
           "type": "bze.tradebin.OrderCancelMessageEvent",
           "attrs": {

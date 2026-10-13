@@ -39,42 +39,6 @@
       "Module": "distribution",
       "Events": [
         {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
-            "module": "distribution",
-            "sender": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "29072284ubze",
-            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "29072284ubze",
-            "receiver": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "29072284ubze",
-            "recipient": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
           "type": "withdraw_rewards",
           "attrs": {
             "amount": "29072284ubze",
@@ -96,42 +60,6 @@
       "Sender": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
       "Module": "distribution",
       "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission",
-            "module": "distribution",
-            "sender": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "105900120ubze",
-            "spender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "105900120ubze",
-            "receiver": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "105900120ubze",
-            "recipient": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg"
-          }
-        },
         {
           "type": "withdraw_commission",
           "attrs": {

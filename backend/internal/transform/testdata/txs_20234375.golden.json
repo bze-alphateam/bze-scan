@@ -36,72 +36,7 @@
       "TypeURL": "/bze.tradebin.MsgFillOrders",
       "Sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "Module": "tradebin",
-      "Events": [
-        {
-          "type": "message",
-          "attrs": {
-            "action": "/bze.tradebin.MsgFillOrders",
-            "module": "tradebin",
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "100000ubze",
-            "spender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "100000ubze",
-            "receiver": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "100000ubze",
-            "recipient": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_spent",
-          "attrs": {
-            "amount": "29112259ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2",
-            "spender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "coin_received",
-          "attrs": {
-            "amount": "29112259ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2",
-            "receiver": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp"
-          }
-        },
-        {
-          "type": "transfer",
-          "attrs": {
-            "amount": "29112259ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2",
-            "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        },
-        {
-          "type": "message",
-          "attrs": {
-            "sender": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y"
-          }
-        }
-      ],
+      "Events": [],
       "Body": {
         "creator": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
         "market_id": "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2/ubze",
