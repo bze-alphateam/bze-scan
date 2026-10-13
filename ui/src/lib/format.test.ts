@@ -13,6 +13,7 @@ import {
   relativeTime,
   shortAddress,
   shortHash,
+  shortOrderId,
 } from "./format";
 
 describe("formatAmount", () => {
@@ -88,6 +89,15 @@ describe("shortHash and shortAddress", () => {
     expect(shortAddress("bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a")).toBe("bze1q8f…xu4a");
     expect(shortAddress("bzevaloper1acdefghjklmnpqrstuvwxyz0023")).toBe("bzevaloper1acd…0023");
     expect(shortAddress("bze1abcdefgh")).toBe("bze1abcdefgh");
+  });
+});
+
+describe("shortOrderId", () => {
+  it("keeps ids up to 8 characters and trims longer ones to the first character and the last 7", () => {
+    expect(shortOrderId("1042")).toBe("1042");
+    expect(shortOrderId("12345678")).toBe("12345678");
+    expect(shortOrderId("123456789")).toBe("1…3456789");
+    expect(shortOrderId("000000000000000006714623")).toBe("0…6714623");
   });
 });
 

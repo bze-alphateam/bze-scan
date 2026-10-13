@@ -5,6 +5,7 @@ import { LuClock, LuExternalLink } from "react-icons/lu";
 
 import type { Coin, Order, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
+import { shortOrderId } from "@/lib/format";
 
 import { Account, accountName, coin, coinText, Coins, Fields, obj, str, transfersOf } from "./common";
 import {
@@ -72,10 +73,21 @@ function Makers({ makers, ctx }: { makers: string[]; ctx: RenderContext }) {
   );
 }
 
+/** `#0…6714623`, the full id on hover. */
+function OrderId({ id }: { id: string }) {
+  return (
+    <Text as="span" fontFamily="mono" title={id} data-testid="order-id">
+      #{shortOrderId(id)}
+    </Text>
+  );
+}
+
 function orderLink(o: Order) {
   return (
     <Link asChild>
-      <NextLink href={`/accounts/${encodeURIComponent(o.owner)}?tab=activity`}>order #{o.order_id}</NextLink>
+      <NextLink href={`/accounts/${encodeURIComponent(o.owner)}?tab=activity`}>
+        order <OrderId id={o.order_id} />
+      </NextLink>
     </Link>
   );
 }
@@ -101,7 +113,7 @@ function CancelledLine({ o, ctx }: { o: Order; ctx: RenderContext }) {
   const back = returnedCoin(o);
   return (
     <Text fontSize="sm" data-testid="dex-cancelled">
-      Order #{o.order_id} cancelled
+      Order <OrderId id={o.order_id} /> cancelled
       {back && new BigNumber(back.amount).gt(0) ? `, ${coinText(back, ctx)} returned` : ""}
     </Text>
   );
@@ -261,7 +273,7 @@ const createOrder = renderer({
 
 const cancelOrder = renderer({
   category: "dex",
-  title: (msg, ctx) => `Cancel order #${str(msg, "order_id") ?? "?"} on ${marketName(str(msg, "market_id"), ctx)}`,
+  title: (msg, ctx) => `Cancel order #${shortOrderId(str(msg, "order_id") ?? "?")} on ${marketName(str(msg, "market_id"), ctx)}`,
   counterparty: () => ({ kind: "name", name: DEX_MODULE }),
   reasonFor: (t, msg, ctx) => orderReason(t, msg, ctx, orderSide(str(msg, "order_type"))),
   Body: function CancelOrderBody({ msg, ctx }: BodyProps) {
@@ -275,7 +287,11 @@ const cancelOrder = renderer({
             },
             {
               label: "Order",
-              value: `#${str(msg, "order_id") ?? "?"} · ${str(msg, "order_type") ?? "unknown side"}`,
+              value: (
+                <>
+                  <OrderId id={str(msg, "order_id") ?? "?"} /> · {str(msg, "order_type") ?? "unknown side"}
+                </>
+              ),
             },
           ]}
         />

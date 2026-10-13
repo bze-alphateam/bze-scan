@@ -3,46 +3,34 @@ import { expect, test } from "@playwright/test";
 import { noHorizontalScroll } from "./layout";
 import { mockApi, respond } from "./mock-api";
 
-import stats from "../test/fixtures/api/v1/stats.json";
 import sendTx from "../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
 
 // The mock API answers /stats, /blocks, /txs and /search from their fixtures
 // (query strings ignored): search.json matches Honeycomb and an account.
 const HONEYCOMB = "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c";
 
-const tile = (page: import("@playwright/test").Page, label: string) => page.getByTestId("tile").filter({ hasText: label });
-
 test.describe("home page", () => {
-  test("renders the tiles and both lists, and refreshes the tiles", async ({ page }) => {
-    let height = stats.latest_height;
-    await page.route("**/api/v1/stats", (route) =>
-      route.fulfill({
-        json: { ...stats, latest_height: height },
-        headers: { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
-      }),
-    );
+  test("renders both lists and no figure tiles; the strip carries the figures", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle("BZE Explorer — blocks, transactions and accounts of the BeeZee network, explained in plain terms");
-    await expect(page.getByTestId("tile")).toHaveCount(6);
-    await expect(tile(page, "Latest block")).toContainText("25,120,450");
-    await expect(tile(page, "BZE price")).toContainText("+1.2% today");
+    await expect(page.getByRole("main").getByRole("heading", { level: 2 })).toHaveText(["Latest blocks", "Latest transactions", "Go to"]);
+    await expect(page.getByTestId("tile")).toHaveCount(0);
+    await expect(page.getByRole("complementary", { name: "Network summary" }).getByText("25,120,450")).toBeVisible();
 
     await expect(page.getByTestId("latest-block")).toHaveCount(5);
     await expect(page.getByTestId("latest-block").first().getByRole("link", { name: "25,120,449" })).toBeVisible();
     await expect(page.getByTestId("latest-tx")).toHaveCount(5);
     await expect(page.getByTestId("latest-tx-what").first()).toHaveText("Send 25 BZE to bze1m3k…9ds4");
     await expect(page.getByTestId("latest-tx-parties").nth(1)).toContainText("Honeycomb");
-
-    height += 3;
-    await expect(tile(page, "Latest block")).toContainText("25,120,453", { timeout: 10_000 });
+    await expect(page.getByRole("navigation", { name: "BZE apps" }).getByRole("link")).toHaveCount(7);
     await noHorizontalScroll(page);
   });
 
-  test("keeps the page when the stats route fails", async ({ page }) => {
+  test("keeps the lists when the stats route fails", async ({ page }) => {
     await mockApi(page, { "v1/stats": respond(500, { error: { code: "internal", message: "boom" } }) });
     await page.goto("/");
-    await expect(tile(page, "Latest block")).toContainText("—", { timeout: 15_000 });
     await expect(page.getByTestId("latest-block")).toHaveCount(5);
+    await expect(page.getByTestId("latest-tx")).toHaveCount(5);
   });
 });
 

@@ -107,6 +107,14 @@ export function shortAddress(address: string): string {
   return address.length <= head.length + 5 ? address : `${head}…${address.slice(-4)}`;
 }
 
+/**
+ * A DEX order id as lists show it: ids longer than 8 characters keep the first
+ * character and the last 7 (`0…6714623`); show the full id on hover.
+ */
+export function shortOrderId(id: string): string {
+  return id.length <= 8 ? id : `${id[0]}…${id.slice(-7)}`;
+}
+
 const RELATIVE_STEPS: [number, Intl.RelativeTimeFormatUnit][] = [
   [60, "second"],
   [60, "minute"],

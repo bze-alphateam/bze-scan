@@ -6,7 +6,7 @@ test.describe("site shell", () => {
   test("renders the hero, the footer and no horizontal scroll", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Explore the BeeZee network" })).toBeVisible();
-    await expect(page.getByTestId("tile")).toHaveCount(6);
+    await expect(page.getByTestId("latest-block")).toHaveCount(5);
 
     const footer = page.getByRole("contentinfo");
     await expect(footer.getByText("BZE Explorer · chain beezee-1")).toBeVisible();
