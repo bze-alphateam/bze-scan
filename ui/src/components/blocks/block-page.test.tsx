@@ -160,7 +160,12 @@ describe("BlockPage", () => {
 
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(screen.getByTestId("block-not_produced")).toHaveTextContent("Not produced yet");
+    expect(screen.getByRole("heading", { level: 1, name: `Block ${ahead.toLocaleString("en-US")}` })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("as soon as it is produced");
+    // The Future block estimator in place, By block height with this height, once /stats answers.
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    expect(screen.getByRole("tab", { name: "By block height" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("textbox", { name: "Block height" })).toHaveValue(ahead.toLocaleString("en-US"));
     const first = fetchBlock.mock.calls.length;
 
     await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS));
