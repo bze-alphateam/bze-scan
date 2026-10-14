@@ -118,6 +118,95 @@ func TestCommit(t *testing.T) {
 	require.Len(t, c.Signatures, 22)
 	assert.Equal(t, node.BlockIDFlagCommit, c.Signatures[0].BlockIDFlag)
 	assert.Equal(t, "101DF52F658F4EF69DA0333BC4FB519E36DC54CA", c.Signatures[0].ValidatorAddress)
+	assert.Equal(t, time.Date(2026, 10, 8, 15, 33, 38, 155384191, time.UTC), c.Time.UTC())
+	assert.Equal(t, time.Date(2026, 10, 8, 15, 33, 43, 964380559, time.UTC), c.Signatures[0].Timestamp.UTC())
+}
+
+func TestCommitAbsentSlot(t *testing.T) {
+	// The first block after the v8.1.0 upgrade's halt: seven validators
+	// were not back.
+	c, _, err := node.New(fakenode.New(t).URL).Commit(context.Background(), 22551811)
+	require.NoError(t, err)
+	assert.Equal(t, 1, c.Signatures[0].BlockIDFlag)
+	assert.Empty(t, c.Signatures[0].ValidatorAddress)
+	assert.True(t, c.Signatures[0].Timestamp.IsZero())
+	signed := 0
+	for _, s := range c.Signatures {
+		if s.BlockIDFlag == node.BlockIDFlagCommit {
+			signed++
+		}
+	}
+	assert.Equal(t, 16, signed)
+}
+
+func TestConsensusState(t *testing.T) {
+	// Recorded on mainnet mid-round: 19 prevotes and 13 precommits for the
+	// block at 25085046, round 0; round 1 is all nil-Vote.
+	n := fakenode.New(t)
+	cs, raw, err := node.New(n.URL).ConsensusState(context.Background())
+	require.NoError(t, err)
+	assert.NotEmpty(t, raw)
+	assert.Equal(t, int64(25085046), cs.Height)
+	assert.Equal(t, int32(0), cs.Round)
+	assert.Empty(t, cs.Unparsed)
+	require.Len(t, cs.Votes, 32)
+	prevotes, precommits := 0, 0
+	for _, v := range cs.Votes {
+		assert.Equal(t, int64(25085046), v.Height)
+		assert.False(t, v.Nil)
+		switch v.Type {
+		case node.Prevote:
+			prevotes++
+		case node.Precommit:
+			precommits++
+		}
+	}
+	assert.Equal(t, 19, prevotes)
+	assert.Equal(t, 13, precommits)
+	assert.Equal(t, node.RoundVote{
+		ValidatorIndex: 0, AddressPrefix: "2217EC92A4E7", Height: 25085046, Round: 0, Type: node.Prevote,
+		Timestamp: time.Date(2026, 10, 14, 12, 11, 37, 668402387, time.UTC),
+	}, cs.Votes[0])
+}
+
+func TestConsensusStateSkipsWhatIsNotAVote(t *testing.T) {
+	n := fakenode.New(t)
+	n.SetConsensusState([]byte(`{"jsonrpc":"2.0","id":-1,"result":{"round_state":{"height/round/step":"7/2/6",` +
+		`"height_vote_set":[{"round":0,"prevotes":["nil-Vote","Vote{1:AB12 7/00/SIGNED_MSG_TYPE_PREVOTE(Prevote)  0A 00 @ 2026-10-13T10:00:00.5Z}"],` +
+		`"precommits":["something else","nil-Vote"]},` +
+		`{"round":2,"prevotes":["nil-Vote","nil-Vote"],"precommits":["Vote{0:CD34 7/02/SIGNED_MSG_TYPE_PRECOMMIT(Precommit) FFEE 0B 00 @ 2026-10-13T10:01:00Z}","nil-Vote"]}]}}}`))
+	cs, _, err := node.New(n.URL).ConsensusState(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), cs.Height)
+	assert.Equal(t, int32(2), cs.Round)
+	assert.Equal(t, []string{"something else"}, cs.Unparsed)
+	assert.Equal(t, []node.RoundVote{
+		{ValidatorIndex: 1, AddressPrefix: "AB12", Height: 7, Round: 0, Type: node.Prevote, Nil: true,
+			Timestamp: time.Date(2026, 10, 13, 10, 0, 0, 500_000_000, time.UTC)},
+		{ValidatorIndex: 0, AddressPrefix: "CD34", Height: 7, Round: 2, Type: node.Precommit,
+			Timestamp: time.Date(2026, 10, 13, 10, 1, 0, 0, time.UTC)},
+	}, cs.Votes)
+}
+
+func TestParseVote(t *testing.T) {
+	at := time.Date(2026, 10, 13, 10, 0, 0, 0, time.UTC)
+	v, ok := node.ParseVote(fakenode.Vote(4, "2217EC92A4E73BA79E86E90FA6C4180429EB7C41", 22551811, at))
+	require.True(t, ok)
+	assert.Equal(t, node.RoundVote{ValidatorIndex: 4, AddressPrefix: "2217EC92A4E7", Height: 22551811, Type: node.Prevote,
+		Nil: true, Timestamp: at}, v)
+	for _, s := range []string{"nil-Vote", "", "Vote{x:AB 1/00/SIGNED_MSG_TYPE_PREVOTE(Prevote)  0A 00 @ 2026-10-13T10:00:00Z}",
+		"Vote{1:AB 1/00/SIGNED_MSG_TYPE_PROPOSAL(Proposal)  0A 00 @ 2026-10-13T10:00:00Z}",
+		"Vote{1:AB 1/00/SIGNED_MSG_TYPE_PREVOTE(Prevote)  0A 00 @ yesterday}"} {
+		_, ok := node.ParseVote(s)
+		assert.False(t, ok, s)
+	}
+}
+
+func TestConsensusStateRejectsABadPosition(t *testing.T) {
+	n := fakenode.New(t)
+	n.SetConsensusState([]byte(`{"jsonrpc":"2.0","id":-1,"result":{"round_state":{"height/round/step":"7","height_vote_set":[]}}}`))
+	_, _, err := node.New(n.URL).ConsensusState(context.Background())
+	assert.ErrorContains(t, err, "height/round/step")
 }
 
 func TestValidators(t *testing.T) {

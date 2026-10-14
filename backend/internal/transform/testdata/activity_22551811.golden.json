@@ -1,0 +1,1347 @@
+[
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": -1,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_cancel",
+    "is_signer": false,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+        "amount": "4966254"
+      },
+      {
+        "denom": "ubze",
+        "amount": "33780867"
+      }
+    ],
+    "msg_types": [],
+    "details": [
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "231689",
+          "id": "000000000000000004237862",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "3"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "657650",
+          "id": "000000000000000004237861",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "6"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "733900",
+          "id": "000000000000000004237860",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "9"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "316378",
+          "id": "000000000000000004237859",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "108"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "712630",
+          "id": "000000000000000004237858",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "105"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "320099",
+          "id": "000000000000000004237857",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "102"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "255551",
+          "id": "000000000000000004237856",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "99"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "835045",
+          "id": "000000000000000004237855",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "96"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "817371",
+          "id": "000000000000000004237854",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "93"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "996921",
+          "id": "000000000000000004237853",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "90"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderCanceledEvent",
+        "attrs": {
+          "amount": "242784",
+          "id": "000000000000000004237852",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "87"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderExecutedEvent",
+        "attrs": {
+          "amount": "469475",
+          "id": "000000000000000004237840",
+          "maker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "sell",
+          "price": "48",
+          "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+        }
+      },
+      {
+        "type": "bze.tradebin.OrderSavedEvent",
+        "attrs": {
+          "amount": "469475",
+          "id": "000000000000000004237863",
+          "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+          "mode": "EndBlock",
+          "order_type": "buy",
+          "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+          "price": "48"
+        }
+      }
+    ]
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 0,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_cancel",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 1,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_cancel",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 2,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 3,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1gk8k0u3vkt65xjc82l8qryf44pxp68dcgc5uq8",
+    "height": 22551811,
+    "tx_index": 4,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "staking",
+    "kind": "claim_rewards",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "bzevaloper1gk8k0u3vkt65xjc82l8qryf44pxp68dcsuth5c",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "75994"
+      }
+    ],
+    "msg_types": [
+      "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+      "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 5,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 6,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 7,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-29250"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 8,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 9,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 10,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 11,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 12,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 13,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 14,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 15,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 16,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 17,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 18,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 19,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 20,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-17071"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 21,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 22,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 23,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 24,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 25,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 26,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 27,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 28,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1n4qjms7gdam0k8f06eadgn3ecggvwy042casm5",
+    "height": 22551811,
+    "tx_index": 29,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_swap",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011",
+        "amount": "-16665987"
+      },
+      {
+        "denom": "ubze",
+        "amount": "1136819851"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgMultiSwap"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze1hywehmyk26d0hcw9ekdkggthjuedmpkj3fgauh",
+    "height": 22551811,
+    "tx_index": 30,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_swap",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "amount": "2691817"
+      },
+      {
+        "denom": "ubze",
+        "amount": "-3943071101"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgMultiSwap"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 31,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 32,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 33,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 34,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 35,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_order",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-22651871"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 36,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 37,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 38,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 39,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 40,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 41,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 42,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 43,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 44,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 45,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 46,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 47,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 48,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "dex",
+    "kind": "dex_order",
+    "is_signer": true,
+    "success": true,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-22651871"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCreateOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 49,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 50,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 51,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 52,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 53,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551811,
+    "tx_index": 54,
+    "time": "2026-04-28T15:52:31.683549605Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  }
+]
