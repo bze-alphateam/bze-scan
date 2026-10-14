@@ -24,6 +24,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/route"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
@@ -134,8 +135,9 @@ func (j *Job) Run(ctx context.Context, p Plan) (Result, error) {
 	earliest := j.earliest(ctx)
 	failures := &failureRecorder{Writer: j.deps.Pipeline.Writer}
 	deps := j.deps.Pipeline
-	deps.Archive = &routed{local: j.deps.Local, remote: deps.Archive, earliest: earliest}
-	deps.ArchiveRetry = &routed{local: j.deps.Local, remote: deps.ArchiveRetry, earliest: earliest}
+	hasLocal := j.deps.Local != nil
+	deps.Archive = routed{route.Route[backfill.Node]{Local: j.deps.Local, Remote: deps.Archive, HasLocal: hasLocal, Earliest: earliest}}
+	deps.ArchiveRetry = routed{route.Route[backfill.Node]{Local: j.deps.Local, Remote: deps.ArchiveRetry, HasLocal: hasLocal, Earliest: earliest}}
 	deps.Writer = failures
 
 	cp := backfill.Checkpoint{
@@ -210,44 +212,31 @@ func (j *Job) earliest(ctx context.Context) int64 {
 }
 
 // routed reads a height from the local node when it has it, else from
-// remote. A height the local node pruned meanwhile goes to remote too.
+// the archive (route.Via).
 type routed struct {
-	local    backfill.Node
-	remote   backfill.Node
-	earliest int64
-}
-
-func via[T any](r *routed, h int64, call func(backfill.Node) (T, []byte, error)) (T, []byte, error) {
-	if r.local == nil || h < r.earliest {
-		return call(r.remote)
-	}
-	v, raw, err := call(r.local)
-	if errors.Is(err, node.ErrPruned) {
-		return call(r.remote)
-	}
-	return v, raw, err
+	r route.Route[backfill.Node]
 }
 
 // Status answers when every node a height may be read from answers.
-func (r *routed) Status(ctx context.Context) (*node.Status, []byte, error) {
-	if r.local != nil {
-		if _, _, err := r.local.Status(ctx); err != nil {
+func (r routed) Status(ctx context.Context) (*node.Status, []byte, error) {
+	if r.r.HasLocal {
+		if _, _, err := r.r.Local.Status(ctx); err != nil {
 			return nil, nil, err
 		}
 	}
-	return r.remote.Status(ctx)
+	return r.r.Remote.Status(ctx)
 }
 
-func (r *routed) Block(ctx context.Context, h int64) (*node.Block, []byte, error) {
-	return via(r, h, func(n backfill.Node) (*node.Block, []byte, error) { return n.Block(ctx, h) })
+func (r routed) Block(ctx context.Context, h int64) (*node.Block, []byte, error) {
+	return route.Via(r.r, h, func(n backfill.Node) (*node.Block, []byte, error) { return n.Block(ctx, h) })
 }
 
-func (r *routed) BlockResults(ctx context.Context, h int64) (*node.BlockResults, []byte, error) {
-	return via(r, h, func(n backfill.Node) (*node.BlockResults, []byte, error) { return n.BlockResults(ctx, h) })
+func (r routed) BlockResults(ctx context.Context, h int64) (*node.BlockResults, []byte, error) {
+	return route.Via(r.r, h, func(n backfill.Node) (*node.BlockResults, []byte, error) { return n.BlockResults(ctx, h) })
 }
 
-func (r *routed) Commit(ctx context.Context, h int64) (*node.Commit, []byte, error) {
-	return via(r, h, func(n backfill.Node) (*node.Commit, []byte, error) { return n.Commit(ctx, h) })
+func (r routed) Commit(ctx context.Context, h int64) (*node.Commit, []byte, error) {
+	return route.Via(r.r, h, func(n backfill.Node) (*node.Commit, []byte, error) { return n.Commit(ctx, h) })
 }
 
 // failureRecorder passes everything to the writer and remembers the heights
