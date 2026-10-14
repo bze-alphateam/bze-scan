@@ -1,6 +1,6 @@
 // Package node is the CometBFT RPC client of the backend. It calls the
-// by-height routes only (/status, /block, /block_results, /commit, and
-// /abci_query at a height), in the GET URI form, and never /tx, /tx_search or
+// by-height routes only (/status, /block, /block_results, /commit,
+// /validators and /abci_query at a height), in the GET URI form, and never /tx, /tx_search or
 // /block_search.
 //
 // Every call returns the parsed response and the raw response body: the raw
@@ -146,6 +146,37 @@ type CommitSig struct {
 	ValidatorAddress string `json:"validator_address"`
 }
 
+// ValidatorsPerPage is the largest page /validators answers (CometBFT caps
+// per_page at 100).
+const ValidatorsPerPage = 100
+
+// Validators is one page of /validators: the consensus validator set that
+// signs the block at Height.
+type Validators struct {
+	Height     int64
+	Validators []Validator
+	// Total is the size of the whole set, every page.
+	Total int
+}
+
+// Validator is one entry of /validators.
+type Validator struct {
+	// Address is the consensus address, upper-case hex.
+	Address string `json:"address"`
+	PubKey  PubKey `json:"pub_key"`
+	// VotingPower is the consensus power: the bonded tokens over the
+	// power reduction (10^6 on BZE), truncated.
+	VotingPower int64 `json:"voting_power,string"`
+}
+
+// PubKey is a consensus public key as CometBFT encodes it in JSON.
+type PubKey struct {
+	// Type is tendermint/PubKeyEd25519 on BZE.
+	Type string `json:"type"`
+	// Value is the key, base64.
+	Value string `json:"value"`
+}
+
 // Status calls /status.
 func (c *Client) Status(ctx context.Context) (*Status, []byte, error) {
 	var res struct {
@@ -261,6 +292,28 @@ func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, err
 	return &Commit{Height: cm.Height, Signatures: cm.Signatures}, raw, nil
 }
 
+// Validators calls /validators?height=height&page=page&per_page=perPage:
+// one page (from 1) of the validator set of the block at height.
+func (c *Client) Validators(ctx context.Context, height int64, page, perPage int) (*Validators, []byte, error) {
+	var res struct {
+		BlockHeight int64       `json:"block_height,string"`
+		Validators  []Validator `json:"validators"`
+		Total       int         `json:"total,string"`
+	}
+	q := url.Values{}
+	q.Set("height", strconv.FormatInt(height, 10))
+	q.Set("page", strconv.Itoa(page))
+	q.Set("per_page", strconv.Itoa(perPage))
+	raw, err := c.callQuery(ctx, "validators", height, q, &res)
+	if err != nil {
+		return nil, nil, err
+	}
+	if res.BlockHeight != height {
+		return nil, nil, fmt.Errorf("validators %d: node answered height %d", height, res.BlockHeight)
+	}
+	return &Validators{Height: res.BlockHeight, Validators: res.Validators, Total: res.Total}, raw, nil
+}
+
 // call GETs route (with ?height= when height > 0), decodes the JSON-RPC
 // envelope's result into out and returns the raw body.
 func (c *Client) call(ctx context.Context, route string, height int64, out any) ([]byte, error) {
@@ -367,7 +420,10 @@ func newRPCError(route string, height int64, code int, message, data string) *RP
 	switch {
 	case strings.Contains(data, "must be less than or equal to the current blockchain height"):
 		e.kind = ErrAboveTip
-	case strings.Contains(data, "is not available, lowest height is"):
+	case strings.Contains(data, "is not available, lowest height is"),
+		// /validators below the heights whose validator sets the state
+		// store keeps.
+		strings.Contains(data, "could not find validator set for height"):
 		e.kind = ErrPruned
 	}
 	return e

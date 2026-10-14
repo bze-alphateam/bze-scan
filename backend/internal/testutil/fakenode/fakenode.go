@@ -11,6 +11,8 @@
 //	<height>/block_results.json   /block_results?height=<height>
 //	<height>/commit.json          /commit?height=<height>
 //	                              (a height may hold only some of the three)
+//	<height>/validators.<p>.json  /validators?height=<height>&page=<p>&per_page=100
+//	                              (scripts/record-fixtures.sh, VALSETS; only per_page=100 is recorded)
 //	abci/<height>/<file>          /abci_query?path="/<svc>/<Method>"&data=0x<hex>&height=<height>,
 //	                              <file> = <svc>.<Method>.<hex>.json (scripts/record-fixtures.sh, ABCI)
 //
@@ -46,6 +48,7 @@ const (
 	RouteBlockResults = "/block_results"
 	RouteCommit       = "/commit"
 	RouteABCIQuery    = "/abci_query"
+	RouteValidators   = "/validators"
 )
 
 var byHeightFiles = map[string]string{
@@ -310,6 +313,11 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	file, ok := byHeightFiles[route]
+	if route == RouteValidators {
+		if file, ok = validatorsFile(w, r); !ok {
+			return
+		}
+	}
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -341,6 +349,25 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// validatorsFile is the fixture file of a /validators page; false after
+// answering a request no fixture can match.
+func validatorsFile(w http.ResponseWriter, r *http.Request) (string, bool) {
+	q := r.URL.Query()
+	if pp := q.Get("per_page"); pp != "100" {
+		http.Error(w, "fakenode: /validators is recorded at per_page=100 only, not "+pp, http.StatusBadRequest)
+		return "", false
+	}
+	page := q.Get("page")
+	if page == "" {
+		page = "1"
+	}
+	if p, err := strconv.Atoi(page); err != nil || p <= 0 {
+		http.Error(w, "page must be a positive integer", http.StatusBadRequest)
+		return "", false
+	}
+	return "validators." + page + ".json", true
 }
 
 // ABCIFile is the fixture file of an abci_query: abci/<height>/<svc>.<Method>.<hex>.json.

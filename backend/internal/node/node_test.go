@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,33 @@ func TestCommit(t *testing.T) {
 	assert.Equal(t, "101DF52F658F4EF69DA0333BC4FB519E36DC54CA", c.Signatures[0].ValidatorAddress)
 }
 
+func TestValidators(t *testing.T) {
+	n := fakenode.New(t)
+	v, raw, err := node.New(n.URL).Validators(context.Background(), 23821226, 1, node.ValidatorsPerPage)
+	require.NoError(t, err)
+
+	want, err := os.ReadFile("../testutil/fakenode/testdata/23821226/validators.1.json")
+	require.NoError(t, err)
+	assert.Equal(t, want, raw)
+
+	assert.Equal(t, int64(23821226), v.Height)
+	assert.Equal(t, 23, v.Total)
+	require.Len(t, v.Validators, 23)
+	assert.Equal(t, node.Validator{
+		Address:     "908785D2A4D25B062E669AAF65D3AB0727C92494",
+		PubKey:      node.PubKey{Type: "tendermint/PubKeyEd25519", Value: "a8fkGHNvPGZI6Q2P+n+6IDAIZ5UpPH+/5HzWbaFjsW8="},
+		VotingPower: 9656470,
+	}, v.Validators[0])
+}
+
+func TestValidatorsRejectsAnotherHeight(t *testing.T) {
+	d := &mockDoer{body: `{"jsonrpc":"2.0","id":-1,"result":{"block_height":"7","validators":[],"count":"0","total":"0"}}`}
+	_, _, err := node.NewWithDoer("http://node", d).Validators(context.Background(), 8, 2, 50)
+	require.ErrorContains(t, err, "validators 8: node answered height 7")
+	require.Len(t, d.reqs, 1)
+	assert.Equal(t, "/validators?height=8&page=2&per_page=50", d.reqs[0].URL.RequestURI())
+}
+
 func TestAboveTipError(t *testing.T) {
 	n := fakenode.New(t)
 	c := node.New(n.URL)
@@ -200,12 +228,15 @@ func TestRequestsByHeightOnly(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = c.Commit(ctx, fixtureHeight)
 	require.NoError(t, err)
+	_, _, err = c.Validators(ctx, 23821226, 1, node.ValidatorsPerPage)
+	require.NoError(t, err)
 
 	assert.Equal(t, []string{
 		"/status",
 		"/block?height=24998316",
 		"/block_results?height=24998316",
 		"/commit?height=24998316",
+		"/validators?height=23821226&page=1&per_page=100",
 	}, paths)
 }
 
@@ -254,6 +285,12 @@ func TestPrunedHeightIsErrPruned(t *testing.T) {
 	_, _, err = c.BlockResults(context.Background(), fixtureHeight)
 	require.ErrorIs(t, err, node.ErrPruned)
 	assert.NotErrorIs(t, err, node.ErrAboveTip)
+}
+
+func TestMissingValidatorSetIsErrPruned(t *testing.T) {
+	d := &mockDoer{body: `{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"could not find validator set for height #12"}}`}
+	_, _, err := node.NewWithDoer("http://node", d).Validators(context.Background(), 12, 1, node.ValidatorsPerPage)
+	require.ErrorIs(t, err, node.ErrPruned)
 }
 
 func TestUnreachableNodeIsErrUnavailable(t *testing.T) {
