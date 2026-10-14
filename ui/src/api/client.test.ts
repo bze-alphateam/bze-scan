@@ -59,6 +59,7 @@ describe("createHttpApi", () => {
     await api.proposalVotes(48, { voter: "validators", limit: 100 });
     await api.proposalVotes(48, { option: "no_with_veto", cursor: "v" });
     await api.proposalDeposits(48, { limit: 100 });
+    await api.proposalNonVoters(45, { limit: 100, cursor: "n" });
     await api.stats();
     await api.params();
     await api.rawBlock(7);
@@ -90,6 +91,7 @@ describe("createHttpApi", () => {
       "/v1/proposals/48/votes?limit=100&voter=validators",
       "/v1/proposals/48/votes?cursor=v&option=no_with_veto",
       "/v1/proposals/48/deposits?limit=100",
+      "/v1/proposals/45/non-voters?cursor=n&limit=100",
       "/v1/stats",
       "/v1/params",
       "/v1/raw/block/7",

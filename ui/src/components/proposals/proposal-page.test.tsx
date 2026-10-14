@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { ChainParams, Page, Proposal, ProposalDeposit, ProposalVote, Stats, Status, TokenSummary, ValidatorList } from "@/api/types";
+import type { ChainParams, Page, Proposal, ProposalDeposit, ProposalNonVoter, ProposalVote, Stats, Status, TokenSummary, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
@@ -12,6 +12,7 @@ import deposits43 from "../../../test/fixtures/api/v1/proposals/43/deposits.json
 import votes43 from "../../../test/fixtures/api/v1/proposals/43/votes.json";
 import p45Json from "../../../test/fixtures/api/v1/proposals/45.json";
 import deposits45 from "../../../test/fixtures/api/v1/proposals/45/deposits.json";
+import nonVoters45 from "../../../test/fixtures/api/v1/proposals/45/non-voters.json";
 import votes45 from "../../../test/fixtures/api/v1/proposals/45/votes.json";
 import p48Json from "../../../test/fixtures/api/v1/proposals/48.json";
 import deposits48 from "../../../test/fixtures/api/v1/proposals/48/deposits.json";
@@ -56,6 +57,7 @@ function api(p: Proposal = p48, extra: Partial<ExplorerApi> = {}): ExplorerApi {
     proposal: () => Promise.resolve(p),
     proposalVotes,
     proposalDeposits: (id) => Promise.resolve(DEPOSITS[id]),
+    proposalNonVoters: () => Promise.resolve(nonVoters45 as Page<ProposalNonVoter>),
     params: () => Promise.resolve(params as ChainParams),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     validators: () => Promise.resolve(validators as ValidatorList),
@@ -202,16 +204,53 @@ describe("ProposalPage", () => {
     expect(await screen.findByRole("tab", { name: "Everyone 3" })).toBeInTheDocument();
     // Voting ended: today's active set is not the one that could vote, so no
     // "of N" and no "did not vote" in the counts (the summary and the tab once
-    // disagreed); the validators that did not vote are still named, as today's set.
+    // disagreed); the validators that did not vote are named from the set the
+    // tally counted, as recorded.
     expect(screen.getByRole("tab", { name: "Validators 1" })).toBeInTheDocument();
-    expect(await screen.findByTestId("not-voted")).toHaveTextContent(/^\d+ of today's active validators did not vote:/);
-    expect(screen.getByTestId("not-voted")).not.toHaveTextContent("their stakers can still vote");
+    const notVoted = await screen.findByTestId("not-voted");
+    expect(notVoted).toHaveTextContent(/^3 of the 4 active validators did not vote:/);
+    expect(notVoted).not.toHaveTextContent("today's");
+    expect(notVoted).not.toHaveTextContent("their stakers can still vote");
+    expect(screen.queryByTestId("non-voters-pending")).not.toBeInTheDocument();
 
     // Indexed votes and a synced turnout: nothing is marked historical.
     expect(await screen.findAllByTestId("validator-vote")).toHaveLength(1);
     expect(screen.queryByTestId("historical-turnout")).not.toBeInTheDocument();
     expect(screen.queryByTestId("historical-vote")).not.toBeInTheDocument();
     expect(screen.queryByTestId("historical-explainer")).not.toBeInTheDocument();
+  });
+
+  it("names the recorded non-voters, largest power first, with an unknown validator by its consensus address", async () => {
+    renderWithProviders(<ProposalPage id={45} />, { api: api(p45) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    const rows = await within(await screen.findByTestId("not-voted")).findAllByTestId("non-voter");
+    expect(rows.map((r) => r.textContent)).toEqual(["TNThamar Node30.2%", "DFDeep Fields8.1%", "C3B2…0A9F1.2%"]);
+    expect(within(rows[0]).getByRole("link", { name: "Thamar Node" })).toHaveAttribute(
+      "href",
+      "/validators/bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+    );
+    expect(within(rows[2]).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(rows[2]).getByTitle("C3B2A1F0E9D8C7B6A5948372615F4E3D2C1B0A9F")).toBeInTheDocument();
+  });
+
+  it("falls back to today's active set, said so, while the set at the time is not recorded", async () => {
+    const nonVoters = vi.fn();
+    renderWithProviders(<ProposalPage id={45} />, { api: api({ ...p45, active_set: null }, { proposalNonVoters: nonVoters }) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    const notVoted = await screen.findByTestId("not-voted");
+    expect(notVoted).toHaveTextContent(/^2 of today's active validators did not vote:/);
+    expect(within(notVoted).getByTestId("non-voters-pending")).toHaveTextContent("The exact list is being recorded.");
+    expect(within(notVoted).queryByTestId("non-voter")).not.toBeInTheDocument();
+    expect(nonVoters).not.toHaveBeenCalled();
+  });
+
+  it("says every validator of the recorded set voted, without asking for the list", async () => {
+    const nonVoters = vi.fn();
+    const p = { ...p45, active_set: { height: 21512346, size: 4, non_voters_count: 0 } };
+    renderWithProviders(<ProposalPage id={45} />, { api: api(p, { proposalNonVoters: nonVoters }) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    expect(await screen.findByTestId("not-voted")).toHaveTextContent(/^All 4 active validators voted\.$/);
+    expect(nonVoters).not.toHaveBeenCalled();
   });
 
   it("marks what the archive read as historical: the turnout, the votes and the deposit", async () => {

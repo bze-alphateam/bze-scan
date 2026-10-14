@@ -83,6 +83,15 @@ test.describe("proposal page", () => {
 
     await page.getByRole("button", { name: "See every vote" }).click();
     await expect(page.getByTestId("validator-vote")).toHaveCount(1);
+    // Who did not vote, from the set the tally counted.
+    const notVoted = page.getByTestId("not-voted");
+    await expect(notVoted).toContainText("3 of the 4 active validators did not vote:");
+    await expect(notVoted).not.toContainText("today's");
+    await expect(notVoted.getByTestId("non-voter")).toHaveText(["TNThamar Node30.2%", "DFDeep Fields8.1%", "C3B2…0A9F1.2%"]);
+    await expect(notVoted.getByRole("link", { name: "Deep Fields" })).toHaveAttribute(
+      "href",
+      "/validators/bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440",
+    );
     await expect(page.getByTestId("historical-turnout")).toHaveCount(0);
     await expect(page.getByTestId("historical-vote")).toHaveCount(0);
     await expect(page.getByTestId("historical-explainer")).toHaveCount(0);
@@ -97,6 +106,8 @@ test.describe("proposal page", () => {
     const who = page.getByTestId("who-voted");
     await who.getByRole("button", { name: "See every vote" }).click();
     await expect(who.getByTestId("validator-vote").getByRole("link", { name: "historical" })).toHaveAttribute("href", "/blocks/17131436");
+    // No recorded set yet: today's set stands in, said so.
+    await expect(who.getByTestId("non-voters-pending")).toHaveText("The exact list is being recorded.");
     await who.getByRole("tab", { name: "Everyone 27" }).click();
     await expect(who.getByTestId("vote-row")).toHaveCount(3);
     await expect(who.getByTestId("vote-row").getByTestId("historical-vote")).toHaveCount(3);

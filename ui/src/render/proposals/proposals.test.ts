@@ -17,6 +17,7 @@ import {
   endsIn,
   excerpt,
   govRules,
+  isTallied,
   kindLabel,
   metadataView,
   notVoted,
@@ -300,5 +301,12 @@ describe("the proposer's text", () => {
     expect(depositsReturned("rejected", true)).toBe(false);
     expect(depositsReturned("voting_period", false)).toBe(false);
     expect(depositsReturned("dropped", false)).toBe(false);
+  });
+});
+
+describe("isTallied", () => {
+  it("is true only for the proposals whose voting ended in a tally", () => {
+    expect((["passed", "rejected", "failed"] as const).map(isTallied)).toEqual([true, true, true]);
+    expect((["deposit_period", "voting_period", "canceled", "dropped"] as const).map(isTallied)).toEqual([false, false, false, false]);
   });
 });

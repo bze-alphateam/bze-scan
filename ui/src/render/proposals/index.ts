@@ -73,6 +73,9 @@ export function titleStatus(p: Pick<ProposalSummary, "status" | "deposit_end_tim
 
 export const isOpen = (status: ProposalStatus) => status === "deposit_period" || status === "voting_period";
 
+/** Voting ended in a tally (a canceled or dropped proposal never had one): the explorer records who did not vote. */
+export const isTallied = (status: ProposalStatus) => status === "passed" || status === "rejected" || status === "failed";
+
 export const OPTIONS: { option: VoteOption; label: string; tone: Tone }[] = [
   { option: "yes", label: "Yes", tone: "green" },
   { option: "no", label: "No", tone: "red" },

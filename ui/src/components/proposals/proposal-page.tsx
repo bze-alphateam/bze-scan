@@ -12,12 +12,13 @@ import {
   useParams,
   useProposal,
   useProposalDeposits,
+  useProposalNonVoters,
   useProposalVotes,
   useStats,
   useStatus,
   useValidatorVotes,
 } from "@/api/hooks";
-import type { Proposal, ProposalVote, TokenSummary, VoteOption } from "@/api/types";
+import type { ActiveSet, Proposal, ProposalNonVoter, ProposalVote, TokenSummary, VoteOption } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Chip } from "@/components/ui/chip";
 import { DetailList, DetailRow } from "@/components/ui/detail-list";
@@ -33,7 +34,7 @@ import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { VTabs, VTabPanel, VTabsBar } from "@/components/ui/vtabs";
-import { formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
+import { formatCount, formatDate, formatDateTime, formatPct, shortHash } from "@/lib/format";
 import { pingPubProposal, voteDestinations } from "@/lib/links";
 import {
   checks,
@@ -43,6 +44,7 @@ import {
   endsIn,
   govRules,
   isOpen,
+  isTallied,
   kindLabel,
   metadataView,
   notVoted,
@@ -479,15 +481,8 @@ function VoteRow({ v, validator }: { v: ProposalVote; validator?: boolean }) {
 const NOT_VOTED_SHOWN = 5;
 
 function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | undefined }) {
-  const validators = useAllValidators();
-  const [all, setAll] = useState(false);
   if (!votes) return <ListSkeleton rows={5} />;
   const voting = p.status === "voting_period";
-  // Measured against today's active set: the voters while voting is open; once it
-  // closed, said as today's set (it may differ from the set at the time), and kept
-  // out of the summary's counts.
-  const missing = validators.data ? notVoted(validators.data.items, votes) : [];
-  const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
   return (
     <Box>
       {votes.length === 0 ? (
@@ -504,35 +499,130 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
           </Box>
         </>
       )}
-      {missing.length > 0 && (
-        <Flex align="center" gap="6px 10px" wrap="wrap" mt="3" pt="3" borderTopWidth="1px" borderColor="border.panel" data-testid="not-voted">
-          <Text as="span" color="fg.muted">
-            {voting ? (
-              <>
-                <Mono>{missing.length}</Mono> {missing.length === 1 ? "validator has" : "validators have"} not voted yet:
-              </>
-            ) : (
-              <>
-                <Mono>{missing.length}</Mono> of today&apos;s active validators did not vote:
-              </>
-            )}
-          </Text>
-          {shown.map((v) => (
-            <ValidatorChip key={v.operator_address} operator={v.operator_address} moniker={v.moniker} />
-          ))}
-          {missing.length > shown.length && (
-            <Button variant="plain" size="xs" px="0" color="accent.fg" onClick={() => setAll(true)}>
-              Show all
-            </Button>
-          )}
-          {voting && (
-            <Text as="span" color="fg.muted">
-              · their stakers can still vote for themselves
-            </Text>
-          )}
-        </Flex>
+      {p.active_set && !voting ? (
+        <RecordedNotVoted id={p.id} set={p.active_set} />
+      ) : (
+        <TodayNotVoted votes={votes} voting={voting} recording={isTallied(p.status)} />
       )}
     </Box>
+  );
+}
+
+/** The line under the validator votes naming the ones that did not vote. */
+function NotVotedLine({ children }: { children: ReactNode }) {
+  return (
+    <Flex align="center" gap="6px 10px" wrap="wrap" mt="3" pt="3" borderTopWidth="1px" borderColor="border.panel" data-testid="not-voted">
+      {children}
+    </Flex>
+  );
+}
+
+/**
+ * Who did not vote, measured against today's active set: the voters while
+ * voting is open; once it closed, said as today's set (it may differ from the
+ * set at the time) until the explorer has recorded the set the tally counted.
+ */
+function TodayNotVoted({ votes, voting, recording }: { votes: ProposalVote[]; voting: boolean; recording: boolean }) {
+  const validators = useAllValidators();
+  const [all, setAll] = useState(false);
+  const missing = validators.data ? notVoted(validators.data.items, votes) : [];
+  const shown = all ? missing : missing.slice(0, NOT_VOTED_SHOWN);
+  if (missing.length === 0) return null;
+  return (
+    <NotVotedLine>
+      <Text as="span" color="fg.muted">
+        {voting ? (
+          <>
+            <Mono>{missing.length}</Mono> {missing.length === 1 ? "validator has" : "validators have"} not voted yet:
+          </>
+        ) : (
+          <>
+            <Mono>{missing.length}</Mono> of today&apos;s active validators did not vote:
+          </>
+        )}
+      </Text>
+      {shown.map((v) => (
+        <ValidatorChip key={v.operator_address} operator={v.operator_address} moniker={v.moniker} />
+      ))}
+      {missing.length > shown.length && (
+        <Button variant="plain" size="xs" px="0" color="accent.fg" onClick={() => setAll(true)}>
+          Show all
+        </Button>
+      )}
+      {voting && (
+        <Text as="span" color="fg.muted">
+          · their stakers can still vote for themselves
+        </Text>
+      )}
+      {recording && (
+        <Text color="fg.muted" fontSize="13px" w="full" data-testid="non-voters-pending">
+          The exact list is being recorded.
+        </Text>
+      )}
+    </NotVotedLine>
+  );
+}
+
+/** Who did not vote, as recorded: the validators of the set the tally counted. */
+function RecordedNotVoted({ id, set }: { id: number; set: ActiveSet }) {
+  const nonVoters = useProposalNonVoters(id, set.non_voters_count > 0);
+  const [all, setAll] = useState(false);
+  if (set.non_voters_count === 0) {
+    return (
+      <NotVotedLine>
+        <Text as="span" color="fg.muted">
+          All <Mono>{set.size}</Mono> active validators voted.
+        </Text>
+      </NotVotedLine>
+    );
+  }
+  const items = nonVoters.data?.pages.flatMap((page) => page.items);
+  const shown = items && (all ? items : items.slice(0, NOT_VOTED_SHOWN));
+  return (
+    <NotVotedLine>
+      <Text as="span" color="fg.muted">
+        <Mono>{set.non_voters_count}</Mono> of the <Mono>{set.size}</Mono> active validators did not vote:
+      </Text>
+      {!shown ? (
+        nonVoters.error ? (
+          <Text as="span" color="fg.muted">
+            The list could not be loaded.
+          </Text>
+        ) : (
+          <Skeleton as="span" h="4" w="48" maxW="full" display="inline-block" />
+        )
+      ) : (
+        shown.map((n) => <NonVoterChip key={n.consensus_address} n={n} />)
+      )}
+      {items && !all && items.length > NOT_VOTED_SHOWN && (
+        <Button variant="plain" size="xs" px="0" color="accent.fg" onClick={() => setAll(true)}>
+          Show all
+        </Button>
+      )}
+      {all && nonVoters.hasNextPage && (
+        <Button variant="plain" size="xs" px="0" color="accent.fg" disabled={nonVoters.isFetchingNextPage} onClick={() => void nonVoters.fetchNextPage()}>
+          Show more
+        </Button>
+      )}
+    </NotVotedLine>
+  );
+}
+
+/** A recorded non-voter: the validator's chip, or its short consensus address when no validator is known with it; its share of the set's power. */
+function NonVoterChip({ n }: { n: ProposalNonVoter }) {
+  return (
+    <Flex as="span" align="center" gap="1.5" minW="0" maxW="full" data-testid="non-voter">
+      {n.operator_address ? (
+        <ValidatorChip operator={n.operator_address} moniker={n.moniker} />
+      ) : (
+        <Text as="span" fontFamily="mono" title={n.consensus_address}>
+          {shortHash(n.consensus_address)}
+        </Text>
+      )}
+      <Text as="span" color="fg.muted" fontSize="12px" fontFamily="mono">
+        {formatPct(n.power_pct)}
+      </Text>
+    </Flex>
   );
 }
 
