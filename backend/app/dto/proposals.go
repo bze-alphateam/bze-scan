@@ -54,22 +54,23 @@ type ValidatorsVoted struct {
 // TotalDeposit is a coin list.
 type Proposal struct {
 	ProposalSummary
-	Summary           *string         `json:"summary"`
-	Metadata          *string         `json:"metadata"`
-	Proposer          *string         `json:"proposer"`
-	ProposerLabel     *Label          `json:"proposer_label"`
-	MessageTypes      []string        `json:"message_types"`
-	Messages          json.RawMessage `json:"messages"`
-	TotalDeposit      json.RawMessage `json:"total_deposit"`
-	TallyBondedTokens *string         `json:"tally_bonded_tokens"`
-	TallyUpdatedAt    *time.Time      `json:"tally_updated_at"`
-	SubmitHeight      *int64          `json:"submit_height"`
-	SubmitTxHash      *string         `json:"submit_tx_hash"`
-	ResolvedHeight    *int64          `json:"resolved_height"`
-	ValidatorsVoted   ValidatorsVoted `json:"validators_voted"`
-	VotesCount        int             `json:"votes_count"`
-	ActiveSet         *ActiveSet      `json:"active_set"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	Summary           *string          `json:"summary"`
+	Metadata          *string          `json:"metadata"`
+	Proposer          *string          `json:"proposer"`
+	ProposerLabel     *Label           `json:"proposer_label"`
+	MessageTypes      []string         `json:"message_types"`
+	Messages          json.RawMessage  `json:"messages"`
+	TotalDeposit      json.RawMessage  `json:"total_deposit"`
+	TallyBondedTokens *string          `json:"tally_bonded_tokens"`
+	TallyUpdatedAt    *time.Time       `json:"tally_updated_at"`
+	SubmitHeight      *int64           `json:"submit_height"`
+	SubmitTxHash      *string          `json:"submit_tx_hash"`
+	ResolvedHeight    *int64           `json:"resolved_height"`
+	ValidatorsVoted   ValidatorsVoted  `json:"validators_voted"`
+	VotesCount        int              `json:"votes_count"`
+	ActiveSet         *ActiveSet       `json:"active_set"`
+	Upgrade           *ProposalUpgrade `json:"upgrade"`
+	UpdatedAt         time.Time        `json:"updated_at"`
 }
 
 // ActiveSet is the validator set a closed proposal's tally counted: the
@@ -155,6 +156,7 @@ func NewProposal(p *repository.Proposal) Proposal {
 		ValidatorsVoted: ValidatorsVoted{Voted: p.ValidatorsVoted, Total: p.ValidatorsTotal},
 		VotesCount:      p.VotesCount,
 		ActiveSet:       newActiveSet(p.ActiveSet),
+		Upgrade:         NewProposalUpgrade(p.Upgrade),
 		UpdatedAt:       p.UpdatedAt.UTC(),
 	}
 }

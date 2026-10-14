@@ -55,8 +55,8 @@ e2e: e2e-up ## Run acceptance tests (starts PostgreSQL, runs tests, tears it dow
 	go test -tags=e2e -race -v -count=1 ./e2e/ ; ret=$$? ; $(MAKE) e2e-down ; exit $$ret
 
 .PHONY: fixtures
-fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [BLOCKS="..."] [ABCI="47@23821225"] [VALSETS="23821226"] [ARCHIVE_RPC=...]
-	HEIGHTS="$(HEIGHTS)" BLOCKS="$(BLOCKS)" ABCI="$(ABCI)" VALSETS="$(VALSETS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
+fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1] [ARCHIVE_RPC=...]
+	HEIGHTS="$(HEIGHTS)" BLOCKS="$(BLOCKS)" COMMITS="$(COMMITS)" ABCI="$(ABCI)" VALSETS="$(VALSETS)" CONSENSUS_STATE="$(CONSENSUS_STATE)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
 
 .PHONY: grpc-fixtures
 grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [DENOMS="ubze …"] [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [REST=...]

@@ -1,0 +1,44 @@
+[
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551812,
+    "tx_index": 0,
+    "time": "2026-04-28T16:04:39.802993053Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-21278"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  },
+  {
+    "address": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+    "height": 22551812,
+    "tx_index": 1,
+    "time": "2026-04-28T16:04:39.802993053Z",
+    "category": "other",
+    "kind": "fee_only",
+    "is_signer": true,
+    "success": false,
+    "counterparty": "",
+    "deltas": [
+      {
+        "denom": "ubze",
+        "amount": "-48660"
+      }
+    ],
+    "msg_types": [
+      "/bze.tradebin.MsgCancelOrder"
+    ],
+    "details": null
+  }
+]

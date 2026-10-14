@@ -20,6 +20,15 @@
 # BLOCKS lists heights whose /block alone is recorded (the snapshots
 # command's search for a proposal's resolution reads only block times).
 #
+# COMMITS lists heights and ranges a..b whose /commit alone is recorded (the
+# upgrade recovery reads who signed the blocks after an upgrade, BFE-194).
+#
+# CONSENSUS_STATE=1 records /consensus_state into
+# testdata/consensus_state.json: the votes of the round in progress, asked
+# until an answer holds at least 8 votes (most answers come between rounds,
+# all nil-Vote). It is a live route, not by height: the halt watch reads it
+# from the local node only.
+#
 # VALSETS lists heights whose validator set is recorded: every page of
 # /validators at per_page=100 into testdata/<height>/validators.<page>.json
 # (the active set at a height, BFE-192).
@@ -33,7 +42,7 @@
 # code marshals.
 #
 # Usage: HEIGHTS="24998316 24998321..24998330" scripts/record-fixtures.sh
-#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [ABCI="47@23821225"] [VALSETS="23821226"])
+#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1])
 set -euo pipefail
 
 ARCHIVE_RPC="${ARCHIVE_RPC:-https://rpc.getbze.com}"
@@ -42,6 +51,8 @@ HEIGHTS="${HEIGHTS:-}"
 BLOCKS="${BLOCKS:-}"
 ABCI="${ABCI:-}"
 VALSETS="${VALSETS:-}"
+COMMITS="${COMMITS:-}"
+CONSENSUS_STATE="${CONSENSUS_STATE:-}"
 
 # The page size of /validators, CometBFT's maximum (node.ValidatorsPerPage).
 PER_PAGE=100
@@ -50,8 +61,8 @@ PER_PAGE=100
 BONDED_POOL="bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
 PAGE_LIMIT=1000
 
-if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}${VALSETS}" ]]; then
-  echo "HEIGHTS, BLOCKS, ABCI or VALSETS is required, e.g. HEIGHTS=\"24998316\"" >&2
+if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}${VALSETS}${COMMITS}${CONSENSUS_STATE}" ]]; then
+  echo "HEIGHTS, BLOCKS, COMMITS, ABCI, VALSETS or CONSENSUS_STATE is required, e.g. HEIGHTS=\"24998316\"" >&2
   exit 2
 fi
 
@@ -74,19 +85,25 @@ fetch() {
   echo "recorded ${route} -> ${dest#"${OUT}/"}"
 }
 
-expanded=""
-for item in ${HEIGHTS}; do
-  if [[ "${item}" =~ ^([1-9][0-9]*)\.\.([1-9][0-9]*)$ ]]; then
-    lo="${BASH_REMATCH[1]}" hi="${BASH_REMATCH[2]}"
-    if (( lo > hi )); then
-      echo "invalid range: ${item}" >&2
-      exit 2
+# expand <heights and ranges a..b>: every height, space-separated.
+expand() {
+  local item lo hi out=""
+  for item in $1; do
+    if [[ "${item}" =~ ^([1-9][0-9]*)\.\.([1-9][0-9]*)$ ]]; then
+      lo="${BASH_REMATCH[1]}" hi="${BASH_REMATCH[2]}"
+      if (( lo > hi )); then
+        echo "invalid range: ${item}" >&2
+        exit 2
+      fi
+      out+=" $(seq -s ' ' "${lo}" "${hi}")"
+    else
+      out+=" ${item}"
     fi
-    expanded+=" $(seq -s ' ' "${lo}" "${hi}")"
-  else
-    expanded+=" ${item}"
-  fi
-done
+  done
+  echo "${out}"
+}
+expanded="$(expand "${HEIGHTS}")"
+commits="$(expand "${COMMITS}")"
 
 for h in ${expanded}; do
   if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then
@@ -98,6 +115,24 @@ for h in ${expanded}; do
     fetch "${route}?height=${h}" "${OUT}/${h}/${route}.json" 200
   done
 done
+
+for h in ${commits}; do
+  if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "invalid height: ${h}" >&2
+    exit 2
+  fi
+  mkdir -p "${OUT}/${h}"
+  fetch "commit?height=${h}" "${OUT}/${h}/commit.json" 200
+done
+
+if [[ -n "${CONSENSUS_STATE}" ]]; then
+  for _ in $(seq 1 100); do
+    fetch "consensus_state" "${OUT}/consensus_state.json" 200
+    if (( $(grep -o 'Vote{' "${OUT}/consensus_state.json" | wc -l) >= 8 )); then
+      break
+    fi
+  done
+fi
 
 for h in ${BLOCKS}; do
   if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then

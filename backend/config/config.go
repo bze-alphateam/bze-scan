@@ -120,6 +120,16 @@ type Config struct {
 	// sets it; a Config built in code without one leaves the logos alone.
 	KeybaseURL string
 
+	// HaltWatchEnabled runs the halt watch with the state sync: during a
+	// software upgrade's halt it polls the local node's /consensus_state
+	// and records which validators are back.
+	HaltWatchEnabled bool
+	// HaltWatchInterval is the halt watch's polling period.
+	HaltWatchInterval time.Duration
+	// UpgradeRecoveryWindow is how many heights after an upgrade the
+	// upgrade_recovery set reads commits for the validators not back yet.
+	UpgradeRecoveryWindow int64
+
 	// DebugAddr, when set, makes serve expose net/http/pprof on this
 	// host:port. Empty (the default) exposes nothing.
 	DebugAddr string
@@ -283,6 +293,25 @@ func Load() (*Config, error) {
 		fail("BACKFILL_RATE_LIMIT must be a positive number of requests per second (got %q)", rateLimit)
 	} else {
 		cfg.BackfillRateLimit = r
+	}
+
+	haltWatch := envString("HALT_WATCH_ENABLED", "true")
+	if v, err := strconv.ParseBool(haltWatch); err != nil {
+		fail("HALT_WATCH_ENABLED must be true or false (got %q)", haltWatch)
+	} else {
+		cfg.HaltWatchEnabled = v
+	}
+	haltInterval := envString("HALT_WATCH_INTERVAL", "5s")
+	if d, err := time.ParseDuration(haltInterval); err != nil || d <= 0 {
+		fail("HALT_WATCH_INTERVAL must be a positive duration like 5s (got %q)", haltInterval)
+	} else {
+		cfg.HaltWatchInterval = d
+	}
+	window := envString("UPGRADE_RECOVERY_WINDOW", "10000")
+	if n, err := strconv.ParseInt(window, 10, 64); err != nil || n <= 0 {
+		fail("UPGRADE_RECOVERY_WINDOW must be a positive number of heights (got %q)", window)
+	} else {
+		cfg.UpgradeRecoveryWindow = n
 	}
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {

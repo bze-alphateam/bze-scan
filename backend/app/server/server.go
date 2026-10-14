@@ -39,6 +39,9 @@ type Deps struct {
 	// Proposals reads the proposals, votes and deposits; nil leaves
 	// /api/v1/proposals out.
 	Proposals controller.ProposalReader
+	// Upgrades reads the software upgrades' recovery; nil leaves
+	// /api/v1/upgrades out.
+	Upgrades controller.UpgradeReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Stats reads the home tiles and the validators header; nil leaves
@@ -126,6 +129,9 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id/votes", proposals.ProposalVotes)
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
 		api.GET("/proposals/:id/non-voters", proposals.ProposalNonVoters)
+	}
+	if deps.Upgrades != nil {
+		api.GET("/upgrades/:height", controller.NewUpgradeController(deps.Upgrades).Upgrade)
 	}
 	if deps.Stats != nil {
 		api.GET("/stats", controller.NewStatsController(deps.Stats, deps.Daily).Stats)

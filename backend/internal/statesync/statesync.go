@@ -46,6 +46,9 @@ const (
 	// ProposalNonVoters is the validators of a closed proposal's tally set
 	// that did not vote; its keys are proposal ids.
 	ProposalNonVoters = "proposal_non_voters"
+	// UpgradeRecovery is when each validator came back after a software
+	// upgrade's halt; its keys are plan heights.
+	UpgradeRecovery = "upgrade_recovery"
 )
 
 // registryNamePrefix starts the chain_registry keys that name a chain by its

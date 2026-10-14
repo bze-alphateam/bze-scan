@@ -285,3 +285,38 @@ func TestValidatorsAnswersTheRecordedSet(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, code)
 	assert.Contains(t, string(body), "is not available, lowest height is 23821227")
 }
+
+func TestServesConsensusState(t *testing.T) {
+	n := fakenode.New(t)
+	code, body := get(t, n.URL+fakenode.RouteConsensusState)
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, readFile(t, "consensus_state.json"), body)
+
+	set := fakenode.ConsensusStateBody(22551811, 3, map[int]string{
+		1: fakenode.Vote(1, "A4C8C1086A5A8C8C16689B91DF11B34B904F7329", 22551811, time.Date(2026, 4, 28, 16, 0, 0, 0, time.UTC)),
+	})
+	n.SetConsensusState(set)
+	_, body = get(t, n.URL+fakenode.RouteConsensusState)
+	assert.Equal(t, set, body)
+	var env struct {
+		Result struct {
+			RoundState struct {
+				HRS   string `json:"height/round/step"`
+				Votes []struct {
+					Prevotes   []string `json:"prevotes"`
+					Precommits []string `json:"precommits"`
+				} `json:"height_vote_set"`
+			} `json:"round_state"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(body, &env))
+	assert.Equal(t, "22551811/0/1", env.Result.RoundState.HRS)
+	assert.Equal(t, []string{"nil-Vote",
+		"Vote{1:A4C8C1086A5A 22551811/00/SIGNED_MSG_TYPE_PREVOTE(Prevote)  0A1B2C3D4E5F 000000000000 @ 2026-04-28T16:00:00.000000000Z}",
+		"nil-Vote"}, env.Result.RoundState.Votes[0].Prevotes)
+	assert.Equal(t, []string{"nil-Vote", "nil-Vote", "nil-Vote"}, env.Result.RoundState.Votes[0].Precommits)
+
+	n.SetConsensusState(nil)
+	_, body = get(t, n.URL+fakenode.RouteConsensusState)
+	assert.Equal(t, readFile(t, "consensus_state.json"), body)
+}

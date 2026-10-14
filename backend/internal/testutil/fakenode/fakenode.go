@@ -15,6 +15,8 @@
 //	                              (scripts/record-fixtures.sh, VALSETS; only per_page=100 is recorded)
 //	abci/<height>/<file>          /abci_query?path="/<svc>/<Method>"&data=0x<hex>&height=<height>,
 //	                              <file> = <svc>.<Method>.<hex>.json (scripts/record-fixtures.sh, ABCI)
+//	consensus_state.json          /consensus_state (scripts/record-fixtures.sh, CONSENSUS_STATE=1),
+//	                              until SetConsensusState replaces it
 //
 // An /abci_query without a recorded answer answers code 1 ("no fixture"), so
 // a test sees which query it lacks.
@@ -39,6 +41,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Routes served by the fake node.
@@ -49,6 +52,9 @@ const (
 	RouteCommit       = "/commit"
 	RouteABCIQuery    = "/abci_query"
 	RouteValidators   = "/validators"
+	// RouteConsensusState answers consensus_state.json, or the body
+	// SetConsensusState set.
+	RouteConsensusState = "/consensus_state"
 )
 
 var byHeightFiles = map[string]string{
@@ -84,6 +90,7 @@ type Node struct {
 	downFor       int
 	holdRoute     string // with holdHeight: the request that never answers
 	holdHeight    int64
+	consensus     []byte // nil: consensus_state.json
 }
 
 // New starts a fake node serving the recorded fixtures and closes it when the
@@ -312,6 +319,21 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if route == RouteConsensusState {
+		n.mu.Lock()
+		body := n.consensus
+		n.mu.Unlock()
+		if body == nil {
+			var err error
+			if body, err = fs.ReadFile(n.fixtures, "consensus_state.json"); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, body)
+		return
+	}
+
 	file, ok := byHeightFiles[route]
 	if route == RouteValidators {
 		if file, ok = validatorsFile(w, r); !ok {
@@ -349,6 +371,43 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// SetConsensusState makes /consensus_state answer body (a whole JSON-RPC
+// response, see ConsensusStateBody); nil answers the recorded fixture again.
+func (n *Node) SetConsensusState(body []byte) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.consensus = body
+}
+
+// ConsensusStateBody is a /consensus_state answer at height, round 0, in the
+// node's format: one round whose prevotes are size slots, the slot of each
+// index in prevotes holding that vote string (see Vote) and the others
+// "nil-Vote"; no precommits.
+func ConsensusStateBody(height int64, size int, prevotes map[int]string) []byte {
+	slots := make([]string, size)
+	for i := range slots {
+		slots[i] = `"nil-Vote"`
+		if v, ok := prevotes[i]; ok {
+			slots[i] = strconv.Quote(v)
+		}
+	}
+	nils := make([]string, size)
+	for i := range nils {
+		nils[i] = `"nil-Vote"`
+	}
+	return []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":-1,"result":{"round_state":{"height/round/step":"%d/0/1",`+
+		`"height_vote_set":[{"round":0,"prevotes":[%s],"precommits":[%s]}]}}}`,
+		height, strings.Join(slots, ","), strings.Join(nils, ",")))
+}
+
+// Vote is a nil prevote at height, round 0, as the node prints it: index is
+// the validator's position in the set, consensus its address (upper-case
+// hex; the first six bytes are printed) and at its timestamp.
+func Vote(index int, consensus string, height int64, at time.Time) string {
+	return fmt.Sprintf("Vote{%d:%s %d/00/SIGNED_MSG_TYPE_PREVOTE(Prevote)  0A1B2C3D4E5F 000000000000 @ %s}",
+		index, consensus[:min(12, len(consensus))], height, at.UTC().Format("2006-01-02T15:04:05.000000000Z"))
 }
 
 // validatorsFile is the fixture file of a /validators page; false after

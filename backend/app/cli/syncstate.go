@@ -55,7 +55,8 @@ func newSyncStateCmd() *cobra.Command {
 			"succeeded, 1 when any failed. serve does the same at every start and " +
 			"keeps the tables fresh afterwards; this command is for operations.\n\n" +
 			"--job runs one set only; with --id (repeatable) it resyncs those entries of the set only, " +
-			"e.g. --job proposal_non_voters --id 47 computes proposal 47's non-voters again. --job daily_stats --from YYYY-MM-DD --to YYYY-MM-DD " +
+			"e.g. --job proposal_non_voters --id 47 computes proposal 47's non-voters again, --job upgrade_recovery --id 22551810 " +
+			"reads the commits after the upgrade planned at that height again (the halt votes stay). --job daily_stats --from YYYY-MM-DD --to YYYY-MM-DD " +
 			"recomputes those closed UTC days from the indexed tables (after a reindex, " +
 			"for example), with the database alone.",
 		Args: cobra.NoArgs,
@@ -112,7 +113,7 @@ func newSyncStateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&f.job, "job", "", "run only this set (validators, daily_stats, …)")
-	cmd.Flags().StringArrayVar(&f.ids, "id", nil, "with --job: resync only this entry (a proposal id for proposal_non_voters); repeatable")
+	cmd.Flags().StringArrayVar(&f.ids, "id", nil, "with --job: resync only this entry (a proposal id for proposal_non_voters, a plan height for upgrade_recovery); repeatable")
 	cmd.Flags().StringVar(&f.from, "from", "", "with --job daily_stats: the first day to recompute (YYYY-MM-DD, UTC)")
 	cmd.Flags().StringVar(&f.to, "to", "", "with --job daily_stats: the last day to recompute (YYYY-MM-DD, UTC, before today)")
 	return cmd

@@ -1,0 +1,234 @@
+{
+  "transactions": [
+    {
+      "Height": 22551812,
+      "TxIndex": 0,
+      "Hash": "475C9BAC1C462CEAB2628E5F82FC0D5A7DFD7A1196DDFD9C5BF55E5D635AA69B",
+      "Time": "2026-04-28T16:04:39.802993053Z",
+      "Success": false,
+      "Code": 4008,
+      "Codespace": "tradebin",
+      "ErrorLog": "failed to execute message; message index: 0: order not found",
+      "GasWanted": 319182,
+      "GasUsed": 160474,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "21278"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 3,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder"
+      ]
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "Hash": "CE8FBA7DF0132149AAB928C9CD9EE292739BCA63EC5B280971EB1EB345D91FC7",
+      "Time": "2026-04-28T16:04:39.802993053Z",
+      "Success": false,
+      "Code": 4008,
+      "Codespace": "tradebin",
+      "ErrorLog": "failed to execute message; message index: 0: order not found",
+      "GasWanted": 729906,
+      "GasUsed": 301192,
+      "Fee": [
+        {
+          "denom": "ubze",
+          "amount": "48660"
+        }
+      ],
+      "FeePayer": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Signers": [
+        "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+      ],
+      "Memo": "",
+      "MsgCount": 8,
+      "MsgTypes": [
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder",
+        "/bze.tradebin.MsgCancelOrder"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "Height": 22551812,
+      "TxIndex": 0,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237862",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 0,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237861",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 0,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237860",
+        "order_type": "buy"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 0,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237859",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 1,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237858",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 2,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237857",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 3,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237856",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 4,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237855",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 5,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237854",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 6,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237853",
+        "order_type": "sell"
+      }
+    },
+    {
+      "Height": 22551812,
+      "TxIndex": 1,
+      "MsgIndex": 7,
+      "TypeURL": "/bze.tradebin.MsgCancelOrder",
+      "Sender": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+      "Module": "",
+      "Events": [],
+      "Body": {
+        "creator": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
+        "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+        "order_id": "000000000000000004237852",
+        "order_type": "sell"
+      }
+    }
+  ]
+}

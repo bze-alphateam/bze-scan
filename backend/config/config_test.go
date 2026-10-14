@@ -17,7 +17,8 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
-	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL"}
+	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
+	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -45,7 +46,8 @@ func TestLoadDefaults(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -66,7 +68,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -157,7 +160,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json"}, cfg)
+		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -315,6 +319,28 @@ func TestLoadBackfillSettings(t *testing.T) {
 	assert.Equal(t, 4, cfg.BackfillBatch)
 	assert.Equal(t, 500*time.Millisecond, cfg.BackfillQuiet)
 	assert.InDelta(t, 2.5, cfg.BackfillRateLimit, 0)
+}
+
+func TestLoadUpgradeRecoverySettings(t *testing.T) {
+	isolate(t)
+	t.Setenv("HALT_WATCH_ENABLED", "false")
+	t.Setenv("HALT_WATCH_INTERVAL", "250ms")
+	t.Setenv("UPGRADE_RECOVERY_WINDOW", "50")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.HaltWatchEnabled)
+	assert.Equal(t, 250*time.Millisecond, cfg.HaltWatchInterval)
+	assert.Equal(t, int64(50), cfg.UpgradeRecoveryWindow)
+
+	t.Setenv("HALT_WATCH_ENABLED", "maybe")
+	t.Setenv("HALT_WATCH_INTERVAL", "0s")
+	t.Setenv("UPGRADE_RECOVERY_WINDOW", "-1")
+	_, err = config.Load()
+	require.Error(t, err)
+	for _, key := range []string{"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW"} {
+		assert.Contains(t, err.Error(), key)
+	}
 }
 
 func TestLoadBackfillFloorForms(t *testing.T) {

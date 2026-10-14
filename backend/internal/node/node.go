@@ -1,7 +1,8 @@
 // Package node is the CometBFT RPC client of the backend. It calls the
 // by-height routes only (/status, /block, /block_results, /commit,
 // /validators and /abci_query at a height), in the GET URI form, and never /tx, /tx_search or
-// /block_search.
+// /block_search. The one exception is /consensus_state (a safe route, the
+// round in progress), which the halt watch reads from the local node only.
 //
 // Every call returns the parsed response and the raw response body: the raw
 // bytes are what the raw-JSON cache serves later.
@@ -136,7 +137,9 @@ func (e Event) Get(key string) (string, bool) {
 
 // Commit is the part of /commit the backend uses.
 type Commit struct {
-	Height     int64
+	Height int64
+	// Time is the time of the block at Height (its header's).
+	Time       time.Time
 	Signatures []CommitSig
 }
 
@@ -144,6 +147,9 @@ type Commit struct {
 type CommitSig struct {
 	BlockIDFlag      int    `json:"block_id_flag"`
 	ValidatorAddress string `json:"validator_address"`
+	// Timestamp is the validator's own time on its precommit; zero for an
+	// absent slot.
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // ValidatorsPerPage is the largest page /validators answers (CometBFT caps
@@ -275,6 +281,9 @@ func (c *Client) BlockResults(ctx context.Context, height int64) (*BlockResults,
 func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, error) {
 	var res struct {
 		SignedHeader struct {
+			Header struct {
+				Time time.Time `json:"time"`
+			} `json:"header"`
 			Commit struct {
 				Height     int64       `json:"height,string"`
 				Signatures []CommitSig `json:"signatures"`
@@ -289,7 +298,7 @@ func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, err
 	if cm.Height != height {
 		return nil, nil, fmt.Errorf("commit %d: node answered height %d", height, cm.Height)
 	}
-	return &Commit{Height: cm.Height, Signatures: cm.Signatures}, raw, nil
+	return &Commit{Height: cm.Height, Time: res.SignedHeader.Header.Time, Signatures: cm.Signatures}, raw, nil
 }
 
 // Validators calls /validators?height=height&page=page&per_page=perPage:

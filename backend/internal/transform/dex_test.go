@@ -61,7 +61,7 @@ func TestDexGolden(t *testing.T) {
 			assert.JSONEq(t, string(want), string(got))
 		})
 	}
-	assert.Equal(t, 11, withRows, "the recorded heights with order book events")
+	assert.Equal(t, 12, withRows, "the recorded heights with order book events")
 }
 
 // Recorded heights cover the shapes: a sell that rests on the book and a

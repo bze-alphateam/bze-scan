@@ -380,6 +380,28 @@ func TestProposalRoutes(t *testing.T) {
 		"no proposal reader, no route")
 }
 
+// oneUpgrade knows the upgrade planned at 22551810.
+type oneUpgrade struct{}
+
+func (oneUpgrade) Upgrade(_ context.Context, height int64) (*repository.Upgrade, error) {
+	if height != 22551810 {
+		return nil, repository.ErrNotFound
+	}
+	return &repository.Upgrade{Height: height}, nil
+}
+
+func (oneUpgrade) UpgradeMembers(context.Context, int64) ([]repository.UpgradeMember, error) {
+	return nil, nil
+}
+
+func TestUpgradeRoutes(t *testing.T) {
+	e := server.New(server.Deps{Upgrades: oneUpgrade{}})
+	assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, "/api/v1/upgrades/22551810").Code)
+	assert.Equal(t, http.StatusNotFound, serve(t, e, http.MethodGet, "/api/v1/upgrades/22551811").Code)
+	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/v1/upgrades/22551810").Code,
+		"no upgrade reader, no route")
+}
+
 type noStats struct{}
 
 func (noStats) BlockStats(context.Context) (*repository.BlockStats, error) {

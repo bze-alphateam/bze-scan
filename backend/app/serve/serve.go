@@ -66,6 +66,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		"indexer_enabled":  cfg.IndexerEnabled,
 		"node_grpc_addr":   cfg.NodeGRPCAddr,
 		"backfill_enabled": cfg.BackfillEnabled,
+		"halt_watch":       cfg.IndexerEnabled && cfg.HaltWatchEnabled,
 		"debug_addr":       cfg.DebugAddr,
 	}).Info("starting bze-scan")
 
@@ -146,6 +147,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Accounts:           explorerRepo,
 		Tokens:             explorerRepo,
 		Proposals:          explorerRepo,
+		Upgrades:           explorerRepo,
 		Stats:              explorerRepo,
 		Daily:              explorerRepo,
 		Params:             liveParams,
@@ -197,6 +199,14 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			}
 			defer closeSync()
 			components = append(components, component{name: "state sync", run: syncer.Run})
+			if cfg.HaltWatchEnabled {
+				watch, closeWatch, err := NewHaltWatch(ctx, cfg)
+				if err != nil {
+					return err
+				}
+				defer closeWatch()
+				components = append(components, component{name: "halt watch", run: watch.Run})
+			}
 
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
