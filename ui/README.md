@@ -142,7 +142,10 @@ status chip (a chip change shows skeleton rows). `useProposal` polls while a
 proposal collects deposits or votes and stops once it resolves.
 `useValidatorVotes` reads every vote of a validator owner
 (`?voter=validators`) for the validators tab and the not-voted list;
-`useProposalVotes` pages everyone's votes, by option. The checks read the
+`useProposalVotes` pages everyone's votes, by option. Once a tallied proposal
+has an `active_set`, the not-voted list is `useProposalNonVoters` (the
+validators of the set the tally counted, recorded by the backend, read once);
+until then it falls back to today's active set, said so. The checks read the
 thresholds from `useParams()` (gov), never constants; an upgrade's date is
 estimated from `useStatus()`'s height and `useStats()`'s block time. Where to
 vote is data: `voteDestinations()` in `src/lib/links.ts`.

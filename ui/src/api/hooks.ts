@@ -60,6 +60,7 @@ export const queryKeys = {
   proposalVotes: (id: number, option: VoteOption | "weighted" | null) => ["proposal-votes", id, option] as const,
   validatorVotes: (id: number) => ["proposal-votes", id, "validators"] as const,
   proposalDeposits: (id: number) => ["proposal-deposits", id] as const,
+  proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
@@ -503,6 +504,23 @@ export function useValidatorVotes(id: number, open = true) {
         (v) => v.validator_operator != null,
       ),
     ...(open ? live : immutable),
+  });
+}
+
+/**
+ * The recorded validators of a closed proposal's tally set that did not vote,
+ * largest power first, 100 a page (a set rarely has more). Written once, so
+ * read once; `enabled` false until the proposal says it has them.
+ */
+export function useProposalNonVoters(id: number, enabled = true) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.proposalNonVoters(id),
+    queryFn: ({ pageParam, signal }) => api.proposalNonVoters(id, pageParam, signal),
+    initialPageParam: firstPage(100),
+    getNextPageParam: nextPage(100),
+    enabled,
+    ...immutable,
   });
 }
 

@@ -19,6 +19,7 @@ import type {
   ProposalDeposit,
   ProposalListParams,
   ProposalSummary,
+  ProposalNonVoter,
   ProposalVote,
   RawRpcResponse,
   RawTx,
@@ -75,6 +76,7 @@ export interface ExplorerApi {
   proposal(id: number, signal?: AbortSignal): Promise<Proposal>;
   proposalVotes(id: number, params: VoteListParams, signal?: AbortSignal): Promise<Page<ProposalVote>>;
   proposalDeposits(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalDeposit>>;
+  proposalNonVoters(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalNonVoter>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
@@ -191,6 +193,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     proposalVotes: (id, params, signal) =>
       get(`/proposals/${seg(String(id))}/votes`, { ...page(params), option: params.option, voter: params.voter }, signal),
     proposalDeposits: (id, params, signal) => get(`/proposals/${seg(String(id))}/deposits`, page(params), signal),
+    proposalNonVoters: (id, params, signal) => get(`/proposals/${seg(String(id))}/non-voters`, page(params), signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 

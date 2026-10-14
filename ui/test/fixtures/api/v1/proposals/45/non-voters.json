@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "operator_address": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "consensus_address": "6A1B7C2D3E4F5061728394A5B6C7D8E9F0A1B2C3",
+      "moniker": "Thamar Node",
+      "voting_power": 31250000,
+      "power_pct": "30.19480"
+    },
+    {
+      "operator_address": "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440",
+      "consensus_address": "0F4E2D1C3B5A69788796A5B4C3D2E1F00F1E2D3C",
+      "moniker": "Deep Fields",
+      "voting_power": 8400000,
+      "power_pct": "8.11594"
+    },
+    {
+      "operator_address": null,
+      "consensus_address": "C3B2A1F0E9D8C7B6A5948372615F4E3D2C1B0A9F",
+      "moniker": null,
+      "voting_power": 1200000,
+      "power_pct": "1.15942"
+    }
+  ],
+  "next_cursor": null
+}

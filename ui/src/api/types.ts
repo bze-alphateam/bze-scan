@@ -636,7 +636,32 @@ export interface Proposal extends ProposalSummary {
   validators_voted: { voted: number; total: number | null };
   /** The accounts that voted (one vote each, the latest). */
   votes_count: number;
+  /**
+   * The validator set the tally counted (the CometBFT set at `height`, the
+   * validators jailed in the tally's block left out): `size` validators, of
+   * which `non_voters_count` did not vote. Null until the state sync recorded
+   * it, and while voting is open.
+   */
+  active_set: ActiveSet | null;
   updated_at: string;
+}
+
+export interface ActiveSet {
+  height: number;
+  size: number;
+  non_voters_count: number;
+}
+
+/** A validator of a closed proposal's tally set that did not vote, largest power first. */
+export interface ProposalNonVoter {
+  /** Null (and `moniker` too) when no validator is known with the consensus address. */
+  operator_address: string | null;
+  /** Upper-case hex. */
+  consensus_address: string;
+  moniker: string | null;
+  voting_power: number;
+  /** Its share of the set's power, percent with five decimals. */
+  power_pct: string;
 }
 
 export type VoteOption = "yes" | "no" | "abstain" | "no_with_veto";
