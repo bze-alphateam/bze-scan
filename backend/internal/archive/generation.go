@@ -30,6 +30,24 @@
 // Note that v7 stayed on SDK 0.45 and CometBFT 0.34: there is no 0.47
 // generation on mainnet, and the only format break is v8.0.0.
 //
+// # Order of the gov and staking EndBlockers
+//
+// Gov tallies a proposal in its EndBlocker, over the validators the staking
+// power index holds at that moment. Which validator set that is depends on
+// whether staking's EndBlocker (which applies the bonding changes) already
+// ran in the same block, and the releases did not keep one order
+// (SetOrderEndBlockers of app/app.go up to v7.2.0, endBlockers of
+// app/app_config.go since v8.0.0, read at each release tag on 2026-10-14):
+//
+//	v5.0             crisis, gov, staking, …           gov first
+//	v5.1.2 – v7.2.0  …, staking, mint, distr, gov, …   staking first
+//	v8.0.0 –         (crisis,) gov, staking, …         gov first
+//
+// CometBFT applies the validator updates of EndBlock(N) at height N+2, so
+// the set a tally at height H counted is the CometBFT set at H+1 when gov
+// runs first (staking's EndBlock(H−1)) and at H+2 when staking runs first
+// (its EndBlock(H)). StakingBeforeGov records it per generation.
+//
 // # What the legacy format differs in, and what Normalise does
 //
 // The archive node runs CometBFT 0.38 and serves old heights through its
@@ -137,22 +155,36 @@ type Generation struct {
 	// DoubledEvents marks the generation that repeats the finalize-block
 	// events of its wrapped EndBlock and epoch-hook calls (v8.0.x).
 	DoubledEvents bool
+	// StakingBeforeGov marks the generations whose staking EndBlocker runs
+	// before gov's (v5.1.2 to v7.2.0): a tally there counts the validator
+	// set staking just updated.
+	StakingBeforeGov bool
 }
 
 // Generations lists the releases of mainnet beezee-1 by height, oldest
 // first (see the package documentation for how it was verified).
 var Generations = []Generation{
 	{Release: "v5.0", From: 1, SDK: "0.44.3", Consensus: "Tendermint 0.34.14", IBC: "1.2.2", Format: FormatLegacy},
-	{Release: "v5.1.2", From: 3_646_700, SDK: "0.45.9", Consensus: "Tendermint 0.34.21", IBC: "1.2.2", Format: FormatLegacy},
-	{Release: "v6.0.0", From: 4_875_460, SDK: "0.45.10", Consensus: "Tendermint 0.34.22", IBC: "2.4.2", Format: FormatLegacy},
-	{Release: "v6.1.0", From: 9_079_079, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.5.1", Format: FormatLegacy},
-	{Release: "v7.0.0", From: 12_723_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
-	{Release: "v7.1.0", From: 13_710_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
-	{Release: "v7.1.1", From: 14_182_500, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
-	{Release: "v7.2.0", From: 15_951_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy},
+	{Release: "v5.1.2", From: 3_646_700, SDK: "0.45.9", Consensus: "Tendermint 0.34.21", IBC: "1.2.2", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v6.0.0", From: 4_875_460, SDK: "0.45.10", Consensus: "Tendermint 0.34.22", IBC: "2.4.2", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v6.1.0", From: 9_079_079, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.5.1", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v7.0.0", From: 12_723_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v7.1.0", From: 13_710_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v7.1.1", From: 14_182_500, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy, StakingBeforeGov: true},
+	{Release: "v7.2.0", From: 15_951_000, SDK: "0.45.16", Consensus: "CometBFT 0.34.27", IBC: "4.6.0", Format: FormatLegacy, StakingBeforeGov: true},
 	{Release: "v8.0.0", From: 20_237_800, SDK: "0.50.14", Consensus: "CometBFT 0.38.17", IBC: "8.7.0", Format: FormatCurrent, DoubledEvents: true},
 	{Release: "v8.1.0", From: 22_551_810, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
 	{Release: "v8.1.1", From: 23_855_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
+}
+
+// TallySetHeight is the height whose CometBFT validator set (/validators) is
+// the set a gov tally at height h counted: h+1, or h+2 in the generations
+// whose staking EndBlocker runs first (see the package documentation).
+func TallySetHeight(h int64) int64 {
+	if GenerationAt(h).StakingBeforeGov {
+		return h + 2
+	}
+	return h + 1
 }
 
 // GenerationAt returns the generation that produced height (≥ 1).

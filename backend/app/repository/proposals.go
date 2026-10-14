@@ -51,6 +51,38 @@ type Proposal struct {
 	ValidatorsTotal *int
 	// VotesCount is how many accounts voted (one vote each, the latest).
 	VotesCount int
+	// ActiveSet is the set the tally counted, nil until the state sync
+	// wrote the proposal's non-voters.
+	ActiveSet *ActiveSet
+}
+
+// ActiveSet is the validator set a proposal's tally counted.
+type ActiveSet struct {
+	// Height is the height of the CometBFT set read.
+	Height int64
+	// Size is how many validators the tally counted.
+	Size int
+	// NonVotersCount is how many of them did not vote.
+	NonVotersCount int
+}
+
+// ProposalNonVoter is a proposal_non_voters row with the moniker of its
+// validator.
+type ProposalNonVoter struct {
+	ConsensusAddress string
+	// OperatorAddress is nil when no validator was known with the
+	// consensus address.
+	OperatorAddress *string
+	Moniker         *string
+	VotingPower     int64
+	PowerPct        string
+}
+
+// NonVoterKey is the keyset position of a proposal's non-voters, by power
+// descending.
+type NonVoterKey struct {
+	VotingPower      int64
+	ConsensusAddress string
 }
 
 // ProposalVote is a proposal_votes row with its transaction's hash, the
@@ -134,16 +166,22 @@ func (r *Explorer) Proposals(ctx context.Context, status *string, before *int64,
 func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 	var p Proposal
 	var name, kind *string
+	var setHeight *int64
+	var setSize, nonVoters *int
 	dest := append(proposalSummaryDest(&p.ProposalSummary), &p.Summary, &p.Metadata, &p.Proposer, &name, &kind,
 		&p.MessageTypes, &p.Messages, &p.TotalDeposit, &p.TallyUpdatedAt, &p.SubmitHeight, &p.SubmitTxHash,
-		&p.ResolvedHeight, &p.UpdatedAt, &p.ValidatorsVoted, &p.ValidatorsTotal, &p.VotesCount)
+		&p.ResolvedHeight, &p.UpdatedAt, &p.ValidatorsVoted, &p.ValidatorsTotal, &p.VotesCount,
+		&setHeight, &setSize, &nonVoters)
 	err := r.db.QueryRow(ctx, `SELECT `+proposalSummaryCols+`, p.summary, p.metadata, p.proposer, l.name, l.kind,
 			p.message_types, p.messages, p.total_deposit, p.tally_updated_at, p.submit_height, p.submit_tx_hash,
 			p.resolved_height, p.updated_at,
 			(SELECT count(*) FROM explorer.validators v
 			  WHERE EXISTS (SELECT 1 FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id AND pv.voter = v.account_address)),
 			CASE WHEN p.status = 'voting_period' THEN (SELECT count(*) FROM explorer.validators v WHERE v.status = 'bonded') END,
-			(SELECT count(*) FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id)
+			(SELECT count(*) FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id),
+			p.active_set_height, p.active_set_size,
+			CASE WHEN p.non_voters_at IS NOT NULL THEN
+			  (SELECT count(*) FROM explorer.proposal_non_voters n WHERE n.proposal_id = p.id) END
 		FROM explorer.proposals p
 		LEFT JOIN explorer.labels l ON l.address = p.proposer
 		WHERE p.id = $1`, id).Scan(dest...)
@@ -154,7 +192,39 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 		return nil, fmt.Errorf("proposal %d: %w", id, err)
 	}
 	p.ProposerLabel = label(p.Proposer, name, kind)
+	if setHeight != nil && setSize != nil && nonVoters != nil {
+		p.ActiveSet = &ActiveSet{Height: *setHeight, Size: *setSize, NonVotersCount: *nonVoters}
+	}
 	return &p, nil
+}
+
+// ProposalNonVoters returns up to limit of the validators of proposal id's
+// tally set that did not vote, by voting power descending then consensus
+// address, after the key after (from the first when nil).
+func (r *Explorer) ProposalNonVoters(ctx context.Context, id int64, after *NonVoterKey, limit int) ([]ProposalNonVoter, error) {
+	args := []any{id, limit}
+	keyset := ""
+	if after != nil {
+		args = append(args, after.VotingPower, after.ConsensusAddress)
+		keyset = ` AND (n.voting_power < $3 OR (n.voting_power = $3 AND n.consensus_address > $4))`
+	}
+	rows, err := r.db.Query(ctx, `SELECT n.consensus_address, n.operator_address, v.moniker, n.voting_power, n.power_pct::text
+		FROM explorer.proposal_non_voters n
+		LEFT JOIN explorer.validators v ON v.operator_address = n.operator_address
+		WHERE n.proposal_id = $1`+keyset+`
+		ORDER BY n.voting_power DESC, n.consensus_address LIMIT $2`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("proposal %d non-voters: %w", id, err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ProposalNonVoter, error) {
+		var n ProposalNonVoter
+		err := row.Scan(&n.ConsensusAddress, &n.OperatorAddress, &n.Moniker, &n.VotingPower, &n.PowerPct)
+		return n, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("proposal %d non-voters: %w", id, err)
+	}
+	return out, nil
 }
 
 // ProposalVotes returns up to limit votes on proposal id, newest first,

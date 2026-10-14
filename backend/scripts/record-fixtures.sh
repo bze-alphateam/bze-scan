@@ -20,6 +20,10 @@
 # BLOCKS lists heights whose /block alone is recorded (the snapshots
 # command's search for a proposal's resolution reads only block times).
 #
+# VALSETS lists heights whose validator set is recorded: every page of
+# /validators at per_page=100 into testdata/<height>/validators.<page>.json
+# (the active set at a height, BFE-192).
+#
 # ABCI lists proposals as <id>@<resolved height H>, the set the snapshots
 # command reads (BFE-121). For each, at H - 1: the abci_query answers of bank
 # Balance of the bonded_tokens_pool in ubze, gov v1 Votes and gov v1 Deposits
@@ -29,7 +33,7 @@
 # code marshals.
 #
 # Usage: HEIGHTS="24998316 24998321..24998330" scripts/record-fixtures.sh
-#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [ABCI="47@23821225"])
+#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [ABCI="47@23821225"] [VALSETS="23821226"])
 set -euo pipefail
 
 ARCHIVE_RPC="${ARCHIVE_RPC:-https://rpc.getbze.com}"
@@ -37,13 +41,17 @@ ARCHIVE_RPC="${ARCHIVE_RPC%/}"
 HEIGHTS="${HEIGHTS:-}"
 BLOCKS="${BLOCKS:-}"
 ABCI="${ABCI:-}"
+VALSETS="${VALSETS:-}"
+
+# The page size of /validators, CometBFT's maximum (node.ValidatorsPerPage).
+PER_PAGE=100
 
 # bonded_tokens_pool, whose ubze balance is the bonded tokens at any height.
 BONDED_POOL="bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
 PAGE_LIMIT=1000
 
-if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}" ]]; then
-  echo "HEIGHTS, BLOCKS or ABCI is required, e.g. HEIGHTS=\"24998316\"" >&2
+if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}${VALSETS}" ]]; then
+  echo "HEIGHTS, BLOCKS, ABCI or VALSETS is required, e.g. HEIGHTS=\"24998316\"" >&2
   exit 2
 fi
 
@@ -98,6 +106,23 @@ for h in ${BLOCKS}; do
   fi
   mkdir -p "${OUT}/${h}"
   fetch "block?height=${h}" "${OUT}/${h}/block.json" 200
+done
+
+for h in ${VALSETS}; do
+  if ! [[ "${h}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "invalid height: ${h}" >&2
+    exit 2
+  fi
+  mkdir -p "${OUT}/${h}"
+  page=1 seen=0
+  while :; do
+    dest="${OUT}/${h}/validators.${page}.json"
+    fetch "validators?height=${h}&page=${page}&per_page=${PER_PAGE}" "${dest}" 200
+    total="$(grep -o '"total":"[0-9]*"' "${dest}" | grep -o '[0-9]*')"
+    seen=$(( seen + $(grep -o '"count":"[0-9]*"' "${dest}" | grep -o '[0-9]*') ))
+    (( seen < total )) || break
+    page=$(( page + 1 ))
+  done
 done
 
 # Protobuf encoding of the few requests the snapshots command sends, as hex.

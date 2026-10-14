@@ -68,7 +68,31 @@ type Proposal struct {
 	ResolvedHeight    *int64          `json:"resolved_height"`
 	ValidatorsVoted   ValidatorsVoted `json:"validators_voted"`
 	VotesCount        int             `json:"votes_count"`
+	ActiveSet         *ActiveSet      `json:"active_set"`
 	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// ActiveSet is the validator set a closed proposal's tally counted: the
+// CometBFT set at Height (the validators jailed in the tally's block left
+// out), Size validators of which NonVotersCount did not vote. Null until
+// the state sync recorded it.
+type ActiveSet struct {
+	Height         int64 `json:"height"`
+	Size           int   `json:"size"`
+	NonVotersCount int   `json:"non_voters_count"`
+}
+
+// ProposalNonVoter is an item of GET /api/v1/proposals/{id}/non-voters: a
+// validator of the tally's set that did not vote. OperatorAddress and
+// Moniker are null when no validator is known with the consensus address;
+// VotingPower is its consensus power then, PowerPct its share of the set's
+// power in percent with five decimals.
+type ProposalNonVoter struct {
+	OperatorAddress  *string `json:"operator_address"`
+	ConsensusAddress string  `json:"consensus_address"`
+	Moniker          *string `json:"moniker"`
+	VotingPower      int64   `json:"voting_power"`
+	PowerPct         string  `json:"power_pct"`
 }
 
 // ProposalVote is an item of GET /api/v1/proposals/{id}/votes. Option is
@@ -130,8 +154,50 @@ func NewProposal(p *repository.Proposal) Proposal {
 		SubmitHeight: p.SubmitHeight, SubmitTxHash: p.SubmitTxHash, ResolvedHeight: p.ResolvedHeight,
 		ValidatorsVoted: ValidatorsVoted{Voted: p.ValidatorsVoted, Total: p.ValidatorsTotal},
 		VotesCount:      p.VotesCount,
+		ActiveSet:       newActiveSet(p.ActiveSet),
 		UpdatedAt:       p.UpdatedAt.UTC(),
 	}
+}
+
+func newActiveSet(s *repository.ActiveSet) *ActiveSet {
+	if s == nil {
+		return nil
+	}
+	return &ActiveSet{Height: s.Height, Size: s.Size, NonVotersCount: s.NonVotersCount}
+}
+
+// NewProposalNonVoter maps a proposal_non_voters row.
+func NewProposalNonVoter(n repository.ProposalNonVoter) ProposalNonVoter {
+	return ProposalNonVoter{
+		OperatorAddress: n.OperatorAddress, ConsensusAddress: n.ConsensusAddress, Moniker: n.Moniker,
+		VotingPower: n.VotingPower, PowerPct: n.PowerPct,
+	}
+}
+
+// nonVoterCursor is the JSON of a non-voters cursor.
+type nonVoterCursor struct {
+	Power int64  `json:"p"`
+	Cons  string `json:"c"`
+}
+
+// EncodeNonVoterCursor is the cursor after a non-voter: base64 (URL
+// alphabet, no padding) of its keyset position.
+func EncodeNonVoterCursor(k repository.NonVoterKey) string {
+	raw, _ := json.Marshal(nonVoterCursor{Power: k.VotingPower, Cons: k.ConsensusAddress}) // an int and a string always marshal
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// DecodeNonVoterCursor reverses EncodeNonVoterCursor.
+func DecodeNonVoterCursor(cursor string) (*repository.NonVoterKey, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || !utf8.Valid(raw) {
+		return nil, ErrInvalidCursor
+	}
+	var c nonVoterCursor
+	if err := json.Unmarshal(raw, &c); err != nil || c.Cons == "" || c.Power < 0 {
+		return nil, ErrInvalidCursor
+	}
+	return &repository.NonVoterKey{VotingPower: c.Power, ConsensusAddress: c.Cons}, nil
 }
 
 // NewProposalVote maps a proposal_votes row.

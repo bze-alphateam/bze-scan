@@ -25,6 +25,7 @@ type fakeProposals struct {
 	proposal *repository.Proposal
 	votes    []repository.ProposalVote
 	deposits []repository.ProposalDeposit
+	missing  []repository.ProposalNonVoter
 	err      error
 
 	gotStatus, gotOption *string
@@ -32,6 +33,7 @@ type fakeProposals struct {
 	gotBefore            *int64
 	gotVoteKey           *repository.VoteKey
 	gotDepositKey        *repository.DepositKey
+	gotNonVoterKey       *repository.NonVoterKey
 	gotLimit             int
 }
 
@@ -60,6 +62,11 @@ func (f *fakeProposals) ProposalDeposits(_ context.Context, _ int64, before *rep
 	return f.deposits[:min(limit, len(f.deposits))], nil
 }
 
+func (f *fakeProposals) ProposalNonVoters(_ context.Context, _ int64, after *repository.NonVoterKey, limit int) ([]repository.ProposalNonVoter, error) {
+	f.gotNonVoterKey, f.gotLimit = after, limit
+	return f.missing[:min(limit, len(f.missing))], nil
+}
+
 func proposalServer(f *fakeProposals) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
@@ -68,6 +75,7 @@ func proposalServer(f *fakeProposals) *echo.Echo {
 	e.GET("/api/v1/proposals/:id", h.Proposal)
 	e.GET("/api/v1/proposals/:id/votes", h.ProposalVotes)
 	e.GET("/api/v1/proposals/:id/deposits", h.ProposalDeposits)
+	e.GET("/api/v1/proposals/:id/non-voters", h.ProposalNonVoters)
 	return e
 }
 
@@ -128,6 +136,13 @@ func TestProposalPage(t *testing.T) {
 	assert.Equal(t, "Alpha", got.ProposerLabel.Name)
 	assert.JSONEq(t, `[{"denom":"ubze","amount":"100"}]`, string(got.TotalDeposit))
 	assert.Nil(t, got.ResolvedHeight)
+	assert.Nil(t, got.ActiveSet, "no non-voters recorded")
+	assert.Contains(t, rec.Body.String(), `"active_set":null`)
+
+	p.ActiveSet = &repository.ActiveSet{Height: 23821226, Size: 23, NonVotersCount: 4}
+	rec = get(t, e, "/api/v1/proposals/47")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"active_set":{"height":23821226,"size":23,"non_voters_count":4}`)
 
 	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/proposals/48").Code)
 	for _, path := range []string{"/api/v1/proposals/0", "/api/v1/proposals/x", "/api/v1/proposals/-1"} {
@@ -187,9 +202,50 @@ func TestProposalDepositsPage(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/deposits?cursor=x").Code)
 }
 
+func TestProposalNonVotersPage(t *testing.T) {
+	f := &fakeProposals{proposal: &repository.Proposal{ProposalSummary: summary(47)}, missing: []repository.ProposalNonVoter{
+		{ConsensusAddress: "AA", OperatorAddress: strp("bzevaloper1a"), Moniker: strp("Alpha"), VotingPower: 30, PowerPct: "30.00000"},
+		{ConsensusAddress: "BB", VotingPower: 20, PowerPct: "20.00000"},
+	}}
+	e := proposalServer(f)
+	rec := get(t, e, "/api/v1/proposals/47/non-voters?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, 2, f.gotLimit)
+	assert.Nil(t, f.gotNonVoterKey)
+	var raw struct {
+		Items      []map[string]any `json:"items"`
+		NextCursor *string          `json:"next_cursor"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	require.Len(t, raw.Items, 1)
+	assert.Equal(t, map[string]any{"operator_address": "bzevaloper1a", "consensus_address": "AA", "moniker": "Alpha",
+		"voting_power": float64(30), "power_pct": "30.00000"}, raw.Items[0])
+	require.NotNil(t, raw.NextCursor)
+
+	rec = get(t, e, "/api/v1/proposals/47/non-voters?cursor="+*raw.NextCursor)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, &repository.NonVoterKey{VotingPower: 30, ConsensusAddress: "AA"}, f.gotNonVoterKey)
+	page := decode[dto.List[dto.ProposalNonVoter]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Nil(t, page.Items[1].OperatorAddress, "no validator known with the address")
+	assert.Nil(t, page.Items[1].Moniker)
+	assert.Nil(t, page.NextCursor)
+
+	f.missing = nil
+	rec = get(t, e, "/api/v1/proposals/47/non-voters")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String(), "nothing recorded: an empty list")
+
+	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/proposals/48/non-voters").Code)
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/non-voters?cursor=x").Code)
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/proposals/47/non-voters?cursor="+dto.EncodeVoteCursor(repository.VoteKey{Height: 1, Voter: "bze1v"})).Code,
+		"another list's cursor")
+}
+
 func TestProposalReadFailuresAreInternal(t *testing.T) {
 	e := proposalServer(&fakeProposals{err: errors.New("db down")})
-	for _, path := range []string{"/api/v1/proposals", "/api/v1/proposals/1", "/api/v1/proposals/1/votes"} {
+	for _, path := range []string{"/api/v1/proposals", "/api/v1/proposals/1", "/api/v1/proposals/1/votes", "/api/v1/proposals/1/non-voters"} {
 		assert.Equal(t, http.StatusInternalServerError, get(t, e, path).Code, path)
 	}
 }

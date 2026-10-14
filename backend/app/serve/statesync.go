@@ -22,6 +22,7 @@ import (
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
 	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
@@ -35,6 +36,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/nonvoters"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/orders"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/paramsnap"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/prices"
@@ -57,14 +59,16 @@ const keybaseTimeout = 10 * time.Second
 // them: the IBC channels before the chain registry that names their
 // counterparties and the denoms whose origin they give, the chain registry
 // before the denoms it names, the holders and the prices after the denoms
-// they fill, the parameters after the proposals that explain their changes,
+// they fill, the proposals' non-voters after the proposals they read, the
+// parameters after the proposals that explain their changes,
 // the open orders' reconciliation with the node's order book anywhere (it
 // reads nothing the others write), the chain state after them (it counts
 // the validators and copies the native price), the daily statistics last
 // (they read only the indexed tables). The chain registry runs only
 // with both its URLs, the prices only with AGGREGATOR_URL, the validator
-// logos only with a KeybaseURL (Load always sets one). Call closeFn
-// when done.
+// logos only with a KeybaseURL (Load always sets one). The non-voters read
+// the validator sets of the heights the local node pruned from the archive
+// (ARCHIVE_RPC_URL). Call closeFn when done.
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
 		return nil, nil, err
@@ -82,6 +86,8 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 	bank := banktypes.NewQueryClient(conn)
 	staking := stakingtypes.NewQueryClient(conn)
 	localNode := node.New(cfg.NodeRPCURL)
+	// The by-height reads of the non-voters: the local node, else the archive.
+	routed := activeset.NewRouted(localNode, node.New(cfg.ArchiveRPCURL))
 	denomStore := denoms.NewPGStore(pool)
 	tradebin := tradebintypes.NewQueryClient(conn)
 	resyncs := &statesync.Deferred{}
@@ -129,6 +135,11 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Staking: staking,
 			JSON:    codec,
 			Store:   proposals.NewPGStore(pool),
+		}, 0),
+		nonvoters.New(nonvoters.Deps{
+			Set:   activeset.New(routed, activeset.NewPGResolver(pool)),
+			Node:  routed,
+			Store: nonvoters.NewPGStore(pool),
 		}, 0),
 		paramsnap.New(paramsnap.Deps{
 			Params: params.NewGRPC(conn, codec),

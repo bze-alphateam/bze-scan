@@ -43,6 +43,9 @@ const (
 	Orders = "orders"
 	// DailyStats is the nightly aggregation of the home charts' days.
 	DailyStats = "daily_stats"
+	// ProposalNonVoters is the validators of a closed proposal's tally set
+	// that did not vote; its keys are proposal ids.
+	ProposalNonVoters = "proposal_non_voters"
 )
 
 // registryNamePrefix starts the chain_registry keys that name a chain by its
@@ -395,14 +398,34 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 
 // RunSet resyncs the set named name in full once (sync-state --job).
 func (s *Syncer) RunSet(ctx context.Context, name string) error {
-	if _, ok := s.byID[name]; !ok {
-		names := make([]string, 0, len(s.sets))
-		for _, set := range s.sets {
-			names = append(names, set.Name())
-		}
-		return fmt.Errorf("no set %q; the registered sets are %s", name, strings.Join(names, ", "))
+	if err := s.known(name); err != nil {
+		return err
 	}
 	return s.run(ctx, job{set: name, key: All})
+}
+
+// RunKey resyncs the entry key of the set named name once (sync-state
+// --job --id).
+func (s *Syncer) RunKey(ctx context.Context, name, key string) error {
+	if err := s.known(name); err != nil {
+		return err
+	}
+	if key == "" || key == All {
+		return fmt.Errorf("no entry of %s named", name)
+	}
+	return s.run(ctx, job{set: name, key: key})
+}
+
+// known fails for a set name no set registered.
+func (s *Syncer) known(name string) error {
+	if _, ok := s.byID[name]; ok {
+		return nil
+	}
+	names := make([]string, 0, len(s.sets))
+	for _, set := range s.sets {
+		names = append(names, set.Name())
+	}
+	return fmt.Errorf("no set %q; the registered sets are %s", name, strings.Join(names, ", "))
 }
 
 func (s *Syncer) work(ctx context.Context) {

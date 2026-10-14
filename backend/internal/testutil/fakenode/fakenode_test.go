@@ -262,3 +262,26 @@ func TestHoldAtHangsThatRequestUntilTheClientGivesUp(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, http.StatusOK, statusCode(t, block), "once only")
 }
+
+func TestValidatorsAnswersTheRecordedSet(t *testing.T) {
+	n := fakenode.New(t)
+	code, body := get(t, n.URL+"/validators?height=23821226&page=1&per_page=100")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, readFile(t, "23821226", "validators.1.json"), body)
+	assert.Equal(t, 1, n.RequestsAt(fakenode.RouteValidators, 23821226))
+
+	code, body = get(t, n.URL+"/validators?height=23821226&per_page=100")
+	assert.Equal(t, http.StatusOK, code, "page 1 by default")
+	assert.Equal(t, readFile(t, "23821226", "validators.1.json"), body)
+
+	code, _ = get(t, n.URL+"/validators?height=23821226&page=2&per_page=100")
+	assert.Equal(t, http.StatusInternalServerError, code, "a page not recorded answers like an unknown height")
+	assert.Equal(t, http.StatusBadRequest, statusCode(t, n.URL+"/validators?height=23821226&page=1&per_page=30"),
+		"only per_page=100 is recorded")
+	assert.Equal(t, http.StatusBadRequest, statusCode(t, n.URL+"/validators?height=23821226&page=0&per_page=100"))
+
+	n.SetEarliestHeight(23821227)
+	code, body = get(t, n.URL+"/validators?height=23821226&page=1&per_page=100")
+	assert.Equal(t, http.StatusInternalServerError, code)
+	assert.Contains(t, string(body), "is not available, lowest height is 23821227")
+}

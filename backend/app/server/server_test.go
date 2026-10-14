@@ -366,9 +366,13 @@ func (noProposals) ProposalDeposits(context.Context, int64, *repository.DepositK
 	return nil, nil
 }
 
+func (noProposals) ProposalNonVoters(context.Context, int64, *repository.NonVoterKey, int) ([]repository.ProposalNonVoter, error) {
+	return nil, nil
+}
+
 func TestProposalRoutes(t *testing.T) {
 	e := server.New(server.Deps{Proposals: noProposals{}})
-	for _, path := range []string{"/api/v1/proposals", "/api/v1/proposals/47", "/api/v1/proposals/47/votes", "/api/v1/proposals/47/deposits"} {
+	for _, path := range []string{"/api/v1/proposals", "/api/v1/proposals/47", "/api/v1/proposals/47/votes", "/api/v1/proposals/47/deposits", "/api/v1/proposals/47/non-voters"} {
 		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)
 	}
 	assert.Equal(t, http.StatusNotFound, serve(t, e, http.MethodGet, "/api/v1/proposals/48/votes").Code)

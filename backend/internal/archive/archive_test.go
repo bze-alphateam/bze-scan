@@ -74,6 +74,20 @@ func TestGenerationAt(t *testing.T) {
 	}
 }
 
+func TestTallySetHeight(t *testing.T) {
+	cases := []struct{ resolved, set int64 }{
+		{3_646_699, 3_646_700},   // v5.0: gov, then staking
+		{3_646_700, 3_646_702},   // v5.1.2: staking, then gov
+		{17_131_437, 17_131_439}, // v7.2.0, proposal 43
+		{20_237_799, 20_237_801}, // the last v7.2.0 block
+		{20_237_800, 20_237_801}, // v8.0.0: gov first again
+		{23_821_225, 23_821_226}, // v8.1.0, proposal 47
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.set, archive.TallySetHeight(c.resolved), "resolved at %d", c.resolved)
+	}
+}
+
 func TestGenerationsAreOrdered(t *testing.T) {
 	for i := 1; i < len(archive.Generations); i++ {
 		assert.Less(t, archive.Generations[i-1].From, archive.Generations[i].From)

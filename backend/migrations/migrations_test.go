@@ -71,6 +71,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"ibc_client_status_chain_status",
 		"order_cancel_lookup",
 		"lean_message_events",
+		"proposal_non_voters",
 	}, idents)
 }
 

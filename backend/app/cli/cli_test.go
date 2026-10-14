@@ -115,6 +115,9 @@ func TestSyncStateRejectsABadDayRange(t *testing.T) {
 		{[]string{"--job", "daily_stats", "--from", "2026-10-01", "--to", "yesterday"}, `--to: "yesterday": not a day`},
 		{[]string{"--job", "daily_stats", "--from", "1.10.2026", "--to", "2026-10-02"}, "--from:"},
 		{[]string{"--job", "daily_stats", "--from", "2026-10-01", "--to", "2026-10-02"}, "DATABASE_URL is required"},
+		{[]string{"--id", "47"}, "--id needs --job, without --from and --to"},
+		{[]string{"--job", "daily_stats", "--id", "47", "--from", "2026-10-01", "--to", "2026-10-02"}, "--id needs --job, without --from and --to"},
+		{[]string{"--job", "proposal_non_voters", "--id", "47"}, "DATABASE_URL is required"},
 	} {
 		root := cli.NewRootCmd()
 		root.SetArgs(append([]string{"sync-state"}, c.args...))
