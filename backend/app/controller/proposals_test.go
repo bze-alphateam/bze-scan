@@ -143,6 +143,18 @@ func TestProposalPage(t *testing.T) {
 	rec = get(t, e, "/api/v1/proposals/47")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), `"active_set":{"height":23821226,"size":23,"non_voters_count":4}`)
+	assert.Contains(t, rec.Body.String(), `"upgrade":null`)
+
+	// A passed upgrade: planned, then halted and resumed.
+	p.Upgrade = &repository.ProposalUpgrade{Height: 22551810}
+	rec = get(t, e, "/api/v1/proposals/47")
+	assert.Contains(t, rec.Body.String(),
+		`"upgrade":{"height":22551810,"halt_time":null,"resume_time":null,"watched":false,"downtime_seconds":null}`)
+	halt, resume := time.Date(2026, 4, 28, 15, 52, 31, 683549605, time.UTC), time.Date(2026, 4, 28, 16, 4, 39, 802993053, time.UTC)
+	p.Upgrade = &repository.ProposalUpgrade{Height: 22551810, HaltTime: &halt, ResumeTime: &resume, Watched: true}
+	rec = get(t, e, "/api/v1/proposals/47")
+	assert.Contains(t, rec.Body.String(),
+		`"upgrade":{"height":22551810,"halt_time":"2026-04-28T15:52:31.683549605Z","resume_time":"2026-04-28T16:04:39.802993053Z","watched":true,"downtime_seconds":728}`)
 
 	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/proposals/48").Code)
 	for _, path := range []string{"/api/v1/proposals/0", "/api/v1/proposals/x", "/api/v1/proposals/-1"} {

@@ -54,6 +54,9 @@ type Proposal struct {
 	// ActiveSet is the set the tally counted, nil until the state sync
 	// wrote the proposal's non-voters.
 	ActiveSet *ActiveSet
+	// Upgrade is the software upgrade the proposal planned, nil for any
+	// other proposal and until the state sync found it (once passed).
+	Upgrade *ProposalUpgrade
 }
 
 // ActiveSet is the validator set a proposal's tally counted.
@@ -168,10 +171,13 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 	var name, kind *string
 	var setHeight *int64
 	var setSize, nonVoters *int
+	var up ProposalUpgrade
+	var upHeight *int64
+	var upWatched *bool
 	dest := append(proposalSummaryDest(&p.ProposalSummary), &p.Summary, &p.Metadata, &p.Proposer, &name, &kind,
 		&p.MessageTypes, &p.Messages, &p.TotalDeposit, &p.TallyUpdatedAt, &p.SubmitHeight, &p.SubmitTxHash,
 		&p.ResolvedHeight, &p.UpdatedAt, &p.ValidatorsVoted, &p.ValidatorsTotal, &p.VotesCount,
-		&setHeight, &setSize, &nonVoters)
+		&setHeight, &setSize, &nonVoters, &upHeight, &up.HaltTime, &up.ResumeTime, &upWatched)
 	err := r.db.QueryRow(ctx, `SELECT `+proposalSummaryCols+`, p.summary, p.metadata, p.proposer, l.name, l.kind,
 			p.message_types, p.messages, p.total_deposit, p.tally_updated_at, p.submit_height, p.submit_tx_hash,
 			p.resolved_height, p.updated_at,
@@ -181,9 +187,12 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 			(SELECT count(*) FROM explorer.proposal_votes pv WHERE pv.proposal_id = p.id),
 			p.active_set_height, p.active_set_size,
 			CASE WHEN p.non_voters_at IS NOT NULL THEN
-			  (SELECT count(*) FROM explorer.proposal_non_voters n WHERE n.proposal_id = p.id) END
+			  (SELECT count(*) FROM explorer.proposal_non_voters n WHERE n.proposal_id = p.id) END,
+			u.height, u.halt_time, u.resume_time, u.watched
 		FROM explorer.proposals p
 		LEFT JOIN explorer.labels l ON l.address = p.proposer
+		LEFT JOIN LATERAL (SELECT height, halt_time, resume_time, watched FROM explorer.upgrades
+		  WHERE proposal_id = p.id ORDER BY height DESC LIMIT 1) u ON true
 		WHERE p.id = $1`, id).Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -194,6 +203,10 @@ func (r *Explorer) Proposal(ctx context.Context, id int64) (*Proposal, error) {
 	p.ProposerLabel = label(p.Proposer, name, kind)
 	if setHeight != nil && setSize != nil && nonVoters != nil {
 		p.ActiveSet = &ActiveSet{Height: *setHeight, Size: *setSize, NonVotersCount: *nonVoters}
+	}
+	if upHeight != nil && upWatched != nil {
+		up.Height, up.Watched = *upHeight, *upWatched
+		p.Upgrade = &up
 	}
 	return &p, nil
 }
