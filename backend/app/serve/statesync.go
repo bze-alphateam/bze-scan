@@ -17,6 +17,7 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
@@ -42,6 +43,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/prices"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/proposals"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/registry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/validators"
 )
 
@@ -68,7 +70,8 @@ const keybaseTimeout = 10 * time.Second
 // with both its URLs, the prices only with AGGREGATOR_URL, the validator
 // logos only with a KeybaseURL (Load always sets one). The non-voters read
 // the validator sets of the heights the local node pruned from the archive
-// (ARCHIVE_RPC_URL). Call closeFn when done.
+// (ARCHIVE_RPC_URL), and the upgrade recovery the commits after an upgrade
+// the same way, paced by BACKFILL_RATE_LIMIT. Call closeFn when done.
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
 		return nil, nil, err
@@ -141,6 +144,12 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Node:  routed,
 			Store: nonvoters.NewPGStore(pool),
 		}, 0),
+		upgrades.New(upgrades.Deps{
+			Set:     activeset.New(routed, activeset.NewPGResolver(pool)),
+			Node:    routed,
+			Limiter: rate.NewLimiter(rate.Limit(cfg.BackfillRateLimit), 1),
+			Store:   upgrades.NewPGStore(pool),
+		}, upgrades.Config{Window: cfg.UpgradeRecoveryWindow}),
 		paramsnap.New(paramsnap.Deps{
 			Params: params.NewGRPC(conn, codec),
 			Node:   localNode,
@@ -188,4 +197,22 @@ func NewDailyStats(ctx context.Context, cfg *config.Config) (set *dailystats.Set
 		return nil, nil, fmt.Errorf("daily stats pool: %w", err)
 	}
 	return dailystats.New(dailystats.Deps{Store: dailystats.NewPGStore(pool)}), pool.Close, nil
+}
+
+// NewHaltWatch builds the halt watch over the local node (NODE_RPC_URL), on
+// a pool of its own. Call closeFn when done.
+func NewHaltWatch(ctx context.Context, cfg *config.Config) (watch *upgrades.Watch, closeFn func(), err error) {
+	if err := cfg.RequireDatabase(); err != nil {
+		return nil, nil, err
+	}
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("halt watch pool: %w", err)
+	}
+	local := node.New(cfg.NodeRPCURL)
+	return upgrades.NewWatch(upgrades.WatchDeps{
+		Node:  local,
+		Set:   activeset.New(local, activeset.NewPGResolver(pool)),
+		Store: upgrades.NewPGStore(pool),
+	}, upgrades.WatchConfig{Interval: cfg.HaltWatchInterval}), pool.Close, nil
 }

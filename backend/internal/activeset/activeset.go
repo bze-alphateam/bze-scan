@@ -119,6 +119,7 @@ func ConsensusAddress(ed25519Key []byte) string {
 type RoutedNode interface {
 	Node
 	BlockResults(ctx context.Context, height int64) (*node.BlockResults, []byte, error)
+	Commit(ctx context.Context, height int64) (*node.Commit, []byte, error)
 }
 
 // Routed reads every height from the local node, or from the archive when
@@ -147,5 +148,12 @@ func (r *Routed) Validators(ctx context.Context, height int64, page, perPage int
 func (r *Routed) BlockResults(ctx context.Context, height int64) (*node.BlockResults, []byte, error) {
 	return route.Via(r.r, height, func(n RoutedNode) (*node.BlockResults, []byte, error) {
 		return n.BlockResults(ctx, height)
+	})
+}
+
+// Commit reads /commit at height.
+func (r *Routed) Commit(ctx context.Context, height int64) (*node.Commit, []byte, error) {
+	return route.Via(r.r, height, func(n RoutedNode) (*node.Commit, []byte, error) {
+		return n.Commit(ctx, height)
 	})
 }

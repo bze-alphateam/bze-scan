@@ -72,6 +72,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"order_cancel_lookup",
 		"lean_message_events",
 		"proposal_non_voters",
+		"upgrade_recovery",
 	}, idents)
 }
 
