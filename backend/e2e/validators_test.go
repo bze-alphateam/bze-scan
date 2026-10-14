@@ -51,6 +51,8 @@ type syncEnv struct {
 	agg *fakeAggregator
 	// kb stands in for Keybase, the validator logos' outbound HTTPS.
 	kb *fakeKeybase
+	// archive is the archive node of sync-state; node when nil.
+	archive *fakenode.Node
 }
 
 func newSyncEnv(t *testing.T) *syncEnv {
@@ -77,6 +79,11 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("DATABASE_URL", e.url)
 	t.Setenv("NODE_GRPC_ADDR", e.grpc.Addr)
 	t.Setenv("NODE_RPC_URL", e.node.URL)
+	archive := e.node
+	if e.archive != nil {
+		archive = e.archive
+	}
+	t.Setenv("ARCHIVE_RPC_URL", archive.URL)
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
 	t.Setenv("AGGREGATOR_URL", e.agg.URL)

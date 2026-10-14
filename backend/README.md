@@ -23,9 +23,10 @@ One binary, `bze-scan`, with subcommands:
   from the local node while it still has them and from archive nodes otherwise.
 - `sync-state` — one full refresh of validators, proposals, denominations,
   holders, labels, the Cosmos chain registry cache, token prices, the
-  parameter snapshots, the open orders' reconciliation, the chain state and
-  the daily statistics, for operations (it reads the node's gRPC and its
-  `/status`); `--job <set>` runs one set, `--job daily_stats --from
+  parameter snapshots, the open orders' reconciliation, the proposals'
+  non-voters, the chain state and the daily statistics, for operations (it
+  reads the node's gRPC and its `/status`); `--job <set>` runs one set,
+  `--job <set> --id <key>` one entry of it, `--job daily_stats --from
   YYYY-MM-DD --to YYYY-MM-DD` recomputes those days from the database alone.
 - `snapshots` — reads past state from the archive node at the height it
   describes (the bonded tokens, votes and deposits of resolved proposals)
@@ -33,8 +34,8 @@ One binary, `bze-scan`, with subcommands:
 - `version` — prints the commit the binary was built from (`dev` for a plain
   `go build`; the image sets it with `-ldflags "-X main.version=<sha>"`).
 
-Every node call is by height (`/block`, `/block_results`, `/commit`, `/status`,
-`/abci_query` at a height and gRPC state queries); the search routes are never
+Every node call is by height (`/block`, `/block_results`, `/commit`,
+`/validators`, `/status`, `/abci_query` at a height and gRPC state queries); the search routes are never
 used, on any node.
 
 The raw-JSON routes serve a block, its results, its commit and a transaction
@@ -122,7 +123,7 @@ Invalid values stop the process at startup with every problem listed.
 | `make migrate` | runs `bze-scan migrate up` against the compose database (or `DATABASE_URL` when set) |
 | `bze-scan backfill` | runs the main backfill job standalone with the same configuration (see Backfill below); exit 0 once the floor is reached, 1 otherwise |
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
-| `bze-scan sync-state [--job <set>] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
+| `bze-scan sync-state [--job <set> [--id <key>]...] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--id` resyncs only those entries of the set (`--job proposal_non_voters --id 47` computes proposal 47's non-voters again). `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
 | `bze-scan snapshots [--kind proposals] [--id N]... [--workers N]` | reads past state from the archive and overwrites the database's (see Snapshots below); exit 0 when every target succeeded, 2 when some failed (listed on stderr), 1 on a configuration or database error |
 | `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
@@ -187,6 +188,10 @@ internal/classify/ message and block-event classification (Go source of
                    truth, mirrored into SQL by migrate)
 internal/node/     CometBFT RPC client, by-height routes only (abci_query at
                    a height included)
+internal/route/    the local node for the heights it still has, else the
+                   archive (reindex, active set)
+internal/activeset/
+                   the CometBFT validator set at a height, with operators
 internal/snapshots/
                    the snapshots command: the archive reader (paced), the
                    Kind interface and the runner; kinds in subpackages
@@ -336,8 +341,9 @@ every later route follows:
 | `GET /api/v1/tokens/{denom}/holders?cursor&limit` | the last holders snapshot, largest balance first: rank, address, `label`, balance (base units) and `share_pct` (of the supply, five decimals, null without a supply); every non-zero balance, refreshed hourly |
 | `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=`, `/api/v1/token/holders?denom=` | the same four with the denom as a query value, the chain's own convention for denoms with `/` |
 | `GET /api/v1/proposals?status=deposit_period\|voting_period\|passed\|rejected\|failed\|canceled\|dropped&cursor&limit` | every proposal, id descending: id, title, kind (`software_upgrade`, `community_pool_spend`, `parameter_change`, `cointrunk_publisher`, `ibc_client_update`, `text`, `other`), status, expedited, submit/deposit-end/voting-start/voting-end times, `tally` (`{yes, no, abstain, no_with_veto}` in base units, null until synced), `turnout_pct` (the tally's sum over the bonded tokens it was measured against, five decimals, null without them) and `tally_source` (where those bonded tokens come from: `sync` while the proposal voted, `archive` from the snapshots command, historical; null without them); another status is a 400 |
-| `GET /api/v1/proposals/{id}` | the list item plus summary, metadata, proposer (and `proposer_label`), message_types, `messages` (proto JSON; a legacy content inside its `MsgExecLegacyContent`), total_deposit, tally_bonded_tokens, tally_updated_at, submit_height and submit_tx_hash (null for a proposal submitted below the indexed range), resolved_height, `validators_voted` (`{voted, total}`: bonded validators whose owner voted, of all bonded validators), `votes_count` (the accounts that voted) and updated_at; 404 when unknown |
+| `GET /api/v1/proposals/{id}` | the list item plus summary, metadata, proposer (and `proposer_label`), message_types, `messages` (proto JSON; a legacy content inside its `MsgExecLegacyContent`), total_deposit, tally_bonded_tokens, tally_updated_at, submit_height and submit_tx_hash (null for a proposal submitted below the indexed range), resolved_height, `validators_voted` (`{voted, total}`: bonded validators whose owner voted, of all bonded validators), `votes_count` (the accounts that voted), `active_set` (`{height, size, non_voters_count}`: the CometBFT set the tally counted, its size and how many of it did not vote; null until recorded, always null for a proposal that never had a tally) and updated_at; 404 when unknown |
 | `GET /api/v1/proposals/{id}/votes?option=yes\|no\|abstain\|no_with_veto\|weighted&voter=validators&cursor&limit` | every vote the explorer indexed (the chain deletes them once tallied), newest first (`voter=validators` keeps the votes of accounts owning a validator), one per voter (the latest): voter (and `voter_label`), option (null for a split vote; `weighted` lists those), options (the weights as SDK v0.50 encodes them), height, tx_index, tx_hash, time, and for a validator owner `validator` (moniker), `validator_operator` and `voting_power_pct` (its current share), null for other voters; `source` is `event`, or `archive` for a vote the snapshots command read from the state before the tally (historical: tx_index -1, tx_hash null) |
+| `GET /api/v1/proposals/{id}/non-voters?cursor&limit` | the validators of the set the proposal's tally counted that did not vote (see State sync, Proposals' non-voters), by voting power descending then consensus address: `operator_address` and `moniker` (null when no validator is known with the address), `consensus_address` (upper-case hex), `voting_power` (consensus power at the tally) and `power_pct` (share of the set's power, five decimals); `no-store`; an empty list until the set is recorded; 404 when the proposal is unknown |
 | `GET /api/v1/proposals/{id}/deposits?cursor&limit` | every deposit, the initial one included, newest first: depositor (and `depositor_label`), amount (coins), height, tx_index, tx_hash, time and `source`: `event`, or `archive` for a depositor's total the snapshots command read from the state before the tally (historical: tx_index -1, tx_hash null; left out once that depositor's transactions are indexed) |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/stats` | the home tiles, from the indexed blocks and transactions and the `chain_state` rows (no node call): `latest_height`, `latest_time`, `avg_block_time_ms` (the average `block_time_ms` of the last hour) and `txs_24h` (transactions of the last 24 hours), both windows measured back from the latest indexed block; `block_time_windows`, the average block time over the last 10,000, 30,000, 50,000 and 100,000 blocks in that order (`[{blocks, from_height, avg_block_time_ms}]`: (time of the latest indexed block − time of block `from_height`) ÷ `blocks`, whole milliseconds, read from the two blocks by height; `avg_block_time_ms` null when block `from_height` is not indexed or below 1; `[]` before the first block), for estimates further ahead than the one-hour `avg_block_time_ms`; `bonded_tokens`, `supply` and `community_pool` (whole base units of `ubze`), `staked_share` (bonded over supply), `inflation`, `reward_rate` (inflation × (1 − community tax) ÷ staked share: the yearly staking reward before commission), all three percentages with five decimals; `validators` (`{active, total}`), `max_validators`, `unbonding_period` (seconds), `price_usd` and `price_change_24h_pct` of `ubze` (null until the prices job); `daily`, the stored days of the last 30 closed UTC days (`?days=` from 1 to 365, otherwise a 400), oldest first, a day without indexed blocks absent; and `today`, the current UTC day so far computed live with the same query (null while it has no indexed block). Each day is `{day, blocks, txs, txs_failed, active_addresses, new_addresses, transfers, fees, avg_block_time_ms}` (see Daily statistics under State sync). Every chain-state field is null until its row exists |
@@ -908,7 +914,7 @@ indexer) the state sync:
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
-   proposals, prices, chain state: one minute; denoms, holders, IBC
+   proposals, proposals' non-voters, prices, chain state: one minute; denoms, holders, IBC
    channels, orders: one hour;
    chain registry, params: one day; daily statistics: every night at
    00:10 UTC), the safety net for what no event announces. A full resync, from
@@ -920,7 +926,8 @@ run: it is logged and recorded (the prices set logs a failing aggregator once
 per change of state, not every minute), the rows stay as they were, and the next
 trigger retries. Nothing here is on the user's critical path. `bze-scan
 sync-state` runs the full resync of every set once and exits 1 when any
-failed; `--job <set>` runs one set only.
+failed; `--job <set>` runs one set only, `--job <set> --id <key>` one entry
+of it.
 
 **Validators.** A full resync reads staking `Validators` (every status, 200
 per page), slashing `SigningInfos` and `Params`, and per validator staking
@@ -1114,6 +1121,44 @@ wrote. A proposal the sync writes before its resolution is indexed takes
 `resolved_height` from the stored `active_proposal`/`inactive_proposal`
 block event.
 
+**Proposals' non-voters.** The `proposal_non_voters` set records, for every
+proposal whose voting ended in a tally (passed, rejected, failed; never a
+canceled or dropped one), the validators of the set the tally counted that
+did not vote, and only those: `explorer.proposal_non_voters` (consensus
+address, operator address, consensus power, share of the set's power with
+five decimals) plus `active_set_height`, `active_set_size` and
+`non_voters_at` on the proposal. Every minute it computes the proposals
+with a `resolved_height` (`H`) and no `non_voters_at` whose votes are
+complete: every height from `submit_height` to `H` indexed (no vote comes
+before the submission), or the votes read by the snapshots command
+(`tally_source = 'archive'`; a proposal submitted below the indexed range
+waits for it). The rows and the columns are written in one transaction.
+
+- The tally set. Gov tallies in its EndBlocker at `H`, over the staking
+  power index. CometBFT applies the validator updates of EndBlock(N) at
+  N+2, so the set is CometBFT's `/validators` (every page of 100) at `H+1`
+  where gov's EndBlocker runs before staking's (v5.0, v8.0.0 on) and at
+  `H+2` where staking's runs first (v5.1.2 to v7.2.0; the per-generation
+  rule is `archive.TallySetHeight`). The validators slashed in `H`'s block
+  (its `slash` events) are left out: the slashing BeginBlocker jailed them,
+  which drops them from the power index before the tally, while CometBFT
+  still lists them. The set is never recomputed from staking state.
+- A member voted when the account of its operator (the same key bytes under
+  `bze`) has a `proposal_votes` row. Operators come from the validators
+  table, else from the indexed `MsgCreateValidator` of a validator staking
+  deleted since (its consensus key); an address neither knows is stored
+  without an operator, and logged.
+- The set and the tally's block are read from the local node, or from the
+  archive (`ARCHIVE_RPC_URL`) once the local node pruned the height, so a
+  proposal tallied a minute ago and one of years ago go the same way.
+- Cross-check: the set's power × 10^6 must match `tally_bonded_tokens` within
+  one unit of power per validator (each truncates its tokens); a mismatch
+  is logged as a warning, never fails the run.
+
+A written proposal is not computed again; `sync-state --job
+proposal_non_voters --id N` recomputes it (replacing its rows) once its votes
+are complete, and fails before.
+
 **Parameters.** The params set snapshots the parameters of every module the
 parameters page shows (`internal/params`: txfeecollector, staking, mint,
 distribution, slashing, gov, tradebin, tokenfactory, rewards, burner,
@@ -1256,7 +1301,9 @@ archive answers with `make fixtures ABCI=…` (or a new set there).
 ## Test fixtures and the fake node
 
 `internal/testutil/fakenode` serves the URI form of the by-height RPC routes
-(`/status`, `/block?height=N`, `/block_results?height=N`, `/commit?height=N`)
+(`/status`, `/block?height=N`, `/block_results?height=N`, `/commit?height=N`,
+`/validators?height=N&page=P&per_page=100` from
+`testdata/<N>/validators.<P>.json`, recorded at per_page=100 only)
 and `/abci_query` at a height from recorded mainnet responses, byte for
 byte. An `/abci_query` is keyed by height, method and request bytes
 (`testdata/abci/<height>/<svc>.<Method>.<hex>.json`); one without a recording
@@ -1282,6 +1329,9 @@ reads at `H - 1` (bank `Balance` of the bonded pool, gov v1 `Votes` and
 `H - 1` and `/block_results` at `H`. Recorded for proposals 43 (27 votes;
 the 25 `/block` heights its resolution search visits from the archive's
 earliest block to the recorded tip are `BLOCKS`) and 47 (24 votes).
+`VALSETS="17131439 23821226"` records every page of `/validators` at those
+heights: the sets proposals 43 and 47's tallies counted (31 and 23
+validators). `VALSETS` is not `VALIDATORS`, the gRPC recorder's operators.
 
 Recorded today: 24998316 to 24998330 except 24998319, which is left out on
 purpose: the fake node answers it with the above-tip error, which the live
