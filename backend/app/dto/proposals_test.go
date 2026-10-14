@@ -75,6 +75,23 @@ func TestVoteAndDepositCursorsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNonVoterCursorRoundTrips(t *testing.T) {
+	k := repository.NonVoterKey{VotingPower: 9656470, ConsensusAddress: "908785D2A4D25B062E669AAF65D3AB0727C92494"}
+	got, err := dto.DecodeNonVoterCursor(dto.EncodeNonVoterCursor(k))
+	require.NoError(t, err)
+	assert.Equal(t, &k, got)
+	zero := repository.NonVoterKey{ConsensusAddress: "AA"}
+	got, err = dto.DecodeNonVoterCursor(dto.EncodeNonVoterCursor(zero))
+	require.NoError(t, err)
+	assert.Equal(t, &zero, got, "a validator with no power left")
+
+	for _, bad := range []string{"!!", "e30", dto.EncodeCursor(1), dto.EncodeNonVoterCursor(repository.NonVoterKey{VotingPower: -1, ConsensusAddress: "AA"}),
+		dto.EncodeNonVoterCursor(repository.NonVoterKey{VotingPower: 1})} {
+		_, err := dto.DecodeNonVoterCursor(bad)
+		assert.ErrorIs(t, err, dto.ErrInvalidCursor, bad)
+	}
+}
+
 func TestSourcesAreMapped(t *testing.T) {
 	archive := "archive"
 	p := dto.NewProposalSummary(repository.ProposalSummary{ID: 43, TallySource: &archive})

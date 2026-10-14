@@ -29,6 +29,7 @@ type ProposalReader interface {
 	Proposal(ctx context.Context, id int64) (*repository.Proposal, error)
 	ProposalVotes(ctx context.Context, id int64, option *string, validators bool, before *repository.VoteKey, limit int) ([]repository.ProposalVote, error)
 	ProposalDeposits(ctx context.Context, id int64, before *repository.DepositKey, limit int) ([]repository.ProposalDeposit, error)
+	ProposalNonVoters(ctx context.Context, id int64, after *repository.NonVoterKey, limit int) ([]repository.ProposalNonVoter, error)
 }
 
 // ProposalController serves the /api/v1/proposals routes. Status and tally
@@ -157,6 +158,38 @@ func (h *ProposalController) ProposalDeposits(c *echo.Context) error {
 			break
 		}
 		resp.Items = append(resp.Items, dto.NewProposalDeposit(d))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// ProposalNonVoters serves GET /api/v1/proposals/{id}/non-voters?cursor&limit:
+// the validators of the set the proposal's tally counted that did not vote,
+// by voting power descending. Empty until the state sync recorded them.
+func (h *ProposalController) ProposalNonVoters(c *echo.Context) error {
+	id, limit, err := h.page(c)
+	if err != nil {
+		return err
+	}
+	var after *repository.NonVoterKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if after, err = dto.DecodeNonVoterCursor(s); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+	rows, err := h.repo.ProposalNonVoters(c.Request().Context(), id, after, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.List[dto.ProposalNonVoter]{Items: make([]dto.ProposalNonVoter, 0, min(len(rows), limit))}
+	for i, n := range rows {
+		if i == limit {
+			prev := rows[i-1]
+			next := dto.EncodeNonVoterCursor(repository.NonVoterKey{VotingPower: prev.VotingPower, ConsensusAddress: prev.ConsensusAddress})
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewProposalNonVoter(n))
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)

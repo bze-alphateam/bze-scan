@@ -125,6 +125,7 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id", proposals.Proposal)
 		api.GET("/proposals/:id/votes", proposals.ProposalVotes)
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
+		api.GET("/proposals/:id/non-voters", proposals.ProposalNonVoters)
 	}
 	if deps.Stats != nil {
 		api.GET("/stats", controller.NewStatsController(deps.Stats, deps.Daily).Stats)
