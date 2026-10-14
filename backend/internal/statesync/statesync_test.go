@@ -331,6 +331,25 @@ func TestRunSetRunsOneSet(t *testing.T) {
 	assert.Len(t, rec.list(), 2)
 }
 
+func TestRunKeyRunsOneEntry(t *testing.T) {
+	rec := &recorder{}
+	jobs := &fakeJobs{}
+	a := &fakeSet{name: "a", interval: time.Hour, rec: rec}
+	s := statesync.New(statesync.Config{Log: quietLog()}, jobs, a)
+
+	require.NoError(t, s.RunKey(context.Background(), "a", "47"))
+	assert.Equal(t, []string{"a:47"}, rec.list(), "the entry only, no full resync")
+	require.Len(t, jobs.list(), 1)
+	assert.Equal(t, "a", jobs.list()[0].Job)
+
+	require.EqualError(t, s.RunKey(context.Background(), "c", "47"), `no set "c"; the registered sets are a`)
+	require.EqualError(t, s.RunKey(context.Background(), "a", ""), "no entry of a named")
+	require.EqualError(t, s.RunKey(context.Background(), "a", statesync.All), "no entry of a named")
+	a.err = errors.New("votes not complete")
+	require.EqualError(t, s.RunKey(context.Background(), "a", "48"), "votes not complete")
+	assert.Equal(t, []string{"a:47", "a:48"}, rec.list())
+}
+
 // canonicalSet folds the keys of aliases into their canonical one.
 type canonicalSet struct {
 	*fakeSet

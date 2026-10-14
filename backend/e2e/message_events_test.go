@@ -31,7 +31,7 @@ func TestMigrateUpRewritesTheStoredMessageEvents(t *testing.T) {
 	dbURL := freshDatabase(t, true)
 	db := connect(t, dbURL)
 	migrateUp(t, dbURL)
-	_, err := openMigrator(t, dbURL).Down(1)
+	_, err := openMigrator(t, dbURL).Down(latestVersion - 17) // back to before 000018
 	require.NoError(t, err)
 
 	// Rows in two partitions and one above them, as 000017 left them.
