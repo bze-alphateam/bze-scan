@@ -21,15 +21,15 @@ describe("TimeAgo", () => {
     renderWithProviders(<TimeAgo time={BLOCK} data-testid="first" />);
     expect(screen.getByTestId("first")).toHaveTextContent("5 seconds ago");
 
-    // The next poll mounts another row for the same time 7 s later.
-    act(() => vi.advanceTimersByTime(7000));
+    // The next poll mounts another row for the same time 4 s later.
+    act(() => vi.advanceTimersByTime(4000));
     renderWithProviders(<TimeAgo time={BLOCK} data-testid="second" />);
-    expect(screen.getByTestId("first")).toHaveTextContent("12 seconds ago");
-    expect(screen.getByTestId("second")).toHaveTextContent("12 seconds ago");
+    expect(screen.getByTestId("first")).toHaveTextContent("9 seconds ago");
+    expect(screen.getByTestId("second")).toHaveTextContent("9 seconds ago");
 
     act(() => vi.advanceTimersByTime(3000));
-    expect(screen.getByTestId("first")).toHaveTextContent("15 seconds ago");
-    expect(screen.getByTestId("second")).toHaveTextContent("15 seconds ago");
+    expect(screen.getByTestId("first")).toHaveTextContent("12 seconds ago");
+    expect(screen.getByTestId("second")).toHaveTextContent("12 seconds ago");
   });
 
   it("reads a time just ahead of the clock as just now", () => {

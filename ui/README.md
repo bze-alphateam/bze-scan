@@ -92,7 +92,7 @@ numbers itself:
 
 | Policy | For | Behaviour |
 | --- | --- | --- |
-| `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 7 s, refetched every 7 s, paused in background tabs |
+| `live` | home, the first page of a list, accounts, validators, tokens, proposals | stale after 4 s, refetched every 4 s, paused in background tabs |
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
 | `status` | the footer's health pill, the parameters page | refetched every 60 s |
 | `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
@@ -108,11 +108,11 @@ never refetched, until `latest()` drops the older pages. `useBlocks` and
 follows every page of a block's transfers. `useSearch` is never polled.
 
 A transaction the API answers 404 for is pending, never failed:
-`useTransaction` asks again every 7 s for the pending window
+`useTransaction` asks again every 4 s for the pending window
 (`TX_PENDING_WINDOW_MS`, two minutes), then reports `not_found`; once found it
 is `immutable`, except while `isUnsettled`: the order book has not processed
 its DEX messages (`dex.pending`) or a cross-chain transfer it created is
-`pending` and not expired. It is then refetched every 7 s (`live`).
+`pending` and not expired. It is then refetched every 4 s (`live`).
 
 `useAccountActivity(address, { category })` is the same live-until-older
 list over the account's activity. `useAccountIbc(address)` reads the

@@ -152,7 +152,7 @@ describe("BlockPage", () => {
     for (const l of ping) expect(l).toHaveAttribute("href", expect.stringMatching(/\/block\/25120440$/));
   });
 
-  it("waits for a height not produced yet, polling every 7 s for the pending window", async () => {
+  it("waits for a height not produced yet, polling every 4 s for the pending window", async () => {
     vi.useFakeTimers();
     const ahead = status.live_fill.db_height + 1;
     const fetchBlock = vi.fn(notIndexed);

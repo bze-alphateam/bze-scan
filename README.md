@@ -19,7 +19,7 @@ and the test harness (`ui/README.md`); its pages come next.
   standalone backfill.
 - `ui/` — Next.js web app. Talks only to the backend API, raw JSON for the
   "More details" view included, and refreshes live views by polling every
-  7 seconds.
+  4 seconds.
 - `docker/` — container images and the local-development compose setup
   (PostgreSQL with the CometBFT `psql` indexer schema plus the explorer schema,
   the backend and the UI). No node image: a local node is built from source.

@@ -100,7 +100,7 @@ function usePendingWindow(active: boolean, setExpired: (expired: boolean) => voi
 
 /**
  * A block: immutable once found. With `waitForIt` (a height above the
- * explorer's latest block) a 404 is asked for again every 7 s for the pending
+ * explorer's latest block) a 404 is asked for again every 4 s for the pending
  * window, as a pending transaction is; `expired` says the window is over.
  * Mount it under a `key` of the height so the window restarts per height.
  */
@@ -150,7 +150,7 @@ export function useTransactions(params: TxListParams = {}) {
 
 /**
  * Where a transaction the API answers 404 for stands: `looking` while it is
- * asked for again every 7 s, `not_found` once the pending window is over;
+ * asked for again every 4 s, `not_found` once the pending window is over;
  * null when it is not a 404.
  */
 export type PendingState = "looking" | "not_found" | null;
@@ -167,7 +167,7 @@ export function isUnsettled(tx: Tx): boolean {
 /**
  * A transaction: immutable once found and settled, `live` while unsettled
  * (`isUnsettled`). A 404 means "not indexed yet": the query is polled every
- * 7 s for the pending window, then given up on. Mount it under a `key` of
+ * 4 s for the pending window, then given up on. Mount it under a `key` of
  * the hash so the window restarts per hash.
  */
 export function useTransaction(hash: string) {

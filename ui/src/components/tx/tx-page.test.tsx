@@ -99,7 +99,7 @@ describe("TxPage", () => {
     expect(screen.getByTestId("flow-summary")).toHaveTextContent("1 transfer · 0.002 BZE fee to Fee collector");
   });
 
-  it("looks for a pending transaction every 7 s, then says it is not found", async () => {
+  it("looks for a pending transaction every 4 s, then says it is not found", async () => {
     vi.useFakeTimers();
     const transaction = vi.fn(() => Promise.reject(new ApiError(404, "not_found", "transaction not indexed")));
     renderWithProviders(<TxPage hash={SEND} />, { api: api(null, { transaction }) });
