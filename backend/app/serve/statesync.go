@@ -25,6 +25,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
 	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
+	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
@@ -75,6 +76,11 @@ const keybaseTimeout = 10 * time.Second
 func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
 		return nil, nil, err
+	}
+	// Which tally set a proposal counted depends on the chain's releases.
+	releases, err := archive.ForChain(cfg.ChainID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("state sync: %w", err)
 	}
 	conn, err := grpcclient.Dial(grpcclient.Config{Addr: cfg.NodeGRPCAddr, TLS: cfg.NodeGRPCTLS}, codec.GRPC())
 	if err != nil {
@@ -140,9 +146,10 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Store:   proposals.NewPGStore(pool),
 		}, 0),
 		nonvoters.New(nonvoters.Deps{
-			Set:   activeset.New(routed, activeset.NewPGResolver(pool)),
-			Node:  routed,
-			Store: nonvoters.NewPGStore(pool),
+			Releases: releases,
+			Set:      activeset.New(routed, activeset.NewPGResolver(pool)),
+			Node:     routed,
+			Store:    nonvoters.NewPGStore(pool),
 		}, 0),
 		upgrades.New(upgrades.Deps{
 			Set:     activeset.New(routed, activeset.NewPGResolver(pool)),

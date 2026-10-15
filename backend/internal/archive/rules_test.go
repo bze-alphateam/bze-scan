@@ -57,7 +57,7 @@ func input(code uint32, events ...node.Event) *transform.Input {
 }
 
 func adapt(tx *chain.Tx, in *transform.Input) error {
-	return archive.New(mockDecoder{tx: tx}).Adapt(legacyHeight, in)
+	return archive.New(mockDecoder{tx: tx}, archive.Mainnet).Adapt(legacyHeight, in)
 }
 
 func body(t *testing.T, v any) json.RawMessage {
@@ -203,7 +203,7 @@ func TestIBCTransferGetsAmountDenomAndMemo(t *testing.T) {
 func TestAFailedTransactionKeepsItsAnteEvents(t *testing.T) {
 	in := input(5, ante()...)
 	want := ante()
-	require.NoError(t, archive.New(mockDecoder{err: errors.New("never called")}).Adapt(legacyHeight, in))
+	require.NoError(t, archive.New(mockDecoder{err: errors.New("never called")}, archive.Mainnet).Adapt(legacyHeight, in))
 	assert.Equal(t, want, events(in))
 }
 
@@ -238,13 +238,13 @@ func TestPreCometBFT038LayoutIsRejected(t *testing.T) {
 	for _, h := range []int64{legacyHeight, 25_000_000} {
 		in := input(0)
 		in.Results.BeginBlockEvents = []node.Event{ev("mint", "amount", "1")}
-		assert.ErrorIs(t, archive.New(mockDecoder{}).Adapt(h, in), archive.ErrUnknownGeneration, "height %d", h)
+		assert.ErrorIs(t, archive.New(mockDecoder{}, archive.Mainnet).Adapt(h, in), archive.ErrUnknownGeneration, "height %d", h)
 	}
 }
 
 func TestAnUndecodableTransactionFailsTheHeight(t *testing.T) {
 	in := input(0, append(ante(), ev("message", "action", "create_order"))...)
-	err := archive.New(mockDecoder{err: errors.New("not a transaction")}).Adapt(legacyHeight, in)
+	err := archive.New(mockDecoder{err: errors.New("not a transaction")}, archive.Mainnet).Adapt(legacyHeight, in)
 	assert.ErrorContains(t, err, "not a transaction")
 }
 
@@ -261,7 +261,7 @@ func TestUndoubleKeepsOneCopyOfEachRepeatedRun(t *testing.T) {
 		in.Results.TxsResults = nil
 		in.Block.Txs = nil
 		in.Results.FinalizeBlockEvents = evs
-		require.NoError(t, archive.New(mockDecoder{}).Adapt(h, in))
+		require.NoError(t, archive.New(mockDecoder{}, archive.Mainnet).Adapt(h, in))
 		var out []string
 		for _, ev := range in.Results.FinalizeBlockEvents {
 			v, _ := ev.Get("v")
@@ -283,6 +283,6 @@ func TestUndoubleKeepsOneCopyOfEachRepeatedRun(t *testing.T) {
 	in := input(0)
 	in.Results.TxsResults, in.Block.Txs = nil, nil
 	in.Results.FinalizeBlockEvents = []node.Event{u, u}
-	require.NoError(t, archive.New(mockDecoder{}).Adapt(22_551_810, in))
+	require.NoError(t, archive.New(mockDecoder{}, archive.Mainnet).Adapt(22_551_810, in))
 	assert.Len(t, in.Results.FinalizeBlockEvents, 2, "v8.1.0 reports each event once: nothing dropped")
 }

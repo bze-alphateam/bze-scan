@@ -31,7 +31,7 @@ func TestBackfillOfALegacyHeight(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		LogLevel: "warn", LogFormat: config.LogFormatText, DatabaseURL: url,
+		LogLevel: "warn", LogFormat: config.LogFormatText, ChainID: "beezee-1", DatabaseURL: url,
 		ArchiveRPCURL: fakenode.New(t).URL, BackfillFloorHeight: legacyHeight,
 		BackfillWorkers: 1, BackfillBatch: 1, BackfillQuiet: 0, BackfillRateLimit: 0,
 	}

@@ -32,6 +32,12 @@ type history struct {
 
 // newHistory builds the backfill side. Close its pool when done.
 func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *chain.Codec) (*history, error) {
+	// The archive's release history is per chain: the same height is a
+	// different release on mainnet and on testnet.
+	releases, err := archive.ForChain(cfg.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("backfill: %w", err)
+	}
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("backfill pool: %w", err)
@@ -63,8 +69,8 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 			// One limiter for every worker of every job: the archive sees
 			// one polite client.
 			Limiter: rate.NewLimiter(limit, 1),
-			// Heights older than v8.0.0 come in the legacy event format.
-			Adapter:     archive.New(codec),
+			// Mainnet heights older than v8.0.0 come in the legacy event format.
+			Adapter:     archive.New(codec, releases),
 			Transformer: transform.New(codec, log.StandardLogger()),
 			Writer:      w,
 		},

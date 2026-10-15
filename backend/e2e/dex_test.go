@@ -42,10 +42,10 @@ func transformed(t *testing.T, e *syncEnv, h int64) *transform.Entities {
 	c, _, err := client.Commit(ctx, h)
 	require.NoError(t, err)
 	in := transform.Input{Block: b, Results: r, Commit: c}
-	if archive.GenerationAt(h).Format != archive.FormatCurrent {
+	if archive.Mainnet.At(h).Format != archive.FormatCurrent {
 		codec, err := chain.NewCodec()
 		require.NoError(t, err)
-		require.NoError(t, archive.New(codec).Adapt(h, &in))
+		require.NoError(t, archive.New(codec, archive.Mainnet).Adapt(h, &in))
 	}
 	ents, err := newTransformer(t).Transform(in)
 	require.NoError(t, err)

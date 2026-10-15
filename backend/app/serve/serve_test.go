@@ -31,10 +31,10 @@ func indexerConfig(nodeURL, chainID string) *config.Config {
 func TestRefusesANodeOfAnotherChain(t *testing.T) {
 	n := fakenode.New(t)
 
-	err := serve.Run(context.Background(), indexerConfig(n.URL, "beezee-testnet"), serve.Options{})
+	err := serve.Run(context.Background(), indexerConfig(n.URL, "bzetestnet-3"), serve.Options{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `serves chain "beezee-1"`)
-	assert.Contains(t, err.Error(), `CHAIN_ID is "beezee-testnet"`)
+	assert.Contains(t, err.Error(), `CHAIN_ID is "bzetestnet-3"`)
 	assert.Equal(t, 0, n.Requests(fakenode.RouteBlock), "nothing is indexed")
 }
 
