@@ -331,34 +331,32 @@ function HallOfFameList({ fame, query, window }: { fame: Fame; query: string; wi
 
 type Tab = "fame" | "active" | "inactive";
 
-interface FameQuery {
-  data: Fame | null;
-  failed: boolean;
-  retry: () => void;
-}
-
 /**
  * The list once loaded: tiles, the tabs with the filter, the table and the
- * footnotes. The Hall of Fame loads on its own: until it answers, nobody is
- * marked and its tab waits, and the rest of the page works.
+ * footnotes. The Hall of Fame (null until it answers) loads on its own: its
+ * tab exists only once it has a member, and the page opens on it then, unless
+ * the visitor has already picked a tab. Until then nobody is marked and the
+ * page opens on Active.
  */
-export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: FameQuery }) {
-  const [tab, setTab] = useState<Tab>("fame");
+export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame | null }) {
+  const hasFame = (fame?.items.length ?? 0) > 0;
+  const [picked, setPicked] = useState<Tab | null>(null);
+  const tab: Tab = picked === "fame" && !hasFame ? "active" : (picked ?? (hasFame ? "fame" : "active"));
   const [query, setQuery] = useState("");
   const id = useId();
   const bar = useRef<HTMLDivElement>(null);
   const params = useParams();
   const { active, inactive } = useMemo(() => splitValidators(list.items), [list.items]);
   const seats = list.summary?.max_validators ?? null;
-  const window = signedBlocksWindow(params.data) ?? fame.data?.rules.signed_blocks_window ?? 10_000;
+  const window = signedBlocksWindow(params.data) ?? fame?.rules.signed_blocks_window ?? 10_000;
 
   const showFame = () => {
-    setTab("fame");
+    setPicked("fame");
     bar.current?.scrollIntoView?.({ block: "start" });
   };
-  const fameItems = fame.data?.items;
+  const fameItems = fame?.items;
   const members = useMemo(() => new Map((fameItems ?? []).map((v) => [v.operator_address, v])), [fameItems]);
-  const marks: FameMarks | null = fame.data ? { members, rules: fame.data.rules, seeAll: showFame } : null;
+  const marks: FameMarks | null = fame ? { members, rules: fame.rules, seeAll: showFame } : null;
 
   const footnote = (
     <Text color="fg.muted" fontSize="13px">
@@ -376,14 +374,18 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
             id={id}
             label="Validators"
             value={tab}
-            onChange={setTab}
+            onChange={setPicked}
             tabs={[
-              {
-                value: "fame",
-                icon: <Crown />,
-                label: "Hall of Fame",
-                count: fame.data ? formatCount(fame.data.items.length) : null,
-              },
+              ...(fame && hasFame
+                ? [
+                    {
+                      value: "fame" as const,
+                      icon: <Crown />,
+                      label: "Hall of Fame",
+                      count: formatCount(fame.items.length),
+                    },
+                  ]
+                : []),
               {
                 value: "active",
                 label: "Active",
@@ -400,14 +402,8 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
         </VTabsBar>
       </Box>
       <VTabPanel id={id} value={tab}>
-        {tab === "fame" ? (
-          fame.data ? (
-            <HallOfFameList fame={fame.data} query={query} window={window} />
-          ) : fame.failed ? (
-            <LoadError what="The Hall of Fame" onRetry={fame.retry} />
-          ) : (
-            <TableSkeleton rows={5} columns={3} />
-          )
+        {tab === "fame" && fame ? (
+          <HallOfFameList fame={fame} query={query} window={window} />
         ) : (
           <ValidatorTable
             items={filterByMoniker(tab === "active" ? active : inactive, query)}
@@ -433,7 +429,7 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
             fontSize="13px"
             fontWeight="500"
             borderColor="border.panel"
-            onClick={() => setTab("active")}
+            onClick={() => setPicked("active")}
           >
             See all active validators
           </Button>
@@ -467,14 +463,7 @@ export function ValidatorsPage() {
         }
       />
       {data ? (
-        <ValidatorsView
-          list={data}
-          fame={{
-            data: fame.data ?? null,
-            failed: !!fame.error && !fame.data,
-            retry: () => void fame.refetch(),
-          }}
-        />
+        <ValidatorsView list={data} fame={fame.data ?? null} />
       ) : list.error ? (
         <LoadError what="The validators" onRetry={() => void list.refetch()} />
       ) : (
