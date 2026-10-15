@@ -4,11 +4,10 @@ on:
   # On main and develop these run from release.yml, which publishes the
   # images only after the tests pass.
   workflow_call:
+  # Every pull request, whatever it touches: these are required checks of
+  # the main ruleset, and a path filter would leave a pull request that
+  # skips them (docs, other workflows) waiting forever.
   pull_request:
-    paths:
-      - "backend/**"
-      - "docker/**"
-      - ".github/workflows/backend-e2e.yml"
 
 permissions:
   contents: read

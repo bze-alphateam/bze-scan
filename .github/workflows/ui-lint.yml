@@ -6,10 +6,10 @@ on:
     paths:
       - "ui/**"
       - ".github/workflows/ui-lint.yml"
+  # Every pull request, whatever it touches: these are required checks of
+  # the main ruleset, and a path filter would leave a pull request that
+  # skips them (docs, other workflows) waiting forever.
   pull_request:
-    paths:
-      - "ui/**"
-      - ".github/workflows/ui-lint.yml"
 
 permissions:
   contents: read
