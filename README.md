@@ -60,7 +60,7 @@ Two release branches, one network each. Work lands through pull requests to
 
 | Branch | Network | Image tag | Deployed to |
 | --- | --- | --- | --- |
-| `develop` | testnet (`bzetestnet-3`) | `testnet-<sha8>` | explorer.testnet.getbze.com |
+| `develop` | testnet (`bzetestnet-3`) | `testnet-<sha8>` | testnet-explorer.getbze.com |
 | `main` | mainnet (`beezee-1`) | `<sha8>` and `latest` | explorer.getbze.com |
 
 `.github/workflows/release.yml` runs on every push to either branch: the unit

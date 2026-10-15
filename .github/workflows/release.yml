@@ -3,7 +3,7 @@ name: Release
 # Every push to a release branch builds, publishes and deploys the explorer:
 #
 #   develop -> testnet: images tagged testnet-<sha8>, deployed to
-#              explorer.testnet.getbze.com
+#              testnet-explorer.getbze.com
 #   main    -> mainnet: images tagged <sha8> (+ :latest), deployed to
 #              explorer.getbze.com only while the repository variable
 #              DEPLOY_MAINNET is "true"
@@ -49,7 +49,7 @@ jobs:
           sha=${SHA:0:8}
           if [ "$GITHUB_REF_NAME" = "develop" ]; then
             echo "tag=testnet-$sha" >> "$GITHUB_OUTPUT"
-            echo "deploy_dir=explorer.testnet.getbze.com" >> "$GITHUB_OUTPUT"
+            echo "deploy_dir=testnet-explorer.getbze.com" >> "$GITHUB_OUTPUT"
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "latest=false" >> "$GITHUB_OUTPUT"
           else
