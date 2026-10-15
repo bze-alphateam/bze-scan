@@ -51,5 +51,34 @@ MIT, see `LICENSE`.
 - Node 24 for `ui/` (see `ui/README.md`).
 - `docker/README.md` describes the local PostgreSQL setup, the two images
   (`ghcr.io/bze-alphateam/bze-scan-backend` and
-  `ghcr.io/bze-alphateam/bze-scan-ui`, each published on merges to `main` as
-  `:<sha8>` and `:latest`) and the compose profile that runs them.
+  `ghcr.io/bze-alphateam/bze-scan-ui`) and the compose profile that runs them.
+
+## Branches, releases and deploys
+
+Two release branches, one network each. Work lands through pull requests to
+`develop`; `develop` is merged into `main` when testnet looks right.
+
+| Branch | Network | Image tag | Deployed to |
+| --- | --- | --- | --- |
+| `develop` | testnet (`bzetestnet-3`) | `testnet-<sha8>` | explorer.testnet.getbze.com |
+| `main` | mainnet (`beezee-1`) | `<sha8>` and `latest` | explorer.getbze.com |
+
+`.github/workflows/release.yml` runs on every push to either branch: the unit
+and e2e tests of both apps, then both images, then the deploy. **One tag per
+release:** both images are built on every push, whatever changed, so every
+commit on a release branch has a complete backend + UI pair to deploy or roll
+back to; the deploy target runs both from the same tag. The backend image is
+the same for both networks; the UI's is not, because its `NEXT_PUBLIC_*`
+values are inlined at build time from the deploy target's build env (see
+`docker/README.md`).
+
+The deploy step hands the tag to the BZE deployment repository's `deploy`
+workflow (with the `DEPLOY_REPO_TOKEN` organisation secret) and waits for it:
+the server migrates the database with the new backend image, starts the new
+backend + UI next to the live pair, switches traffic once both are healthy
+and stops the old pair. A failed migration or health check leaves the
+previous release live and turns the run red. Migrations only add, so a
+rollback is a deploy of an older tag.
+
+Deploys from `main` run only while the repository variable `DEPLOY_MAINNET`
+is `true`; until then a push to `main` publishes the images and stops.

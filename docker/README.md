@@ -104,10 +104,12 @@ CI (`.github/workflows/backend-image.yml`) builds the image on every pull
 request and runs `smoke-test.sh` on it: `version` must print the commit,
 `serve` must answer `GET /health` with 200 within 10 s and stop with exit
 code 0 within 15 s of SIGTERM. Nothing is pushed from a pull request. On a
-push to `main` the same workflow first runs the unit and e2e test workflows
-and, when both pass, pushes `:<sha8>` (the first 8 characters of the
-commit) and `:latest` to GHCR. Deploying the image is not this repository's
-job.
+push to `main` or `develop`, `release.yml` calls the same workflow after the
+unit and e2e tests passed, and it pushes the release's tag: `:<sha8>` (the
+first 8 characters of the commit) plus `:latest` from `main`,
+`:testnet-<sha8>` from `develop` — the same build, the backend reads
+everything network-specific at run time. See the root README for the release
+flow.
 
 `ui.Dockerfile` builds `ghcr.io/bze-alphateam/bze-scan-ui`. The build
 context is the repository root too, trimmed by `ui.Dockerfile.dockerignore`
@@ -136,11 +138,14 @@ CI (`.github/workflows/ui-image.yml`) builds it on every pull request touching
 `ui/` or these files, with `ui/.env.dist` as the build env, and runs
 `ui-smoke-test.sh`: the revision label must be the commit, `GET /` must answer
 200 within 15 s and the container must stop with exit code 0 within 10 s of
-SIGTERM. On a push to `main` it first runs `ui-unit` and `ui-e2e`, then takes
-the production build env from `scan.getbze.com/build.env` of the deploy
+SIGTERM. On a push to `main` or `develop`, `release.yml` calls it after
+`ui-unit` and `ui-e2e` passed, with the release's tag and deploy target: it
+takes that target's build env, `<deploy dir>/build.env` of the deploy
 repository (sparse checkout with the `DEPLOY_REPO_TOKEN` organisation secret,
-on push runs only, so pull requests never see it; the file is checked for
-`NEXT_PUBLIC_` lines, never printed), builds, smoke-tests and pushes `:<sha8>`
-and `:latest`. While that file does not exist, the push falls back to
-`ui/.env.dist` with a warning in the run summary: such an image points the
-browser at localhost and is for testing only.
+on release runs only, so pull requests never see it; the file is checked for
+`NEXT_PUBLIC_` lines, never printed), builds, smoke-tests and pushes
+`:testnet-<sha8>` (develop) or `:<sha8>` and `:latest` (main). An image that
+is about to be deployed fails without its build env; only `main` while its
+deploys are off falls back to `ui/.env.dist`, with a warning in the run
+summary: such an image points the browser at localhost and is for testing
+only.

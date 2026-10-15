@@ -114,7 +114,7 @@ export function isNotFound(error: unknown): boolean {
 }
 
 export interface HttpApiOptions {
-  /** The API's base URL without a trailing slash, e.g. `https://scan.getbze.com/api`. */
+  /** The API's base URL without a trailing slash, e.g. `https://explorer.getbze.com/api`. */
   baseUrl: string;
   fetch: typeof globalThis.fetch;
 }

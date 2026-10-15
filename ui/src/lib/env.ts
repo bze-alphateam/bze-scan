@@ -10,7 +10,7 @@ export const env = {
   chainId: process.env.NEXT_PUBLIC_CHAIN_ID || "beezee-1",
   networkLabel: process.env.NEXT_PUBLIC_NETWORK_LABEL || "Mainnet",
   pingPubUrl: trimSlash(process.env.NEXT_PUBLIC_PINGPUB_URL || "https://explorer.getbze.com/beezee"),
-  siteUrl: trimSlash(process.env.NEXT_PUBLIC_SITE_URL || "https://scan.getbze.com"),
+  siteUrl: trimSlash(process.env.NEXT_PUBLIC_SITE_URL || "https://explorer.getbze.com"),
 };
 
 /** The API as the Next.js server reaches it: `API_URL`, else the public URL. */
