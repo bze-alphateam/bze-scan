@@ -103,6 +103,19 @@ type Block struct {
 	Signers []string
 }
 
+// CommitSigners returns the consensus addresses (upper-case hex) of the
+// signatures that committed the block: Block.Signers, whose count is
+// Block.SignaturesCount. Nil when none did.
+func CommitSigners(c *node.Commit) []string {
+	var signers []string
+	for _, s := range c.Signatures {
+		if s.BlockIDFlag == node.BlockIDFlagCommit {
+			signers = append(signers, strings.ToUpper(s.ValidatorAddress))
+		}
+	}
+	return signers
+}
+
 // FeesDistributedJSON is the fees_distributed column value: a JSON array of
 // {"denom","amount"} objects, or nil.
 func (b *Block) FeesDistributedJSON() ([]byte, error) {
@@ -208,12 +221,8 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 			b.TxFailedCount++
 		}
 	}
-	for _, s := range in.Commit.Signatures {
-		if s.BlockIDFlag == node.BlockIDFlagCommit {
-			b.SignaturesCount++
-			b.Signers = append(b.Signers, strings.ToUpper(s.ValidatorAddress))
-		}
-	}
+	b.Signers = CommitSigners(in.Commit)
+	b.SignaturesCount = len(b.Signers)
 
 	ents := &Entities{}
 	for _, ev := range in.Results.FinalizeBlockEvents {

@@ -115,11 +115,27 @@ func TestCommit(t *testing.T) {
 	assert.Equal(t, want, raw)
 
 	assert.Equal(t, int64(fixtureHeight), c.Height)
+	assert.True(t, c.Canonical, "recorded below the tip")
 	require.Len(t, c.Signatures, 22)
 	assert.Equal(t, node.BlockIDFlagCommit, c.Signatures[0].BlockIDFlag)
 	assert.Equal(t, "101DF52F658F4EF69DA0333BC4FB519E36DC54CA", c.Signatures[0].ValidatorAddress)
 	assert.Equal(t, time.Date(2026, 10, 8, 15, 33, 38, 155384191, time.UTC), c.Time.UTC())
 	assert.Equal(t, time.Date(2026, 10, 8, 15, 33, 43, 964380559, time.UTC), c.Signatures[0].Timestamp.UTC())
+}
+
+func TestSeenCommitIsNotCanonical(t *testing.T) {
+	n := fakenode.New(t)
+	n.SetSeenCommit(fixtureHeight, 2)
+	c, _, err := node.New(n.URL).Commit(context.Background(), fixtureHeight)
+	require.NoError(t, err)
+	assert.False(t, c.Canonical)
+	signed := 0
+	for _, s := range c.Signatures {
+		if s.BlockIDFlag == node.BlockIDFlagCommit {
+			signed++
+		}
+	}
+	assert.Equal(t, 20, signed)
 }
 
 func TestCommitAbsentSlot(t *testing.T) {

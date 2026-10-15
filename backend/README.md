@@ -485,6 +485,20 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   same height. So a node restart, even in the middle of a catch-up, never
   turns into recorded failures. A node that answers `/status` but not a
   height is a failed attempt at that height.
+- Seen vs canonical commits. A height is usually indexed while it is the
+  node's tip, and then `/commit` answers the node's *seen* commit
+  (`"canonical": false`): only the precommits that arrived before the node
+  moved on, often just the +2/3 it needed. The *canonical* commit, block
+  H+1's `last_commit`, has every signature that made it in time, and the node
+  answers it (`"canonical": true`) once H+1 exists. So the block is written
+  at once with the seen figures, and when the next height of the same
+  session is written the indexer re-reads the seen height's commit, updates
+  its `signatures_count` and `signatures_power_pct` (the same expression as
+  the insert) and replaces its commit in the raw-JSON cache. A failed or
+  still-seen re-read only logs a warning: nothing is recorded and the live
+  path goes on. A height seen just before a reconnect keeps its figures
+  until a reindex. Backfill, catch-up and reindex read old heights, whose
+  commits are canonical.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the
   height, the node supplies the data.
@@ -1366,8 +1380,10 @@ files; `FixtureHeights` lists those recorded in full. A height without a fixture
 answers the JSON-RPC error a real node returns above its tip (HTTP 500,
 `testdata/above_tip.json`). Tests can override the `/status` height, make the
 node pruned below a height (`SetEarliestHeight`: `/status` reports it and
-lower heights answer the node's "not available" error), and read request
-counters per route and per height.
+lower heights answer the node's "not available" error), answer a height's
+seen commit (`SetSeenCommit(h, absent)`: `"canonical": false` and the last
+`absent` committed signatures turned absent, until `ClearSeenCommit(h)`),
+and read request counters per route and per height.
 
 Fixtures are committed and re-recorded only on purpose, when a test needs a
 height the existing ones do not cover:

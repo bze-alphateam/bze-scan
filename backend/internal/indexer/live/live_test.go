@@ -93,10 +93,38 @@ type mockNode struct {
 	blockErrs map[int64][]error
 	badBlocks map[int64]bool
 	calls     map[int64]int
+	// seen lists the commits the node answers next for a height, oldest
+	// first; the last one repeats. A height without one is canonical with
+	// three signers.
+	seen        map[int64][]commitAnswer
+	commitCalls map[int64]int
+}
+
+// commitAnswer is one /commit answer of mockNode.
+type commitAnswer struct {
+	canonical bool
+	signers   int
+	err       error
 }
 
 func newMockNode(tip int64) *mockNode {
-	return &mockNode{tip: tip, blockErrs: map[int64][]error{}, badBlocks: map[int64]bool{}, calls: map[int64]int{}, downAt: map[int64]int{}}
+	return &mockNode{
+		tip: tip, blockErrs: map[int64][]error{}, badBlocks: map[int64]bool{}, calls: map[int64]int{}, downAt: map[int64]int{},
+		seen: map[int64][]commitAnswer{}, commitCalls: map[int64]int{},
+	}
+}
+
+// answerCommits queues the commits the node answers for h.
+func (n *mockNode) answerCommits(h int64, answers ...commitAnswer) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.seen[h] = answers
+}
+
+func (n *mockNode) commitCallsAt(h int64) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.commitCalls[h]
 }
 
 // goDown makes the first Block call at h find the node unreachable, and the
@@ -163,7 +191,28 @@ func (n *mockNode) BlockResults(_ context.Context, h int64) (*node.BlockResults,
 }
 
 func (n *mockNode) Commit(_ context.Context, h int64) (*node.Commit, []byte, error) {
-	return &node.Commit{Height: h}, rawBody("commit", h), nil
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.commitCalls[h]++
+	a := commitAnswer{canonical: true, signers: 3}
+	if answers := n.seen[h]; len(answers) > 0 {
+		a = answers[0]
+		if len(answers) > 1 {
+			n.seen[h] = answers[1:]
+		}
+	}
+	if a.err != nil {
+		return nil, nil, a.err
+	}
+	c := &node.Commit{Height: h, Canonical: a.canonical}
+	for i := range a.signers {
+		c.Signatures = append(c.Signatures, node.CommitSig{BlockIDFlag: node.BlockIDFlagCommit, ValidatorAddress: fmt.Sprintf("v%d", i)})
+	}
+	body := rawBody("commit", h)
+	if !a.canonical {
+		body = []byte(fmt.Sprintf("seen commit %d", h))
+	}
+	return c, body, nil
 }
 
 // rawBody is the response body mockNode answers for route at h.
@@ -171,10 +220,31 @@ func rawBody(route string, h int64) []byte {
 	return []byte(fmt.Sprintf("%s %d", route, h))
 }
 
-// mockRaw records the bodies the indexer puts, by height.
+// mockRaw records the bodies the indexer puts and the commits it replaces,
+// by height.
 type mockRaw struct {
-	mu   sync.Mutex
-	puts map[int64][3]string
+	mu       sync.Mutex
+	puts     map[int64][3]string
+	replaced map[int64]string
+}
+
+func (r *mockRaw) ReplaceCommit(h int64, commit []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.replaced[h] = string(commit)
+}
+
+func (r *mockRaw) replacedCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.replaced)
+}
+
+func (r *mockRaw) replacedAt(h int64) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.replaced[h]
+	return c, ok
 }
 
 func (r *mockRaw) PutHeight(h int64, block, blockResults, commit []byte) {
@@ -237,6 +307,32 @@ type mockStore struct {
 	floor    int64
 	written  []int64
 	failures map[int64]failure
+	// signers are the UpdateSignatures calls, by height.
+	signers   map[int64][]string
+	updateErr error
+}
+
+func (s *mockStore) UpdateSignatures(_ context.Context, h int64, signers []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.updateErr != nil {
+		return s.updateErr
+	}
+	s.signers[h] = signers
+	return nil
+}
+
+func (s *mockStore) updatedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.signers)
+}
+
+func (s *mockStore) updated(h int64) ([]string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.signers[h]
+	return v, ok
 }
 
 type failure struct {
@@ -345,8 +441,8 @@ func runWithCatchUp(t *testing.T, l *mockListener, n *mockNode, clock *fakeClock
 	t.Helper()
 	h := &harness{
 		listener: l, node: n, clock: clock, done: make(chan error, 1),
-		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}},
-		raw:   &mockRaw{puts: map[int64][3]string{}},
+		store: &mockStore{cursor: cursor, floor: floor, failures: map[int64]failure{}, signers: map[int64][]string{}},
+		raw:   &mockRaw{puts: map[int64][3]string{}, replaced: map[int64]string{}},
 	}
 	h.dirty = &mockPublisher{store: h.store}
 	deps := live.Deps{Listener: l, Node: n, Store: h.store, Transformer: mockTransformer{}, Raw: h.raw, Dirty: h.dirty}
@@ -694,4 +790,105 @@ func TestAFailedCatchUpReconnectsAndRetries(t *testing.T) {
 	h.waitWritten(t, 105, 106)
 	assert.Equal(t, [][2]int64{{100, 104}, {100, 104}}, cu.calls())
 	assert.Equal(t, []time.Duration{live.DefaultReconnectMin}, clock.recorded())
+}
+
+// A height written at the tip carries the node's seen commit: once the next
+// height is written, the indexer re-reads it, canonical by now, and corrects
+// its signatures and its cached commit.
+func TestASeenCommitIsCorrectedOnceTheNextHeightIsWritten(t *testing.T) {
+	n := newMockNode(99)
+	n.answerCommits(100, commitAnswer{canonical: false, signers: 2}, commitAnswer{canonical: true, signers: 3})
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	h.waitWritten(t, 100)
+	got, _ := h.raw.put(100)
+	assert.Equal(t, "seen commit 100", got[2], "the seen commit is what the node answered")
+	_, ok := h.store.updated(100)
+	assert.False(t, ok, "nothing to correct before 101")
+
+	sub.notify(101)
+	h.waitWritten(t, 100, 101)
+	require.Eventually(t, func() bool { _, ok := h.raw.replacedAt(100); return ok }, 5*time.Second, time.Millisecond)
+	signers, ok := h.store.updated(100)
+	require.True(t, ok)
+	assert.Equal(t, []string{"V0", "V1", "V2"}, signers, "the canonical commit's three signers")
+	commit, _ := h.raw.replacedAt(100)
+	assert.Equal(t, "commit 100", commit, "the canonical body replaces the seen one")
+	assert.Equal(t, 2, n.commitCallsAt(100))
+	_, ok = h.store.updated(101)
+	assert.False(t, ok, "101 was canonical")
+}
+
+func TestACanonicalCommitIsNotReRead(t *testing.T) {
+	n := newMockNode(99)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	sub.notify(101)
+	h.waitWritten(t, 100, 101)
+	assert.Equal(t, 1, n.commitCallsAt(100))
+	assert.Zero(t, h.store.updatedCount())
+	assert.Zero(t, h.raw.replacedCount())
+}
+
+// A failed re-read only logs: the session goes on, nothing is recorded, and
+// the height keeps its seen figures.
+func TestAFailedReReadDoesNotStopTheSession(t *testing.T) {
+	n := newMockNode(99)
+	n.answerCommits(100, commitAnswer{canonical: false, signers: 2}, commitAnswer{err: errors.New("connection reset")})
+	n.answerCommits(101, commitAnswer{canonical: false, signers: 2}, commitAnswer{canonical: false, signers: 2})
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	sub.notify(101)
+	sub.notify(102)
+	h.waitWritten(t, 100, 101, 102)
+	require.Eventually(t, func() bool { return n.commitCallsAt(101) == 2 }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, 2, n.commitCallsAt(100), "one re-read, no retry")
+	assert.Zero(t, h.store.updatedCount(), "a failed or still seen re-read corrects nothing")
+	assert.Zero(t, h.raw.replacedCount())
+	_, failed := h.store.failure(100)
+	assert.False(t, failed, "a re-read never records a failure")
+
+	sub.notify(103)
+	h.waitWritten(t, 100, 101, 102, 103)
+}
+
+func TestAFailedSignaturesUpdateKeepsTheSessionAndTheCache(t *testing.T) {
+	n := newMockNode(99)
+	n.answerCommits(100, commitAnswer{canonical: false, signers: 2}, commitAnswer{canonical: true, signers: 3})
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	h.store.mu.Lock()
+	h.store.updateErr = errors.New("database gone")
+	h.store.mu.Unlock()
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	sub.notify(101)
+	sub.notify(102)
+	h.waitWritten(t, 100, 101, 102)
+	assert.Equal(t, 2, n.commitCallsAt(100))
+	_, ok := h.raw.replacedAt(100)
+	assert.False(t, ok, "the cache keeps the seen body the table still matches")
+}
+
+// A reconnect starts a new session: the height seen before it is not
+// re-read (a reindex fixes it).
+func TestASessionStartsWithNothingToCorrect(t *testing.T) {
+	n := newMockNode(99)
+	n.answerCommits(100, commitAnswer{canonical: false, signers: 2})
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	h.waitWritten(t, 100)
+	sub.drop()
+	sub = h.listener.next(t)
+	sub.notify(101)
+	h.waitWritten(t, 100, 101)
+	assert.Equal(t, 1, n.commitCallsAt(100))
 }
