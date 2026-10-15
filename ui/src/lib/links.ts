@@ -17,11 +17,7 @@ export const navLinks: NavLink[] = [
 
 export const externalLinks = {
   website: "https://getbze.com",
-  staking: "https://staking.getbze.com",
-  dex: "https://dex.getbze.com",
-  burner: "https://burner.getbze.com",
-  factory: "https://factory.getbze.com",
-  communities: "https://communities.getbze.com",
+  ...env.apps,
   docs: "https://docs.getbze.com",
   pingPub: env.pingPubUrl,
 };
