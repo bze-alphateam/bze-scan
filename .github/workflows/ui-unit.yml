@@ -4,9 +4,8 @@ on:
   # On main and develop these run from release.yml, which publishes the
   # images only after the tests pass.
   workflow_call:
-  # Every pull request, whatever it touches: these are required checks of
-  # the main ruleset, and a path filter would leave a pull request that
-  # skips them (docs, other workflows) waiting forever.
+  # Every pull request, whatever it touches: this is a required check of the
+  # main ruleset, so the trigger takes no path filter (see the changes job).
   pull_request:
 
 permissions:
@@ -19,7 +18,29 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # On a pull request: does it touch what this check covers? Called from
+  # release.yml (pushes to main and develop) it is skipped and unit runs.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/pr-touches.sh '^ui/' '^backend/internal/classify/classify\.go$' '^\.github/workflows/ui-unit\.yml$' '^\.github/scripts/pr-touches\.sh$'
+
   unit:
+    needs: changes
+    # Skipped (= a passing required check) only when the pull request touches
+    # none of its paths. Outside pull requests, or if the changes job failed,
+    # it runs.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.run != 'false') }}
     runs-on: ubuntu-latest
     defaults:
       run:
