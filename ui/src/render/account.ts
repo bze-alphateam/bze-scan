@@ -1,5 +1,6 @@
 import type { Account, AccountUnbonding, Balance, Coin, Label, LpPair, TokenSummary, Validator } from "@/api/types";
 import { formatCount, formatDateTime, formatPct, shortAddress } from "@/lib/format";
+import { externalLinks } from "@/lib/links";
 import { compareDecimals, isAboveZero, percentOf, sumAmounts, usdValue } from "@/lib/math";
 
 import { uptimeText } from "./validators";
@@ -263,7 +264,7 @@ export function originTag(token: TokenSummary | undefined, denom: string): strin
 
 /** The token's page on the DEX. */
 export function dexAssetUrl(denom: string): string {
-  return `https://dex.getbze.com/assets/details?denom=${encodeURIComponent(denom)}`;
+  return `${externalLinks.dex}/assets/details?denom=${encodeURIComponent(denom)}`;
 }
 
 export interface TokenRow {

@@ -5,6 +5,14 @@
 const trimSlash = (url: string) => url.replace(/\/+$/, "");
 
 export const env = {
+  /** The BZE apps of the same network: mainnet by default, the testnet- hosts on testnet. */
+  apps: {
+    staking: trimSlash(process.env.NEXT_PUBLIC_STAKING_URL || "https://staking.getbze.com"),
+    dex: trimSlash(process.env.NEXT_PUBLIC_DEX_URL || "https://dex.getbze.com"),
+    burner: trimSlash(process.env.NEXT_PUBLIC_BURNER_URL || "https://burner.getbze.com"),
+    factory: trimSlash(process.env.NEXT_PUBLIC_FACTORY_URL || "https://factory.getbze.com"),
+    communities: trimSlash(process.env.NEXT_PUBLIC_COMMUNITIES_URL || "https://communities.getbze.com"),
+  },
   /** The API as the browser reaches it, without `/v1`. */
   apiUrl: trimSlash(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"),
   chainId: process.env.NEXT_PUBLIC_CHAIN_ID || "beezee-1",

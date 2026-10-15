@@ -109,7 +109,7 @@ export const PARAM_GROUPS: GroupDef[] = [
     label: "Burner",
     modules: ["burner"],
     description: "The account that collects BZE to destroy.",
-    see: { label: "burner.getbze.com", href: externalLinks.burner },
+    see: { label: new URL(externalLinks.burner).host, href: externalLinks.burner },
   },
   { group: "cointrunk", label: "CoinTrunk", modules: ["cointrunk"], description: "Rules of the CoinTrunk news app at app.cointrunk.io." },
 ];

@@ -78,6 +78,7 @@ tests only. The end-to-end tests run in CI, or on a developer machine with
 | `NEXT_PUBLIC_NETWORK_LABEL` | the network tag in the strip above the header (`Mainnet`) |
 | `NEXT_PUBLIC_PINGPUB_URL` | the Ping.pub explorer link |
 | `NEXT_PUBLIC_SITE_URL` | the site's own URL, base of absolute links and previews |
+| `NEXT_PUBLIC_STAKING_URL`, `NEXT_PUBLIC_DEX_URL`, `NEXT_PUBLIC_BURNER_URL`, `NEXT_PUBLIC_FACTORY_URL`, `NEXT_PUBLIC_COMMUNITIES_URL` | the BZE apps the explorer links to (Apps menu, Stake, Trade, Claim on Staking, the DEX's token and market pages); empty means the mainnet hosts, a testnet build sets the `testnet-` ones |
 | `NEXT_PUBLIC_TX_PENDING_WINDOW_MS` | how long the transaction page looks for a hash the API does not know yet; empty means two minutes (`pnpm build:e2e` sets 4 s) |
 
 ## Data
