@@ -10,7 +10,7 @@
 # ui/.env.production. Its NEXT_PUBLIC_* values are inlined into the browser
 # bundle, so they are public by definition; the secret mount only keeps the
 # file out of the build context, the image layers and the build log. CI takes
-# it from the deploy repository (scan.getbze.com/build.env). Server-only
+# it from the deploy repository (<deploy dir>/build.env). Server-only
 # values such as API_URL are read at run time from the container environment.
 # The context is trimmed to ui/ by ui.Dockerfile.dockerignore.
 

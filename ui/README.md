@@ -72,7 +72,7 @@ tests only. The end-to-end tests run in CI, or on a developer machine with
 
 | Key | Meaning |
 | --- | --- |
-| `NEXT_PUBLIC_API_URL` | the API as the browser reaches it, without `/v1` (production `https://scan.getbze.com/api`) |
+| `NEXT_PUBLIC_API_URL` | the API as the browser reaches it, without `/v1` (production `https://explorer.getbze.com/api`) |
 | `API_URL` | the API as the Next.js server reaches it; falls back to `NEXT_PUBLIC_API_URL` |
 | `NEXT_PUBLIC_CHAIN_ID` | the chain named in the footer (`beezee-1`) |
 | `NEXT_PUBLIC_NETWORK_LABEL` | the network tag in the strip above the header (`Mainnet`) |

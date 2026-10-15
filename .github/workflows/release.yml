@@ -1,0 +1,143 @@
+name: Release
+
+# Every push to a release branch builds, publishes and deploys the explorer:
+#
+#   develop -> testnet: images tagged testnet-<sha8>, deployed to
+#              explorer.testnet.getbze.com
+#   main    -> mainnet: images tagged <sha8> (+ :latest), deployed to
+#              explorer.getbze.com only while the repository variable
+#              DEPLOY_MAINNET is "true"
+#
+# Tag rule: a release is ONE tag for both images. Both are built on every
+# push, whatever changed (no path filters here), so every commit on a release
+# branch has a complete backend + UI pair that can be deployed or rolled back
+# to. The deploy target runs both services from the same tag.
+#
+# Order: the unit and e2e workflows of both apps, then each image (backend
+# after the backend tests, UI after the UI tests), then the deploy. The
+# deploy dispatches the private deploy repository's `deploy` workflow (it
+# migrates the database, then swaps the blue/green colour) and waits for it:
+# a failed release on the server is a red run here, and the previously
+# released tag stays live.
+on:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+# Releases of one branch run one at a time, in commit order.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vars:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      deploy_dir: ${{ steps.vars.outputs.deploy_dir }}
+      deploy: ${{ steps.vars.outputs.deploy }}
+      latest: ${{ steps.vars.outputs.latest }}
+    steps:
+      - name: Compute tag and deploy target
+        id: vars
+        env:
+          SHA: ${{ github.sha }}
+          DEPLOY_MAINNET: ${{ vars.DEPLOY_MAINNET }}
+        run: |
+          sha=${SHA:0:8}
+          if [ "$GITHUB_REF_NAME" = "develop" ]; then
+            echo "tag=testnet-$sha" >> "$GITHUB_OUTPUT"
+            echo "deploy_dir=explorer.testnet.getbze.com" >> "$GITHUB_OUTPUT"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$sha" >> "$GITHUB_OUTPUT"
+            echo "deploy_dir=explorer.getbze.com" >> "$GITHUB_OUTPUT"
+            echo "deploy=$([ "$DEPLOY_MAINNET" = "true" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  backend-unit:
+    uses: ./.github/workflows/backend-unit.yml
+
+  backend-e2e:
+    uses: ./.github/workflows/backend-e2e.yml
+
+  ui-unit:
+    uses: ./.github/workflows/ui-unit.yml
+
+  ui-e2e:
+    uses: ./.github/workflows/ui-e2e.yml
+
+  backend-image:
+    needs: [vars, backend-unit, backend-e2e]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/backend-image.yml
+    with:
+      tag: ${{ needs.vars.outputs.tag }}
+      latest: ${{ needs.vars.outputs.latest == 'true' }}
+
+  ui-image:
+    needs: [vars, ui-unit, ui-e2e]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ui-image.yml
+    with:
+      tag: ${{ needs.vars.outputs.tag }}
+      deploy_dir: ${{ needs.vars.outputs.deploy_dir }}
+      # An image that is about to be deployed must carry its network's build
+      # env; main without DEPLOY_MAINNET may still fall back to ui/.env.dist.
+      require_build_env: ${{ needs.vars.outputs.deploy == 'true' }}
+      latest: ${{ needs.vars.outputs.latest == 'true' }}
+    secrets:
+      DEPLOY_REPO_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+
+  # `gh workflow run` returns no run id, so the run is found by its title (the
+  # deploy workflow sets run-name: deploy <app> <tag>) among the runs created
+  # after this dispatch (minus a minute of clock skew).
+  deploy:
+    needs: [vars, backend-image, ui-image]
+    if: needs.vars.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_REPO: bze-alphateam/bze-deploy
+    steps:
+      - name: Deploy (dispatch the deploy repository's workflow and wait for it)
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          APP: ${{ needs.vars.outputs.deploy_dir }}
+          TAG: ${{ needs.vars.outputs.tag }}
+          SOURCE: ${{ github.repository }}@${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TITLE="deploy $APP $TAG"
+          SINCE=$(date -u -d '-1 minute' +%Y-%m-%dT%H:%M:%SZ)
+          export TITLE SINCE
+          gh workflow run deploy.yml -R "$DEPLOY_REPO" -f app="$APP" -f tag="$TAG" -f source="$SOURCE" >/dev/null
+          run_id=""
+          for _ in $(seq 1 20); do
+            sleep 5
+            run_id=$(gh run list -R "$DEPLOY_REPO" --workflow deploy.yml -L 30 \
+              --json databaseId,displayTitle,createdAt \
+              --jq '[.[] | select(.displayTitle == env.TITLE and .createdAt >= env.SINCE)] | sort_by(.createdAt) | last | .databaseId // empty')
+            [ -n "$run_id" ] && break
+          done
+          if [ -z "$run_id" ]; then
+            echo "::error::dispatched '$TITLE' but no matching run appeared in the deploy repository within 100s"
+            exit 1
+          fi
+          # This repository is public: its logs and summary must not carry the
+          # deploy repository's run URL or step output, so the run is watched
+          # silently.
+          if gh run watch "$run_id" -R "$DEPLOY_REPO" --interval 10 --exit-status >/dev/null 2>&1; then
+            echo "✅ deploy \`$APP\` \`$TAG\` succeeded" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ deploy \`$APP\` \`$TAG\` FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::deploy of $APP $TAG failed, see the deploy repository's Actions (the previous tag stays live)"
+            exit 1
+          fi

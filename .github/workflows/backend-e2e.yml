@@ -1,8 +1,8 @@
 name: Backend e2e tests
 
 on:
-  # On main these run from backend-image.yml, which publishes the image only
-  # after both pass.
+  # On main and develop these run from release.yml, which publishes the
+  # images only after the tests pass.
   workflow_call:
   pull_request:
     paths:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 # A newer push to a pull request cancels its run in progress; runs on main
-# always finish. The group is spelled out: called from backend-image.yml,
+# always finish. The group is spelled out: called from release.yml,
 # github.workflow would name the caller and share its group.
 concurrency:
   group: backend-e2e-${{ github.ref }}

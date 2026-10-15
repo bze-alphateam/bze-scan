@@ -1,8 +1,8 @@
 name: UI unit tests
 
 on:
-  # On main these run from ui-image.yml, which publishes the image only after
-  # both pass.
+  # On main and develop these run from release.yml, which publishes the
+  # images only after the tests pass.
   workflow_call:
   pull_request:
     paths:
@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 
-# The group is spelled out: called from ui-image.yml, github.workflow would
+# The group is spelled out: called from release.yml, github.workflow would
 # name the caller and share its group.
 concurrency:
   group: ui-unit-${{ github.ref }}
