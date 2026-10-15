@@ -5,8 +5,9 @@
 // The live indexer puts the bodies it already fetched, so recent heights never
 // reach the archive.
 //
-// By-height data is immutable: an entry is never refreshed, and expiry exists
-// only to bound memory. Raw payloads are never written to the database.
+// By-height data is immutable: an entry is never refreshed (except a seen
+// commit, replaced by the canonical one), and expiry exists only to bound
+// memory. Raw payloads are never written to the database.
 package rawcache
 
 import (
@@ -161,6 +162,22 @@ func (c *Cache) PutHeight(height int64, block, blockResults, commit []byte) {
 	c.put(RouteBlock, height, block)
 	c.put(RouteBlockResults, height, blockResults)
 	c.put(RouteCommit, height, commit)
+}
+
+// ReplaceCommit stores the canonical /commit body of a height the live
+// indexer wrote with the node's seen commit, replacing the cached one: the
+// one exception to by-height bodies never changing.
+func (c *Cache) ReplaceCommit(height int64, commit []byte) {
+	if len(commit) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	l := c.lrus[RouteCommit]
+	if el, ok := l.items[height]; ok {
+		l.remove(el)
+	}
+	l.put(height, commit, c.cfg.Now(), c.cfg.TTL)
 }
 
 // Tx is one transaction of a block as the node encodes it.

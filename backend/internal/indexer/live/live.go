@@ -49,6 +49,9 @@ type Store interface {
 	LiveFloor(ctx context.Context) (int64, bool, error)
 	WriteBlock(ctx context.Context, ents *transform.Entities) error
 	RecordFailure(ctx context.Context, height int64, attempts int, cause error) error
+	// UpdateSignatures replaces the signature columns of a written block
+	// with those of signers, its canonical commit's committed signatures.
+	UpdateSignatures(ctx context.Context, height int64, signers []string) error
 }
 
 // Transformer turns the node's answers for one height into entities.
@@ -60,6 +63,8 @@ type Transformer interface {
 // the raw-JSON routes serve recent heights without an archive call.
 type RawCache interface {
 	PutHeight(height int64, block, blockResults, commit []byte)
+	// ReplaceCommit replaces a height's seen commit with the canonical one.
+	ReplaceCommit(height int64, commit []byte)
 }
 
 // CatchUp indexes heights the local node has pruned (an outage longer than
@@ -124,6 +129,10 @@ type Indexer struct {
 	raw         RawCache
 	catchUp     CatchUp
 	dirty       DirtyPublisher
+	// seen is the last height written with the node's seen commit, or the
+	// cursor at session start, whose commit is unknown (0: none); refreshed
+	// once the next height is written.
+	seen int64
 }
 
 // New returns an indexer woken by deps.Listener, reading deps.Node,
@@ -174,6 +183,16 @@ func (ix *Indexer) session(ctx context.Context, connected func()) error {
 		return err
 	}
 	defer sub.Close()
+	// The last height written before this session (a reconnect, a restart)
+	// may carry a seen commit: re-read it once the next height is written.
+	cursor, hasCursor, err := ix.store.Cursor(ctx)
+	if err != nil {
+		return err
+	}
+	ix.seen = 0
+	if hasCursor {
+		ix.seen = cursor
+	}
 	log.WithField("channel", migrations.NotifyChannel).Info("live indexer listening")
 	connected()
 
@@ -287,9 +306,14 @@ func (ix *Indexer) indexHeight(ctx context.Context, h int64) error {
 			}
 		}
 		start := time.Now()
-		lastErr = ix.indexOnce(hctx, h)
+		var canonical bool
+		canonical, lastErr = ix.indexOnce(hctx, h)
 		if lastErr == nil {
 			log.WithFields(log.Fields{"height": h, "took_ms": time.Since(start).Milliseconds()}).Debug("block indexed")
+			ix.refreshSeen(hctx, h)
+			if !canonical {
+				ix.seen = h
+			}
 			return nil
 		}
 		if errors.Is(lastErr, node.ErrPruned) {
@@ -327,25 +351,26 @@ func (ix *Indexer) recordFailure(ctx context.Context, h int64, attempts int, cau
 	return nil
 }
 
-func (ix *Indexer) indexOnce(ctx context.Context, h int64) error {
+// indexOnce indexes h once and reports whether its commit was canonical.
+func (ix *Indexer) indexOnce(ctx context.Context, h int64) (bool, error) {
 	b, rawBlock, err := ix.node.Block(ctx, h)
 	if err != nil {
-		return err
+		return false, err
 	}
 	r, rawResults, err := ix.node.BlockResults(ctx, h)
 	if err != nil {
-		return err
+		return false, err
 	}
 	c, rawCommit, err := ix.node.Commit(ctx, h)
 	if err != nil {
-		return err
+		return false, err
 	}
 	ents, err := ix.transformer.Transform(transform.Input{Block: b, Results: r, Commit: c})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := ix.store.WriteBlock(ctx, ents); err != nil {
-		return err
+		return false, err
 	}
 	if ix.raw != nil {
 		ix.raw.PutHeight(h, rawBlock, rawResults, rawCommit)
@@ -355,7 +380,36 @@ func (ix *Indexer) indexOnce(ctx context.Context, h int64) error {
 	if ix.dirty != nil && !ents.Dirty.Empty() {
 		ix.dirty.Publish(ents.Dirty)
 	}
-	return nil
+	return c.Canonical, nil
+}
+
+// refreshSeen corrects the height written with a seen commit, now that h
+// above it is written: the node's commit of that height is the canonical one
+// by now, with every signature. A failure only logs: the live path never
+// waits on the correction, and a reindex rewrites the figures anyway.
+func (ix *Indexer) refreshSeen(ctx context.Context, h int64) {
+	prev := ix.seen
+	if prev == 0 || prev >= h {
+		return
+	}
+	ix.seen = 0
+	logger := log.WithField("height", prev)
+	c, raw, err := ix.node.Commit(ctx, prev)
+	if err != nil {
+		logger.WithError(err).Warn("live indexer: re-reading a seen commit failed, its signatures stay as seen")
+		return
+	}
+	if !c.Canonical {
+		logger.Warn("live indexer: the node still answers a seen commit, its signatures stay as seen")
+		return
+	}
+	if err := ix.store.UpdateSignatures(ctx, prev, transform.CommitSigners(c)); err != nil {
+		logger.WithError(err).Warn("live indexer: correcting the signatures failed, they stay as seen")
+		return
+	}
+	if ix.raw != nil {
+		ix.raw.ReplaceCommit(prev, raw)
+	}
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

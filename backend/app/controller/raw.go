@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -58,8 +59,26 @@ func (h *RawController) route(c *echo.Context, route rawcache.Route) error {
 	if err != nil {
 		return rawError(err)
 	}
-	c.Response().Header().Set(echo.HeaderCacheControl, CacheImmutable)
+	cache := CacheImmutable
+	if route == rawcache.RouteCommit && !canonicalCommit(body) {
+		// A node asked at its tip answers its seen commit, which may lack
+		// late signatures; the canonical one follows with the next block.
+		cache = CacheIndexed
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, cache)
 	return c.Blob(http.StatusOK, echo.MIMEApplicationJSON, body)
+}
+
+// canonicalCommit reports whether a /commit body is the canonical commit
+// ("canonical": true), the only one that never changes. A body that does not
+// say is treated as seen.
+func canonicalCommit(body []byte) bool {
+	var res struct {
+		Result struct {
+			Canonical bool `json:"canonical"`
+		} `json:"result"`
+	}
+	return json.Unmarshal(body, &res) == nil && res.Result.Canonical
 }
 
 // Tx serves GET /api/v1/raw/tx/{hash}: the raw transaction and its result,
