@@ -89,6 +89,19 @@ export function useBlocks(params: BlockListParams = {}) {
   });
 }
 
+/**
+ * The query's error, with a 404 held through the refetches that poll for it.
+ * A refetch of a query that never had data clears its error while in flight,
+ * so without this a page waiting for a transaction or height would flash its
+ * loading state on every poll, and the pending window would restart each time.
+ */
+function useHeldNotFound(error: unknown, hasData: boolean): unknown {
+  const [held, setHeld] = useState<unknown>(null);
+  if (isNotFound(error) && held !== error) setHeld(error);
+  if (hasData && held !== null) setHeld(null);
+  return error ?? (hasData ? null : held);
+}
+
 /** Sets `expired` once `active` has held for the pending window (two minutes). */
 function usePendingWindow(active: boolean, setExpired: (expired: boolean) => void) {
   useEffect(() => {
@@ -113,8 +126,9 @@ export function useBlock(height: number, { waitForIt = false }: { waitForIt?: bo
     ...immutable,
     refetchInterval: (q) => (waitForIt && isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false),
   });
-  usePendingWindow(waitForIt && isNotFound(query.error), setExpired);
-  return { ...query, expired };
+  const error = useHeldNotFound(query.error, query.data !== undefined);
+  usePendingWindow(waitForIt && isNotFound(error), setExpired);
+  return { ...query, error, expired };
 }
 
 /** Every transfer at a height, pages of 100 followed to the last; fetched once. */
@@ -182,11 +196,12 @@ export function useTransaction(hash: string) {
       return isNotFound(q.state.error) && !expired ? TX_PENDING_POLL_MS : false;
     },
   });
-  const notFound = isNotFound(query.error);
+  const error = useHeldNotFound(query.error, query.data !== undefined);
+  const notFound = isNotFound(error);
   usePendingWindow(notFound, setExpired);
 
   const pending: PendingState = notFound ? (expired ? "not_found" : "looking") : null;
-  return { ...query, pending };
+  return { ...query, error, pending };
 }
 
 export function useValidators(params: ValidatorListParams = {}) {
