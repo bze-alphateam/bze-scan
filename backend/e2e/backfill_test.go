@@ -75,7 +75,7 @@ func newBackfillEnv(t *testing.T) *backfillEnv {
 // config is the backfill of the range with X=3 and M=4.
 func (e *backfillEnv) config(rateLimit float64) *config.Config {
 	return &config.Config{
-		LogLevel: "warn", LogFormat: config.LogFormatText, DatabaseURL: e.url,
+		LogLevel: "warn", LogFormat: config.LogFormatText, ChainID: "beezee-1", DatabaseURL: e.url,
 		ArchiveRPCURL: e.archive.URL, BackfillFloorHeight: backfillFloor,
 		BackfillWorkers: 3, BackfillBatch: 4, BackfillQuiet: time.Second, BackfillRateLimit: rateLimit,
 	}

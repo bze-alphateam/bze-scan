@@ -4,6 +4,10 @@
 // path only, before the transformer: the backfill and the reindex of old
 // heights. The live path never calls it.
 //
+// The height tables are per chain: the same height is a different release on
+// mainnet and on testnet, so the adapter is built for the chain CHAIN_ID
+// names (ForChain) and refuses a chain it has no table for.
+//
 // # Generations of mainnet beezee-1
 //
 // Every software upgrade of the chain, with the height it was applied at and
@@ -29,6 +33,23 @@
 // been applied yet: when it is, add its row (same event format as v8.0.0).
 // Note that v7 stayed on SDK 0.45 and CometBFT 0.34: there is no 0.47
 // generation on mainnet, and the only format break is v8.0.0.
+//
+// # Generations of testnet bzetestnet-3
+//
+// bzetestnet-3 started from genesis on v8.0.2 (genesis app_version 8.0.2,
+// SDK 0.50 genesis layout), so every height it ever produced has the current
+// event format; v8.0.2 still repeats its block events like v8.0.x on
+// mainnet:
+//
+//	release  from height  Cosmos SDK  consensus          ibc-go  event format
+//	v8.0.2   1            0.50.14     CometBFT 0.38.21   8.7.0   current (doubled)
+//	v8.1.0   600,000      0.50.15     CometBFT 0.38.21   8.7.0   current
+//	v8.1.1   2,254,400    0.50.15     CometBFT 0.38.23   8.8.0   current
+//	v8.2.0   3,626,000    0.50.15     CometBFT 0.38.26   8.8.0   current
+//
+// Verified 2026-10-15 from the testnet's applied plans
+// (/cosmos/upgrade/v1beta1/applied_plan/<name> on testnet REST), the genesis
+// file in the chain repository and the go.mod of each release tag.
 //
 // # Order of the gov and staking EndBlockers
 //
@@ -118,7 +139,11 @@
 // such run (undouble); the transactions' own events are not affected.
 package archive
 
-import "sort"
+import (
+	"errors"
+	"fmt"
+	"sort"
+)
 
 // Format is the event format of a generation.
 type Format int
@@ -142,7 +167,7 @@ func (f Format) String() string {
 	return "unknown"
 }
 
-// Generation is one release line of mainnet beezee-1.
+// Generation is one release line of a chain.
 type Generation struct {
 	// Release is the chain release, e.g. "v7.2.0".
 	Release string
@@ -161,9 +186,15 @@ type Generation struct {
 	StakingBeforeGov bool
 }
 
-// Generations lists the releases of mainnet beezee-1 by height, oldest
-// first (see the package documentation for how it was verified).
-var Generations = []Generation{
+// Chain is the release history of one chain id, oldest first.
+type Chain struct {
+	ID          string
+	Generations []Generation
+}
+
+// Mainnet is beezee-1 (see the package documentation for how it was
+// verified).
+var Mainnet = Chain{ID: "beezee-1", Generations: []Generation{
 	{Release: "v5.0", From: 1, SDK: "0.44.3", Consensus: "Tendermint 0.34.14", IBC: "1.2.2", Format: FormatLegacy},
 	{Release: "v5.1.2", From: 3_646_700, SDK: "0.45.9", Consensus: "Tendermint 0.34.21", IBC: "1.2.2", Format: FormatLegacy, StakingBeforeGov: true},
 	{Release: "v6.0.0", From: 4_875_460, SDK: "0.45.10", Consensus: "Tendermint 0.34.22", IBC: "2.4.2", Format: FormatLegacy, StakingBeforeGov: true},
@@ -175,23 +206,47 @@ var Generations = []Generation{
 	{Release: "v8.0.0", From: 20_237_800, SDK: "0.50.14", Consensus: "CometBFT 0.38.17", IBC: "8.7.0", Format: FormatCurrent, DoubledEvents: true},
 	{Release: "v8.1.0", From: 22_551_810, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
 	{Release: "v8.1.1", From: 23_855_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
+}}
+
+// Testnet3 is bzetestnet-3 (see the package documentation).
+var Testnet3 = Chain{ID: "bzetestnet-3", Generations: []Generation{
+	{Release: "v8.0.2", From: 1, SDK: "0.50.14", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent, DoubledEvents: true},
+	{Release: "v8.1.0", From: 600_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
+	{Release: "v8.1.1", From: 2_254_400, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
+	{Release: "v8.2.0", From: 3_626_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.26", IBC: "8.8.0", Format: FormatCurrent},
+}}
+
+// Chains are the chains the adapter knows, by chain id.
+var Chains = map[string]Chain{Mainnet.ID: Mainnet, Testnet3.ID: Testnet3}
+
+// ErrUnknownChain is returned by ForChain for a chain id without a table.
+var ErrUnknownChain = errors.New("no release history for this chain id")
+
+// ForChain returns the release history of chainID.
+func ForChain(chainID string) (Chain, error) {
+	c, ok := Chains[chainID]
+	if !ok {
+		return Chain{}, fmt.Errorf("%w: %q (known: beezee-1, bzetestnet-3)", ErrUnknownChain, chainID)
+	}
+	return c, nil
 }
 
 // TallySetHeight is the height whose CometBFT validator set (/validators) is
 // the set a gov tally at height h counted: h+1, or h+2 in the generations
 // whose staking EndBlocker runs first (see the package documentation).
-func TallySetHeight(h int64) int64 {
-	if GenerationAt(h).StakingBeforeGov {
+func (c Chain) TallySetHeight(h int64) int64 {
+	if c.At(h).StakingBeforeGov {
 		return h + 2
 	}
 	return h + 1
 }
 
-// GenerationAt returns the generation that produced height (≥ 1).
-func GenerationAt(height int64) Generation {
-	i := sort.Search(len(Generations), func(i int) bool { return Generations[i].From > height })
+// At returns the generation that produced height (≥ 1).
+func (c Chain) At(height int64) Generation {
+	gs := c.Generations
+	i := sort.Search(len(gs), func(i int) bool { return gs[i].From > height })
 	if i == 0 {
-		return Generations[0]
+		return gs[0]
 	}
-	return Generations[i-1]
+	return gs[i-1]
 }

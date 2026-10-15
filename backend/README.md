@@ -546,7 +546,13 @@ elsewhere ends without stopping the process, and the next start resumes it).
 
 ### Old event formats
 
-Heights before v8.0.0 (mainnet height 20,237,800) were produced by Cosmos SDK
+The release history behind it is per chain (`archive.ForChain(CHAIN_ID)`): the
+same height is a different release on mainnet `beezee-1` and on testnet
+`bzetestnet-3`, which started on v8.0.2, so every testnet height has the
+current format. Backfill, reindex and the state sync refuse to start for a
+chain id without a table.
+
+Mainnet heights before v8.0.0 (height 20,237,800) were produced by Cosmos SDK
 0.44/0.45 on Tendermint/CometBFT 0.34. On the archive path only (backfill,
 catch-up, reindex; never the live path), `internal/archive` normalises them
 to the current format before the transformer sees them: `msg_index` rebuilt
@@ -1147,7 +1153,7 @@ waits for it). The rows and the columns are written in one transaction.
   N+2, so the set is CometBFT's `/validators` (every page of 100) at `H+1`
   where gov's EndBlocker runs before staking's (v5.0, v8.0.0 on) and at
   `H+2` where staking's runs first (v5.1.2 to v7.2.0; the per-generation
-  rule is `archive.TallySetHeight`). The validators slashed in `H`'s block
+  rule is the chain's `archive.Chain.TallySetHeight`). The validators slashed in `H`'s block
   (its `slash` events) are left out: the slashing BeginBlocker jailed them,
   which drops them from the power index before the tally, while CometBFT
   still lists them. The set is never recomputed from staking state.
