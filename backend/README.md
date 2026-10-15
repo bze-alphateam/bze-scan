@@ -315,7 +315,9 @@ every later route follows:
   counterparty chain, a block time), so it is never cached for good. A block
   whose proposer is not named yet (no synced validator has its consensus
   address) stays `no-store` until it is. A block's events and the raw node
-  answers by height join nothing and are `public, max-age=31536000, immutable`.
+  answers by height join nothing and are `public, max-age=31536000, immutable`,
+  except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
+  asked at its tip), which is `public, max-age=60`.
 - **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
@@ -378,11 +380,14 @@ otherwise (`running`, `paused`, `error`, or enabled and waiting) it is
 | `GET /api/v1/raw/tx/{hash}` | `{"height", "index", "tx", "tx_result"}`: the base64 transaction from `/block` `data.txs[index]` and `/block_results` `txs_results[index]`, at the height and index `explorer.transactions` holds; 404 when the hash is not indexed |
 
 A height is a positive integer (else 400) and is proxied whether the explorer
-indexed it or not. Successes are `immutable`; when no archive node serves the
+indexed it or not. Successes are `immutable`, but a commit body without
+`"canonical": true` (the seen commit of a node's tip, see "Live indexer") is
+`public, max-age=60`, so a browser picks up the canonical one; when no archive node serves the
 height (unreachable, an error, above its tip) the answer is 502
 `upstream_error` and nothing is cached. The cache keeps one LRU per route of
 at most `RAW_CACHE_MAX_ENTRIES` entries, each living `RAW_CACHE_TTL` from the
-moment it was stored; an entry is never refreshed (a height never changes).
+moment it was stored; an entry is never refreshed (a height never changes),
+except a seen commit, which the live indexer replaces with the canonical one.
 The live indexer puts the three bodies of every height it writes, so recent
 heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
@@ -496,8 +501,9 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   its `signatures_count` and `signatures_power_pct` (the same expression as
   the insert) and replaces its commit in the raw-JSON cache. A failed or
   still-seen re-read only logs a warning: nothing is recorded and the live
-  path goes on. A height seen just before a reconnect keeps its figures
-  until a reindex. Backfill, catch-up and reindex read old heights, whose
+  path goes on. Each session (start, reconnect) begins by treating the cursor
+  as seen, since the height written just before it may be, and re-reads it
+  once too. Backfill, catch-up and reindex read old heights, whose
   commits are canonical.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the

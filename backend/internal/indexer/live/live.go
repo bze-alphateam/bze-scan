@@ -129,8 +129,9 @@ type Indexer struct {
 	raw         RawCache
 	catchUp     CatchUp
 	dirty       DirtyPublisher
-	// seen is the last height of this session written with the node's seen
-	// commit (0: none), refreshed once the next height is written.
+	// seen is the last height written with the node's seen commit, or the
+	// cursor at session start, whose commit is unknown (0: none); refreshed
+	// once the next height is written.
 	seen int64
 }
 
@@ -182,7 +183,16 @@ func (ix *Indexer) session(ctx context.Context, connected func()) error {
 		return err
 	}
 	defer sub.Close()
+	// The last height written before this session (a reconnect, a restart)
+	// may carry a seen commit: re-read it once the next height is written.
+	cursor, hasCursor, err := ix.store.Cursor(ctx)
+	if err != nil {
+		return err
+	}
 	ix.seen = 0
+	if hasCursor {
+		ix.seen = cursor
+	}
 	log.WithField("channel", migrations.NotifyChannel).Info("live indexer listening")
 	connected()
 

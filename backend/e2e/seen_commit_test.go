@@ -71,6 +71,10 @@ func TestLiveCorrectsASeenCommitOnceTheNextBlockIsIndexed(t *testing.T) {
 	insertSinkBlock(t, db, h317)
 	waitFor(t, 5*time.Second, func() bool { return signatures(h317) != "" }, "block %d", h317)
 	assert.Equal(t, "19", signatures(h317), "written with the seen commit")
+	seen := fetch(t, base+fakenode.RouteCommit+"/"+strconv.FormatInt(h317, 10))
+	require.Equal(t, http.StatusOK, seen.status)
+	assert.Contains(t, string(seen.body), `"canonical":false`)
+	assert.Equal(t, "public, max-age=60", seen.header.Get("Cache-Control"), "seen: browsers ask again soon")
 
 	// 318 exists: the node now answers 317's canonical commit.
 	local.ClearSeenCommit(h317)
@@ -85,6 +89,7 @@ func TestLiveCorrectsASeenCommitOnceTheNextBlockIsIndexed(t *testing.T) {
 	want, err := local.Fixture(fakenode.RouteCommit, h317)
 	require.NoError(t, err)
 	assert.Equal(t, string(want), string(res.body), "the canonical commit, verbatim")
+	assert.Equal(t, "public, max-age=31536000, immutable", res.header.Get("Cache-Control"), "canonical: final")
 	assert.Zero(t, archive.Requests(fakenode.RouteCommit), "served from the cache")
 	assert.Empty(t, queryStrings(t, db, `SELECT height::text FROM explorer.index_failures`))
 }

@@ -234,12 +234,6 @@ func (r *mockRaw) ReplaceCommit(h int64, commit []byte) {
 	r.replaced[h] = string(commit)
 }
 
-func (r *mockRaw) replacedCount() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.replaced)
-}
-
 func (r *mockRaw) replacedAt(h int64) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -830,8 +824,10 @@ func TestACanonicalCommitIsNotReRead(t *testing.T) {
 	sub.notify(101)
 	h.waitWritten(t, 100, 101)
 	assert.Equal(t, 1, n.commitCallsAt(100))
-	assert.Zero(t, h.store.updatedCount())
-	assert.Zero(t, h.raw.replacedCount())
+	_, updated := h.store.updated(100)
+	assert.False(t, updated)
+	_, replaced := h.raw.replacedAt(100)
+	assert.False(t, replaced)
 }
 
 // A failed re-read only logs: the session goes on, nothing is recorded, and
@@ -849,8 +845,12 @@ func TestAFailedReReadDoesNotStopTheSession(t *testing.T) {
 	h.waitWritten(t, 100, 101, 102)
 	require.Eventually(t, func() bool { return n.commitCallsAt(101) == 2 }, 5*time.Second, time.Millisecond)
 	assert.Equal(t, 2, n.commitCallsAt(100), "one re-read, no retry")
-	assert.Zero(t, h.store.updatedCount(), "a failed or still seen re-read corrects nothing")
-	assert.Zero(t, h.raw.replacedCount())
+	for _, seen := range []int64{100, 101} {
+		_, updated := h.store.updated(seen)
+		assert.False(t, updated, "a failed or still seen re-read corrects nothing at %d", seen)
+		_, replaced := h.raw.replacedAt(seen)
+		assert.False(t, replaced, "%d", seen)
+	}
 	_, failed := h.store.failure(100)
 	assert.False(t, failed, "a re-read never records a failure")
 
@@ -876,11 +876,12 @@ func TestAFailedSignaturesUpdateKeepsTheSessionAndTheCache(t *testing.T) {
 	assert.False(t, ok, "the cache keeps the seen body the table still matches")
 }
 
-// A reconnect starts a new session: the height seen before it is not
-// re-read (a reindex fixes it).
-func TestASessionStartsWithNothingToCorrect(t *testing.T) {
+// The last height written before a reconnect or a restart may carry a seen
+// commit the indexer no longer remembers: a session starts by treating the
+// cursor as seen, and re-reads it once the next height is written.
+func TestASessionCorrectsTheHeightWrittenBeforeIt(t *testing.T) {
 	n := newMockNode(99)
-	n.answerCommits(100, commitAnswer{canonical: false, signers: 2})
+	n.answerCommits(100, commitAnswer{canonical: false, signers: 2}, commitAnswer{canonical: true, signers: 3})
 	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
 	sub := h.listener.next(t)
 
@@ -890,5 +891,37 @@ func TestASessionStartsWithNothingToCorrect(t *testing.T) {
 	sub = h.listener.next(t)
 	sub.notify(101)
 	h.waitWritten(t, 100, 101)
+	require.Eventually(t, func() bool { _, ok := h.raw.replacedAt(100); return ok }, 5*time.Second, time.Millisecond)
+	signers, ok := h.store.updated(100)
+	require.True(t, ok)
+	assert.Equal(t, []string{"V0", "V1", "V2"}, signers)
+	assert.Equal(t, 2, n.commitCallsAt(100))
+}
+
+// A restart (a fresh indexer over a store that has a cursor) re-reads the
+// cursor's commit once; a first start, without a cursor, re-reads nothing.
+func TestARestartReReadsTheCursorOnce(t *testing.T) {
+	n := newMockNode(99)
+	h := run(t, newMockListener(), n, &fakeClock{}, 99, 50)
+	sub := h.listener.next(t)
+
+	sub.notify(100)
+	sub.notify(101)
+	h.waitWritten(t, 100, 101)
+	require.Eventually(t, func() bool { _, ok := h.store.updated(99); return ok }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, 1, n.commitCallsAt(99), "never written by this indexer: only the re-read")
+	assert.Equal(t, 1, n.commitCallsAt(100), "canonical when written")
+	assert.Equal(t, 1, h.store.updatedCount())
+}
+
+func TestAFirstStartReReadsNothing(t *testing.T) {
+	n := newMockNode(100)
+	h := run(t, newMockListener(), n, &fakeClock{}, 0, 0)
+	sub := h.listener.next(t)
+	h.waitWritten(t, 100)
+
+	sub.notify(101)
+	h.waitWritten(t, 100, 101)
 	assert.Equal(t, 1, n.commitCallsAt(100))
+	assert.Zero(t, h.store.updatedCount())
 }
