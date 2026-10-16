@@ -36,8 +36,12 @@ test.describe("home page", () => {
       await expect(img).toHaveAttribute("src", /^\/images\/apps\/[a-z]+\/icon-small-on-dark\.svg$/);
       await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
     }
-    // Decorative: the tiles keep their plain names.
+    // Decorative: the tiles keep their plain names, never cut short by the icon.
     await expect(goTo.getByRole("link", { name: "Communities" })).toBeVisible();
+    const cut = await goTo.getByRole("link").evaluateAll((links) =>
+      links.flatMap((a) => Array.from(a.querySelectorAll<HTMLElement>("[data-testid=go-to-name]")).filter((s) => s.scrollWidth > s.clientWidth).map((s) => s.textContent)),
+    );
+    expect(cut).toEqual([]);
 
     // Light mode swaps to the files drawn for a light background.
     await page.addInitScript(() => localStorage.setItem("theme", "light"));

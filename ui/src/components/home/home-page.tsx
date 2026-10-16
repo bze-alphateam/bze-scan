@@ -217,7 +217,12 @@ function LatestTransactions() {
   );
 }
 
-/** One "Go to" tile: the app's icon and name; on hover, the app's accent (Website and Docs keep the explorer's). */
+/**
+ * One "Go to" tile: the app's icon and name; on hover, the app's accent
+ * (Website and Docs keep the explorer's). The spacing is set so that
+ * "Communities" (85 px) with its icon, arrow, padding and borders (155 px)
+ * fits a 158 px tile, the size on a 360 px phone.
+ */
 function GoToTile({ link }: { link: AppLink }) {
   const accent = appAccent(link.icon);
   const hover = accent ? { base: accent.light, _dark: accent.dark } : "accent.fg";
@@ -227,8 +232,8 @@ function GoToTile({ link }: { link: AppLink }) {
       display="flex"
       justifyContent="space-between"
       alignItems="center"
-      gap="2"
-      px="3"
+      gap="1"
+      px="2"
       py="10px"
       bg="bg.panel"
       borderWidth="1px"
@@ -238,9 +243,9 @@ function GoToTile({ link }: { link: AppLink }) {
       fontWeight="500"
       _hover={{ textDecoration: "none", borderColor: hover, color: hover }}
     >
-      <HStack as="span" gap="2" minW="0">
+      <HStack as="span" gap="1.5" minW="0">
         <AppIcon app={link.icon} size={28} />
-        <Text as="span" truncate>
+        <Text as="span" truncate data-testid="go-to-name">
           {link.label}
         </Text>
       </HStack>
@@ -253,7 +258,7 @@ function GoTo() {
   return (
     <Box as="section" aria-labelledby="go-to" mt="10">
       <SectionHead id="go-to" title="Go to" />
-      <SimpleGrid as="nav" aria-label="BZE apps" minChildWidth="156px" gap="3">
+      <SimpleGrid as="nav" aria-label="BZE apps" minChildWidth="158px" gap="3">
         {appLinks.map((l) => (
           <GoToTile key={l.label} link={l} />
         ))}
