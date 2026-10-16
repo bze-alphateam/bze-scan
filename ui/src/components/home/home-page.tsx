@@ -7,6 +7,7 @@ import { LuExternalLink } from "react-icons/lu";
 
 import { useBlocks, useTransactions } from "@/api/hooks";
 import type { BlockSummary, TxSummary } from "@/api/types";
+import { AppIcon } from "@/components/layout/app-icon";
 import { SearchBox } from "@/components/layout/search-box";
 import { useListRenderContext } from "@/components/txs/list-context";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -17,7 +18,7 @@ import { ListSkeleton } from "@/components/ui/skeleton";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount } from "@/lib/format";
-import { appLinks } from "@/lib/links";
+import { appAccent, type AppLink, appLinks } from "@/lib/links";
 import type { Counterparty, RenderContext } from "@/render/messages/types";
 import { txCounterparty, txOneLine } from "@/render/txs";
 
@@ -216,31 +217,45 @@ function LatestTransactions() {
   );
 }
 
+/** One "Go to" tile: the app's icon and name; on hover, the app's accent (Website and Docs keep the explorer's). */
+function GoToTile({ link }: { link: AppLink }) {
+  const accent = appAccent(link.icon);
+  const hover = accent ? { base: accent.light, _dark: accent.dark } : "accent.fg";
+  return (
+    <Link
+      href={link.href}
+      display="flex"
+      justifyContent="space-between"
+      alignItems="center"
+      gap="2"
+      px="3"
+      py="10px"
+      bg="bg.panel"
+      borderWidth="1px"
+      borderColor="border.panel"
+      rounded="l3"
+      color="fg"
+      fontWeight="500"
+      _hover={{ textDecoration: "none", borderColor: hover, color: hover }}
+    >
+      <HStack as="span" gap="2" minW="0">
+        <AppIcon app={link.icon} size={28} />
+        <Text as="span" truncate>
+          {link.label}
+        </Text>
+      </HStack>
+      <LuExternalLink size={14} aria-hidden style={{ flexShrink: 0 }} />
+    </Link>
+  );
+}
+
 function GoTo() {
   return (
     <Box as="section" aria-labelledby="go-to" mt="10">
       <SectionHead id="go-to" title="Go to" />
-      <SimpleGrid as="nav" aria-label="BZE apps" minChildWidth="140px" gap="3">
+      <SimpleGrid as="nav" aria-label="BZE apps" minChildWidth="156px" gap="3">
         {appLinks.map((l) => (
-          <Link
-            key={l.label}
-            href={l.href}
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            px="4"
-            py="14px"
-            bg="bg.panel"
-            borderWidth="1px"
-            borderColor="border.panel"
-            rounded="l3"
-            color="fg"
-            fontWeight="500"
-            _hover={{ textDecoration: "none", borderColor: "accent.fg", color: "accent.fg" }}
-          >
-            {l.label}
-            <LuExternalLink size={14} aria-hidden />
-          </Link>
+          <GoToTile key={l.label} link={l} />
         ))}
       </SimpleGrid>
     </Box>

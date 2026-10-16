@@ -1,9 +1,11 @@
 "use client";
 
-import { Button, Menu, Portal } from "@chakra-ui/react";
+import { Button, HStack, Menu, Portal } from "@chakra-ui/react";
 import { LuChevronDown, LuExternalLink } from "react-icons/lu";
 
 import { appLinks } from "@/lib/links";
+
+import { AppIcon } from "./app-icon";
 
 /** "Apps": the other BZE apps, opened in the same tab. */
 export function AppsMenu() {
@@ -21,7 +23,10 @@ export function AppsMenu() {
             {appLinks.map((link) => (
               <Menu.Item key={link.label} value={link.label} asChild minH="44px">
                 <a href={link.href}>
-                  {link.label}
+                  <HStack as="span" gap="2.5">
+                    <AppIcon app={link.icon} size={20} />
+                    {link.label}
+                  </HStack>
                   <Menu.ItemCommand>
                     <LuExternalLink />
                   </Menu.ItemCommand>

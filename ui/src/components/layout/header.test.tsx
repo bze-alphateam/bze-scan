@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithProviders } from "@/test/render";
+import { appIconsIn, renderWithProviders } from "@/test/render";
 
 import { Header } from "./header";
 
@@ -53,6 +53,9 @@ describe("Header", () => {
     expect(within(drawer).getByRole("link", { name: "Validators" })).toHaveAttribute("href", "/validators");
     expect(within(drawer).getByRole("link", { name: "DEX" })).toHaveAttribute("href", "https://dex.getbze.com");
     expect(within(drawer).getByRole("link", { name: "Docs" })).toHaveAttribute("href", "https://docs.getbze.com");
+    // One icon per app link, and none on the explorer's own sections.
+    expect(appIconsIn(drawer)).toEqual(["website", "staking", "dex", "burner", "factory", "communities", "docs"]);
+    expect(appIconsIn(within(drawer).getByRole("link", { name: "DEX" }))).toEqual(["dex"]);
 
     // jsdom cannot navigate; keep the click, drop the page load.
     document.addEventListener("click", (e) => e.preventDefault(), { once: true });
