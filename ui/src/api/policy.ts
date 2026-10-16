@@ -7,10 +7,10 @@ import { ApiError } from "./client";
 
 const SECOND = 1000;
 
-/** Home, lists (first page), accounts, validators…: refetched every 7 s, paused in background tabs. */
+/** Home, lists (first page), accounts, validators…: refetched every 4 s, paused in background tabs. */
 export const live = {
-  staleTime: 7 * SECOND,
-  refetchInterval: 7 * SECOND,
+  staleTime: 4 * SECOND,
+  refetchInterval: 4 * SECOND,
   refetchIntervalInBackground: false,
 } as const;
 
@@ -40,7 +40,7 @@ export const reference = {
 } as const;
 
 /** How often a transaction the API does not know yet (404, "pending") is asked for again. */
-export const TX_PENDING_POLL_MS = 7 * SECOND;
+export const TX_PENDING_POLL_MS = 4 * SECOND;
 
 /**
  * How long a pending transaction is looked for before the page says it is not

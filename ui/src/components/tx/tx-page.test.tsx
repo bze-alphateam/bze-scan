@@ -99,7 +99,7 @@ describe("TxPage", () => {
     expect(screen.getByTestId("flow-summary")).toHaveTextContent("1 transfer · 0.002 BZE fee to Fee collector");
   });
 
-  it("looks for a pending transaction every 7 s, then says it is not found", async () => {
+  it("looks for a pending transaction every 4 s, then says it is not found", async () => {
     vi.useFakeTimers();
     const transaction = vi.fn(() => Promise.reject(new ApiError(404, "not_found", "transaction not indexed")));
     renderWithProviders(<TxPage hash={SEND} />, { api: api(null, { transaction }) });
@@ -128,6 +128,32 @@ describe("TxPage", () => {
     const calls = transaction.mock.calls.length;
     await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS * 3));
     expect(transaction).toHaveBeenCalledTimes(calls);
+  });
+
+  it("gives up after the pending window even when each 404 takes a while to come back", async () => {
+    vi.useFakeTimers();
+    // Like a real network: every answer lands 300 ms after the request, so each
+    // poll clears the query's error for a moment before the 404 is back.
+    const transaction = vi.fn(
+      () =>
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new ApiError(404, "not_found", "transaction not indexed")), 300),
+        ),
+    );
+    renderWithProviders(<TxPage hash={SEND} />, { api: api(null, { transaction }) });
+
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(screen.getByTestId("tx-looking")).toBeInTheDocument();
+
+    // Mid-poll, the 404 not back yet: still looking, no loading skeleton.
+    await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS));
+    expect(transaction).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("tx-looking")).toBeInTheDocument();
+    expect(screen.queryByTestId("tx-skeleton")).not.toBeInTheDocument();
+
+    await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_WINDOW_MS + TX_PENDING_POLL_MS));
+    expect(transaction.mock.calls.length).toBeGreaterThan(2);
+    expect(screen.getByTestId("tx-not_found")).toBeInTheDocument();
   });
 
   it("shows the transaction once a pending one is indexed", async () => {
