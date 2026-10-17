@@ -17,12 +17,12 @@ import {
 } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuCircleHelp, LuExternalLink, LuTriangleAlert } from "react-icons/lu";
+import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import { useAllValidators, useHallOfFame, useParams, useValidator } from "@/api/hooks";
 import type { HallOfFame, ValidatorDetail, ValidatorsSummary, ValidatorVote } from "@/api/types";
-import { AppIcon } from "@/components/layout/app-icon";
+import { AppButton } from "@/components/layout/app-button";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Avatar } from "@/components/ui/avatar";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -124,12 +124,9 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
         </Box>
         {/* An inactive validator pays no rewards: no stake button. */}
         {v.status === "bonded" && (
-          <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
-            <a href={stakeHref(v.operator_address)} target="_blank" rel="noopener noreferrer">
-              <AppIcon app="staking" size={18} />
-              Stake with this validator <LuExternalLink aria-hidden />
-            </a>
-          </Button>
+          <AppButton app="staking" href={stakeHref(v.operator_address)}>
+            Stake with this validator
+          </AppButton>
         )}
       </Flex>
     </Box>
