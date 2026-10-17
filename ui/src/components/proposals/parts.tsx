@@ -2,13 +2,13 @@
 
 import { Box, Flex, Grid, Stack, Text } from "@chakra-ui/react";
 import type { ReactNode } from "react";
-import { LuCircleCheck, LuCircleX } from "react-icons/lu";
+import { LuCircleCheck, LuCircleHelp, LuCircleX } from "react-icons/lu";
 
 import type { ProposalSummary, Tally, TokenSummary, VoteOption } from "@/api/types";
 import { Chip } from "@/components/ui/chip";
 import { Tag, type TagTone } from "@/components/ui/status-pill";
 import { formatPct } from "@/lib/format";
-import { coinsText, statusInfo, tallyShares, titleStatus, type Checks, type Tone } from "@/render/proposals";
+import { coinsText, statusInfo, tallyShares, titleStatus, type Checks, type Tone, type Verdict } from "@/render/proposals";
 
 // The atoms both governance pages share: the status tag, the tally bars,
 // the verdict tag, the historical chip and the three checks.
@@ -77,25 +77,26 @@ export function HistoricalChip({ p }: { p: Pick<ProposalSummary, "tally_source">
 }
 
 /** Where a vote is heading: ON TRACK TO PASS, or WOULD FAIL and why. */
-export function VerdictTag({ v }: { v: { pass: boolean; text: string } }) {
+export function VerdictTag({ v }: { v: Verdict }) {
   return (
-    <Tag tone={v.pass ? "ok" : "warn"} whiteSpace="normal" data-testid="verdict">
+    <Tag tone={v.pass === null ? "muted" : v.pass ? "ok" : "warn"} whiteSpace="normal" data-testid="verdict">
       {v.text}
     </Tag>
   );
 }
 
-function CheckRow({ ok, title, detail, mark }: { ok: boolean; title: string; detail: string; mark?: ReactNode }) {
+/** One check: met, not met, or unknown (null) when the explorer has no measure for it. */
+function CheckRow({ ok, title, detail, mark }: { ok: boolean | null; title: string; detail: string; mark?: ReactNode }) {
   return (
-    <Flex as="li" gap="10px" align="flex-start" fontSize="13px" data-testid="check" data-ok={ok}>
-      <Box color={ok ? "pos.fg" : "neg.fg"} pt="1px" display="inline-flex" aria-hidden>
-        {ok ? <LuCircleCheck size={16} /> : <LuCircleX size={16} />}
+    <Flex as="li" gap="10px" align="flex-start" fontSize="13px" data-testid="check" data-ok={ok ?? "unknown"}>
+      <Box color={ok === null ? "fg.muted" : ok ? "pos.fg" : "neg.fg"} pt="1px" display="inline-flex" aria-hidden>
+        {ok === null ? <LuCircleHelp size={16} /> : ok ? <LuCircleCheck size={16} /> : <LuCircleX size={16} />}
       </Box>
       <Box minW="0">
         <Text fontWeight="500">
           {title}
           <Text as="span" srOnly>
-            {ok ? ": yes" : ": no"}
+            {ok === null ? ": not known" : ok ? ": yes" : ": no"}
           </Text>
         </Text>
         <Flex gap="1.5" wrap="wrap" align="center" mt="1px" fontSize="12px" color="fg.muted">
@@ -107,6 +108,14 @@ function CheckRow({ ok, title, detail, mark }: { ok: boolean; title: string; det
   );
 }
 
+/** The turnout line; without a recorded turnout, what the outcome tells (a passed proposal reached the quorum). */
+function turnoutDetail(c: Checks): string {
+  const need = `${formatPct(c.turnout.need, { trim: true })} needed`;
+  if (c.turnout.value != null) return `${formatPct(c.turnout.value)} of staked BZE voted · ${need}`;
+  if (c.turnout.ok) return `Reached · ${need} (the exact share was not recorded)`;
+  return `Not recorded: the explorer started after this vote · ${need}`;
+}
+
 /** The three checks the chain runs when voting ends; the turnout marked historical when the archive measured it. */
 export function ChecksList({ c, p }: { c: Checks; p?: Pick<ProposalSummary, "tally_source"> }) {
   return (
@@ -114,7 +123,7 @@ export function ChecksList({ c, p }: { c: Checks; p?: Pick<ProposalSummary, "tal
       <CheckRow
         ok={c.turnout.ok}
         title="Enough people voted"
-        detail={`${formatPct(c.turnout.value)} of staked BZE voted · ${formatPct(c.turnout.need, { trim: true })} needed`}
+        detail={turnoutDetail(c)}
         mark={p && <HistoricalChip p={p} />}
       />
       <CheckRow

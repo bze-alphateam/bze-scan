@@ -89,7 +89,7 @@ function VotingCard({ p, now }: { p: ProposalSummary; now: Date }) {
             ) : (
               "Not tallied yet"
             )}
-            {c && (
+            {c && c.turnout.ok !== null && (
               <>
                 {" "}
                 · quorum of{" "}
