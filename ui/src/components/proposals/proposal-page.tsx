@@ -143,7 +143,7 @@ function SummaryTiles({ p, c, now, denoms }: { p: Proposal; c: Checks | null; no
       value={p.turnout_pct != null ? formatPct(p.turnout_pct) : null}
       sub={join([
         c && `${formatPct(c.turnout.need, { trim: true })} needed`,
-        voting && c && (c.turnout.ok ? "reached" : "not reached yet"),
+        c && c.turnout.ok !== null && (voting || c.turnout.value == null) && (c.turnout.ok ? "reached" : "not reached yet"),
         p.tally_source === "archive" && <HistoricalChip p={p} />,
       ])}
     />
@@ -164,8 +164,8 @@ function SummaryTiles({ p, c, now, denoms }: { p: Proposal; c: Checks | null; no
       <Grid as="section" aria-label="Summary" templateColumns={TILES} gap="3" mb="6" data-testid="summary-tiles">
         <Tile
           label="If it ended now"
-          value={v ? (v.pass ? "Passes" : "Fails") : null}
-          valueColor={v ? (v.pass ? "pos.fg" : "neg.fg") : undefined}
+          value={v ? (v.pass === null ? "Not known" : v.pass ? "Passes" : "Fails") : null}
+          valueColor={v && v.pass !== null ? (v.pass ? "pos.fg" : "neg.fg") : undefined}
           sub={v ? (v.pass ? "all three checks met" : v.text.replace(/^Would fail: /, "")) : undefined}
         />
         {yes}
