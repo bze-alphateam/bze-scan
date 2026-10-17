@@ -163,6 +163,8 @@ describe("ValidatorPage", () => {
     expect(screen.queryByText(/Never jailed/)).not.toBeInTheDocument();
     expect(screen.getByText("Honeycomb has not voted yet.")).toBeInTheDocument();
     expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("outside the active set");
+    // It pays no rewards, so the page offers no stake.
+    expect(screen.queryByRole("link", { name: /Stake with this validator/ })).not.toBeInTheDocument();
   });
 
   it("tolerates a null summary in the reward tile", async () => {

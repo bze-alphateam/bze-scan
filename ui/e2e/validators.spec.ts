@@ -49,6 +49,8 @@ test.describe("validators list", () => {
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
+    // Inactive validators pay no rewards: their rows offer no stake.
+    await expect(rows(page).getByRole("link", { name: /^Stake with/ })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Active 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");

@@ -122,12 +122,15 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
             </Text>
           </DetailMeta>
         </Box>
-        <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
-          <a href={stakeHref(v.operator_address)} target="_blank" rel="noopener noreferrer">
-            <AppIcon app="staking" size={18} />
-            Stake with this validator <LuExternalLink aria-hidden />
-          </a>
-        </Button>
+        {/* An inactive validator pays no rewards: no stake button. */}
+        {v.status === "bonded" && (
+          <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
+            <a href={stakeHref(v.operator_address)} target="_blank" rel="noopener noreferrer">
+              <AppIcon app="staking" size={18} />
+              Stake with this validator <LuExternalLink aria-hidden />
+            </a>
+          </Button>
+        )}
       </Flex>
     </Box>
   );

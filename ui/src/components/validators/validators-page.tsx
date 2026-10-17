@@ -170,9 +170,8 @@ function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
       >
         {uptimeText(v.uptime)}
       </Text>
-      <Box textAlign="right">
-        <StakeButton moniker={v.moniker} operator={v.operator_address} />
-      </Box>
+      {/* Inactive validators pay no rewards, so their rows offer no stake. */}
+      <Box textAlign="right">{v.status === "bonded" && <StakeButton moniker={v.moniker} operator={v.operator_address} />}</Box>
     </ListRow>
   );
 }

@@ -84,7 +84,7 @@ describe("ValidatorsPage", () => {
     expect(screen.getByRole("heading", { name: "Picking a validator" })).toBeInTheDocument();
   });
 
-  it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named", async () => {
+  it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named, no stake", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
     await waitFor(() => expect(monikers()).toEqual(["Sleepy Node", "Old Timer"]));
@@ -94,6 +94,9 @@ describe("ValidatorsPage", () => {
     expect(within(sleepy).getByText("Unbonding")).toBeInTheDocument();
     expect(within(old).queryByText("Jailed")).not.toBeInTheDocument();
     expect(old).toHaveTextContent("—");
+    // Inactive validators pay no rewards: no Stake button on their rows.
+    expect(within(sleepy).queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
+    expect(within(old).queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
   });
 
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
