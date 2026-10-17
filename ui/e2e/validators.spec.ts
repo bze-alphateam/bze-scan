@@ -49,8 +49,6 @@ test.describe("validators list", () => {
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
-    // Inactive validators pay no rewards: their rows offer no stake.
-    await expect(rows(page).getByRole("link", { name: /^Stake with/ })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Active 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");
@@ -58,10 +56,12 @@ test.describe("validators list", () => {
     await expect(rows(page).first()).toContainText("Thamar Node");
 
     await page.getByRole("textbox", { name: "Find a validator" }).fill("honey");
-    // Exact: the row's "Stake with Honeycomb" button is a link too.
+    // No Stake button in the rows: people stake from the validator's page.
+    await expect(page.getByRole("link", { name: /^Stake with/ })).toHaveCount(0);
     await rows(page).first().getByRole("link", { name: "Honeycomb", exact: true }).click();
     await expect(page).toHaveURL(`/validators/${OP}`);
     await expect(page.getByRole("heading", { level: 1, name: "Honeycomb" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Stake with this validator/ })).toBeVisible();
     await noHorizontalScroll(page);
   });
 });
