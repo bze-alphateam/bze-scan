@@ -34,8 +34,8 @@ func monikersOf(items []dto.Validator) []string {
 }
 
 // The Hall of Fame: bonded, unjailed validators whose account voted on
-// each of the last ten proposals whose voting ended and that missed at most
-// ten blocks, by voting power ascending.
+// each of the last two proposals whose voting ended and that missed at most
+// ten blocks, by voting power ascending. Older proposals don't count.
 func TestHallOfFameAppliesTheRule(t *testing.T) {
 	e := newSyncEnv(t)
 	code, out := e.syncState(t)
@@ -74,8 +74,8 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 	_, err = e.db.Exec(`UPDATE explorer.validators SET tokens = 9000000000000 WHERE operator_address = $1`, small.op)
 	require.NoError(t, err)
 
-	// They vote, whatever the option, on the ten latest closed proposals;
-	// skipped leaves out the oldest of the ten.
+	// They vote, whatever the option, on the two latest closed proposals
+	// only (none of the older ones); skipped leaves out the older of the two.
 	vote := func(account string, offset int) {
 		t.Helper()
 		_, err := e.db.Exec(`INSERT INTO explorer.proposal_votes (proposal_id, voter, options, option, height, tx_index, time)
@@ -85,29 +85,29 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 		require.NoError(t, err)
 	}
 	for _, v := range []val{large, small, missing, jailed} {
-		vote(v.account, 10)
+		vote(v.account, 2)
 	}
-	vote(skipped.account, 9)
+	vote(skipped.account, 1)
 
 	base := e.serveAPI(t)
 	fame := getHallOfFame(t, base)
 	assert.Equal(t, []string{small.moniker, large.moniker}, monikersOf(fame.Items), "by voting power ascending")
 	assert.Nil(t, fame.NextCursor)
 	require.NotNil(t, fame.Rules.SignedBlocksWindow)
-	assert.Equal(t, dto.HallOfFameRules{Proposals: 10, MaxMissedBlocks: 10, SignedBlocksWindow: fame.Rules.SignedBlocksWindow}, fame.Rules)
+	assert.Equal(t, dto.HallOfFameRules{Proposals: 2, MaxMissedBlocks: 10, SignedBlocksWindow: fame.Rules.SignedBlocksWindow}, fame.Rules)
 	assert.Equal(t, int64(10000), *fame.Rules.SignedBlocksWindow)
-	assert.Equal(t, dto.RecentVotes{Voted: 10, Of: 10}, fame.Items[1].RecentVotes)
+	assert.Equal(t, dto.RecentVotes{Voted: 2, Of: 2}, fame.Items[1].RecentVotes, "counted on the rule's proposals")
 	assert.Equal(t, int64(10), *fame.Items[1].MissedBlocks, "ten missed blocks are allowed")
 
-	// Fewer than ten closed proposals: a vote on each of them is enough,
+	// Fewer than two closed proposals: a vote on each of them is enough,
 	// so skipped joins.
 	_, err = e.db.Exec(`UPDATE explorer.proposals SET voting_end_time = now() + interval '1 day'
-		WHERE id NOT IN (SELECT id FROM explorer.proposals WHERE voting_end_time <= now() ORDER BY id DESC LIMIT 3)`)
+		WHERE id NOT IN (SELECT id FROM explorer.proposals WHERE voting_end_time <= now() ORDER BY id DESC LIMIT 1)`)
 	require.NoError(t, err)
 	fame = getHallOfFame(t, base)
 	assert.ElementsMatch(t, []string{small.moniker, large.moniker, skipped.moniker}, monikersOf(fame.Items))
 	for _, v := range fame.Items {
-		assert.Equal(t, dto.RecentVotes{Voted: 3, Of: 3}, v.RecentVotes, v.Moniker)
+		assert.Equal(t, dto.RecentVotes{Voted: 1, Of: 1}, v.RecentVotes, v.Moniker)
 	}
 
 	// No closed proposal: nobody qualifies.
@@ -115,5 +115,5 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 	require.NoError(t, err)
 	fame = getHallOfFame(t, base)
 	assert.Empty(t, fame.Items)
-	assert.Equal(t, 10, fame.Rules.Proposals)
+	assert.Equal(t, 2, fame.Rules.Proposals)
 }
