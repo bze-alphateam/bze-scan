@@ -213,7 +213,7 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	member := func(moniker, tokens string) repository.ValidatorSummary {
 		return repository.ValidatorSummary{
 			Moniker: moniker, OperatorAddress: valoper, Tokens: tokens, CommissionRate: "0.05", Status: "bonded",
-			MissedBlocks: &missed, SignedBlocksWindow: &window, RecentVotes: 10, RecentProposals: 10,
+			MissedBlocks: &missed, SignedBlocksWindow: &window, RecentVotes: 2, RecentProposals: 2,
 		}
 	}
 	f := &fakeReader{fame: &repository.HallOfFame{
@@ -228,19 +228,19 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	require.Len(t, fame.Items, 2)
 	assert.Equal(t, "Small", fame.Items[0].Moniker, "the repository's order is kept")
 	assert.Equal(t, "99.99000", *fame.Items[0].Uptime)
-	assert.Equal(t, dto.RecentVotes{Voted: 10, Of: 10}, fame.Items[0].RecentVotes)
+	assert.Equal(t, dto.RecentVotes{Voted: 2, Of: 2}, fame.Items[0].RecentVotes)
 	assert.Nil(t, fame.NextCursor, "one page")
 	assert.Equal(t, dto.HallOfFameRules{
-		Proposals: repository.RecentProposals, MaxMissedBlocks: repository.HallOfFameMaxMissedBlocks, SignedBlocksWindow: &window,
+		Proposals: repository.HallOfFameProposals, MaxMissedBlocks: repository.HallOfFameMaxMissedBlocks, SignedBlocksWindow: &window,
 	}, fame.Rules)
-	assert.Equal(t, 10, fame.Rules.Proposals)
+	assert.Equal(t, 2, fame.Rules.Proposals, "the last two proposals")
 	assert.Equal(t, 10, fame.Rules.MaxMissedBlocks)
 }
 
 func TestHallOfFameEmpty(t *testing.T) {
 	rec := get(t, newAPI(&fakeReader{}), "/validators/hall-of-fame")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":10,"max_missed_blocks":10,"signed_blocks_window":null}}`,
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":2,"max_missed_blocks":10,"signed_blocks_window":null}}`,
 		rec.Body.String())
 }
 

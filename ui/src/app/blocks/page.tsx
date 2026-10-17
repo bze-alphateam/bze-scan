@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 
 import { BlocksPage } from "@/components/blocks/blocks-page";
 import { parseBlocksPlace } from "@/render/blocks";
+import { shareMeta } from "@/lib/page-meta";
 
 const description = "The latest BZE blocks: who proposed them, their transactions, block time and size.";
 
 export const metadata: Metadata = {
   title: "Blocks",
   description,
-  openGraph: { title: "Blocks", description },
-  twitter: { title: "Blocks", description },
+  ...shareMeta("Blocks", description),
 };
 
 interface Props {
