@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { NetworkStrip } from "@/components/layout/network-strip";
-import { env } from "@/lib/env";
+import { siteMetadata } from "@/lib/page-meta";
 
 import { Providers } from "./providers";
 
@@ -24,17 +24,7 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
 });
 
-const description =
-  "Explore the BeeZee (BZE) network: blocks, transactions, accounts, validators, tokens, proposals and chain parameters, in plain words.";
-
-export const metadata: Metadata = {
-  metadataBase: new URL(env.siteUrl),
-  title: { default: "BZE Explorer", template: "%s · BZE Explorer" },
-  description,
-  icons: { icon: "/images/logo_320px.png" },
-  openGraph: { type: "website", siteName: "BZE Explorer", url: "/", title: "BZE Explorer", description },
-  twitter: { card: "summary", title: "BZE Explorer", description },
-};
+export const metadata: Metadata = siteMetadata;
 
 export const viewport: Viewport = {
   width: "device-width",

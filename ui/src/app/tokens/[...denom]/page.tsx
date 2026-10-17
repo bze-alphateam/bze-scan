@@ -5,6 +5,7 @@ import type { Token } from "@/api/types";
 import { TokenPage } from "@/components/tokens/token-page";
 import { serverApiUrl } from "@/lib/env";
 import { denomFromSegments, tokenSymbol } from "@/render/tokens";
+import { shareMeta } from "@/lib/page-meta";
 
 interface Props {
   // A catch-all: `/tokens/factory%2Fbze1…%2Fuhoney` and `/tokens/factory/bze1…/uhoney` are the same page.
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const t = await fetchToken(denom);
   const title = t ? [tokenSymbol(t), t.name].filter(Boolean).join(" · ") : "Token";
   const description = t?.description || "A token on BZE: its supply, holders, price and recent activity.";
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function TokenRoute({ params }: Props) {

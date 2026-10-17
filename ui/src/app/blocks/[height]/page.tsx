@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BlockPage } from "@/components/blocks/block-page";
 import { formatCount } from "@/lib/format";
+import { shareMeta } from "@/lib/page-meta";
 
 interface Props {
   params: Promise<{ height: string }>;
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (height == null) return { title: "Not found" };
   const title = `Block ${formatCount(height)}`;
   const description = `Block ${formatCount(height)} on BZE: its transactions in plain words and where the funds went.`;
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function BlockRoute({ params }: Props) {

@@ -59,6 +59,8 @@ test.describe("desktop header", () => {
     await expect(header.getByRole("combobox", { name: "Search the explorer" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Open menu" })).toBeHidden();
+    // The landscape lockup, in its dark-theme file.
+    await expect(header.getByRole("link", { name: "BZE Explorer home" }).locator("img:visible")).toHaveAttribute("src", "/images/explorer/landscape-dark.svg");
 
     await header.getByRole("button", { name: "Apps" }).click();
     await expect(page.getByRole("menuitem", { name: "DEX" })).toHaveAttribute("href", "https://dex.getbze.com");
@@ -74,6 +76,7 @@ test.describe("phone header", () => {
     await page.goto("/");
     const header = page.getByRole("banner");
     await expect(header.getByRole("link", { name: "BZE Explorer home" })).toBeVisible();
+    await expect(header.getByRole("link", { name: "BZE Explorer home" }).locator("img:visible")).toHaveAttribute("src", "/images/explorer/compact-dark.svg");
     await expect(header.getByRole("navigation", { name: "Explorer" })).toBeHidden();
     await expect(header.getByRole("combobox")).toBeHidden();
 

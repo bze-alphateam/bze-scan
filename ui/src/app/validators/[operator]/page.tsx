@@ -5,6 +5,7 @@ import type { ValidatorDetail } from "@/api/types";
 import { ValidatorPage } from "@/components/validators/validator-page";
 import { serverApiUrl } from "@/lib/env";
 import { shortAddress } from "@/lib/format";
+import { shareMeta } from "@/lib/page-meta";
 
 const OPERATOR = /^bzevaloper1[02-9ac-hj-np-z]{38,}$/;
 
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const v = await fetchValidator(operator);
   const title = `${v?.moniker || shortAddress(operator)} · validator`;
   const description = v?.details || `A validator of the BZE chain: stake, commission, uptime and history.`;
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function ValidatorRoute({ params }: Props) {

@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 
 import { FutureBlockPage } from "@/components/blocks/future-block";
+import { shareMeta } from "@/lib/page-meta";
 
 const description = "When a future BZE block will be produced, or which block the chain will be at on a date: an estimate from the average block time.";
 
 export const metadata: Metadata = {
   title: "Future block",
   description,
-  openGraph: { title: "Future block", description },
-  twitter: { title: "Future block", description },
+  ...shareMeta("Future block", description),
 };
 
 interface Props {
