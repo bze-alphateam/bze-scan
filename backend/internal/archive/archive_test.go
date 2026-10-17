@@ -32,7 +32,7 @@ func realAdapter(t *testing.T) *archive.Adapter {
 	t.Helper()
 	codecOnce.Do(func() { codec, codecErr = chain.NewCodec() })
 	require.NoError(t, codecErr)
-	return archive.New(codec)
+	return archive.New(codec, archive.Mainnet)
 }
 
 func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
@@ -48,7 +48,7 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	return transform.Input{Block: b, Results: r, Commit: cm}
 }
 
-func TestGenerationAt(t *testing.T) {
+func TestMainnetGenerations(t *testing.T) {
 	cases := []struct {
 		height  int64
 		release string
@@ -68,7 +68,7 @@ func TestGenerationAt(t *testing.T) {
 		{30_000_000, "v8.1.1", archive.FormatCurrent},
 	}
 	for _, c := range cases {
-		g := archive.GenerationAt(c.height)
+		g := archive.Mainnet.At(c.height)
 		assert.Equal(t, c.release, g.Release, "height %d", c.height)
 		assert.Equal(t, c.format, g.Format, "height %d", c.height)
 	}
@@ -84,22 +84,85 @@ func TestTallySetHeight(t *testing.T) {
 		{23_821_225, 23_821_226}, // v8.1.0, proposal 47
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.set, archive.TallySetHeight(c.resolved), "resolved at %d", c.resolved)
+		assert.Equal(t, c.set, archive.Mainnet.TallySetHeight(c.resolved), "resolved at %d", c.resolved)
 	}
 }
 
 func TestGenerationsAreOrdered(t *testing.T) {
-	for i := 1; i < len(archive.Generations); i++ {
-		assert.Less(t, archive.Generations[i-1].From, archive.Generations[i].From)
+	for id, c := range archive.Chains {
+		assert.Equal(t, id, c.ID)
+		for i := 1; i < len(c.Generations); i++ {
+			assert.Less(t, c.Generations[i-1].From, c.Generations[i].From, id)
+		}
+		assert.Equal(t, int64(1), c.Generations[0].From, id)
 	}
-	assert.Equal(t, int64(1), archive.Generations[0].From)
+}
+
+func TestTestnet3Generations(t *testing.T) {
+	cases := []struct {
+		height  int64
+		release string
+		doubled bool
+	}{
+		{1, "v8.0.2", true},
+		{599_999, "v8.0.2", true},
+		{600_000, "v8.1.0", false},
+		{2_254_400, "v8.1.1", false},
+		{3_626_000, "v8.2.0", false},
+		{3_757_152, "v8.2.0", false},
+	}
+	for _, c := range cases {
+		g := archive.Testnet3.At(c.height)
+		assert.Equal(t, c.release, g.Release, "height %d", c.height)
+		assert.Equal(t, archive.FormatCurrent, g.Format, "every bzetestnet-3 height is current, height %d", c.height)
+		assert.Equal(t, c.doubled, g.DoubledEvents, "height %d", c.height)
+		assert.False(t, g.StakingBeforeGov, "height %d", c.height)
+	}
+	assert.Equal(t, int64(3_757_153), archive.Testnet3.TallySetHeight(3_757_152), "gov runs first on every testnet release")
+}
+
+func TestForChain(t *testing.T) {
+	c, err := archive.ForChain("beezee-1")
+	require.NoError(t, err)
+	assert.Equal(t, archive.Mainnet.ID, c.ID)
+	c, err = archive.ForChain("bzetestnet-3")
+	require.NoError(t, err)
+	assert.Equal(t, archive.Testnet3.ID, c.ID)
+	_, err = archive.ForChain("bzetestnet-2")
+	require.ErrorIs(t, err, archive.ErrUnknownChain)
+}
+
+// Regression (BFE-104): on testnet a low height is v8, not mainnet's legacy
+// v5. The adapter used mainnet's table for every chain, so a current-format
+// testnet block at 3,757,152 (mainnet's v5.1.2) failed as an unknown legacy
+// generation. A current-format block adapted as that testnet height passes.
+func TestTestnetHeightIsCurrentFormat(t *testing.T) {
+	n := fakenode.New(t)
+	codecOnce.Do(func() { codec, codecErr = chain.NewCodec() })
+	require.NoError(t, codecErr)
+	var h int64
+	for _, fh := range n.FixtureHeights() {
+		if fh >= 23_855_000 { // a mainnet v8.1.1 block: current format, not doubled
+			h = fh
+			break
+		}
+	}
+	require.NotZero(t, h, "a current-format fixture")
+	const testnetHeight = 3_757_152
+
+	in := fetchInput(t, n, h)
+	require.NoError(t, archive.New(codec, archive.Testnet3).Adapt(testnetHeight, &in))
+
+	in = fetchInput(t, n, h)
+	err := archive.New(codec, archive.Mainnet).Adapt(testnetHeight, &in)
+	require.ErrorIs(t, err, archive.ErrUnknownGeneration, "mainnet's table reads that height as legacy")
 }
 
 // Every legacy release line has at least three recorded heights.
 func TestEveryLegacyLineHasFixtures(t *testing.T) {
 	perLine := map[string]int{}
 	for _, h := range fakenode.New(t).FixtureHeights() {
-		if g := archive.GenerationAt(h); g.Format == archive.FormatLegacy {
+		if g := archive.Mainnet.At(h); g.Format == archive.FormatLegacy {
 			perLine[g.Release[:2]]++
 		}
 	}
@@ -113,7 +176,7 @@ func TestNormaliseGolden(t *testing.T) {
 	n := fakenode.New(t)
 	a := realAdapter(t)
 	for _, h := range n.FixtureHeights() {
-		if archive.GenerationAt(h).Format != archive.FormatLegacy {
+		if archive.Mainnet.At(h).Format != archive.FormatLegacy {
 			continue
 		}
 		t.Run(fmt.Sprint(h), func(t *testing.T) {
@@ -142,7 +205,7 @@ func TestNormalisedHeightsHaveTheCurrentShape(t *testing.T) {
 	n := fakenode.New(t)
 	a := realAdapter(t)
 	for _, h := range n.FixtureHeights() {
-		if archive.GenerationAt(h).Format != archive.FormatLegacy {
+		if archive.Mainnet.At(h).Format != archive.FormatLegacy {
 			continue
 		}
 		in := fetchInput(t, n, h)
@@ -169,7 +232,7 @@ func TestCurrentGenerationIsIdentity(t *testing.T) {
 	a := realAdapter(t)
 	checked := 0
 	for _, h := range n.FixtureHeights() {
-		if g := archive.GenerationAt(h); g.Format != archive.FormatCurrent || g.DoubledEvents {
+		if g := archive.Mainnet.At(h); g.Format != archive.FormatCurrent || g.DoubledEvents {
 			continue
 		}
 		in := fetchInput(t, n, h)
@@ -187,7 +250,7 @@ func TestCurrentGenerationIsIdentity(t *testing.T) {
 // Only v8.0.x doubles its block events.
 func TestOnlyV800DoublesItsEvents(t *testing.T) {
 	var doubled []string
-	for _, g := range archive.Generations {
+	for _, g := range archive.Mainnet.Generations {
 		if g.DoubledEvents {
 			doubled = append(doubled, g.Release)
 		}

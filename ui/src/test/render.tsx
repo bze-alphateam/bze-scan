@@ -48,3 +48,8 @@ export function renderWithProviders(ui: ReactElement, { api = fakeApi(), queryCl
   }
   return { queryClient, ...render(ui, { wrapper: Wrapper, ...options }) };
 }
+
+/** The app icons inside `el`, in order, as `data-app` keys (dex, website, docs…). */
+export function appIconsIn(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll<HTMLElement>("[data-testid=app-icon]")).map((i) => i.dataset.app ?? "");
+}

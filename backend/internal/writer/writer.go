@@ -222,6 +222,29 @@ func upsertFailure(ctx context.Context, tx pgx.Tx, height int64, source string, 
 	return nil
 }
 
+// UpdateSignatures replaces signatures_count and signatures_power_pct of the
+// block at height with those of signers, the committed signatures of its
+// canonical commit: the live indexer writes a block with the node's seen
+// commit and corrects it once the next block exists. A height not indexed
+// changes nothing.
+func (w *LiveWriter) UpdateSignatures(ctx context.Context, height int64, signers []string) error {
+	tx, err := w.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("update signatures %d: begin: %w", height, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `UPDATE explorer.blocks
+		SET signatures_count = $2, signatures_power_pct = `+signaturesPowerPct("$3::text[]")+`
+		WHERE height = $1`, height, len(signers), nonNil(signers)); err != nil {
+		return fmt.Errorf("update signatures %d: %w", height, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("update signatures %d: commit: %w", height, err)
+	}
+	return nil
+}
+
 func insertBlock(ctx context.Context, tx pgx.Tx, b *transform.Block) error {
 	fees, err := b.FeesDistributedJSON()
 	if err != nil {

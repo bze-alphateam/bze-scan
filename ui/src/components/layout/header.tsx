@@ -8,6 +8,7 @@ import { LuMenu, LuSearch } from "react-icons/lu";
 
 import { appLinks, navLinks } from "@/lib/links";
 
+import { AppIcon } from "./app-icon";
 import { AppsMenu } from "./apps-menu";
 import { Logo } from "./logo";
 import { SearchBox } from "./search-box";
@@ -85,7 +86,8 @@ export function Header() {
                       </Text>
                       <Stack gap="0">
                         {appLinks.map((link) => (
-                          <Link key={link.label} href={link.href} minH="44px">
+                          <Link key={link.label} href={link.href} minH="44px" gap="2.5">
+                            <AppIcon app={link.icon} size={20} />
                             {link.label}
                           </Link>
                         ))}

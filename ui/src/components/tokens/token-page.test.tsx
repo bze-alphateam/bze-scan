@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { Page, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
-import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
+import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import honeyJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
 import holdersJson from "../../../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/holders.json";
@@ -131,6 +131,7 @@ describe("TokenPage", () => {
     expect(screen.getByTestId("token-chips")).toHaveTextContent("FactoryTrading on the DEXhoney.example");
     expect(screen.getByTestId("token-created")).toHaveTextContent("Created Oct 2, 2099 by3Gbze13gz…yhqk");
     expect(screen.getByRole("link", { name: /View on the DEX/ })).toHaveAttribute("href", expect.stringContaining("uhoney"));
+    expect(appIconsIn(screen.getByRole("link", { name: /View on the DEX/ }))).toEqual(["dex"]);
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Total supply500K HONEYcan change · see below",
       "Holders310accounts with at least 1 HONEY",

@@ -63,6 +63,7 @@ test.describe("desktop header", () => {
     await header.getByRole("button", { name: "Apps" }).click();
     await expect(page.getByRole("menuitem", { name: "DEX" })).toHaveAttribute("href", "https://dex.getbze.com");
     await expect(page.getByRole("menuitem")).toHaveCount(7);
+    await expect(page.getByRole("menuitem", { name: "Burner" }).locator("img:visible")).toHaveAttribute("src", "/images/apps/burner/icon-small-on-dark.svg");
   });
 });
 

@@ -320,3 +320,34 @@ func TestServesConsensusState(t *testing.T) {
 	_, body = get(t, n.URL+fakenode.RouteConsensusState)
 	assert.Equal(t, readFile(t, "consensus_state.json"), body)
 }
+
+func TestSetSeenCommitAnswersASeenCommitUntilCleared(t *testing.T) {
+	n := fakenode.New(t)
+	h := n.FixtureHeights()[0]
+	client := node.New(n.URL)
+	signed := func(c *node.Commit) int {
+		k := 0
+		for _, s := range c.Signatures {
+			if s.BlockIDFlag == node.BlockIDFlagCommit {
+				k++
+			}
+		}
+		return k
+	}
+
+	n.SetSeenCommit(h, 1)
+	seen, _, err := client.Commit(context.Background(), h)
+	require.NoError(t, err)
+	assert.False(t, seen.Canonical)
+	_, block := get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteBlock, h))
+	assert.Equal(t, readFile(t, strconv.FormatInt(h, 10), "block.json"), block, "only /commit changes")
+
+	n.ClearSeenCommit(h)
+	_, body := get(t, fmt.Sprintf("%s%s?height=%d", n.URL, fakenode.RouteCommit, h))
+	assert.Equal(t, readFile(t, strconv.FormatInt(h, 10), "commit.json"), body, "the recorded body again")
+	canonical, _, err := client.Commit(context.Background(), h)
+	require.NoError(t, err)
+	assert.True(t, canonical.Canonical)
+	assert.Len(t, seen.Signatures, len(canonical.Signatures), "the slots stay")
+	assert.Equal(t, signed(canonical)-1, signed(seen), "one committed signature turned absent")
+}

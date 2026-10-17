@@ -152,7 +152,7 @@ describe("BlockPage", () => {
     for (const l of ping) expect(l).toHaveAttribute("href", expect.stringMatching(/\/block\/25120440$/));
   });
 
-  it("waits for a height not produced yet, polling every 7 s for the pending window", async () => {
+  it("waits for a height not produced yet, polling every 4 s for the pending window", async () => {
     vi.useFakeTimers();
     const ahead = status.live_fill.db_height + 1;
     const fetchBlock = vi.fn(notIndexed);
@@ -176,6 +176,33 @@ describe("BlockPage", () => {
     const calls = fetchBlock.mock.calls.length;
     await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS * 3));
     expect(fetchBlock).toHaveBeenCalledTimes(calls);
+  });
+
+  it("keeps waiting through slow polls and gives up after the pending window", async () => {
+    vi.useFakeTimers();
+    const ahead = status.live_fill.db_height + 1;
+    // Like a real network: every 404 lands 300 ms after the request, so each
+    // poll clears the query's error for a moment before the answer is back.
+    const fetchBlock = vi.fn(
+      () =>
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new ApiError(404, "not_found", "block not indexed")), 300),
+        ),
+    );
+    renderWithProviders(<BlockPage height={ahead} />, { api: api({ block: fetchBlock }) });
+
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(screen.getByTestId("block-not_produced")).toHaveTextContent("Not produced yet");
+
+    // Mid-poll, the 404 not back yet: still waiting, no loading skeleton.
+    const first = fetchBlock.mock.calls.length;
+    await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_POLL_MS));
+    expect(fetchBlock.mock.calls.length).toBeGreaterThan(first);
+    expect(screen.getByTestId("block-not_produced")).toBeInTheDocument();
+    expect(screen.queryByTestId("block-skeleton")).not.toBeInTheDocument();
+
+    await act(() => vi.advanceTimersByTimeAsync(TX_PENDING_WINDOW_MS + TX_PENDING_POLL_MS));
+    expect(screen.getByTestId("block-not_produced")).toHaveTextContent("Reload the page to look again");
   });
 
   it("shows the block once a waited-for height is produced", async () => {

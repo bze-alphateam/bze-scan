@@ -96,7 +96,7 @@ func fetchInput(t *testing.T, n *fakenode.Node, h int64) transform.Input {
 	// Every height reaches the transformer through the archive adapter, as on
 	// the backfill path: it normalises the legacy format and v8.0.x's doubled
 	// block events, and leaves the later heights untouched.
-	require.NoError(t, archive.New(chainCodec(t)).Adapt(h, &in))
+	require.NoError(t, archive.New(chainCodec(t), archive.Mainnet).Adapt(h, &in))
 	return in
 }
 
