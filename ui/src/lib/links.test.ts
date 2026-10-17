@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // env.ts reads NEXT_PUBLIC_* when it is first imported (next build inlines
@@ -47,5 +50,36 @@ describe("app links", () => {
       label: "testnet-burner.getbze.com",
       href: externalLinks.burner,
     });
+  });
+});
+
+describe("app identity", () => {
+  it("gives every app its icons, from files the explorer serves, and its accent", async () => {
+    const { appIdentity } = await load();
+    const { env } = await import("./env");
+    expect(Object.keys(appIdentity).sort()).toEqual(Object.keys(env.apps).sort());
+    for (const [app, id] of Object.entries(appIdentity)) {
+      const files = [id.icon.light, id.icon.dark, id.iconSmall.light, id.iconSmall.dark];
+      expect(files).toEqual([
+        `/images/apps/${app}/icon.svg`,
+        `/images/apps/${app}/icon-on-dark.svg`,
+        `/images/apps/${app}/icon-small.svg`,
+        `/images/apps/${app}/icon-small-on-dark.svg`,
+      ]);
+      for (const f of files) expect(existsSync(join(process.cwd(), "public", f)), f).toBe(true);
+      expect(id.accent.light).toMatch(/^#[0-9A-F]{6}$/);
+      expect(id.accent.dark).toMatch(/^#[0-9A-F]{6}$/);
+    }
+    // Ink on light, the light end on dark (Official-BZEdge-Graphics, beezee/apps).
+    expect(appIdentity.dex.accent).toEqual({ light: "#0E74AD", dark: "#12C1E1" });
+    expect(appIdentity.factory.accent).toEqual({ light: "#9A6A00", dark: "#FFC933" });
+  });
+
+  it("puts an icon on every app link; Website and Docs keep the explorer's accent", async () => {
+    const { appLinks, appAccent, appIdentity } = await load();
+    expect(appLinks.map((l) => l.icon)).toEqual(["website", "staking", "dex", "burner", "factory", "communities", "docs"]);
+    expect(appAccent("staking")).toBe(appIdentity.staking.accent);
+    expect(appAccent("website")).toBeNull();
+    expect(appAccent("docs")).toBeNull();
   });
 });

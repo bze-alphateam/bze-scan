@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { ChainParams, HallOfFame, ValidatorDetail, ValidatorList } from "@/api/types";
 import { websiteLink } from "@/lib/links";
-import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
+import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
 import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
@@ -46,6 +46,7 @@ describe("ValidatorPage", () => {
       "href",
       "https://staking.getbze.com/?stake=bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
     );
+    expect(appIconsIn(screen.getByRole("link", { name: /Stake with this validator/ }))).toEqual(["staking"]);
 
     const tiles = screen.getAllByTestId("tile").map((t) => t.textContent);
     expect(tiles).toEqual([

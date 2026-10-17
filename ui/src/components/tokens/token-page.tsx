@@ -8,6 +8,7 @@ import { LuCircleHelp, LuExternalLink, LuTriangleAlert } from "react-icons/lu";
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { AppIcon } from "@/components/layout/app-icon";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Callout, type CalloutTone } from "@/components/ui/callout";
 import { Chip } from "@/components/ui/chip";
@@ -153,6 +154,7 @@ function Header({ t }: { t: Token }) {
         {onDex(t) && (
           <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
             <a href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer">
+              <AppIcon app="dex" size={18} />
               View on the DEX <LuExternalLink aria-hidden />
             </a>
           </Button>
