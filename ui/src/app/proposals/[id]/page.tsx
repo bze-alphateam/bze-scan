@@ -5,6 +5,7 @@ import type { Proposal } from "@/api/types";
 import { ProposalPage } from "@/components/proposals/proposal-page";
 import { serverApiUrl } from "@/lib/env";
 import { excerpt, titleStatus } from "@/render/proposals";
+import { shareMeta } from "@/lib/page-meta";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await fetchProposal(id);
   const title = p ? `#${id} ${p.title} · ${titleStatus(p, new Date())}` : `Proposal #${id}`;
   const description = (p?.summary && excerpt(p.summary, 200)) || "A governance proposal on BZE: what it changes, the votes and the result.";
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function ProposalRoute({ params }: Props) {

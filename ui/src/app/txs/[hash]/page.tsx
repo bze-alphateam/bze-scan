@@ -6,6 +6,7 @@ import { TxPage } from "@/components/tx/tx-page";
 import { serverApiUrl } from "@/lib/env";
 import { shortHash } from "@/lib/format";
 import { createRenderContext } from "@/render/messages/registry";
+import { shareMeta } from "@/lib/page-meta";
 
 const HASH = /^[0-9a-fA-F]{64}$/;
 
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!first) return { title };
   const ctx = createRenderContext({ transfers: tx.transfers });
   const description = ctx.rendererFor(first.type_url).title(first, ctx);
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function TransactionRoute({ params }: Props) {

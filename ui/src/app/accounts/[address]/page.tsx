@@ -6,6 +6,7 @@ import { AccountPage } from "@/components/accounts/account-page";
 import { serverApiUrl } from "@/lib/env";
 import { accountTitle, parsePage } from "@/render/account";
 import { parseCategory } from "@/render/activity";
+import { shareMeta } from "@/lib/page-meta";
 
 // A `bze1…` account; contracts and interchain accounts are longer than 38.
 const ADDRESS = /^bze1[02-9ac-hj-np-z]{38,}$/;
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const a = await fetchAccount(address);
   const title = accountTitle(address, a?.label);
   const description = "A BZE account: its balances, tokens, stake and activity.";
-  return { title, description, openGraph: { title, description }, twitter: { title, description } };
+  return { title, description, ...shareMeta(title, description) };
 }
 
 export default async function AccountRoute({ params, searchParams }: Props) {
