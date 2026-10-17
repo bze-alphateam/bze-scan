@@ -3,7 +3,7 @@
 import { Box, CloseButton, Container, Drawer, Flex, HStack, IconButton, Link, Portal, Separator, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { LuMenu, LuSearch } from "react-icons/lu";
 
 import { appLinks, navLinks } from "@/lib/links";
@@ -28,6 +28,10 @@ export function Header() {
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer moves focus into itself when it opens. On the first link, a
+  // phone shows that link with a focus ring as if selected, so the panel
+  // takes the focus instead.
+  const drawerContent = useRef<HTMLDivElement>(null);
 
   return (
     <Box as="header" bg="bg.panel" borderBottomWidth="1px" borderColor="border.panel">
@@ -53,7 +57,12 @@ export function Header() {
             >
               <LuSearch />
             </IconButton>
-            <Drawer.Root open={drawerOpen} onOpenChange={(e) => setDrawerOpen(e.open)} placement="end">
+            <Drawer.Root
+              open={drawerOpen}
+              onOpenChange={(e) => setDrawerOpen(e.open)}
+              placement="end"
+              initialFocusEl={() => drawerContent.current}
+            >
               <Drawer.Trigger asChild>
                 <IconButton variant="ghost" minW="44px" minH="44px" aria-label="Open menu">
                   <LuMenu />
@@ -62,7 +71,7 @@ export function Header() {
               <Portal>
                 <Drawer.Backdrop />
                 <Drawer.Positioner>
-                  <Drawer.Content>
+                  <Drawer.Content ref={drawerContent} outline="none">
                     <Drawer.Header>
                       <Drawer.Title>Menu</Drawer.Title>
                     </Drawer.Header>
