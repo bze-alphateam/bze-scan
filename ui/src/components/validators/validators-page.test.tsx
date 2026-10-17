@@ -75,16 +75,14 @@ describe("ValidatorsPage", () => {
     expect(honeycomb).toHaveTextContent("50M BZE · 12.3%");
     expect(honeycomb).toHaveTextContent("5%");
     expect(honeycomb).toHaveTextContent("99.9%");
-    expect(within(honeycomb).getAllByRole("link", { name: "Stake with Honeycomb" })[0]).toHaveAttribute(
-      "href",
-      "https://staking.getbze.com/?stake=bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
-    );
+    // No Stake button in the rows: people stake from the validator's page.
+    expect(screen.queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
 
     expect(await screen.findByText(/share of the last 10,000 blocks the validator signed/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Picking a validator" })).toBeInTheDocument();
   });
 
-  it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named, no stake", async () => {
+  it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
     await waitFor(() => expect(monikers()).toEqual(["Sleepy Node", "Old Timer"]));
@@ -94,9 +92,6 @@ describe("ValidatorsPage", () => {
     expect(within(sleepy).getByText("Unbonding")).toBeInTheDocument();
     expect(within(old).queryByText("Jailed")).not.toBeInTheDocument();
     expect(old).toHaveTextContent("—");
-    // Inactive validators pay no rewards: no Stake button on their rows.
-    expect(within(sleepy).queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
-    expect(within(old).queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
   });
 
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
@@ -114,6 +109,7 @@ describe("ValidatorsPage", () => {
     expect(rows.every((r) => r.querySelector('[data-ring="gold"]') && r.querySelector("[data-gold]"))).toBe(true);
     expect(within(rows[1]).getByTestId("hall-of-fame-votes")).toHaveTextContent("Voted on all of the last 10 proposals");
     expect(rows[1]).toHaveTextContent("50M BZE · 12.3% of the voting power");
+    expect(screen.queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
 
     // The list ends with a way to every active validator.
     await userEvent.click(screen.getByRole("button", { name: "See all active validators" }));

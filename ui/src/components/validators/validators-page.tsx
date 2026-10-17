@@ -18,7 +18,7 @@ import { Tag } from "@/components/ui/status-pill";
 import { Tile } from "@/components/ui/tile";
 import { VTabPanel, VTabs, VTabsBar } from "@/components/ui/vtabs";
 import { formatCount } from "@/lib/format";
-import { externalLinks, stakeHref } from "@/lib/links";
+import { externalLinks } from "@/lib/links";
 import {
   bondCompact,
   filterByMoniker,
@@ -73,29 +73,20 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
   );
 }
 
-// # · Validator · Staked (c2) · Commission (c2) · Uptime (c3) · Stake. On phones the stake sits under the name.
+// # · Validator · Staked (c2) · Commission (c2) · Uptime (c3). On phones the stake sits under the name.
+// No Stake button in the rows: people stake from the validator's page, after seeing its details.
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
 const COLUMNS = {
-  base: "24px minmax(0, 1fr) auto",
-  c2: "28px minmax(0, 1fr) 170px 100px auto",
-  c3: "28px minmax(0, 1fr) 170px 100px 80px auto",
+  base: "24px minmax(0, 1fr)",
+  c2: "28px minmax(0, 1fr) 170px 100px",
+  c3: "28px minmax(0, 1fr) 170px 100px 80px",
 };
 const FAME_COLUMNS = {
-  base: "24px minmax(0, 1fr) auto",
-  c2: "28px minmax(0, 1fr) auto",
+  base: "24px minmax(0, 1fr)",
+  c2: "28px minmax(0, 1fr)",
 };
 // The crown's card hangs below its row, so the table panel cannot clip; the last row keeps the rounded corners.
 const LAST_ROW = { borderBottomWidth: "0", roundedBottom: "l3" };
-
-function StakeButton({ moniker, operator }: { moniker: string; operator: string }) {
-  return (
-    <Button asChild size="xs" variant="outline" h="30px" px="3" fontSize="13px" fontWeight="500" borderColor="border.panel">
-      <a href={stakeHref(operator)} target="_blank" rel="noopener noreferrer" aria-label={`Stake with ${moniker}`}>
-        Stake
-      </a>
-    </Button>
-  );
-}
 
 const validatorHref = (operator: string) => `/validators/${encodeURIComponent(operator)}`;
 
@@ -170,8 +161,6 @@ function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
       >
         {uptimeText(v.uptime)}
       </Text>
-      {/* Inactive validators pay no rewards, so their rows offer no stake. */}
-      <Box textAlign="right">{v.status === "bonded" && <StakeButton moniker={v.moniker} operator={v.operator_address} />}</Box>
     </ListRow>
   );
 }
@@ -191,7 +180,6 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
         <Text hideBelow="c3" textAlign="right">
           Uptime
         </Text>
-        <span />
       </ListHead>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
@@ -240,7 +228,7 @@ export function ValidatorsSkeleton() {
           <TileSkeleton key={i} />
         ))}
       </SimpleGrid>
-      <TableSkeleton rows={10} columns={6} />
+      <TableSkeleton rows={10} columns={5} />
     </Stack>
   );
 }
@@ -292,7 +280,6 @@ function HallOfFameRow({ v, place, rules, window }: { v: Validator; place: numbe
           </Flex>
         </Box>
       </HStack>
-      <StakeButton moniker={v.moniker} operator={v.operator_address} />
     </ListRow>
   );
 }
