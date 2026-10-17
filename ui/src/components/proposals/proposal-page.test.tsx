@@ -310,6 +310,29 @@ describe("ProposalPage", () => {
     expect(screen.getByTestId("proposal-status")).toHaveAttribute("data-tag", "bad");
   });
 
+  it("does not fail the quorum check of a vote whose turnout was never recorded", async () => {
+    // The vote ended before the explorer followed it and no archive read it: no turnout.
+    const unrecorded: Proposal = { ...p45, turnout_pct: null, tally_source: null, tally_bonded_tokens: null };
+    renderWithProviders(<ProposalPage id={45} />, { api: api(unrecorded) });
+    const texts = await tiles();
+    // The chain passed it, so the quorum was reached.
+    await waitFor(() => expect(texts()[2]).toBe("Turnout—33.4% needed · reached"));
+    const [turnout] = within(screen.getByTestId("votes-card")).getAllByTestId("check");
+    expect(turnout).toHaveAttribute("data-ok", "true");
+    expect(turnout).toHaveTextContent("Reached · 33.4% needed (the exact share was not recorded)");
+    expect(turnout).not.toHaveTextContent("0.0%");
+  });
+
+  it("marks the quorum unknown on a rejected vote whose turnout was never recorded", async () => {
+    renderWithProviders(<ProposalPage id={45} />, { api: api({ ...rejected, turnout_pct: null, tally_source: null, tally_bonded_tokens: null }) });
+    const texts = await tiles();
+    await waitFor(() => expect(texts()[2]).toBe("Turnout—33.4% needed"));
+    const [turnout] = within(screen.getByTestId("votes-card")).getAllByTestId("check");
+    expect(turnout).toHaveAttribute("data-ok", "unknown");
+    expect(turnout).toHaveTextContent("Enough people voted: not known");
+    expect(turnout).toHaveTextContent("Not recorded: the explorer started after this vote · 33.4% needed");
+  });
+
   it("keeps what the options mean collapsed until asked", async () => {
     renderWithProviders(<ProposalPage id={45} />, { api: api(p45) });
     const votes = await screen.findByTestId("votes-card");

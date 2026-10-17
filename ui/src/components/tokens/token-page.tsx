@@ -3,11 +3,12 @@
 import { Box, Button, Flex, Grid, Heading, HStack, Image, Link, SimpleGrid, Skeleton, SkeletonCircle, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import type { ReactNode } from "react";
-import { LuCircleHelp, LuExternalLink, LuTriangleAlert } from "react-icons/lu";
+import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { AppButton } from "@/components/layout/app-button";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Callout, type CalloutTone } from "@/components/ui/callout";
 import { Chip } from "@/components/ui/chip";
@@ -151,11 +152,9 @@ function Header({ t }: { t: Token }) {
           )}
         </Box>
         {onDex(t) && (
-          <Button asChild colorPalette="blue" h="40px" px="4" fontWeight="600">
-            <a href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer">
-              View on the DEX <LuExternalLink aria-hidden />
-            </a>
-          </Button>
+          <AppButton app="dex" href={dexAssetUrl(t.denom)}>
+            View on the DEX
+          </AppButton>
         )}
       </Flex>
     </Box>

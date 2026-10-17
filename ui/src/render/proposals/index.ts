@@ -134,9 +134,19 @@ export interface Check {
   need: string;
 }
 
+/** The quorum check, which can be unknown: the explorer has no turnout for a vote it did not follow. */
+export interface TurnoutCheck {
+  /** Null when no turnout was recorded and the outcome does not tell. */
+  ok: boolean | null;
+  /** The measured share, percent; null when no turnout was recorded. */
+  value: string | null;
+  /** The threshold, percent. */
+  need: string;
+}
+
 export interface Checks {
   /** Turnout ≥ quorum. */
-  turnout: Check;
+  turnout: TurnoutCheck;
   /** Yes ÷ (Yes + No + Veto) > threshold. */
   yes: Check;
   /** Veto ÷ all votes ≤ veto threshold. */
@@ -144,25 +154,39 @@ export interface Checks {
 }
 
 /** The three checks the chain runs when voting ends, on the current tally; null without a tally or the rules. */
-export function checks(p: Pick<ProposalSummary, "tally" | "turnout_pct">, rules: GovRules | null): Checks | null {
+export function checks(
+  p: Pick<ProposalSummary, "tally" | "turnout_pct"> & Partial<Pick<ProposalSummary, "status">>,
+  rules: GovRules | null,
+): Checks | null {
   if (!p.tally || !rules) return null;
   const t = p.tally;
   const pct = (fractionValue: string) => percentOf(fractionValue, "1")!;
-  const turnout = p.turnout_pct ?? "0";
+  const quorum = pct(rules.quorum);
   const yes = percentOf(t.yes, sumAmounts([t.yes, t.no, t.no_with_veto])) ?? "0";
   const veto = percentOf(t.no_with_veto, sumAmounts([t.yes, t.no, t.abstain, t.no_with_veto])) ?? "0";
   return {
-    turnout: { ok: compareDecimals(turnout, pct(rules.quorum)) >= 0, value: turnout, need: pct(rules.quorum) },
+    turnout:
+      p.turnout_pct != null
+        ? { ok: compareDecimals(p.turnout_pct, quorum) >= 0, value: p.turnout_pct, need: quorum }
+        : // No turnout recorded (the vote ended before the explorer followed it): a proposal the chain passed met the quorum.
+          { ok: p.status === "passed" || p.status === "failed" ? true : null, value: null, need: quorum },
     yes: { ok: compareDecimals(yes, pct(rules.threshold)) > 0, value: yes, need: pct(rules.threshold) },
     veto: { ok: compareDecimals(veto, pct(rules.vetoThreshold)) <= 0, value: veto, need: pct(rules.vetoThreshold) },
   };
 }
 
-/** `On track to pass` or `Would fail: <the first failing check>`. */
-export function verdict(c: Checks): { pass: boolean; text: string } {
+export interface Verdict {
+  /** Null when the turnout is unknown and nothing else fails. */
+  pass: boolean | null;
+  text: string;
+}
+
+/** `On track to pass`, `Would fail: <the first failing check>`, or unknown without a turnout. */
+export function verdict(c: Checks): Verdict {
   if (!c.veto.ok) return { pass: false, text: "Would fail: vetoed" };
-  if (!c.turnout.ok) return { pass: false, text: "Would fail: not enough people voted yet" };
+  if (c.turnout.ok === false) return { pass: false, text: "Would fail: not enough people voted yet" };
   if (!c.yes.ok) return { pass: false, text: "Would fail: not enough Yes votes" };
+  if (c.turnout.ok === null) return { pass: null, text: "Turnout not known yet" };
   return { pass: true, text: "On track to pass" };
 }
 

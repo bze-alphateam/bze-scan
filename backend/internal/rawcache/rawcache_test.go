@@ -279,6 +279,30 @@ func TestPutHeightIsServedWithoutTheArchive(t *testing.T) {
 	}
 }
 
+func TestReplaceCommitReplacesOnlyTheCommit(t *testing.T) {
+	archive := newFakeNode()
+	c := newCache(archive, nil, rawcache.Config{})
+	ctx := context.Background()
+
+	c.PutHeight(12, []byte(`"b"`), []byte(`"r"`), []byte(`"seen"`))
+	c.ReplaceCommit(12, []byte(`"canonical"`))
+	c.ReplaceCommit(12, nil) // an empty body changes nothing
+	for r, w := range map[rawcache.Route]string{rawcache.RouteBlock: `"b"`, rawcache.RouteBlockResults: `"r"`, rawcache.RouteCommit: `"canonical"`} {
+		body, err := c.Get(ctx, r, 12)
+		require.NoError(t, err)
+		assert.Equal(t, w, string(body))
+		assert.Zero(t, archive.count(r))
+	}
+
+	// A height that left the cache is stored too: the next Get needs no
+	// archive.
+	c.ReplaceCommit(13, []byte(`"canonical 13"`))
+	body, err := c.Get(ctx, rawcache.RouteCommit, 13)
+	require.NoError(t, err)
+	assert.Equal(t, `"canonical 13"`, string(body))
+	assert.Zero(t, archive.count(rawcache.RouteCommit))
+}
+
 const txHeight = 24998316 // three transactions, the third failed with code 11
 
 func fixtureCache(t *testing.T) (*rawcache.Cache, *fakenode.Node) {

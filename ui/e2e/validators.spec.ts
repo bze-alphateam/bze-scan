@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 import { noHorizontalScroll } from "./layout";
+import { mockApi } from "./mock-api";
 
 import honeycomb from "../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
+import fame from "../test/fixtures/api/v1/validators/hall-of-fame.json";
 
 // The mock API answers /validators from test/fixtures/api/v1/validators.json
 // (three active, two inactive), Honeycomb's page from validators/<operator>.json
@@ -54,11 +56,25 @@ test.describe("validators list", () => {
     await expect(rows(page).first()).toContainText("Thamar Node");
 
     await page.getByRole("textbox", { name: "Find a validator" }).fill("honey");
-    // Exact: the row's "Stake with Honeycomb" button is a link too.
+    // No Stake button in the rows: people stake from the validator's page.
+    await expect(page.getByRole("link", { name: /^Stake with/ })).toHaveCount(0);
     await rows(page).first().getByRole("link", { name: "Honeycomb", exact: true }).click();
     await expect(page).toHaveURL(`/validators/${OP}`);
     await expect(page.getByRole("heading", { level: 1, name: "Honeycomb" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Stake with this validator/ })).toBeVisible();
     await noHorizontalScroll(page);
+  });
+});
+
+test.describe("validators list without a Hall of Fame member", () => {
+  test("hides the Hall of Fame tab and opens on Active", async ({ page }) => {
+    await mockApi(page, { "v1/validators/hall-of-fame": { ...fame, items: [] } });
+    await page.goto("/validators");
+    await expect(page.getByRole("tab", { name: "Active 3" })).toHaveAttribute("aria-selected", "true");
+    await expect(rows(page)).toHaveCount(3);
+    await expect(page.getByRole("tab")).toHaveCount(2);
+    await expect(page.getByRole("tab", { name: /Hall of Fame/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Hall of Fame member" })).toHaveCount(0);
   });
 });
 

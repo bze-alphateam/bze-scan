@@ -26,6 +26,30 @@ test.describe("home page", () => {
     await noHorizontalScroll(page);
   });
 
+  test("shows each app's icon on its Go to tile, for the colour mode", async ({ page }) => {
+    await page.goto("/");
+    const goTo = page.getByRole("navigation", { name: "BZE apps" });
+    // Dark is the default theme: the five app icons show their on-dark small cut.
+    const apps = goTo.locator("span[data-testid=app-icon] img:visible");
+    await expect(apps).toHaveCount(5);
+    for (const img of await apps.all()) {
+      await expect(img).toHaveAttribute("src", /^\/images\/apps\/[a-z]+\/icon-small-on-dark\.svg$/);
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+    }
+    // Decorative: the tiles keep their plain names, never cut short by the icon.
+    await expect(goTo.getByRole("link", { name: "Communities" })).toBeVisible();
+    const cut = await goTo.getByRole("link").evaluateAll((links) =>
+      links.flatMap((a) => Array.from(a.querySelectorAll<HTMLElement>("[data-testid=go-to-name]")).filter((s) => s.scrollWidth > s.clientWidth).map((s) => s.textContent)),
+    );
+    expect(cut).toEqual([]);
+
+    // Light mode swaps to the files drawn for a light background.
+    await page.addInitScript(() => localStorage.setItem("theme", "light"));
+    await page.reload();
+    await expect(apps).toHaveCount(5);
+    await expect(apps.first()).toHaveAttribute("src", "/images/apps/staking/icon-small.svg");
+  });
+
   test("keeps the lists when the stats route fails", async ({ page }) => {
     await mockApi(page, { "v1/stats": respond(500, { error: { code: "internal", message: "boom" } }) });
     await page.goto("/");

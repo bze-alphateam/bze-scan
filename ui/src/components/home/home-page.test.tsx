@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { BlockSummary, Page, TokenSummary, TxSummary, ValidatorList } from "@/api/types";
-import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
+import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import blocks from "../../../test/fixtures/api/v1/blocks.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
@@ -102,6 +102,21 @@ describe("HomePage", () => {
       "Factory",
       "Communities",
       "Docs",
+    ]);
+    expect(within(goTo).getAllByRole("link").map((a) => appIconsIn(a))).toEqual([
+      ["website"],
+      ["staking"],
+      ["dex"],
+      ["burner"],
+      ["factory"],
+      ["communities"],
+      ["docs"],
+    ]);
+    // The small cut, for light and dark backgrounds, switched in CSS.
+    const dex = within(goTo).getByRole("link", { name: "DEX" });
+    expect(Array.from(dex.querySelectorAll("img")).map((i) => i.getAttribute("src"))).toEqual([
+      "/images/apps/dex/icon-small.svg",
+      "/images/apps/dex/icon-small-on-dark.svg",
     ]);
   });
 });

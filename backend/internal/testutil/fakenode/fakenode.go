@@ -28,8 +28,10 @@
 package fakenode
 
 import (
+	"bytes"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -90,7 +92,8 @@ type Node struct {
 	downFor       int
 	holdRoute     string // with holdHeight: the request that never answers
 	holdHeight    int64
-	consensus     []byte // nil: consensus_state.json
+	consensus     []byte        // nil: consensus_state.json
+	seen          map[int64]int // height → committed signatures the seen commit lacks
 }
 
 // New starts a fake node serving the recorded fixtures and closes it when the
@@ -134,6 +137,7 @@ func newNode(fixtures fs.FS) (*Node, error) {
 		recordedTip:   tip,
 		requestCounts: map[string]int{},
 		heightCounts:  map[string]int{},
+		seen:          map[int64]int{},
 	}, nil
 }
 
@@ -194,6 +198,23 @@ func (n *Node) HoldAt(route string, height int64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.holdRoute, n.holdHeight = route, height
+}
+
+// SetSeenCommit makes /commit?height=height answer a seen commit, as a node
+// asked at its tip does: "canonical": false, with the last absent committed
+// signatures turned into absent slots. ClearSeenCommit serves the recorded
+// (canonical) commit again, as the node does once the next block exists.
+func (n *Node) SetSeenCommit(height int64, absent int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.seen[height] = absent
+}
+
+// ClearSeenCommit undoes SetSeenCommit for height.
+func (n *Node) ClearSeenCommit(height int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.seen, height)
 }
 
 // RequestsAt returns how many requests route has received for height.
@@ -370,7 +391,44 @@ func (n *Node) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, n.aboveTip)
 		return
 	}
+	n.mu.Lock()
+	absent, seen := n.seen[height]
+	n.mu.Unlock()
+	if seen && route == RouteCommit {
+		if body, err = seenCommit(body, absent); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// seenCommit rewrites a recorded canonical /commit body into a seen commit
+// lacking the last absent committed signatures.
+func seenCommit(body []byte, absent int) ([]byte, error) {
+	var doc map[string]any
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("fakenode: seen commit: %w", err)
+	}
+	result, _ := doc["result"].(map[string]any)
+	header, _ := result["signed_header"].(map[string]any)
+	commit, _ := header["commit"].(map[string]any)
+	sigs, _ := commit["signatures"].([]any)
+	if sigs == nil {
+		return nil, fmt.Errorf("fakenode: seen commit: no signatures in the recorded body")
+	}
+	result["canonical"] = false
+	for i := len(sigs) - 1; i >= 0 && absent > 0; i-- {
+		sig, _ := sigs[i].(map[string]any)
+		if fmt.Sprint(sig["block_id_flag"]) != "2" {
+			continue
+		}
+		sigs[i] = map[string]any{"block_id_flag": 1, "validator_address": "", "timestamp": "0001-01-01T00:00:00Z", "signature": nil}
+		absent--
+	}
+	return json.Marshal(doc)
 }
 
 // SetConsensusState makes /consensus_state answer body (a whole JSON-RPC

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
+	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/nonvoters"
@@ -161,7 +162,7 @@ func newEnv(t *testing.T) *env {
 	logger, hook := logtest.NewNullLogger()
 	logger.SetLevel(logrus.DebugLevel)
 	e.logs = hook
-	e.sync = nonvoters.New(nonvoters.Deps{Set: e.set, Node: e.node, Store: e.store, Log: logger}, 0)
+	e.sync = nonvoters.New(nonvoters.Deps{Releases: archive.Mainnet, Set: e.set, Node: e.node, Store: e.store, Log: logger}, 0)
 	return e
 }
 

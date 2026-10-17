@@ -139,7 +139,12 @@ func (e Event) Get(key string) (string, bool) {
 type Commit struct {
 	Height int64
 	// Time is the time of the block at Height (its header's).
-	Time       time.Time
+	Time time.Time
+	// Canonical is false for the node's seen commit: the precommits it had
+	// when it moved on, asked at its tip. The canonical commit, block
+	// Height+1's last_commit, carries every signature that made it in time;
+	// the node answers it once Height+1 exists.
+	Canonical  bool
 	Signatures []CommitSig
 }
 
@@ -289,6 +294,7 @@ func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, err
 				Signatures []CommitSig `json:"signatures"`
 			} `json:"commit"`
 		} `json:"signed_header"`
+		Canonical bool `json:"canonical"`
 	}
 	raw, err := c.call(ctx, "commit", height, &res)
 	if err != nil {
@@ -298,7 +304,7 @@ func (c *Client) Commit(ctx context.Context, height int64) (*Commit, []byte, err
 	if cm.Height != height {
 		return nil, nil, fmt.Errorf("commit %d: node answered height %d", height, cm.Height)
 	}
-	return &Commit{Height: cm.Height, Time: res.SignedHeader.Header.Time, Signatures: cm.Signatures}, raw, nil
+	return &Commit{Height: cm.Height, Time: res.SignedHeader.Header.Time, Canonical: res.Canonical, Signatures: cm.Signatures}, raw, nil
 }
 
 // Validators calls /validators?height=height&page=page&per_page=perPage:

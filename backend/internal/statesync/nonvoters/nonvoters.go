@@ -4,8 +4,8 @@
 // non-voters are stored, with the height and size of the set.
 //
 // The tally set of a proposal resolved at height H is the CometBFT validator
-// set at archive.TallySetHeight(H) (H+1, or H+2 in the generations whose
-// staking EndBlocker ran before gov's) minus the validators jailed at H: the
+// set at TallySetHeight(H) of the chain's release history (H+1, or H+2 in
+// the generations whose staking EndBlocker ran before gov's) minus the validators jailed at H: the
 // slashing BeginBlocker jails them before gov's EndBlocker tallies, which
 // drops them from the staking power index the tally iterates, while
 // CometBFT still lists them until their power update applies. A member
@@ -34,7 +34,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
-	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
@@ -106,8 +105,16 @@ type Node interface {
 	BlockResults(ctx context.Context, height int64) (*node.BlockResults, []byte, error)
 }
 
+// Releases gives the height of the validator set a tally at h counted; the
+// chain's archive.Chain (archive.ForChain) satisfies it.
+type Releases interface {
+	TallySetHeight(h int64) int64
+}
+
 // Deps of the set.
 type Deps struct {
+	// Releases is the release history of the chain the node serves.
+	Releases Releases
 	// Set reads the CometBFT set at a height.
 	Set   activeset.Reader
 	Node  Node
@@ -214,7 +221,7 @@ func (s *Set) complete(ctx context.Context, p Proposal) (bool, error) {
 
 // compute writes the non-voters of p.
 func (s *Set) compute(ctx context.Context, p Proposal) error {
-	setHeight := archive.TallySetHeight(p.ResolvedHeight)
+	setHeight := s.deps.Releases.TallySetHeight(p.ResolvedHeight)
 	members, err := s.deps.Set.At(ctx, setHeight)
 	if err != nil {
 		return fmt.Errorf("proposal %d: %w", p.ID, err)

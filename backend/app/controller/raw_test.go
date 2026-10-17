@@ -18,9 +18,11 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 )
 
-// fakeRaw answers fixed bodies; err fails every call.
+// fakeRaw answers fixed bodies (commit, when set, for the commit route);
+// err fails every call.
 type fakeRaw struct {
 	err       error
+	commit    []byte
 	gotRoute  rawcache.Route
 	gotHeight int64
 	gotIndex  int
@@ -30,6 +32,9 @@ func (f *fakeRaw) Get(_ context.Context, route rawcache.Route, height int64) ([]
 	f.gotRoute, f.gotHeight = route, height
 	if f.err != nil {
 		return nil, f.err
+	}
+	if route == rawcache.RouteCommit && f.commit != nil {
+		return f.commit, nil
 	}
 	return []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":-1,"result":{"route":%q}}`, route)), nil
 }
@@ -65,9 +70,27 @@ func TestRawRoutesAnswerTheBodyVerbatim(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, path)
 		assert.Equal(t, fmt.Sprintf(`{"jsonrpc":"2.0","id":-1,"result":{"route":%q}}`, route), rec.Body.String(), path)
 		assert.Equal(t, echo.MIMEApplicationJSON, rec.Header().Get(echo.HeaderContentType), path)
-		assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl), path)
+		if route != rawcache.RouteCommit {
+			assert.Equal(t, controller.CacheImmutable, rec.Header().Get(echo.HeaderCacheControl), path)
+		}
 		assert.Equal(t, route, raw.gotRoute)
 		assert.Equal(t, int64(7), raw.gotHeight)
+	}
+}
+
+// Only the canonical commit is final: a seen one (the node's tip) is cached
+// for a minute, so a browser picks up the canonical one after the next block.
+func TestRawCommitIsImmutableOnlyWhenCanonical(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"jsonrpc":"2.0","id":-1,"result":{"signed_header":{},"canonical":true}}`:  controller.CacheImmutable,
+		`{"jsonrpc":"2.0","id":-1,"result":{"signed_header":{},"canonical":false}}`: controller.CacheIndexed,
+		`{"jsonrpc":"2.0","id":-1,"result":{"signed_header":{}}}`:                   controller.CacheIndexed,
+		`not json`: controller.CacheIndexed,
+	} {
+		rec := get(t, newRawAPI(&fakeRaw{commit: []byte(body)}, &fakeReader{}), "/raw/commit/7")
+		require.Equal(t, http.StatusOK, rec.Code, body)
+		assert.Equal(t, body, rec.Body.String(), "verbatim")
+		assert.Equal(t, want, rec.Header().Get(echo.HeaderCacheControl), body)
 	}
 }
 

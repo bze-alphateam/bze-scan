@@ -315,7 +315,9 @@ every later route follows:
   counterparty chain, a block time), so it is never cached for good. A block
   whose proposer is not named yet (no synced validator has its consensus
   address) stays `no-store` until it is. A block's events and the raw node
-  answers by height join nothing and are `public, max-age=31536000, immutable`.
+  answers by height join nothing and are `public, max-age=31536000, immutable`,
+  except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
+  asked at its tip), which is `public, max-age=60`.
 - **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
@@ -378,11 +380,14 @@ otherwise (`running`, `paused`, `error`, or enabled and waiting) it is
 | `GET /api/v1/raw/tx/{hash}` | `{"height", "index", "tx", "tx_result"}`: the base64 transaction from `/block` `data.txs[index]` and `/block_results` `txs_results[index]`, at the height and index `explorer.transactions` holds; 404 when the hash is not indexed |
 
 A height is a positive integer (else 400) and is proxied whether the explorer
-indexed it or not. Successes are `immutable`; when no archive node serves the
+indexed it or not. Successes are `immutable`, but a commit body without
+`"canonical": true` (the seen commit of a node's tip, see "Live indexer") is
+`public, max-age=60`, so a browser picks up the canonical one; when no archive node serves the
 height (unreachable, an error, above its tip) the answer is 502
 `upstream_error` and nothing is cached. The cache keeps one LRU per route of
 at most `RAW_CACHE_MAX_ENTRIES` entries, each living `RAW_CACHE_TTL` from the
-moment it was stored; an entry is never refreshed (a height never changes).
+moment it was stored; an entry is never refreshed (a height never changes),
+except a seen commit, which the live indexer replaces with the canonical one.
 The live indexer puts the three bodies of every height it writes, so recent
 heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
@@ -485,6 +490,21 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   same height. So a node restart, even in the middle of a catch-up, never
   turns into recorded failures. A node that answers `/status` but not a
   height is a failed attempt at that height.
+- Seen vs canonical commits. A height is usually indexed while it is the
+  node's tip, and then `/commit` answers the node's *seen* commit
+  (`"canonical": false`): only the precommits that arrived before the node
+  moved on, often just the +2/3 it needed. The *canonical* commit, block
+  H+1's `last_commit`, has every signature that made it in time, and the node
+  answers it (`"canonical": true`) once H+1 exists. So the block is written
+  at once with the seen figures, and when the next height of the same
+  session is written the indexer re-reads the seen height's commit, updates
+  its `signatures_count` and `signatures_power_pct` (the same expression as
+  the insert) and replaces its commit in the raw-JSON cache. A failed or
+  still-seen re-read only logs a warning: nothing is recorded and the live
+  path goes on. Each session (start, reconnect) begins by treating the cursor
+  as seen, since the height written just before it may be, and re-reads it
+  once too. Backfill, catch-up and reindex read old heights, whose
+  commits are canonical.
 - On shutdown the height in flight gets up to 10 s to finish.
 - Nothing is read from the sink's tables: the notification carries the
   height, the node supplies the data.
@@ -546,7 +566,13 @@ elsewhere ends without stopping the process, and the next start resumes it).
 
 ### Old event formats
 
-Heights before v8.0.0 (mainnet height 20,237,800) were produced by Cosmos SDK
+The release history behind it is per chain (`archive.ForChain(CHAIN_ID)`): the
+same height is a different release on mainnet `beezee-1` and on testnet
+`bzetestnet-3`, which started on v8.0.2, so every testnet height has the
+current format. Backfill, reindex and the state sync refuse to start for a
+chain id without a table.
+
+Mainnet heights before v8.0.0 (height 20,237,800) were produced by Cosmos SDK
 0.44/0.45 on Tendermint/CometBFT 0.34. On the archive path only (backfill,
 catch-up, reindex; never the live path), `internal/archive` normalises them
 to the current format before the transformer sees them: `msg_index` rebuilt
@@ -1147,7 +1173,7 @@ waits for it). The rows and the columns are written in one transaction.
   N+2, so the set is CometBFT's `/validators` (every page of 100) at `H+1`
   where gov's EndBlocker runs before staking's (v5.0, v8.0.0 on) and at
   `H+2` where staking's runs first (v5.1.2 to v7.2.0; the per-generation
-  rule is `archive.TallySetHeight`). The validators slashed in `H`'s block
+  rule is the chain's `archive.Chain.TallySetHeight`). The validators slashed in `H`'s block
   (its `slash` events) are left out: the slashing BeginBlocker jailed them,
   which drops them from the power index before the tally, while CometBFT
   still lists them. The set is never recomputed from staking state.
@@ -1360,8 +1386,10 @@ files; `FixtureHeights` lists those recorded in full. A height without a fixture
 answers the JSON-RPC error a real node returns above its tip (HTTP 500,
 `testdata/above_tip.json`). Tests can override the `/status` height, make the
 node pruned below a height (`SetEarliestHeight`: `/status` reports it and
-lower heights answer the node's "not available" error), and read request
-counters per route and per height.
+lower heights answer the node's "not available" error), answer a height's
+seen commit (`SetSeenCommit(h, absent)`: `"canonical": false` and the last
+`absent` committed signatures turned absent, until `ClearSeenCommit(h)`),
+and read request counters per route and per height.
 
 Fixtures are committed and re-recorded only on purpose, when a test needs a
 height the existing ones do not cover:

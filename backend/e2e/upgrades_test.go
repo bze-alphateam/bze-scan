@@ -236,7 +236,7 @@ func TestHaltWatchDuringAnUpgrade(t *testing.T) {
 // polling every 20 ms; the returned func stops it.
 func (e *syncEnv) runWatch(t *testing.T) func() {
 	t.Helper()
-	cfg := &config.Config{DatabaseURL: e.url, NodeRPCURL: e.node.URL, HaltWatchEnabled: true, HaltWatchInterval: 20 * time.Millisecond}
+	cfg := &config.Config{DatabaseURL: e.url, NodeRPCURL: e.node.URL, ChainID: "beezee-1", HaltWatchEnabled: true, HaltWatchInterval: 20 * time.Millisecond}
 	watch, closeFn, err := serve.NewHaltWatch(context.Background(), cfg)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())

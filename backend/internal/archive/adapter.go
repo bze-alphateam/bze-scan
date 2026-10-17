@@ -25,15 +25,17 @@ type Decoder interface {
 	Decode(raw []byte) (*chain.Tx, error)
 }
 
-// Adapter normalises archive input of any generation to the current event
-// format. It satisfies the backfill pipeline's Adapter.
+// Adapter normalises archive input of any generation of one chain to the
+// current event format. It satisfies the backfill pipeline's Adapter.
 type Adapter struct {
 	decoder Decoder
+	chain   Chain
 }
 
-// New returns an adapter that decodes transactions with decoder.
-func New(decoder Decoder) *Adapter {
-	return &Adapter{decoder: decoder}
+// New returns an adapter for chain (ForChain) that decodes transactions with
+// decoder.
+func New(decoder Decoder, chain Chain) *Adapter {
+	return &Adapter{decoder: decoder, chain: chain}
 }
 
 // Adapt normalises in, the archive's answers for height, in place. A height
@@ -47,7 +49,7 @@ func (a *Adapter) Adapt(height int64, in *transform.Input) error {
 		return fmt.Errorf("%w: height %d answered in the layout of a node older than CometBFT 0.38 (begin/end block events)",
 			ErrUnknownGeneration, height)
 	}
-	switch g := GenerationAt(height); g.Format {
+	switch g := a.chain.At(height); g.Format {
 	case FormatCurrent:
 		if g.DoubledEvents {
 			in.Results.FinalizeBlockEvents = undouble(in.Results.FinalizeBlockEvents)

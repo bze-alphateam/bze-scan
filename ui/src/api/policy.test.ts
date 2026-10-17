@@ -5,9 +5,9 @@ import { createQueryClient, immutable, live, reference, shouldRetry, status, TX_
 
 describe("policies", () => {
   it("holds the UI Design numbers", () => {
-    expect(live).toMatchObject({ staleTime: 7000, refetchInterval: 7000, refetchIntervalInBackground: false });
+    expect(live).toMatchObject({ staleTime: 4000, refetchInterval: 4000, refetchIntervalInBackground: false });
     expect(reference).toMatchObject({ staleTime: 60_000, refetchInterval: false });
-    expect(TX_PENDING_POLL_MS).toBe(7000);
+    expect(TX_PENDING_POLL_MS).toBe(4000);
     expect(TX_PENDING_WINDOW_MS).toBe(120_000);
     expect(immutable).toMatchObject({
       staleTime: Infinity,

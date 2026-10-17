@@ -247,6 +247,8 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "messages update")
 		case strings.Contains(s.sql, "UPDATE explorer.blocks AS t"):
 			out = append(out, "block update")
+		case strings.Contains(s.sql, "SET signatures_count"):
+			out = append(out, "signatures")
 		case strings.Contains(s.sql, "UPDATE explorer.blocks"):
 			out = append(out, "block times")
 		case strings.Contains(s.sql, "UPDATE explorer.index_failures"):
@@ -335,6 +337,34 @@ func TestRecordFailureMovesTheCursorInTheSameTransaction(t *testing.T) {
 	assert.Equal(t, []string{"failure", "cursor"}, sqlOf(tx))
 	assert.Equal(t, []any{int64(100), writer.FailureSourceLive, 3, "above tip"}, tx.stmts[0].args)
 	assert.True(t, tx.committed)
+}
+
+func TestUpdateSignaturesRewritesOnlyTheSignatureColumns(t *testing.T) {
+	db := newMockDB(49)
+	w := writer.NewLiveWriter(db)
+
+	require.NoError(t, w.UpdateSignatures(context.Background(), 100, []string{"AA", "BB", "CC"}))
+	require.Len(t, db.txs, 1)
+	tx := db.txs[0]
+	assert.Equal(t, []string{"signatures"}, sqlOf(tx))
+	assert.Contains(t, tx.stmts[0].sql, "WHERE height = $1")
+	assert.Contains(t, tx.stmts[0].sql, "explorer.validators", "power from the signers, as the insert")
+	assert.Equal(t, []any{int64(100), 3, []string{"AA", "BB", "CC"}}, tx.stmts[0].args)
+	assert.True(t, tx.committed)
+}
+
+func TestUpdateSignaturesWithoutSignersPassesAnEmptyArray(t *testing.T) {
+	db := newMockDB(49)
+	require.NoError(t, writer.NewLiveWriter(db).UpdateSignatures(context.Background(), 100, nil))
+	assert.Equal(t, []any{int64(100), 0, []string{}}, db.txs[0].stmts[0].args)
+}
+
+func TestFailedSignaturesUpdateRollsBack(t *testing.T) {
+	db := newMockDB(49)
+	db.execErr, db.execErrOn = errors.New("connection reset"), "SET signatures_count"
+	err := writer.NewLiveWriter(db).UpdateSignatures(context.Background(), 100, []string{"AA"})
+	require.ErrorContains(t, err, "update signatures 100")
+	assert.True(t, db.txs[0].rolledBack)
 }
 
 func TestCursorAndFloor(t *testing.T) {

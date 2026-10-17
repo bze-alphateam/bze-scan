@@ -215,6 +215,20 @@ describe("the votes", () => {
     expect(checks(p48, null)).toBeNull();
   });
 
+  it("knows a passed vote reached the quorum without a recorded turnout, and leaves the others unknown", () => {
+    const unrecorded = { ...p48, turnout_pct: null };
+    expect(checks({ ...unrecorded, status: "passed" }, rules)!.turnout).toEqual({ ok: true, value: null, need: "33.4" });
+    // Failed: passed, then its messages failed to run.
+    expect(checks({ ...unrecorded, status: "failed" }, rules)!.turnout.ok).toBe(true);
+    expect(checks({ ...unrecorded, status: "rejected" }, rules)!.turnout).toEqual({ ok: null, value: null, need: "33.4" });
+    const voting = checks({ ...unrecorded, status: "voting_period" }, rules)!;
+    expect(voting.turnout.ok).toBeNull();
+    expect(verdict(voting)).toEqual({ pass: null, text: "Turnout not known yet" });
+    // A failing check still decides.
+    const vetoed = { yes: "50", no: "0", abstain: "0", no_with_veto: "50" };
+    expect(verdict(checks({ tally: vetoed, turnout_pct: null, status: "voting_period" }, rules)!).text).toBe("Would fail: vetoed");
+  });
+
   it("lists the bonded validators that have not voted, and sums up who did", () => {
     const validatorVotes = votes.filter((v) => v.validator_operator);
     expect(notVoted(validators, validatorVotes).map((v) => v.moniker)).toEqual(["Deep Fields"]);
