@@ -92,6 +92,17 @@ test.describe("phone header", () => {
     await expect(page).toHaveURL(/\/validators$/);
     await expect(page.getByRole("dialog")).toBeHidden();
   });
+
+  // Opening the drawer must not focus its first link: the phone then draws
+  // Blocks with a focus ring, as if it were selected.
+  test("focuses the drawer panel, not its first link", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open menu" }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeFocused();
+    await expect(drawer.getByRole("link", { name: "Blocks" })).not.toBeFocused();
+  });
 });
 
 test.describe("not found", () => {
