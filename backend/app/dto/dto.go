@@ -284,7 +284,7 @@ func NewHallOfFame(h *repository.HallOfFame) HallOfFame {
 	out := HallOfFame{
 		List: List[Validator]{Items: make([]Validator, 0, len(h.Members))},
 		Rules: HallOfFameRules{
-			Proposals:          repository.RecentProposals,
+			Proposals:          repository.HallOfFameProposals,
 			MaxMissedBlocks:    repository.HallOfFameMaxMissedBlocks,
 			SignedBlocksWindow: h.SignedBlocksWindow,
 		},

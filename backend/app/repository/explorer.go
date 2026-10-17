@@ -407,25 +407,33 @@ type ValidatorSummary struct {
 	// LogoURL is the Keybase picture of its identity, nil without one.
 	LogoURL *string
 	// RecentVotes is how many of the RecentProposals (the last 10
-	// proposals whose voting ended, fewer while the chain has fewer) the
-	// validator's account voted on, whatever the option.
+	// proposals whose voting ended, fewer while the chain has fewer; the
+	// last HallOfFameProposals in the Hall of Fame) the validator's account
+	// voted on, whatever the option.
 	RecentVotes     int64
 	RecentProposals int64
 }
 
 // RecentProposals is how many of the last proposals whose voting ended a
-// validator's votes are counted on (recent_votes), and the Hall of Fame
-// asks a vote on each of.
+// validator's votes are counted on (recent_votes) in the validator list
+// and on the validator page.
 const RecentProposals = 10
+
+// HallOfFameProposals is how many of the last proposals whose voting ended
+// a Hall of Fame validator must have voted on; its members' recent_votes
+// count on those.
+const HallOfFameProposals = 2
 
 // HallOfFameMaxMissedBlocks is the most blocks of the slashing signing
 // window a Hall of Fame validator may have missed (99.9% of 10,000).
 const HallOfFameMaxMissedBlocks = 10
 
-// recentProposals is the CTE of the last RecentProposals proposals whose
-// voting period ended.
-var recentProposals = `recent AS (SELECT id FROM explorer.proposals WHERE voting_end_time <= now()
-		ORDER BY id DESC LIMIT ` + strconv.Itoa(RecentProposals) + `)`
+// recentProposals is the CTE of the last n proposals whose voting period
+// ended.
+func recentProposals(n int) string {
+	return `recent AS (SELECT id FROM explorer.proposals WHERE voting_end_time <= now()
+		ORDER BY id DESC LIMIT ` + strconv.Itoa(n) + `)`
+}
 
 // recentVoteCols counts a validators row's votes on the recent proposals,
 // then the recent proposals.
@@ -439,7 +447,7 @@ const recentVoteCols = `(SELECT count(*) FROM explorer.proposal_votes pv
 // table holds tens of rows, so the position is the keyset.
 func (r *Explorer) Validators(ctx context.Context, status *string, after int64, limit int) ([]ValidatorSummary, error) {
 	rows, err := r.db.Query(ctx, `
-		WITH `+recentProposals+`, v AS (
+		WITH `+recentProposals(RecentProposals)+`, v AS (
 			SELECT row_number() OVER (ORDER BY rank NULLS LAST,
 			         CASE status WHEN 'bonded' THEN 0 WHEN 'unbonding' THEN 1 ELSE 2 END,
 			         tokens DESC, operator_address) AS pos,
@@ -485,13 +493,13 @@ type HallOfFame struct {
 }
 
 // HallOfFame returns the bonded, unjailed validators whose account voted,
-// whatever the option, on every one of the last RecentProposals proposals
+// whatever the option, on every one of the last HallOfFameProposals proposals
 // whose voting ended (all of them while there are fewer; nobody while
 // none ended) and that missed at most HallOfFameMaxMissedBlocks blocks of
 // the signing window, by voting power ascending.
 func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 	rows, err := r.db.Query(ctx, `
-		WITH `+recentProposals+`
+		WITH `+recentProposals(HallOfFameProposals)+`
 		SELECT row_number() OVER (ORDER BY tokens, operator_address),
 		       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
 		       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
@@ -568,7 +576,7 @@ type ValidatorVote struct {
 func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDetail, error) {
 	var v ValidatorDetail
 	v.OperatorAddress = operator
-	err := r.db.QueryRow(ctx, `WITH `+recentProposals+`
+	err := r.db.QueryRow(ctx, `WITH `+recentProposals(RecentProposals)+`
 		SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
 			missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`,
 			account_address, consensus_address, consensus_pubkey, identity, website, security_contact, details,

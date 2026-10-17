@@ -160,7 +160,7 @@ export function CrownMark({ v, rules, seeAll, size = 13 }: CrownMarkProps) {
         <Check>{recentVotesText(v)}</Check>
         <Check>{fameMissedText(v, rules)}</Check>
         <Text as="span" color="fg.muted" mt="2px">
-          Active validators that vote on every proposal and almost never miss a block.
+          Active validators that vote on the latest proposals and almost never miss a block.
         </Text>
         {"href" in seeAll ? (
           <Link asChild color="accent.fg" alignSelf="flex-start" mt="2px">
