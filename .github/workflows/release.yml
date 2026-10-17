@@ -5,8 +5,7 @@ name: Release
 #   develop -> testnet: images tagged testnet-<sha8>, deployed to
 #              testnet-explorer.getbze.com
 #   main    -> mainnet: images tagged <sha8> (+ :latest), deployed to
-#              explorer.getbze.com only while the repository variable
-#              DEPLOY_MAINNET is "true"
+#              explorer.getbze.com
 #
 # Tag rule: a release is ONE tag for both images. Both are built on every
 # push, whatever changed (no path filters here), so every commit on a release
@@ -37,25 +36,21 @@ jobs:
     outputs:
       tag: ${{ steps.vars.outputs.tag }}
       deploy_dir: ${{ steps.vars.outputs.deploy_dir }}
-      deploy: ${{ steps.vars.outputs.deploy }}
       latest: ${{ steps.vars.outputs.latest }}
     steps:
       - name: Compute tag and deploy target
         id: vars
         env:
           SHA: ${{ github.sha }}
-          DEPLOY_MAINNET: ${{ vars.DEPLOY_MAINNET }}
         run: |
           sha=${SHA:0:8}
           if [ "$GITHUB_REF_NAME" = "develop" ]; then
             echo "tag=testnet-$sha" >> "$GITHUB_OUTPUT"
             echo "deploy_dir=testnet-explorer.getbze.com" >> "$GITHUB_OUTPUT"
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "latest=false" >> "$GITHUB_OUTPUT"
           else
             echo "tag=$sha" >> "$GITHUB_OUTPUT"
             echo "deploy_dir=explorer.getbze.com" >> "$GITHUB_OUTPUT"
-            echo "deploy=$([ "$DEPLOY_MAINNET" = "true" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
             echo "latest=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -90,9 +85,9 @@ jobs:
     with:
       tag: ${{ needs.vars.outputs.tag }}
       deploy_dir: ${{ needs.vars.outputs.deploy_dir }}
-      # An image that is about to be deployed must carry its network's build
-      # env; main without DEPLOY_MAINNET may still fall back to ui/.env.dist.
-      require_build_env: ${{ needs.vars.outputs.deploy == 'true' }}
+      # Every release image is deployed, so it must carry its network's
+      # build env (never the ui/.env.dist fallback of pull requests).
+      require_build_env: true
       latest: ${{ needs.vars.outputs.latest == 'true' }}
     secrets:
       DEPLOY_REPO_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
@@ -102,7 +97,6 @@ jobs:
   # after this dispatch (minus a minute of clock skew).
   deploy:
     needs: [vars, backend-image, ui-image]
-    if: needs.vars.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     env:
       DEPLOY_REPO: bze-alphateam/bze-deploy

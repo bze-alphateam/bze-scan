@@ -144,8 +144,5 @@ takes that target's build env, `<deploy dir>/build.env` of the deploy
 repository (sparse checkout with the `DEPLOY_REPO_TOKEN` organisation secret,
 on release runs only, so pull requests never see it; the file is checked for
 `NEXT_PUBLIC_` lines, never printed), builds, smoke-tests and pushes
-`:testnet-<sha8>` (develop) or `:<sha8>` and `:latest` (main). An image that
-is about to be deployed fails without its build env; only `main` while its
-deploys are off falls back to `ui/.env.dist`, with a warning in the run
-summary: such an image points the browser at localhost and is for testing
-only.
+`:testnet-<sha8>` (develop) or `:<sha8>` and `:latest` (main). Every release
+image is deployed, so a release run fails without its build env.
