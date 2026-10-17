@@ -79,6 +79,3 @@ backend + UI next to the live pair, switches traffic once both are healthy
 and stops the old pair. A failed migration or health check leaves the
 previous release live and turns the run red. Migrations only add, so a
 rollback is a deploy of an older tag.
-
-Deploys from `main` run only while the repository variable `DEPLOY_MAINNET`
-is `true`; until then a push to `main` publishes the images and stops.
