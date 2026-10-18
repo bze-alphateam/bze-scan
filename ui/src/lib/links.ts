@@ -108,10 +108,11 @@ export function websiteLink(website: string | null): { href: string; text: strin
 
 /**
  * Where people vote on proposal `id`: the explorer is read-only, so the
- * proposal page lists these as data. Add a destination here as one opens.
+ * proposal page lists these as data. The BZE Staking app's proposal page
+ * votes with the staked BZE (Keplr, Leap and the other wallets it supports).
  */
 export function voteDestinations(id: number): NavLink[] {
-  return [{ label: "Vote on Ping.pub with Keplr or Leap", href: `${env.pingPubUrl}/gov/${id}` }];
+  return [{ label: "Vote in the BZE Staking app", href: `${externalLinks.staking}/governance/${id}` }];
 }
 
 /** A proposal on Ping.pub. */
