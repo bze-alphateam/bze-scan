@@ -208,12 +208,15 @@ func TestASecondBackfillCannotTakeTheLock(t *testing.T) {
 	e.assertComplete(t)
 }
 
+// The command runs with the backfill's real retry backoff (minutes per
+// failing height), so its floor sits above the failing height 24998319.
 func TestBackfillCommandExitsZeroWhenDone(t *testing.T) {
 	e := newBackfillEnv(t)
 	t.Chdir(t.TempDir())
+	floor := h319 + 1
 	for k, v := range map[string]string{
 		"DATABASE_URL": e.url, "ARCHIVE_RPC_URL": e.archive.URL, "LOG_LEVEL": "warn",
-		"BACKFILL_FLOOR": strconv.FormatInt(backfillFloor, 10), "BACKFILL_WORKERS": "3", "BACKFILL_BATCH": "4",
+		"BACKFILL_FLOOR": strconv.FormatInt(floor, 10), "BACKFILL_WORKERS": "3", "BACKFILL_BATCH": "4",
 		"BACKFILL_RATE_LIMIT": "1000",
 	} {
 		t.Setenv(k, v)
@@ -227,7 +230,9 @@ func TestBackfillCommandExitsZeroWhenDone(t *testing.T) {
 	}
 
 	require.NoError(t, run(), "exit 0")
-	e.assertComplete(t)
+	assert.Equal(t, backfilled()[floor-backfillFloor-1:], e.heights(t), "every height from the floor to the ceiling")
+	assert.Empty(t, queryStrings(t, e.db, `SELECT height::text FROM explorer.index_failures`))
+	assert.Equal(t, "done 24998330 24998320 24998320 24998320 11", e.checkpoint(t))
 
 	// Locked by another process: an error, so exit 1.
 	release, ok, err := backfill.NewPGLocker(e.url).TryLock(context.Background(), backfill.JobMain)
