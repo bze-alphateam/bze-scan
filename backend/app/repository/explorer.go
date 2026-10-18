@@ -412,6 +412,35 @@ type ValidatorSummary struct {
 	// voted on, whatever the option.
 	RecentVotes     int64
 	RecentProposals int64
+	// LastSignedHeight is the highest block it signed since the explorer
+	// watches signatures, nil when it signed none since.
+	LastSignedHeight *int64
+	// MissedInARow is how many blocks in a row up to the live cursor an
+	// active (bonded, unjailed) validator did not sign, counted from the
+	// latest of its last signature, its last return to the active set and
+	// the start of the watch; nil for any other validator or before the live
+	// indexer wrote.
+	MissedInARow *int64
+}
+
+// OfflineMissedInARow is how many blocks in a row an active validator must
+// miss to be shown offline.
+const OfflineMissedInARow = 10
+
+// signingCols are last_signed_height and the missed-in-a-row count of the
+// validators row aliased t (see ValidatorSummary).
+func signingCols(t string) string {
+	return t + `.last_signed_height,
+		CASE WHEN ` + t + `.status = 'bonded' AND NOT ` + t + `.jailed THEN (
+		  SELECT CASE WHEN s.since IS NULL THEN NULL ELSE GREATEST(c.h - s.since, 0) END
+		    FROM (SELECT value::bigint AS h FROM explorer.indexer_state WHERE key = 'last_indexed_height') c,
+		         (SELECT GREATEST(` + t + `.last_signed_height,
+		                 (SELECT max(e.height) FROM explorer.validator_events e
+		                   WHERE e.operator_address = ` + t + `.operator_address AND e.kind IN ('bonded', 'unjailed')),
+		                 (SELECT coalesce(max(value) FILTER (WHERE key = 'signing_watch_from'),
+		                                  max(value) FILTER (WHERE key = 'live_floor'))::bigint
+		                    FROM explorer.indexer_state)) AS since) s)
+		END`
 }
 
 // RecentProposals is how many of the last proposals whose voting ended a
@@ -452,8 +481,9 @@ func (r *Explorer) Validators(ctx context.Context, status *string, after int64, 
 			         CASE status WHEN 'bonded' THEN 0 WHEN 'unbonding' THEN 1 ELSE 2 END,
 			         tokens DESC, operator_address) AS pos,
 			       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
-			       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
-			  FROM explorer.validators
+			       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`,
+			       `+signingCols("vl")+`
+			  FROM explorer.validators vl
 			 WHERE $1::text IS NULL OR status = $1)
 		SELECT * FROM v WHERE pos > $2 ORDER BY pos LIMIT $3`, status, after, limit)
 	if err != nil {
@@ -475,7 +505,7 @@ func scanValidatorSummaries(rows pgx.Rows) ([]ValidatorSummary, error) {
 		var v ValidatorSummary
 		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
 			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
-			&v.RecentVotes, &v.RecentProposals); err != nil {
+			&v.RecentVotes, &v.RecentProposals, &v.LastSignedHeight, &v.MissedInARow); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -502,7 +532,8 @@ func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 		WITH `+recentProposals(HallOfFameProposals)+`
 		SELECT row_number() OVER (ORDER BY tokens, operator_address),
 		       rank, moniker, operator_address, tokens::text, voting_power_pct::text, commission_rate::text,
-		       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`
+		       missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`,
+		       `+signingCols("v")+`
 		  FROM explorer.validators v
 		 WHERE status = 'bonded' AND NOT jailed AND missed_blocks <= $1
 		   AND EXISTS (SELECT 1 FROM recent)
@@ -579,13 +610,15 @@ func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDe
 	err := r.db.QueryRow(ctx, `WITH `+recentProposals(RecentProposals)+`
 		SELECT rank, moniker, tokens::text, voting_power_pct::text, commission_rate::text,
 			missed_blocks, signed_blocks_window, jailed, status, logo_url, `+recentVoteCols+`,
+			`+signingCols("vl")+`,
 			account_address, consensus_address, consensus_pubkey, identity, website, security_contact, details,
 			tombstoned, jailed_until, delegator_shares::text, commission_max_rate::text,
 			commission_max_change_rate::text, commission_update_time, min_self_delegation::text,
 			self_delegation::text, delegator_count, first_seen_height, first_seen_time, updated_at
-		FROM explorer.validators WHERE operator_address = $1`, operator).Scan(
+		FROM explorer.validators vl WHERE operator_address = $1`, operator).Scan(
 		&v.Rank, &v.Moniker, &v.Tokens, &v.VotingPowerPct, &v.CommissionRate,
 		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL, &v.RecentVotes, &v.RecentProposals,
+		&v.LastSignedHeight, &v.MissedInARow,
 		&v.AccountAddress, &v.ConsensusAddress, &v.ConsensusPubkey, &v.Identity, &v.Website, &v.SecurityContact,
 		&v.Details, &v.Tombstoned, &v.JailedUntil, &v.DelegatorShares, &v.CommissionMaxRate,
 		&v.CommissionMaxChangeRate, &v.CommissionUpdateTime, &v.MinSelfDelegation,

@@ -20,7 +20,7 @@ import type { ReactNode } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useAllValidators, useHallOfFame, useParams, useValidator } from "@/api/hooks";
+import { useAllValidators, useHallOfFame, useParams, useStats, useValidator } from "@/api/hooks";
 import type { HallOfFame, ValidatorDetail, ValidatorsSummary, ValidatorVote } from "@/api/types";
 import { AppButton } from "@/components/layout/app-button";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -58,6 +58,7 @@ import {
 } from "@/render/validators";
 
 import { CrownMark, Moniker } from "./hall-of-fame";
+import { OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
 
 type Fame = Pick<HallOfFame, "items" | "rules">;
 
@@ -103,6 +104,7 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
             <Tag tone={statusTone(v)} data-testid="validator-status">
               {statusLine(v, activeCount)}
             </Tag>
+            <OnlineTag v={v} />
             {site && (
               <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" color="accent.fg">
                 {site.text} ↗
@@ -133,7 +135,17 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
   );
 }
 
-function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: ValidatorsSummary | null; window: number | null }) {
+function Tiles({
+  v,
+  summary,
+  window,
+  avgBlockMs,
+}: {
+  v: ValidatorDetail;
+  summary: ValidatorsSummary | null;
+  window: number | null;
+  avgBlockMs: number | null;
+}) {
   const yours = rewardRateAfterCommission(summary?.reward_rate, v.commission_rate);
   const signedWindow = v.signed_blocks_window ?? window;
   return (
@@ -157,7 +169,16 @@ function Tiles({ v, summary, window }: { v: ValidatorDetail; summary: Validators
             : "the base rate minus the commission"
         }
       />
-      <Tile label="Uptime" value={uptimeText(v.uptime)} sub={uptimeDetail(v.missed_blocks, signedWindow)} />
+      <Tile
+        label="Uptime"
+        value={
+          <Flex as="span" align="center" gap="2">
+            {uptimeText(v.uptime)}
+            <OnlineDot v={v} avgBlockMs={avgBlockMs} />
+          </Flex>
+        }
+        sub={uptimeDetail(v.missed_blocks, signedWindow)}
+      />
     </SimpleGrid>
   );
 }
@@ -426,13 +447,15 @@ export function ValidatorSkeleton() {
 export function ValidatorView({ v }: { v: ValidatorDetail }) {
   const all = useAllValidators();
   const params = useParams();
+  const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
   // Membership marks wait for the Hall of Fame; the page never does.
   const fame = useHallOfFame();
   const activeCount = all.data ? splitValidators(all.data.items).active.length : null;
   return (
     <Box>
       <Header v={v} activeCount={activeCount} fame={fame.data ?? null} />
-      <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} />
+      <OfflineCallout v={v} params={params.data} avgBlockMs={avgBlockMs} />
+      <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} avgBlockMs={avgBlockMs} />
       <About v={v} />
       <Grid
         templateColumns={{

@@ -16,7 +16,10 @@
       "recent_votes": {
         "voted": 10,
         "of": 10
-      }
+      },
+      "offline": false,
+      "missed_in_a_row": 0,
+      "last_signed_height": 25120450
     },
     {
       "rank": 1,
@@ -34,7 +37,10 @@
       "recent_votes": {
         "voted": 10,
         "of": 10
-      }
+      },
+      "offline": false,
+      "missed_in_a_row": 0,
+      "last_signed_height": 25120450
     }
   ],
   "next_cursor": null,

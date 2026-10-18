@@ -268,6 +268,12 @@ export interface Validator {
   signed_blocks_window: number | null;
   /** Of the last `of` proposals whose voting ended (ten, fewer while the chain has fewer), how many it voted on. */
   recent_votes: { voted: number; of: number };
+  /** An active validator that missed the last 10 blocks or more in a row; null outside the active set or while unknown. */
+  offline: boolean | null;
+  /** How many blocks in a row up to the latest indexed one an active validator did not sign; null like `offline`. */
+  missed_in_a_row: number | null;
+  /** The highest block it was seen signing; null when none since the explorer watches signatures. */
+  last_signed_height: number | null;
 }
 
 export interface ValidatorsSummary {

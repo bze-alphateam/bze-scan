@@ -1,9 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { ChainParams, HallOfFame, ValidatorDetail, ValidatorList } from "@/api/types";
+import type { ChainParams, HallOfFame, Stats, ValidatorDetail, ValidatorList } from "@/api/types";
 import { websiteLink } from "@/lib/links";
 import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
@@ -11,6 +11,7 @@ import params from "../../../test/fixtures/api/v1/params.json";
 import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
 import detail from "../../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
+import stats from "../../../test/fixtures/api/v1/stats.json";
 
 import { ValidatorPage } from "./validator-page";
 
@@ -53,7 +54,7 @@ describe("ValidatorPage", () => {
       "Staked with them50M BZE12.3% of all staked BZE",
       "Commission5%can change by at most 5 points a day, never above 30%",
       "Your reward rate here≈ 8.5%8.9% base, minus the 5% commission",
-      "Uptime99.9%missed 1 of the last 10,000 blocks",
+      "Uptime99.9%OnlineSigned the latest block, 25,120,450.missed 1 of the last 10,000 blocks",
     ]);
 
     const about = screen.getByRole("heading", { name: "About" }).closest("section")!;
@@ -182,6 +183,37 @@ describe("ValidatorPage", () => {
     expect(screen.getByTestId("validator-not_found")).toHaveAttribute("data-state", "neutral");
     expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Validators/bzevaloper1hc9…5w6c");
     expect(screen.getByRole("link", { name: "Look it up on Ping.pub ↗" })).toHaveAttribute("href", expect.stringContaining(`/staking/${OP}`));
+  });
+
+  it("tags an active validator online, with no callout", async () => {
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api() });
+    expect(await screen.findByTestId("online-tag")).toHaveTextContent("Online");
+    expect(screen.queryByTestId("offline-callout")).not.toBeInTheDocument();
+  });
+
+  it("tags an offline validator and says when it gets jailed if it stays offline", async () => {
+    const offline = { ...detail, offline: true, missed_in_a_row: 6554, last_signed_height: 25113896, missed_blocks: 6554 };
+    renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(offline, { stats: () => Promise.resolve(stats as Stats) }),
+    });
+    expect(await screen.findByTestId("online-tag")).toHaveTextContent("Offline");
+    const callout = await screen.findByTestId("offline-callout");
+    expect(callout).toHaveAttribute("data-tone", "bad");
+    // 6,554 blocks at 5.9 s ≈ 10.7 h; jailed past 9,500 missed (5% of 10,000 must be signed): 2,947 blocks ≈ 4.8 h.
+    await waitFor(() =>
+      expect(callout).toHaveTextContent(
+        "Offline: not signing blocksHoneycomb missed the last 6,554 blocks in a row, about 11 hours. Last signed block 25,113,896." +
+          "If it stays offline it gets jailed in about 5 hours. Stakers then earn nothing from it and lose 0.01% of their stake.",
+      ),
+    );
+  });
+
+  it("gives a validator outside the active set no online tag", async () => {
+    const away = { ...detail, status: "unbonded", rank: null, offline: null, missed_in_a_row: null };
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api(away) });
+    expect(await screen.findByRole("heading", { level: 1, name: "Honeycomb" })).toBeInTheDocument();
+    expect(screen.queryByTestId("online-tag")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("online-dot")).not.toBeInTheDocument();
   });
 
   it("offers a retry when the API fails", async () => {
