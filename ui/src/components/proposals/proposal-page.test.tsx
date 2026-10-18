@@ -145,10 +145,11 @@ describe("ProposalPage", () => {
     expect(votes).toHaveTextContent("5 accounts have voted so far.");
 
     const vote = screen.getByTestId("want-to-vote");
-    expect(within(vote).getByRole("link", { name: /Vote on Ping.pub with Keplr or Leap/ })).toHaveAttribute(
+    expect(within(vote).getByRole("link", { name: /Vote in the BZE Staking app/ })).toHaveAttribute(
       "href",
-      expect.stringMatching(/\/gov\/48$/),
+      "https://staking.getbze.com/governance/48",
     );
+    expect(within(vote).queryByRole("link", { name: /Ping.pub/ })).not.toBeInTheDocument();
     expect(screen.getAllByTestId("timeline-item").map((i) => i.firstChild?.nextSibling?.firstChild?.textContent)).toEqual([
       "Submitted",
       "Deposit of 100,000 BZE reached, voting opened",

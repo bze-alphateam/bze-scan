@@ -52,7 +52,7 @@ test.describe("proposal page", () => {
     const votes = page.getByTestId("votes-card");
     await expect(votes.getByTestId("check")).toHaveCount(3);
     await expect(votes.getByTestId("verdict")).toHaveText("On track to pass");
-    await expect(page.getByTestId("want-to-vote").getByRole("link", { name: /Vote on Ping.pub/ })).toHaveAttribute("href", /\/gov\/48$/);
+    await expect(page.getByTestId("want-to-vote").getByRole("link", { name: /Vote in the BZE Staking app/ })).toHaveAttribute("href", /\/governance\/48$/);
 
     const who = page.getByTestId("who-voted");
     await expect(who.getByTestId("validator-vote")).toHaveCount(2);
