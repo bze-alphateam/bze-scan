@@ -2,6 +2,7 @@ import BigNumber from "bignumber.js";
 
 import type { ChainParams, HallOfFameRules, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
 import { formatAmount, formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
+import { aboutDuration } from "@/lib/parameters";
 
 // The validators pages' words and numbers, kept pure so they are tested
 // without rendering. Rates from the API: `commission_*` are fractions
@@ -255,4 +256,64 @@ export function voteTone(v: Pick<ValidatorVote, "option">): "green" | "red" | "g
 /** `Yes`, `No with veto`; `Split vote` for a weighted one. */
 export function voteOption(v: Pick<ValidatorVote, "option">): string {
   return v.option ? OPTIONS[v.option] ?? humanise(v.option) : "Split vote";
+}
+
+/** An active validator's signing right now; null outside the active set or while unknown. */
+export type OnlineState = "online" | "offline";
+
+export function onlineState(v: Pick<Validator, "offline">): OnlineState | null {
+  if (v.offline == null) return null;
+  return v.offline ? "offline" : "online";
+}
+
+/** "about 11 hours" for `blocks` blocks at the average block time; null without one. */
+function blocksDuration(blocks: number, avgBlockMs: number | null | undefined): string | null {
+  if (!avgBlockMs || avgBlockMs <= 0) return null;
+  return aboutDuration((blocks * avgBlockMs) / 1000);
+}
+
+/** The lines of the online / offline card: what the dot means for this validator. */
+export function onlineLines(
+  v: Pick<Validator, "offline" | "missed_in_a_row" | "last_signed_height">,
+  avgBlockMs?: number | null,
+): string[] {
+  const missed = v.missed_in_a_row ?? 0;
+  const last = v.last_signed_height;
+  if (v.offline) {
+    const span = blocksDuration(missed, avgBlockMs);
+    return [
+      `Missed the last ${formatCount(missed)} blocks in a row${span ? `, ${span}` : ""}.`,
+      last != null ? `Last signed block ${formatCount(last)}.` : "Not seen signing since the explorer started watching.",
+    ];
+  }
+  if (last == null) return ["Signing blocks."];
+  if (missed === 0) return [`Signed the latest block, ${formatCount(last)}.`];
+  return [`Signed block ${formatCount(last)}, ${formatCount(missed)} ${missed === 1 ? "block" : "blocks"} ago.`];
+}
+
+/**
+ * How long an offline validator has before the slashing module jails it, if every next block is missed too:
+ * "about 2 hours"; "any moment now" when the limit is reached; null when the parameters or the block time are not known.
+ */
+export function jailedInText(
+  v: Pick<Validator, "missed_blocks" | "signed_blocks_window">,
+  params: ChainParams | undefined,
+  avgBlockMs: number | null | undefined,
+): string | null {
+  const window = v.signed_blocks_window ?? signedBlocksWindow(params);
+  const minSigned = new BigNumber(String(params?.slashing?.params?.min_signed_per_window ?? "NaN"));
+  if (window == null || v.missed_blocks == null || !minSigned.isFinite()) return null;
+  // x/slashing: jailed once missed > window − trunc(window × min_signed_per_window).
+  const maxMissed = window - minSigned.times(window).integerValue(BigNumber.ROUND_DOWN).toNumber();
+  const left = maxMissed - v.missed_blocks + 1;
+  if (left <= 1) return "any moment now";
+  return blocksDuration(left, avgBlockMs);
+}
+
+/** The downtime penalty as a percentage of the stake: "0.01%"; null when unknown. */
+export function downtimeSlashText(params: ChainParams | undefined): string | null {
+  const raw = params?.slashing?.params?.slash_fraction_downtime;
+  const f = new BigNumber(String(raw ?? "NaN"));
+  // Small fractions keep their digits (0.0001 is 0.01%, not 0%).
+  return f.isFinite() ? `${f.times(100).decimalPlaces(4).toFixed()}%` : null;
 }

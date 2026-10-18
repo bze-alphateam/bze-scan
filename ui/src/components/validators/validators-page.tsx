@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useId, useMemo, useRef, useState } from "react";
 import { LuTriangleAlert } from "react-icons/lu";
 
-import { useAllValidators, useHallOfFame, useParams } from "@/api/hooks";
+import { useAllValidators, useHallOfFame, useParams, useStats } from "@/api/hooks";
 import type { HallOfFame, HallOfFameRules, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Chip } from "@/components/ui/chip";
@@ -34,6 +34,7 @@ import {
 } from "@/render/validators";
 
 import { Crown, CrownMark, Moniker } from "./hall-of-fame";
+import { OnlineDot } from "./online-status";
 
 type Fame = Pick<HallOfFame, "items" | "rules">;
 
@@ -79,7 +80,7 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
 const COLUMNS = {
   base: "24px minmax(0, 1fr)",
   c2: "28px minmax(0, 1fr) 170px 100px",
-  c3: "28px minmax(0, 1fr) 170px 100px 80px",
+  c3: "28px minmax(0, 1fr) 170px 100px 104px",
 };
 const FAME_COLUMNS = {
   base: "24px minmax(0, 1fr)",
@@ -112,7 +113,7 @@ interface FameMarks {
   seeAll: () => void;
 }
 
-function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
+function ValidatorRow({ v, fame, avgBlockMs }: { v: Validator; fame: FameMarks | null; avgBlockMs: number | null }) {
   const member = fame?.members.get(v.operator_address);
   const tone = uptimeTone(v.uptime);
   return (
@@ -130,6 +131,10 @@ function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
               </NextLink>
             </Link>
             {member && fame && <CrownMark v={member} rules={fame.rules} seeAll={{ onClick: fame.seeAll }} />}
+            {/* Below c3 the uptime column is hidden, so the dot follows the name. */}
+            <Box as="span" hideFrom="c3" ms="1">
+              <OnlineDot v={v} avgBlockMs={avgBlockMs} align="start" />
+            </Box>
             {v.jailed && (
               <Tag tone="bad" ms="2" verticalAlign="1px">
                 Jailed
@@ -152,20 +157,18 @@ function ValidatorRow({ v, fame }: { v: Validator; fame: FameMarks | null }) {
       <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
         {rateText(v.commission_rate)}
       </Text>
-      <Text
-        hideBelow="c3"
-        textAlign="right"
-        fontFamily="mono"
-        fontSize="13px"
-        color={tone === "bad" ? "neg.fg" : tone === "muted" ? "fg.muted" : "fg"}
-      >
-        {uptimeText(v.uptime)}
-      </Text>
+      <Flex hideBelow="c3" justify="flex-end" align="center" gap="1" fontFamily="mono" fontSize="13px">
+        <Text as="span" color={tone === "bad" ? "neg.fg" : tone === "muted" ? "fg.muted" : "fg"}>
+          {uptimeText(v.uptime)}
+        </Text>
+        <OnlineDot v={v} avgBlockMs={avgBlockMs} />
+      </Flex>
     </ListRow>
   );
 }
 
 function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame: FameMarks | null }) {
+  const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
   return (
     <ListPanel overflow="visible">
       <ListHead templateColumns={COLUMNS} aria-hidden>
@@ -183,7 +186,7 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
       </ListHead>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} fame={fame} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame} avgBlockMs={avgBlockMs} />
         ))}
       </Box>
       {items.length === 0 && (
@@ -347,7 +350,8 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
   const footnote = (
     <Text color="fg.muted" fontSize="13px">
       Commission is the share of your rewards the validator keeps. Uptime is the share of the last {formatCount(window)} blocks the
-      validator signed.
+      validator signed. The dot next to it is green while an active validator signs blocks, red once it missed the last 10 in a
+      row.
     </Text>
   );
 

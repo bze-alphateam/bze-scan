@@ -16,7 +16,10 @@
       "recent_votes": {
         "voted": 10,
         "of": 10
-      }
+      },
+      "offline": false,
+      "missed_in_a_row": 0,
+      "last_signed_height": 25120450
     },
     {
       "rank": 2,
@@ -34,7 +37,10 @@
       "recent_votes": {
         "voted": 10,
         "of": 10
-      }
+      },
+      "offline": false,
+      "missed_in_a_row": 0,
+      "last_signed_height": 25120450
     },
     {
       "rank": 3,
@@ -52,7 +58,10 @@
       "recent_votes": {
         "voted": 10,
         "of": 10
-      }
+      },
+      "offline": true,
+      "missed_in_a_row": 160,
+      "last_signed_height": 25120290
     },
     {
       "rank": null,
@@ -70,7 +79,10 @@
       "recent_votes": {
         "voted": 4,
         "of": 10
-      }
+      },
+      "offline": null,
+      "missed_in_a_row": null,
+      "last_signed_height": null
     },
     {
       "rank": null,
@@ -88,7 +100,10 @@
       "recent_votes": {
         "voted": 0,
         "of": 10
-      }
+      },
+      "offline": null,
+      "missed_in_a_row": null,
+      "last_signed_height": null
     }
   ],
   "next_cursor": null,

@@ -240,6 +240,13 @@ type Validator struct {
 	MissedBlocks       *int64      `json:"missed_blocks"`
 	SignedBlocksWindow *int64      `json:"signed_blocks_window"`
 	RecentVotes        RecentVotes `json:"recent_votes"`
+	// Offline is whether an active validator missed the last
+	// repository.OfflineMissedInARow blocks or more in a row, null for a
+	// validator outside the active set or while unknown. MissedInARow is
+	// that count, LastSignedHeight the highest block it was seen signing.
+	Offline          *bool  `json:"offline"`
+	MissedInARow     *int64 `json:"missed_in_a_row"`
+	LastSignedHeight *int64 `json:"last_signed_height"`
 }
 
 // RecentVotes is how many (Voted) of the last Of proposals whose voting
@@ -258,8 +265,20 @@ func NewValidator(v repository.ValidatorSummary) Validator {
 		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
 		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow), LogoURL: v.LogoURL,
 		MissedBlocks: v.MissedBlocks, SignedBlocksWindow: v.SignedBlocksWindow,
-		RecentVotes: RecentVotes{Voted: v.RecentVotes, Of: v.RecentProposals},
+		RecentVotes:  RecentVotes{Voted: v.RecentVotes, Of: v.RecentProposals},
+		Offline:      offline(v.MissedInARow),
+		MissedInARow: v.MissedInARow, LastSignedHeight: v.LastSignedHeight,
 	}
+}
+
+// offline is whether missedInARow reaches repository.OfflineMissedInARow,
+// nil when it is unknown.
+func offline(missedInARow *int64) *bool {
+	if missedInARow == nil {
+		return nil
+	}
+	off := *missedInARow >= repository.OfflineMissedInARow
+	return &off
 }
 
 // HallOfFame is GET /api/v1/validators/hall-of-fame: the validators that

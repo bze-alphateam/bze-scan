@@ -2,10 +2,11 @@
 
 import { Box, Link, Text, type BoxProps } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { LuCrown } from "react-icons/lu";
 
 import type { HallOfFameRules, Validator } from "@/api/types";
+import { useHoverCard } from "@/components/ui/hover-card";
 import { fameMissedText, recentVotesText } from "@/render/validators";
 
 /** The crown: the Hall of Fame's mark, in the warn tone. Never an emoji. */
@@ -46,48 +47,16 @@ interface CrownMarkProps {
  */
 export function CrownMark({ v, rules, seeAll, size = 13 }: CrownMarkProps) {
   const id = useId();
-  const root = useRef<HTMLSpanElement>(null);
-  const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const [tapped, setTapped] = useState(false);
-  const open = hover || focus || tapped;
-
-  // A tap opens the card until the next tap elsewhere.
-  useEffect(() => {
-    if (!tapped) return;
-    const away = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setTapped(false);
-    };
-    document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
-  }, [tapped]);
-
-  const close = () => {
-    setHover(false);
-    setFocus(false);
-    setTapped(false);
-  };
+  const { open, close, toggle, rootProps } = useHoverCard();
 
   return (
     <Box
       as="span"
-      ref={root}
+      {...rootProps}
       position="relative"
       display="inline-flex"
       verticalAlign="-2px"
       ms="6px"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocus(true)}
-      onBlur={(e: FocusEvent) => {
-        if (!root.current?.contains(e.relatedTarget as Node | null)) {
-          setFocus(false);
-          setTapped(false);
-        }
-      }}
-      onKeyDown={(e: KeyboardEvent) => {
-        if (e.key === "Escape") close();
-      }}
       data-testid="fame-crown"
     >
       <Box
@@ -106,7 +75,7 @@ export function CrownMark({ v, rules, seeAll, size = 13 }: CrownMarkProps) {
         aria-label="Hall of Fame member"
         aria-describedby={id}
         aria-expanded={open}
-        onClick={() => setTapped((t) => !t)}
+        onClick={toggle}
       >
         <Crown size={size} />
       </Box>
