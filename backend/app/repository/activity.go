@@ -87,18 +87,22 @@ func (r *Explorer) activity(ctx context.Context, address string, category *strin
 	if before != nil {
 		beforeHeight, beforeTxIndex = &before.Height, &before.TxIndex
 	}
+	// The page is cut from account_activity alone, then joined: joined
+	// first, every row an OFFSET skips would look up its transaction, label
+	// and validator too.
 	rows, err := r.db.Query(ctx, `SELECT a.height, a.tx_index, a.time, t.hash, a.kind, a.category,
 			a.is_signer, a.success, a.counterparty, l.name, l.kind, v.moniker, a.deltas, a.msg_types, a.details,
 			CASE WHEN a.is_signer OR t.fee_payer = a.address THEN t.fee END
-		FROM explorer.account_activity a
+		FROM (SELECT * FROM explorer.account_activity
+			WHERE address = $1
+			  AND ($2::text IS NULL OR category = $2)
+			  AND ($3::bigint IS NULL OR (height, tx_index) < ($3::bigint, $4::integer))
+			ORDER BY height DESC, tx_index DESC
+			LIMIT $5 OFFSET $6) a
 		LEFT JOIN explorer.transactions t ON t.height = a.height AND t.tx_index = a.tx_index
 		LEFT JOIN explorer.labels l ON l.address = a.counterparty
 		LEFT JOIN explorer.validators v ON v.operator_address = a.counterparty
-		WHERE a.address = $1
-		  AND ($2::text IS NULL OR a.category = $2)
-		  AND ($3::bigint IS NULL OR (a.height, a.tx_index) < ($3::bigint, $4::integer))
-		ORDER BY a.height DESC, a.tx_index DESC
-		LIMIT $5 OFFSET $6`, address, category, beforeHeight, beforeTxIndex, limit, offset)
+		ORDER BY a.height DESC, a.tx_index DESC`, address, category, beforeHeight, beforeTxIndex, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("activity %s: %w", address, err)
 	}

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -122,22 +123,38 @@ func (r *Explorer) BlockTransfers(ctx context.Context, height int64, after *Tran
 	return out, nil
 }
 
-// denomVolumeSQL counts and sums the transfers rows of a denom in the
-// blocks newer than the window before the latest indexed block (not the
-// wall clock, like the home tiles). The lowest height of the window is an
-// init plan, so the (denom, height) index and run-time partition pruning
-// serve the scan.
+// windowStartSQL finds the lowest height of the blocks newer than the
+// window before the latest indexed block (not the wall clock, like the home
+// tiles). Block time grows with height (CometBFT's BFT time), so that is the
+// oldest block of the window by time: both ends are read on the time index
+// of each partition, never walking a partition's rows. A min(height) over
+// the same filter walks every partition's primary key from its lowest
+// height instead, filtering on time: about a second per ten million blocks.
+const windowStartSQL = `SELECT b.height FROM explorer.blocks b
+	WHERE b.time > (SELECT max(time) FROM explorer.blocks) - $1 * interval '1 second'
+	ORDER BY b.time LIMIT 1`
+
+// denomVolumeSQL counts and sums the transfers rows of a denom from a
+// height on. The height is a parameter, not a subquery, so the planner
+// prunes the partitions below it and costs the scan on the (denom, height)
+// index for what it is.
 const denomVolumeSQL = `SELECT count(*), coalesce(sum(x.amount), 0)::text
 	FROM explorer.transfers x
-	WHERE x.denom = $1 AND x.height >= (
-		SELECT min(b.height) FROM explorer.blocks b
-		 WHERE b.time > (SELECT max(time) FROM explorer.blocks) - $2 * interval '1 second')`
+	WHERE x.denom = $1 AND x.height >= $2`
 
 // DenomVolume returns the transfers of denom in the window before the
 // latest indexed block; none before the first block.
 func (r *Explorer) DenomVolume(ctx context.Context, denom string, window time.Duration) (*TransferVolume, error) {
+	var from int64
+	err := r.db.QueryRow(ctx, windowStartSQL, window.Seconds()).Scan(&from)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &TransferVolume{Amount: "0"}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("denom volume %s: window start: %w", denom, err)
+	}
 	var v TransferVolume
-	if err := r.db.QueryRow(ctx, denomVolumeSQL, denom, window.Seconds()).Scan(&v.Count, &v.Amount); err != nil {
+	if err := r.db.QueryRow(ctx, denomVolumeSQL, denom, from).Scan(&v.Count, &v.Amount); err != nil {
 		return nil, fmt.Errorf("denom volume %s: %w", denom, err)
 	}
 	return &v, nil
