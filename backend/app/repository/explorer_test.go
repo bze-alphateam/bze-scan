@@ -37,6 +37,28 @@ type row struct{ err error }
 
 func (r row) Scan(...any) error { return r.err }
 
+// scriptedDB answers its QueryRow calls in order with rows' scan funcs.
+type scriptedDB struct {
+	rows []func(dest ...any) error
+	sql  []string
+	args [][]any
+}
+
+func (s *scriptedDB) Query(_ context.Context, sql string, args ...any) (pgx.Rows, error) {
+	s.sql, s.args = append(s.sql, sql), append(s.args, args)
+	return nil, errDB
+}
+
+func (s *scriptedDB) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
+	s.sql, s.args = append(s.sql, sql), append(s.args, args)
+	scan := s.rows[len(s.sql)-1]
+	return scriptedRow(scan)
+}
+
+type scriptedRow func(dest ...any) error
+
+func (r scriptedRow) Scan(dest ...any) error { return r(dest...) }
+
 func TestBlocksCursorAddsTheHeightPredicate(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
 	r := repository.NewExplorer(db)

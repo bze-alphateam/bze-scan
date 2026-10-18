@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 )
@@ -80,7 +82,39 @@ func TestDenomVolumeWindowEndsAtTheLatestBlock(t *testing.T) {
 	db := &fakeDB{rowErr: errDB}
 	_, err := repository.NewExplorer(db).DenomVolume(context.Background(), "ubze", 24*time.Hour)
 	assert.ErrorIs(t, err, errDB)
-	assert.Contains(t, db.sql[0], "x.denom = $1 AND x.height >= (")
-	assert.Contains(t, db.sql[0], "b.time > (SELECT max(time) FROM explorer.blocks) - $2 * interval '1 second'")
-	assert.Equal(t, []any{"ubze", float64(86400)}, db.args[0])
+	assert.Contains(t, db.sql[0], "b.time > (SELECT max(time) FROM explorer.blocks) - $1 * interval '1 second'")
+	assert.Equal(t, []any{float64(86400)}, db.args[0])
+}
+
+// Regression: the window start was min(height) over the blocks newer than
+// the window, which walks every partition's primary key and took over a
+// second on ten million blocks. It is read on the time index now, and the
+// volume scan gets it as a parameter, not as a subquery.
+func TestDenomVolumeReadsTheWindowStartOnTheTimeIndex(t *testing.T) {
+	db := &fakeDB{rowErr: errDB}
+	_, err := repository.NewExplorer(db).DenomVolume(context.Background(), "ubze", 24*time.Hour)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[0], "ORDER BY b.time LIMIT 1")
+	assert.NotContains(t, db.sql[0], "min(")
+}
+
+func TestDenomVolumeScansFromTheWindowStartHeight(t *testing.T) {
+	db := &scriptedDB{rows: []func(...any) error{
+		func(dest ...any) error { *dest[0].(*int64) = 25_000_000; return nil },
+		func(...any) error { return errDB },
+	}}
+	_, err := repository.NewExplorer(db).DenomVolume(context.Background(), "ubze", 24*time.Hour)
+	assert.ErrorIs(t, err, errDB)
+	require.Len(t, db.sql, 2)
+	assert.Contains(t, db.sql[1], "WHERE x.denom = $1 AND x.height >= $2")
+	assert.NotContains(t, db.sql[1], "explorer.blocks", "the window start is a parameter")
+	assert.Equal(t, []any{"ubze", int64(25_000_000)}, db.args[1])
+}
+
+func TestDenomVolumeIsZeroBeforeTheFirstBlock(t *testing.T) {
+	db := &scriptedDB{rows: []func(...any) error{func(...any) error { return pgx.ErrNoRows }}}
+	v, err := repository.NewExplorer(db).DenomVolume(context.Background(), "ubze", 24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, &repository.TransferVolume{Count: 0, Amount: "0"}, v)
+	assert.Len(t, db.sql, 1, "no volume scan without a window")
 }
