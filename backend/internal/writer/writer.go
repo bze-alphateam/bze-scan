@@ -24,6 +24,11 @@ import (
 const (
 	KeyLiveFloor         = "live_floor"
 	KeyLastIndexedHeight = "last_indexed_height"
+	// KeySigningWatchFrom is the live cursor when validators gained
+	// last_signed_height (migration 000021): the live writer recorded signers
+	// from the next height on, or from live_floor on a database created
+	// after it.
+	KeySigningWatchFrom = "signing_watch_from"
 )
 
 // FailureSourceLive is index_failures.source for the live indexer.
@@ -149,6 +154,9 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 		if err := insertBlock(ctx, tx, &ents.Blocks[i]); err != nil {
 			return err
 		}
+		if err := markSigned(ctx, tx, ents.Blocks[i].Height, ents.Blocks[i].Signers); err != nil {
+			return err
+		}
 	}
 	flushed := &Flush{Entities: ents, Mode: ModeInsert, Inserted: inserted}
 	for _, hook := range w.hooks {
@@ -239,8 +247,30 @@ func (w *LiveWriter) UpdateSignatures(ctx context.Context, height int64, signers
 		WHERE height = $1`, height, len(signers), nonNil(signers)); err != nil {
 		return fmt.Errorf("update signatures %d: %w", height, err)
 	}
+	if err := markSigned(ctx, tx, height, signers); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("update signatures %d: commit: %w", height, err)
+	}
+	return nil
+}
+
+// markSigned raises validators.last_signed_height to height for the
+// validators whose consensus address is among signers, never lowering it.
+// It locks the rows in operator order so two writes never wait on each
+// other in opposite orders.
+func markSigned(ctx context.Context, tx pgx.Tx, height int64, signers []string) error {
+	if len(signers) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE explorer.validators v SET last_signed_height = $1
+		FROM (SELECT operator_address FROM explorer.validators
+		       WHERE consensus_address = ANY($2::text[])
+		         AND (last_signed_height IS NULL OR last_signed_height < $1)
+		       ORDER BY operator_address FOR UPDATE) s
+		WHERE v.operator_address = s.operator_address`, height, signers); err != nil {
+		return fmt.Errorf("write %d: last signed: %w", height, err)
 	}
 	return nil
 }

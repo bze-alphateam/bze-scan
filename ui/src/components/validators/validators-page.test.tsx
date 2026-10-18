@@ -3,10 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ExplorerApi } from "@/api/client";
-import type { ChainParams, HallOfFame, ValidatorList } from "@/api/types";
+import type { ChainParams, HallOfFame, Stats, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
+import stats from "../../../test/fixtures/api/v1/stats.json";
 import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 
@@ -251,6 +252,31 @@ describe("ValidatorsPage", () => {
     expect(card).toBeVisible();
     fireEvent.pointerDown(document.body);
     expect(card).not.toBeVisible();
+  });
+
+  it("marks each active validator online or offline, the card saying for how long", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api({ stats: () => Promise.resolve(stats as Stats) }) });
+    await openActive();
+    const states = screen
+      .getAllByTestId("validator-row")
+      .map((r) => [...new Set(within(r).getAllByTestId("online-dot").map((d) => d.dataset.state))]);
+    expect(states).toEqual([["online"], ["online"], ["offline"]]);
+
+    // Deep Fields: the dot in the uptime column (the second; the first follows the name on narrow screens).
+    const dot = within(screen.getAllByTestId("validator-row")[2]).getAllByTestId("online-dot")[1];
+    const card = within(dot).getByRole("tooltip", { hidden: true });
+    expect(card).not.toBeVisible();
+    await userEvent.hover(within(dot).getByRole("button", { name: "Offline" }));
+    expect(card).toBeVisible();
+    // 160 blocks at the 5.9 s average.
+    expect(card).toHaveTextContent("OfflineMissed the last 160 blocks in a row, about 16 minutes.Last signed block 25,120,290.");
+  });
+
+  it("gives inactive validators no online dot", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
+    await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(2));
+    expect(screen.queryAllByTestId("online-dot")).toHaveLength(0);
   });
 
   it("shows each validator's picture, else its initials", async () => {

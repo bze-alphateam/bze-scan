@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import type { Validator, ValidatorDetail, ValidatorEvent } from "@/api/types";
+import type { ChainParams, Validator, ValidatorDetail, ValidatorEvent } from "@/api/types";
 
 import detail from "../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 import list from "../../test/fixtures/api/v1/validators.json";
 import params from "../../test/fixtures/api/v1/params.json";
 
 import {
+  downtimeSlashText,
   fameMissedText,
+  jailedInText,
+  onlineLines,
+  onlineState,
   uptimeTone,
   recentVotesText,
   signingText,
@@ -184,5 +188,40 @@ describe("hall of fame", () => {
     expect(recentVotesText({ recent_votes: { voted: 1, of: 1 } })).toBe("Voted on the last proposal");
     expect(recentVotesText({ recent_votes: { voted: 4, of: 10 } })).toBe("Voted on 4 of the last 10 proposals");
     expect(recentVotesText({ recent_votes: { voted: 0, of: 0 } })).toBe("No proposal has closed yet");
+  });
+});
+
+describe("online status", () => {
+  const p = params as ChainParams;
+
+  it("is unknown outside the active set", () => {
+    expect(onlineState({ offline: null })).toBeNull();
+    expect(onlineState({ offline: false })).toBe("online");
+    expect(onlineState({ offline: true })).toBe("offline");
+  });
+
+  it("words the card", () => {
+    expect(onlineLines({ offline: false, missed_in_a_row: 0, last_signed_height: 100 })).toEqual(["Signed the latest block, 100."]);
+    expect(onlineLines({ offline: false, missed_in_a_row: 1, last_signed_height: 1000 })).toEqual(["Signed block 1,000, 1 block ago."]);
+    expect(onlineLines({ offline: false, missed_in_a_row: 3, last_signed_height: 1000 })).toEqual(["Signed block 1,000, 3 blocks ago."]);
+    expect(onlineLines({ offline: true, missed_in_a_row: 600, last_signed_height: 1000 }, 6000)).toEqual([
+      "Missed the last 600 blocks in a row, about 1 hour.",
+      "Last signed block 1,000.",
+    ]);
+    expect(onlineLines({ offline: true, missed_in_a_row: 12, last_signed_height: null })).toEqual([
+      "Missed the last 12 blocks in a row.",
+      "Not seen signing since the explorer started watching.",
+    ]);
+  });
+
+  it("estimates the jail from the slashing parameters", () => {
+    // 5% of 10,000 must be signed: jailed past 9,500 missed.
+    expect(jailedInText({ missed_blocks: 9000, signed_blocks_window: 10000 }, p, 6000)).toBe("about 50 minutes");
+    expect(jailedInText({ missed_blocks: 9500, signed_blocks_window: 10000 }, p, 6000)).toBe("any moment now");
+    expect(jailedInText({ missed_blocks: null, signed_blocks_window: 10000 }, p, 6000)).toBeNull();
+    expect(jailedInText({ missed_blocks: 9000, signed_blocks_window: 10000 }, undefined, 6000)).toBeNull();
+    expect(jailedInText({ missed_blocks: 9000, signed_blocks_window: 10000 }, p, null)).toBeNull();
+    expect(downtimeSlashText(p)).toBe("0.01%");
+    expect(downtimeSlashText(undefined)).toBeNull();
   });
 });

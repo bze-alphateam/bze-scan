@@ -121,6 +121,27 @@ func TestNewValidatorUptime(t *testing.T) {
 	}
 }
 
+func TestValidatorIsOfflineFromTenBlocksMissedInARow(t *testing.T) {
+	ptr := func(n int64) *int64 { return &n }
+	boolPtr := func(b bool) *bool { return &b }
+	cases := []struct {
+		missed *int64
+		want   *bool
+	}{
+		{nil, nil},
+		{ptr(0), boolPtr(false)},
+		{ptr(9), boolPtr(false)},
+		{ptr(repository.OfflineMissedInARow), boolPtr(true)},
+		{ptr(6554), boolPtr(true)},
+	}
+	for _, c := range cases {
+		v := dto.NewValidator(repository.ValidatorSummary{MissedInARow: c.missed, LastSignedHeight: ptr(25)})
+		assert.Equal(t, c.want, v.Offline)
+		assert.Equal(t, c.missed, v.MissedInARow)
+		assert.Equal(t, ptr(25), v.LastSignedHeight)
+	}
+}
+
 func strPtr(s string) *string { return &s }
 
 func TestFirstMessageIsNullWithoutMessages(t *testing.T) {

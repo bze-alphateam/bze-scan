@@ -381,3 +381,53 @@ func TestValidatorsCountTheirVotesOnTheLastTenProposals(t *testing.T) {
 		assert.Equal(t, int64(10), v.RecentVotes.Of, op)
 	}
 }
+
+// The live writer records the signers' last signed height; the list counts
+// an active validator's blocks missed in a row from the latest of that, its
+// return to the active set and the start of the watch, and shows it offline
+// from ten.
+func TestValidatorsOnlineFromTheirLastSignedBlock(t *testing.T) {
+	e := newSyncEnv(t)
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+	base := e.serve(t, restakeHeight)
+	waitFor(t, 10*time.Second, func() bool {
+		return e.count(t, `SELECT count(*) FROM explorer.validators WHERE last_signed_height = $1`, restakeHeight) == recordedBonded
+	}, "every bonded validator signed %d", restakeHeight)
+
+	ops := queryStrings(t, e.db, `SELECT operator_address FROM explorer.validators
+		WHERE status = 'bonded' AND NOT jailed ORDER BY tokens DESC, operator_address LIMIT 3`)
+	require.Len(t, ops, 3)
+	signing, returned, jailed := ops[0], ops[1], ops[2]
+	tip := restakeHeight + 15
+	_, err := e.db.Exec(`UPDATE explorer.validators SET last_signed_height = $1 WHERE operator_address = $2`, tip-2, signing)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.validator_events (height, tx_index, seq, operator_address, kind, time)
+		VALUES ($1, -1, 99999, $2, 'bonded', now())`, tip-3, returned)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`UPDATE explorer.validators SET jailed = true WHERE operator_address = $1`, jailed)
+	require.NoError(t, err)
+	e.setCursor(t, tip)
+
+	got := map[string]string{}
+	for _, v := range getValidators(t, base, "?limit=100").Items {
+		s := "-"
+		if v.Offline != nil {
+			s = fmt.Sprintf("%v %d %d", *v.Offline, *v.MissedInARow, *v.LastSignedHeight)
+		}
+		got[v.OperatorAddress] = s
+	}
+	assert.Equal(t, fmt.Sprintf("false 2 %d", tip-2), got[signing])
+	assert.Equal(t, fmt.Sprintf("false 3 %d", restakeHeight), got[returned], "counted from its return to the active set")
+	assert.Equal(t, "-", got[jailed], "no status outside the active set")
+	assert.Equal(t, fmt.Sprintf("true 15 %d", restakeHeight), got[chainTools], "missed fifteen in a row")
+
+	resp, err := http.Get(base + "/api/v1/validators/" + chainTools)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	var detail dto.ValidatorDetail
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&detail))
+	require.NotNil(t, detail.Offline)
+	assert.True(t, *detail.Offline, "the validator page says the same")
+	assert.Equal(t, int64(15), *detail.MissedInARow)
+}

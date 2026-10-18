@@ -247,6 +247,8 @@ func sqlOf(tx *mockTx) []string {
 			out = append(out, "messages update")
 		case strings.Contains(s.sql, "UPDATE explorer.blocks AS t"):
 			out = append(out, "block update")
+		case strings.Contains(s.sql, "SET last_signed_height"):
+			out = append(out, "last signed")
 		case strings.Contains(s.sql, "SET signatures_count"):
 			out = append(out, "signatures")
 		case strings.Contains(s.sql, "UPDATE explorer.blocks"):
@@ -280,6 +282,20 @@ func TestWriteBlockIsOneTransaction(t *testing.T) {
 	assert.Equal(t, int64(24_998_316), tx.stmts[0].args[0])
 	assert.Equal(t, []any{writer.KeyLiveFloor, "24998316"}, tx.stmts[1].args)
 	assert.Equal(t, []any{writer.KeyLastIndexedHeight, "24998316"}, tx.stmts[2].args)
+}
+
+func TestWriteBlockRecordsTheSignersLastSignedHeight(t *testing.T) {
+	db := newMockDB(49)
+	ents := block(24_998_316)
+	ents.Blocks[0].Signers = []string{"AA", "BB"}
+
+	require.NoError(t, writer.NewLiveWriter(db).WriteBlock(context.Background(), ents))
+	tx := db.txs[0]
+	assert.Equal(t, []string{"block", "last signed", "floor", "cursor"}, sqlOf(tx), "in the block's transaction")
+	assert.Equal(t, []any{int64(24_998_316), []string{"AA", "BB"}}, tx.stmts[1].args)
+	assert.Contains(t, tx.stmts[1].sql, "last_signed_height < $1", "never lowered")
+	assert.Contains(t, tx.stmts[1].sql, "ORDER BY operator_address FOR UPDATE", "rows locked in one order")
+	assert.True(t, tx.committed)
 }
 
 func TestNothingToWrite(t *testing.T) {
@@ -346,10 +362,11 @@ func TestUpdateSignaturesRewritesOnlyTheSignatureColumns(t *testing.T) {
 	require.NoError(t, w.UpdateSignatures(context.Background(), 100, []string{"AA", "BB", "CC"}))
 	require.Len(t, db.txs, 1)
 	tx := db.txs[0]
-	assert.Equal(t, []string{"signatures"}, sqlOf(tx))
+	assert.Equal(t, []string{"signatures", "last signed"}, sqlOf(tx))
 	assert.Contains(t, tx.stmts[0].sql, "WHERE height = $1")
 	assert.Contains(t, tx.stmts[0].sql, "explorer.validators", "power from the signers, as the insert")
 	assert.Equal(t, []any{int64(100), 3, []string{"AA", "BB", "CC"}}, tx.stmts[0].args)
+	assert.Equal(t, []any{int64(100), []string{"AA", "BB", "CC"}}, tx.stmts[1].args, "late signers count as signing")
 	assert.True(t, tx.committed)
 }
 
