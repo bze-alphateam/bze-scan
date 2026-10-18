@@ -23,6 +23,7 @@ import (
 type mockListener struct {
 	mu         sync.Mutex
 	listenErrs []error
+	calls      int
 	subs       chan *mockSubscription
 }
 
@@ -30,17 +31,32 @@ func newMockListener(listenErrs ...error) *mockListener {
 	return &mockListener{listenErrs: listenErrs, subs: make(chan *mockSubscription, 16)}
 }
 
-func (l *mockListener) Listen(context.Context) (live.Subscription, error) {
+// Listen waits, like a real connect, until the test takes the subscription
+// (16 may wait unread) or ctx is cancelled: a node that stays down makes the
+// indexer reconnect in a loop the test never reads.
+func (l *mockListener) Listen(ctx context.Context) (live.Subscription, error) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.calls++
 	if len(l.listenErrs) > 0 {
 		err := l.listenErrs[0]
 		l.listenErrs = l.listenErrs[1:]
+		l.mu.Unlock()
 		return nil, err
 	}
+	l.mu.Unlock()
 	s := &mockSubscription{notes: make(chan note, 16)}
-	l.subs <- s
-	return s, nil
+	select {
+	case l.subs <- s:
+		return s, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (l *mockListener) callCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.calls
 }
 
 // next returns the subscription of the next successful Listen.
@@ -625,6 +641,20 @@ func TestNodeDownRecordsNoFailure(t *testing.T) {
 	assert.Zero(t, n.callsAt(100))
 	_, failed := h.store.failure(100)
 	assert.False(t, failed)
+}
+
+// A node that stays down keeps the indexer reconnecting; cancelling stops it
+// even when nobody reads the new connections.
+func TestStopsWhileTheNodeStaysDown(t *testing.T) {
+	n := newMockNode(100)
+	n.statusErr = errors.New("connection refused")
+	l := newMockListener()
+	h := run(t, l, n, &fakeClock{}, 99, 50)
+
+	// The connection after the 16 unread ones waits until the indexer stops.
+	require.Eventually(t, func() bool { return l.callCount() > cap(l.subs) }, 5*time.Second, time.Millisecond,
+		"the indexer reconnects past the unread connections")
+	h.stop(t)
 }
 
 func TestNodeGoingDownMidPassRecordsNoFailure(t *testing.T) {
