@@ -485,11 +485,11 @@ Runs inside `serve` unless `INDEXER_ENABLED=false`. One per database.
   past it. A pass stops (and reconnects) when the database or the node
   cannot be reached, without recording anything or moving the cursor: a
   fetch the node did not answer (connection refused or reset, a timeout,
-  HTTP 429/502/503/504 from a proxy) is checked with a `/status` call, and
-  when that fails too the node is down and the next pass resumes at the
-  same height. So a node restart, even in the middle of a catch-up, never
-  turns into recorded failures. A node that answers `/status` but not a
-  height is a failed attempt at that height.
+  HTTP 429/502/503/504, or Cloudflare's 520–524, from a proxy) is checked
+  with a `/status` call, and when that fails too the node is down and the
+  next pass resumes at the same height. So a node restart, even in the
+  middle of a catch-up, never turns into recorded failures. A node that
+  answers `/status` but not a height is a failed attempt at that height.
 - Seen vs canonical commits. A height is usually indexed while it is the
   node's tip, and then `/commit` answers the node's *seen* commit
   (`"canonical": false`): only the precommits that arrived before the node
@@ -526,11 +526,13 @@ elsewhere ends without stopping the process, and the next start resumes it).
 - **Pipeline.** The dispatcher walks the heights down and hands each to a
   worker the moment one of X semaphore slots frees. A worker fetches
   `/block`, `/block_results` and `/commit` under one rate limiter shared by
-  every worker, retries three times (0.5 s, 1 s, 2 s) against
-  `ARCHIVE_RPC_RETRY_URL` (or the primary again), runs the archive adapter
-  (see "Old event formats") and the transformer, and sends one result into
-  the writer's channel (capacity X). Its slot frees once the result is
-  queued, so memory holds at most X in flight, X queued and M held.
+  every worker, retries four times with a backoff (5 s, 25 s, 125 s, 10 min:
+  about 12.5 minutes in all, so an archive that struggles for a while leaves
+  no failed heights) against `ARCHIVE_RPC_RETRY_URL` (or the primary again),
+  runs the archive adapter (see "Old event formats") and the transformer,
+  and sends one result into the writer's channel (capacity X). Its slot
+  frees once the result is queued, so memory holds at most X in flight, X
+  queued and M held.
 - **Writer.** A batch writer of its own (own pool, never the live writer's)
   holds results in arrival order and flushes when it holds M heights, after
   `BACKFILL_QUIET` without a result, and when the channel closes after the
@@ -545,13 +547,13 @@ elsewhere ends without stopping the process, and the next start resumes it).
   `explorer.index_failures` with source `backfill`, logged, and skipped.
 - **Outages.** An unreachable archive is not a failure of its heights. When
   a fetch gets no answer (connection refused or reset, a timeout, HTTP
-  429/502/503/504 from a proxy) and the node's `/status` does not answer
-  either, the worker waits (1 s, doubling up to 1 min) and fetches the same
-  height again without spending an attempt, for as long as the outage
-  lasts. Every worker waits, so the run pauses and resumes on its own; the
-  catch-up and the reindex behave the same (Ctrl-C stops a waiting
-  reindex). A node that answers `/status` but not a height (a slow block
-  timing out, say) is an ordinary failed attempt.
+  429/502/503/504, or Cloudflare's 520–524, from a proxy) and the node's
+  `/status` does not answer either, the worker waits (1 s, doubling up to
+  1 min) and fetches the same height again without spending an attempt, for
+  as long as the outage lasts. Every worker waits, so the run pauses and
+  resumes on its own; the catch-up and the reindex behave the same (Ctrl-C
+  stops a waiting reindex). A node that answers `/status` but not a height
+  (a slow block timing out, say) is an ordinary failed attempt.
 - **Checkpoint.** `explorer.backfill_checkpoints` row `main` (ceiling, floor,
   `lowest_dispatched`, `resume_height`, `blocks_done`, status, last error),
   saved every 5 s and after every flush. `resume_height` is the highest
@@ -901,11 +903,13 @@ some failed, 1 on a configuration or database error (or an interrupt).
 
 - **Source per height.** The local node when the height is at or above its
   `earliest_block_height` (read once from its `/status`), the archive below
-  it, with the retries on `ARCHIVE_RPC_RETRY_URL`. A height the local node
-  pruned during the run goes to the archive too; when the local node does
-  not answer `/status`, every height does. `BACKFILL_RATE_LIMIT` paces all
-  requests, local ones included. Old heights pass through the archive
-  adapter as in the backfill.
+  it, with the retries on `ARCHIVE_RPC_RETRY_URL`. A reindex keeps short
+  retries (0.5 s, 1 s, 2 s), not the backfill's backoff: it is run by hand
+  and watched, and a height that still fails can be reindexed again. A
+  height the local node pruned during the run goes to the archive too; when
+  the local node does not answer `/status`, every height does.
+  `BACKFILL_RATE_LIMIT` paces all requests, local ones included. Old heights
+  pass through the archive adapter as in the backfill.
 - **Update mode.** Every table is written by an `UPDATE` of the rows whose
   values differ, then the `INSERT … ON CONFLICT DO NOTHING RETURNING <key>`
   of the backfill. The rows the insert returns are exactly the rows this

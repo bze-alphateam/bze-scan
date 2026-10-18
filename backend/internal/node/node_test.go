@@ -420,6 +420,11 @@ func TestProxyStatusesAreErrUnavailable(t *testing.T) {
 		"503":                 {http.StatusServiceUnavailable, ``},
 		"504":                 {http.StatusGatewayTimeout, `<html>gateway timeout</html>`},
 		"503 json, no result": {http.StatusServiceUnavailable, `{"message":"no healthy upstream"}`},
+		"520 cloudflare":      {520, `error code: 520`},
+		"521 cloudflare":      {521, `error code: 521`},
+		"522 cloudflare":      {522, `error code: 522`},
+		"523 cloudflare":      {523, `error code: 523`},
+		"524 cloudflare":      {524, `error code: 524`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -444,6 +449,7 @@ func TestHeightErrorsAreNotErrUnavailable(t *testing.T) {
 		"above tip":              {http.StatusInternalServerError, `{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"height 200 must be less than or equal to the current blockchain height 100"}}`},
 		"rpc error behind a 503": {http.StatusServiceUnavailable, `{"jsonrpc":"2.0","id":-1,"error":{"code":-32603,"message":"Internal error","data":"something else"}}`},
 		"not json":               {http.StatusInternalServerError, `<html>oops</html>`},
+		"525 not an outage":      {525, `error code: 525`},
 		"bad result":             {http.StatusOK, `{"jsonrpc":"2.0","id":-1,"result":{"block":{"header":{"height":"x"}}}}`},
 	}
 	for name, tc := range cases {

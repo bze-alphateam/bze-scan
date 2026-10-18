@@ -151,7 +151,7 @@ func TestCancelledRunStillWritesWhatItFetched(t *testing.T) {
 func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	e := newEnv()
 	e.archive.fail(3, errFetch)
-	e.retry.fail(3, errFetch, errFetch, errFetch)
+	e.retry.fail(3, errFetch, errFetch, errFetch, errFetch)
 
 	res := e.pipeline(2, 2).Run(context.Background(), backfill.Descending(5, 1, nil), writer.ModeInsert)
 
@@ -160,12 +160,12 @@ func TestAFailingHeightIsRetriedOnTheRetryNodeThenRecorded(t *testing.T) {
 	assert.ElementsMatch(t, []int64{5, 4, 2, 1}, e.writer.written())
 	require.Len(t, e.writer.recorded(), 1)
 	f := e.writer.recorded()[0]
-	assert.Equal(t, "3/"+writer.FailureSourceBackfill+"/4", describe(f))
+	assert.Equal(t, "3/"+writer.FailureSourceBackfill+"/5", describe(f))
 	assert.ErrorIs(t, f.err, errFetch)
 	assert.Equal(t, int64(1), res.Failed)
 	assert.Equal(t, int64(4), res.Written)
 	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
-	assert.Equal(t, []int64{3, 3, 3}, e.retry.blockCalls(), "three retries, all on the retry node")
+	assert.Equal(t, []int64{3, 3, 3, 3}, e.retry.blockCalls(), "four retries, all on the retry node")
 	assert.Equal(t, int64(1), res.Resume, "a recorded height is settled")
 }
 
@@ -204,18 +204,38 @@ func TestAnUnavailableHeightOfAnAnsweringArchiveIsRecorded(t *testing.T) {
 	e := newEnv()
 	slow := fmt.Errorf("block: %w: context deadline exceeded", node.ErrUnavailable)
 	e.archive.fail(2, slow)
-	e.retry.fail(2, slow, slow, slow)
+	e.retry.fail(2, slow, slow, slow, slow)
 
 	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), writer.ModeInsert)
 
 	require.True(t, res.Complete)
 	require.Len(t, e.writer.recorded(), 1)
 	f := e.writer.recorded()[0]
-	assert.Equal(t, "2/"+writer.FailureSourceBackfill+"/4", describe(f))
+	assert.Equal(t, "2/"+writer.FailureSourceBackfill+"/5", describe(f))
 	assert.ErrorIs(t, f.err, node.ErrUnavailable)
 	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
 	assert.Equal(t, 1, e.archive.statusCalls(), "the archive answered the probe")
-	assert.Equal(t, 3, e.retry.statusCalls())
+	assert.Equal(t, 4, e.retry.statusCalls())
+}
+
+// A struggling archive that still answers /status (timeouts, a proxy's 520)
+// spent the old 0.5/1/2 s retries within seconds and left failed heights
+// behind (19 on mainnet on 2026-10-18); the backoff spans minutes.
+func TestTheRetriesBackOffOverMinutes(t *testing.T) {
+	assert.Equal(t,
+		[]time.Duration{5 * time.Second, 25 * time.Second, 125 * time.Second, 10 * time.Minute},
+		backfill.DefaultRetryDelays)
+
+	e := newEnv()
+	e.archive.fail(2, errFetch)
+	e.retry.fail(2, errFetch, errFetch, errFetch)
+
+	res := e.pipeline(1, 10).Run(context.Background(), backfill.Descending(2, 1, nil), writer.ModeInsert)
+
+	require.True(t, res.Complete)
+	assert.Equal(t, []int64{2, 1}, e.writer.written(), "the fifth attempt succeeds")
+	assert.Empty(t, e.writer.recorded())
+	assert.Equal(t, backfill.DefaultRetryDelays, e.clock.recordedSleeps())
 }
 
 func TestACancelDuringAnOutageRecordsNothing(t *testing.T) {

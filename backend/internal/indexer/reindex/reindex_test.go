@@ -322,6 +322,36 @@ func TestFailedHeightsAreRecordedAndListed(t *testing.T) {
 	assert.Contains(t, res.Summary(), "heights=3 failed=2")
 }
 
+func TestAReindexKeepsShortRetries(t *testing.T) {
+	assert.Equal(t, []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second}, reindex.DefaultRetryDelays)
+
+	e := newEnv()
+	var mu sync.Mutex
+	var slept []time.Duration
+	j := reindex.New(backfill.Config{
+		Workers: 1,
+		Sleep: func(ctx context.Context, d time.Duration) error {
+			mu.Lock()
+			defer mu.Unlock()
+			slept = append(slept, d)
+			return ctx.Err()
+		},
+	}, reindex.Deps{
+		Store: e.store,
+		Local: e.local,
+		Pipeline: backfill.Deps{
+			Archive: e.archive, ArchiveRetry: e.retry, Transformer: mockTransformer{}, Writer: e.writer,
+		},
+	})
+	p, err := j.Plan(context.Background(), reindex.Selection{Kind: reindex.KindHeights, Heights: []int64{1001}})
+	require.NoError(t, err)
+	res, err := j.Run(context.Background(), p)
+	require.NoError(t, err)
+
+	assert.Equal(t, []int64{1001}, res.Failed)
+	assert.Equal(t, reindex.DefaultRetryDelays, slept, "not the backfill's minutes-long backoff")
+}
+
 func TestFailedSelectionReadsTheOpenFailures(t *testing.T) {
 	e := newEnv()
 	e.store.failures["live"] = []int64{300, 200}

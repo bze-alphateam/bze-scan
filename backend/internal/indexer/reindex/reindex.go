@@ -65,9 +65,18 @@ type Job struct {
 	deps Deps
 }
 
+// DefaultRetryDelays are the reindex's waits before the three retries of a
+// height. A reindex is run by hand and watched, so it keeps them short
+// instead of the backfill's long backoff; a height that still fails is
+// recorded and the command can run again.
+var DefaultRetryDelays = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second}
+
 // New returns a reindex job; cfg tunes its pipeline (its FailureSource and
-// OnFlush are the reindex's own).
+// OnFlush are the reindex's own, nil RetryDelays are DefaultRetryDelays).
 func New(cfg backfill.Config, deps Deps) *Job {
+	if cfg.RetryDelays == nil {
+		cfg.RetryDelays = DefaultRetryDelays
+	}
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
