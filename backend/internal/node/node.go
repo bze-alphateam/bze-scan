@@ -395,7 +395,8 @@ var (
 	// ErrPruned: the node no longer has the height.
 	ErrPruned = errors.New("height pruned by the node")
 	// ErrUnavailable: the node did not answer (connection refused or reset,
-	// a timeout) or a proxy in front of it answered 429, 502, 503 or 504.
+	// a timeout) or a proxy in front of it answered 429, 502, 503, 504 or
+	// one of Cloudflare's origin errors 520-524.
 	// It says nothing about the height asked for.
 	ErrUnavailable = errors.New("node unavailable")
 )
@@ -416,7 +417,9 @@ func unavailableStatus(code int) bool {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return true
 	}
-	return false
+	// Cloudflare: 520 unknown origin error, 521 origin down, 522 connection
+	// timed out, 523 origin unreachable, 524 origin timeout.
+	return code >= 520 && code <= 524
 }
 
 // RPCError is a JSON-RPC error envelope answered by the node. errors.Is

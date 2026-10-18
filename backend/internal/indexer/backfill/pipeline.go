@@ -77,9 +77,11 @@ const (
 	DefaultUnavailableMax = time.Minute
 )
 
-// DefaultRetryDelays are the waits before the three retries of a height,
-// which go to the retry endpoint.
-var DefaultRetryDelays = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second}
+// DefaultRetryDelays are the waits before the four retries of a height,
+// which go to the retry endpoint: a backoff of about 12.5 minutes in all, so
+// an archive that answers /status but struggles for a while (timeouts,
+// errors from the proxy in front of it) does not leave failed heights.
+var DefaultRetryDelays = []time.Duration{5 * time.Second, 25 * time.Second, 125 * time.Second, 10 * time.Minute}
 
 // Config tunes a pipeline; zero fields take the defaults.
 type Config struct {

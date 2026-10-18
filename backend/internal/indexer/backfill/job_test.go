@@ -241,7 +241,7 @@ func (c *mockCursor) AdvanceCursor(_ context.Context, h int64) error {
 func TestCatchUpWalksUpAndMovesTheCursor(t *testing.T) {
 	e := newEnv()
 	e.archive.fail(103, errFetch)
-	e.retry.fail(103, errFetch, errFetch, errFetch)
+	e.retry.fail(103, errFetch, errFetch, errFetch, errFetch)
 	store := newMockStore(0)
 	store.present[102] = true
 	cursor := &mockCursor{}
@@ -252,7 +252,7 @@ func TestCatchUpWalksUpAndMovesTheCursor(t *testing.T) {
 	assert.Equal(t, []int64{100, 101, 103, 104, 105}, e.archive.blockCalls(), "ascending, 102 skipped")
 	assert.Equal(t, []int64{100, 101, 104, 105}, e.writer.written())
 	require.Len(t, e.writer.recorded(), 1)
-	assert.Equal(t, "103/"+writer.FailureSourceLive+"/4", describe(e.writer.recorded()[0]))
+	assert.Equal(t, "103/"+writer.FailureSourceLive+"/5", describe(e.writer.recorded()[0]))
 	assert.Equal(t, []int64{105}, cursor.moves)
 }
 
