@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useState } from "react";
 
 import { AppLink } from "@/components/layout/app-link";
-import { useDenoms } from "@/api/hooks";
+import { useAccountOpenOrders, useDenoms } from "@/api/hooks";
 import type { Account } from "@/api/types";
 import { TokenLogo } from "@/components/tokens/tokens-page";
 import { Amount } from "@/components/ui/amount";
@@ -16,7 +16,7 @@ import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { formatCount, formatUsd } from "@/lib/format";
 import { sumAmounts } from "@/lib/math";
-import { BOND_DENOM, dexAssetUrl, tokenRows, tokensTotalUsd, type TokenRow, type TokenSort } from "@/render/account";
+import { BOND_DENOM, dexAssetUrl, lockedByDenom, tokenRows, tokensTotalUsd, type TokenRow, type TokenSort } from "@/render/account";
 import { tokenBadges } from "@/render/badges";
 import { tokenHref } from "@/render/tokens";
 import { bondFull } from "@/render/validators";
@@ -53,7 +53,16 @@ function ValueText({ row }: { row: TokenRow }) {
   );
 }
 
-function Row({ row, staked, unstaking }: { row: TokenRow; staked: string | null; unstaking: string | null }) {
+interface RowProps {
+  row: TokenRow;
+  staked: string | null;
+  unstaking: string | null;
+  /** Base units of the denom locked in open DEX orders; null when none. */
+  inOrders: string | null;
+  onShowOrders?: () => void;
+}
+
+function Row({ row, staked, unstaking, inOrders, onShowOrders }: RowProps) {
   const name = row.symbol ?? row.denom;
   return (
     <ListRow role="listitem" templateColumns={COLUMNS} rowGap="2" data-testid="token-row">
@@ -96,6 +105,22 @@ function Row({ row, staked, unstaking }: { row: TokenRow; staked: string | null;
             + {bondFull(staked)} staked · {bondFull(unstaking ?? "0")} unstaking
           </Text>
         )}
+        {inOrders != null && (
+          <Link
+            as="button"
+            {...{ type: "button" }}
+            onClick={onShowOrders}
+            display="block"
+            ml="auto"
+            fontSize="12px"
+            color="fg.muted"
+            textAlign="right"
+            _hover={{ color: "accent.fg" }}
+            data-testid="token-in-orders"
+          >
+            + <Amount amount={inOrders} denom={row.denom} symbol={row.symbol} exponent={row.exponent} /> in orders
+          </Link>
+        )}
         <Text hideFrom="c2" fontFamily="mono" fontSize="12px" color="fg.muted">
           <ValueText row={row} />
         </Text>
@@ -117,11 +142,14 @@ function Row({ row, staked, unstaking }: { row: TokenRow; staked: string | null;
 /**
  * Every non-zero balance with its origin and value at DEX prices: a personal
  * account's Tokens tab, a module account's Holdings (`module`, where staking
- * has no place).
+ * and orders have no place). Balances, values and the total are the bank's
+ * only: what open orders lock is a line under a balance, never added in, and
+ * appears once that answer arrives without holding the rows back.
  */
-export function TokensTab({ a, module = false }: { a: Account; module?: boolean }) {
+export function TokensTab({ a, module = false, onShowOrders }: { a: Account; module?: boolean; onShowOrders?: () => void }) {
   const [sort, setSort] = useState<TokenSort>("value");
   const denoms = useDenoms();
+  const orders = useAccountOpenOrders(a.address, { enabled: !module });
   // Without the tokens list the rows still render, unpriced, once it failed.
   if (!denoms.data && !denoms.error) return <TableSkeleton rows={5} columns={5} />;
   if (!a.live.available) {
@@ -135,6 +163,7 @@ export function TokensTab({ a, module = false }: { a: Account; module?: boolean 
   const total = tokensTotalUsd(rows);
   const staked = module ? null : (a.total_staked ?? "0");
   const unstaking = module ? null : sumAmounts(a.unbonding.map((u) => u.amount));
+  const locked = module ? new Map<string, string>() : lockedByDenom(orders.data);
   return (
     <Box>
       <Flex justify="space-between" align="center" gap="3" wrap="wrap" mb="14px" fontSize="13px">
@@ -159,7 +188,14 @@ export function TokensTab({ a, module = false }: { a: Account; module?: boolean 
         </ListHead>
         <Box role="list" aria-label="Tokens">
           {rows.map((row) => (
-            <Row key={row.denom} row={row} staked={staked} unstaking={unstaking} />
+            <Row
+              key={row.denom}
+              row={row}
+              staked={staked}
+              unstaking={unstaking}
+              inOrders={locked.get(row.denom) ?? null}
+              onShowOrders={onShowOrders}
+            />
           ))}
         </Box>
         {rows.length === 0 && (
@@ -171,6 +207,7 @@ export function TokensTab({ a, module = false }: { a: Account; module?: boolean 
       <Text mt="3" fontSize="13px" color="fg.muted">
         Tokens without a market on the DEX show no value.
         {!module && " Staked and unstaking BZE are counted in the tiles above, not here."}
+        {!module && " Tokens locked in DEX orders are counted in the Orders tab."}
       </Text>
     </Box>
   );

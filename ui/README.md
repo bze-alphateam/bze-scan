@@ -24,7 +24,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/components/funds-flow` | "Where the funds went": `StepList` (one step per transfer, collapsed to a summary line on simple transactions) and `net.ts` (an address's per-denom net) |
 | `src/components/blocks` | the blocks list (live until an older page is loaded, then a snapshot) and the block page (header, overview, transactions in one line each, the block's funds flow by group, More details with the raw JSON tabs, the not-found explanations) |
 | `src/components/tx` | the transaction page's sections, states and skeleton |
-| `src/components/accounts` | the account page: header, tiles, and the Activity (placeholder), Tokens and Staking tabs, the tab kept in `?tab=` |
+| `src/components/accounts` | the account page: header, tiles, and the Activity, Tokens, Orders (tokens locked in open DEX orders, per asset then market) and Staking tabs, the tab kept in `?tab=` |
 | `src/components/validators` | the validators list (tiles, Active/Inactive tabs, name filter) and the validator page |
 | `src/components/tokens` | the tokens list (tiles, kind chips, name filter) and the token page (supply box, about, top holders, recent activity, More details) |
 | `src/components/parameters` | the chain parameters page: last change, anchor nav, one table per group (plain name, human and stored value, what it means), the raw-values box |
@@ -34,7 +34,7 @@ proxies from archive nodes. Never a node URL in `ui/`.
 | `src/render/blocks.ts`, `src/render/block-flow.ts` | the blocks pages' words and numbers: why a height is not found, fee and gas sums; the block's transfers grouped by the label names the backend seeds (Fees, DEX, Staking, Rewards programs, Burner, Cross-chain, Governance, Payments, Other) with each group's line |
 | `src/render/txs.ts` | a transaction in one line (its first message's registry title, "+ N more actions") and its counterparty (its renderer's `counterparty`) |
 | `src/render/home.ts` | the home tiles' words and the price change's sign and colour |
-| `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Staking tab's shares and unlock days |
+| `src/render/account.ts` | the account page's words and numbers: label chips, the tiles' totals, the Tokens tab's join, origin tags, values and sorting, the Orders tab's rows and totals, the Staking tab's shares and unlock days |
 | `src/render/proposals` | the governance pages' words and numbers: one reader per proposal kind turning `messages` (legacy contents included) into actions, kind and status labels, the tally shares, the chain's three checks and the verdict, the upgrade date estimate, who has not voted, the timeline |
 | `src/render/tokens.ts` | the tokens pages' words and numbers: the list's tiles, chips and price cells, the denom in the URL, the supply box's state and mint/burn totals, token events and transfers in plain words, the activity merge |
 | `src/render/validators.ts` | the validators pages' words and numbers: active/inactive split, rates, the reward rate after commission, the history in plain words |
@@ -96,6 +96,7 @@ numbers itself:
 | `immutable` | a block by height, a found transaction, older list pages, raw JSON | fetched once, kept for an hour, never refetched |
 | `status` | the footer's health pill, the parameters page | refetched every 60 s |
 | `reference` | lookups a page decorates with: validator monikers, token symbols and prices, the chain parameters | fresh for 60 s, never polled |
+| `slow` | answers that are slow to compute and change rarely: an account's open orders | stale after 30 s, refetched every 30 s, paused in background tabs |
 
 A 4xx answer is never retried; other failures are retried twice. The hooks
 apply the policies: a list hook with a `cursor` is `immutable`. `useBlock` does the same for a height above the explorer's
@@ -128,6 +129,12 @@ page share it.
 for symbols, logos, origins and USD values. `useAllTokens` reads the same
 pages with the `live` policy for the tokens page, which filters the kinds
 itself so the tiles always count every token.
+
+`useAccountOpenOrders` (`slow` policy) starts with a personal account's page,
+whatever the tab, and nothing waits for it: it gives the Orders tab its count
+and rows and the Tokens tab its "+ X in orders" lines, which read the same
+query. A failed answer changes only those. The Tokens tab's balances, values
+and total stay the bank's; module accounts never ask.
 
 A token's routes take the denom URL-encoded on the path
 (`/tokens/factory%2Fbze1…%2Fuhoney`); the client retries a denom with `/` in

@@ -1,0 +1,57 @@
+{
+  "source": "index",
+  "height": 25159888,
+  "orders_count": 6,
+  "markets_count": 3,
+  "assets": [
+    {
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+      "amount": "1000000000",
+      "orders_count": 2,
+      "markets": [
+        {
+          "market_id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/ubze",
+          "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+          "quote": "ubze",
+          "amount": "1000000000",
+          "orders_count": 2
+        }
+      ]
+    },
+    {
+      "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "amount": "77000000",
+      "orders_count": 1,
+      "markets": [
+        {
+          "market_id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl/ubze",
+          "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+          "quote": "ubze",
+          "amount": "77000000",
+          "orders_count": 1
+        }
+      ]
+    },
+    {
+      "denom": "ubze",
+      "amount": "450000000",
+      "orders_count": 3,
+      "markets": [
+        {
+          "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "base": "ubze",
+          "quote": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+          "amount": "300000000",
+          "orders_count": 2
+        },
+        {
+          "market_id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/ubze",
+          "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+          "quote": "ubze",
+          "amount": "150000000",
+          "orders_count": 1
+        }
+      ]
+    }
+  ]
+}

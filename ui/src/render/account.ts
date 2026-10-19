@@ -1,4 +1,4 @@
-import type { Account, AccountUnbonding, Balance, Coin, Label, LpPair, TokenSummary, Validator } from "@/api/types";
+import type { Account, AccountUnbonding, Balance, Coin, Label, LpPair, OpenOrders, TokenSummary, Validator } from "@/api/types";
 import { formatCount, formatDateTime, formatPct, shortAddress } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
 import { compareDecimals, isAboveZero, percentOf, sumAmounts, usdValue } from "@/lib/math";
@@ -14,10 +14,10 @@ export const BOND_DENOM = "ubze";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 86_400_000;
 
-export type AccountTab = "activity" | "tokens" | "staking";
+export type AccountTab = "activity" | "tokens" | "orders" | "staking";
 
 /** A personal account's tabs, in order; the first is the default. */
-export const ACCOUNT_TABS: AccountTab[] = ["activity", "tokens", "staking"];
+export const ACCOUNT_TABS: AccountTab[] = ["activity", "tokens", "orders", "staking"];
 
 /** The tab a `?tab=` value names; the Activity tab for anything else. */
 export function parseTab(value: string | string[] | undefined): AccountTab {
@@ -325,6 +325,92 @@ export function tokenRows(balances: Balance[], denoms: Map<string, TokenSummary>
 /** The priced rows' total in USD. */
 export function tokensTotalUsd(rows: TokenRow[]): string {
   return sumAmounts(rows.flatMap((r) => (r.valueUsd != null ? [r.valueUsd] : [])));
+}
+
+/** "1 order", "6 orders". */
+export function ordersText(n: number): string {
+  return `${formatCount(n)} ${n === 1 ? "order" : "orders"}`;
+}
+
+/** "1 market", "3 markets". */
+export function marketsText(n: number): string {
+  return `${formatCount(n)} ${n === 1 ? "market" : "markets"}`;
+}
+
+/** One market of an Orders tab row: what the account's orders there lock of the row's asset. */
+export interface OrderMarketRow {
+  marketId: string;
+  amount: string;
+  ordersCount: number;
+  /** In USD; null without a price. */
+  valueUsd: string | null;
+}
+
+/** One asset of the Orders tab: the amount locked in open orders, then per market. */
+export interface OrderAssetRow {
+  denom: string;
+  amount: string;
+  symbol: string | null;
+  exponent: number | null;
+  logoUrl: string | null;
+  lpPair: LpPair | null;
+  /** The token as the tokens list knows it; null for a denom the explorer does not know. */
+  token: TokenSummary | null;
+  valueUsd: string | null;
+  ordersCount: number;
+  markets: OrderMarketRow[];
+}
+
+const valueOf = (amount: string, t: TokenSummary | undefined) =>
+  t?.exponent != null ? usdValue(amount, t.exponent, t.price_usd) : null;
+
+/**
+ * The Orders tab's rows: every asset the open orders lock, with its value at
+ * DEX prices, sorted by value (highest first), then the unpriced ones by
+ * name. Markets keep the API's order (largest amount first).
+ */
+export function orderRows(orders: OpenOrders, denoms: Map<string, TokenSummary> | undefined): OrderAssetRow[] {
+  const rows = orders.assets.map((a): OrderAssetRow => {
+    const t = denoms?.get(a.denom);
+    return {
+      denom: a.denom,
+      amount: a.amount,
+      symbol: t?.symbol ?? null,
+      exponent: t?.exponent ?? null,
+      logoUrl: t?.logo_url ?? null,
+      lpPair: t?.lp_pair ?? null,
+      token: t ?? null,
+      valueUsd: valueOf(a.amount, t),
+      ordersCount: a.orders_count,
+      markets: a.markets.map((m) => ({
+        marketId: m.market_id,
+        amount: m.amount,
+        ordersCount: m.orders_count,
+        valueUsd: valueOf(m.amount, t),
+      })),
+    };
+  });
+  const name = (r: OrderAssetRow) => (r.symbol ?? r.denom).toLowerCase();
+  const byName = (a: OrderAssetRow, b: OrderAssetRow) => name(a).localeCompare(name(b));
+  return rows.sort((a, b) => {
+    if (a.valueUsd != null && b.valueUsd != null) return compareDecimals(b.valueUsd, a.valueUsd) || byName(a, b);
+    if (a.valueUsd != null) return -1;
+    if (b.valueUsd != null) return 1;
+    return byName(a, b);
+  });
+}
+
+/** The priced assets' total in USD, and whether some asset has no price (the head line then says so). */
+export function ordersTotalUsd(rows: OrderAssetRow[]): { total: string; partial: boolean } {
+  return {
+    total: sumAmounts(rows.flatMap((r) => (r.valueUsd != null ? [r.valueUsd] : []))),
+    partial: rows.some((r) => r.valueUsd == null),
+  };
+}
+
+/** The amount each denom has locked in open orders, for the Tokens tab's "in orders" lines. */
+export function lockedByDenom(orders: OpenOrders | undefined): Map<string, string> {
+  return new Map((orders?.assets ?? []).filter((a) => isAboveZero(a.amount)).map((a) => [a.denom, a.amount]));
 }
 
 export interface StakingRow {

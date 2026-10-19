@@ -13,6 +13,7 @@ import type {
   IbcListParams,
   IbcTransfer,
   ModuleAccount,
+  OpenOrders,
   Page,
   PageParams,
   Proposal,
@@ -65,6 +66,7 @@ export interface ExplorerApi {
   account(address: string, signal?: AbortSignal): Promise<Account>;
   accountActivity(address: string, params: ActivityParams, signal?: AbortSignal): Promise<ActivityPage>;
   accountIbc(address: string, params: IbcListParams, signal?: AbortSignal): Promise<Page<IbcTransfer>>;
+  accountOpenOrders(address: string, signal?: AbortSignal): Promise<OpenOrders>;
 
   tokens(params: TokenListParams, signal?: AbortSignal): Promise<Page<TokenSummary>>;
   token(denom: string, signal?: AbortSignal): Promise<Token>;
@@ -181,6 +183,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
       get(`/accounts/${seg(address)}/activity`, { ...page(params), page: params.page, category: params.category }, signal),
     accountIbc: (address, params, signal) =>
       get(`/accounts/${seg(address)}/ibc`, { ...page(params), direction: params.direction }, signal),
+    accountOpenOrders: (address, signal) => get(`/accounts/${seg(address)}/open-orders`, {}, signal),
 
     tokens: (params, signal) => get("/tokens", { ...page(params), kind: params.kind }, signal),
     token: (denom, signal) => byDenom(denom, "", {}, signal),
