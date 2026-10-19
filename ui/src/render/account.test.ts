@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { Account, Page, TokenSummary, Validator } from "@/api/types";
+import type { Account, OpenOrders, Page, TokenSummary, Validator } from "@/api/types";
 
 import account from "../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
+import openOrders from "../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4/open-orders.json";
 import tokens from "../../test/fixtures/api/v1/tokens.json";
 import list from "../../test/fixtures/api/v1/validators.json";
 
@@ -12,6 +13,11 @@ import {
   daysText,
   daysUntil,
   dexAssetUrl,
+  lockedByDenom,
+  marketsText,
+  orderRows,
+  ordersText,
+  ordersTotalUsd,
   activityRange,
   activitySearch,
   lastPage,
@@ -52,6 +58,7 @@ describe("header", () => {
   it("reads the tab from the query, the Activity tab by default", () => {
     expect(parseTab("tokens")).toBe("tokens");
     expect(parseTab("staking")).toBe("staking");
+    expect(parseTab("orders")).toBe("orders");
     expect(parseTab(undefined)).toBe("activity");
     expect(parseTab("nonsense")).toBe("activity");
     expect(parseTab(["tokens", "staking"])).toBe("activity");
@@ -209,5 +216,54 @@ describe("staking tab", () => {
     expect(validatorStatus(sleepy)).toEqual({ text: "Jailed", tone: "red", uptime: "61.2% uptime" });
     expect(validatorStatus(old)).toEqual({ text: "Inactive", tone: "gray", uptime: null });
     expect(validatorStatus(undefined)).toBeNull();
+  });
+});
+
+describe("open orders", () => {
+  const o = openOrders as OpenOrders;
+  const HONEY = "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney";
+  const VDL = "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl";
+
+  it("sorts the assets by value, highest first, then the unpriced ones by name", () => {
+    const rows = orderRows(o, denoms);
+    expect(rows.map((r) => [r.symbol, r.valueUsd])).toEqual([
+      ["HONEY", "2"],
+      ["BZE", "0.675"],
+      ["VDL", null],
+    ]);
+    const unpriced = { ...o, assets: [o.assets[1], { ...o.assets[1], denom: "uaaa" }] };
+    expect(orderRows(unpriced, denoms).map((r) => r.symbol ?? r.denom)).toEqual(["uaaa", "VDL"]);
+  });
+
+  it("keeps each asset's markets in the API's order, valued at the asset's price", () => {
+    const bze = orderRows(o, denoms).find((r) => r.denom === "ubze");
+    expect(bze?.ordersCount).toBe(3);
+    expect(bze?.markets).toEqual([
+      { marketId: "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4", amount: "300000000", ordersCount: 2, valueUsd: "0.45" },
+      { marketId: `${HONEY}/ubze`, amount: "150000000", ordersCount: 1, valueUsd: "0.225" },
+    ]);
+  });
+
+  it("leaves a denom the tokens list lacks unpriced and unnamed", () => {
+    const [row] = orderRows(o, undefined);
+    expect(row).toMatchObject({ symbol: null, exponent: null, token: null, valueUsd: null });
+  });
+
+  it("sums the priced assets and says when some have no price", () => {
+    expect(ordersTotalUsd(orderRows(o, denoms))).toEqual({ total: "2.675", partial: true });
+    const priced = { ...o, assets: o.assets.filter((a) => a.denom !== VDL) };
+    expect(ordersTotalUsd(orderRows(priced, denoms))).toEqual({ total: "2.675", partial: false });
+  });
+
+  it("maps each denom to its locked amount for the Tokens lines", () => {
+    expect(lockedByDenom(undefined).size).toBe(0);
+    expect(Object.fromEntries(lockedByDenom(o))).toEqual({ [HONEY]: "1000000000", [VDL]: "77000000", ubze: "450000000" });
+  });
+
+  it("counts orders and markets in words", () => {
+    expect(ordersText(1)).toBe("1 order");
+    expect(ordersText(1204)).toBe("1,204 orders");
+    expect(marketsText(1)).toBe("1 market");
+    expect(marketsText(3)).toBe("3 markets");
   });
 });

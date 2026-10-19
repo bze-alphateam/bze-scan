@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { noHorizontalScroll } from "./layout";
+import { mockApi, respond } from "./mock-api";
 
 import plain from "../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
 import nodeDown from "../test/fixtures/api/v1/accounts/bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq.json";
@@ -107,6 +108,52 @@ test.describe("account page", () => {
   test("answers not found for something that is not an account address", async ({ page }) => {
     await page.goto("/accounts/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c");
     await expect(page.getByRole("heading", { name: "Nothing here" })).toBeVisible();
+  });
+});
+
+// The open orders come from the account's open-orders.json: HONEY (2 orders,
+// one market), BZE (3 orders, two markets) and VDL (unpriced, held only in
+// orders). The page never waits for them.
+test.describe("account open orders", () => {
+  test("counts them on the tab and expands an asset to its markets with DEX links", async ({ page }) => {
+    await page.goto(`/accounts/${ADDR}`);
+    await expect(page.getByRole("tab", { name: "Orders 6" })).toBeVisible();
+    await page.getByRole("tab", { name: "Orders 6" }).click();
+    await expect(page).toHaveURL(/\?tab=orders$/);
+    await expect(page.getByTestId("orders-summary")).toHaveText("Locked in 6 open orders · 3 markets");
+    await expect(page.getByTestId("order-symbol")).toHaveText(["HONEY", "BZE", "VDL"]);
+    await expect(page.getByTestId("order-market-row")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Show the markets holding BZE" }).click();
+    const markets = page.getByRole("list", { name: "Markets holding BZE" }).getByTestId("order-market-row");
+    await expect(markets).toHaveCount(2);
+    await expect(markets.getByTestId("order-market")).toHaveText(["BZE/USDC", "HONEY/BZE"]);
+    const dex = markets.nth(0).getByRole("link", { name: "DEX" }).filter({ visible: true });
+    await expect(dex).toHaveAttribute("data-testid", "app-link");
+    await expect(dex).toHaveAttribute("href", /\/exchange\/market\?id=ubze%2Fibc%2F6490A7EA/);
+    await noHorizontalScroll(page);
+  });
+
+  test("opens the Orders tab from a Tokens line", async ({ page }) => {
+    await page.goto(`/accounts/${ADDR}?tab=tokens`);
+    const line = page.getByTestId("token-in-orders").filter({ hasText: "450 BZE" });
+    await expect(line).toHaveText("+ 450 BZE in orders");
+    await expect(page.getByTestId("token-row")).toHaveCount(5);
+    await line.click();
+    await expect(page.getByRole("tab", { name: "Orders 6" })).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/\?tab=orders$/);
+  });
+
+  test("a failed answer changes only the Orders panel and the Tokens lines", async ({ page }) => {
+    await mockApi(page, {
+      [`v1/accounts/${ADDR}/open-orders`]: respond(502, { error: { code: "upstream_error", message: "the nodes did not answer" } }),
+    });
+    await page.goto(`/accounts/${ADDR}?tab=tokens`);
+    await expect(page.getByTestId("tokens-summary")).toHaveText("5 tokens · ≈ $37.35 in total, at DEX prices");
+    await expect(page.getByTestId("tile").nth(0)).toContainText("≈ $1.85");
+    await expect(page.getByTestId("token-in-orders")).toHaveCount(0);
+    await page.getByRole("tab", { name: "Orders", exact: true }).click();
+    await expect(page.getByTestId("orders-error")).toHaveText("The open orders could not be loaded right now.", { timeout: 10_000 });
   });
 });
 

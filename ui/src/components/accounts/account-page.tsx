@@ -8,7 +8,7 @@ import { LuTriangleAlert } from "react-icons/lu";
 
 import { AppLink } from "@/components/layout/app-link";
 import { ApiError, isNotFound } from "@/api/client";
-import { useAccount, useAllValidators, useDenoms, useModules } from "@/api/hooks";
+import { useAccount, useAccountOpenOrders, useAllValidators, useDenoms, useModules } from "@/api/hooks";
 import type { Account, ActivityCategory, ModuleAccount } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Callout } from "@/components/ui/callout";
@@ -42,6 +42,7 @@ import {
 import { BOND, bondCompact } from "@/render/validators";
 
 import { ActivityTab, EmptyPanel } from "./activity-tab";
+import { OrdersTab } from "./orders-tab";
 import { StakingTab } from "./staking-tab";
 import { TokensTab } from "./tokens-tab";
 
@@ -209,7 +210,7 @@ function PersonalTiles({ a }: { a: Account }) {
   );
 }
 
-/** A personal account: header, tiles, and the Activity / Tokens / Staking tabs. */
+/** A personal account: header, tiles, and the Activity / Tokens / Orders / Staking tabs. */
 function PersonalView({
   a,
   initialTab,
@@ -223,6 +224,12 @@ function PersonalView({
 }) {
   const id = useId();
   const [tab, setTab] = useState<AccountTab>(parseTab(initialTab));
+  // Starts with the page, whatever the tab: the Orders count and the Tokens lines wait for it, nothing else does.
+  const orders = useAccountOpenOrders(a.address);
+  const choose = (t: AccountTab) => {
+    setTab(t);
+    writeTab(t, t === "activity");
+  };
   const live = a.live.available;
   const tokens = live ? tokenRows(a.balances, undefined, "name").length : null;
   const n = a.delegations.length;
@@ -235,13 +242,11 @@ function PersonalView({
           id={id}
           label="Account"
           value={tab}
-          onChange={(t) => {
-            setTab(t);
-            writeTab(t, t === "activity");
-          }}
+          onChange={choose}
           tabs={[
             { value: "activity", label: "Activity", count: formatCount(a.activity_count) },
             { value: "tokens", label: "Tokens", count: tokens != null ? formatCount(tokens) : null },
+            { value: "orders", label: "Orders", count: orders.data ? formatCount(orders.data.orders_count) : null },
             {
               value: "staking",
               label: "Staking",
@@ -259,7 +264,8 @@ function PersonalView({
             neverSeen={a.activity_count === 0}
           />
         )}
-        {tab === "tokens" && <TokensTab a={a} />}
+        {tab === "tokens" && <TokensTab a={a} onShowOrders={() => choose("orders")} />}
+        {tab === "orders" && <OrdersTab address={a.address} />}
         {tab === "staking" && <StakingTab a={a} />}
       </VTabPanel>
     </Box>

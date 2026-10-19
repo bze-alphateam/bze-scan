@@ -30,6 +30,13 @@ export const status = {
   refetchIntervalInBackground: false,
 } as const;
 
+/** Answers that are slow to compute and change rarely (an account's open orders): refetched every 30 s, paused in background tabs. */
+export const slow = {
+  staleTime: 30 * SECOND,
+  refetchInterval: 30 * SECOND,
+  refetchIntervalInBackground: false,
+} as const;
+
 /**
  * Lookup data a page decorates with (validator monikers, token prices):
  * fresh for a minute, never polled.
