@@ -1,9 +1,10 @@
 "use client";
 
-import { Box, Button, Link, Skeleton, Spinner, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Skeleton, Spinner, Stack, Text } from "@chakra-ui/react";
 import { useMemo } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { useTokenDirectory, useTransaction, useValidatorDirectory } from "@/api/hooks";
 import type { Transfer, Tx } from "@/api/types";
 import { StepList } from "@/components/funds-flow/step-list";
@@ -59,9 +60,7 @@ function Pending({ hash, state }: { hash: string; state: "looking" | "not_found"
           icon={<LuCircleHelp size={20} />}
           title="Not found"
           actions={
-            <Link href={pingPubTxUrl(hash)} target="_blank" rel="noopener noreferrer" color="accent.fg">
-              Look it up on Ping.pub ↗
-            </Link>
+            <ExternalLink href={pingPubTxUrl(hash)}>Look it up on Ping.pub</ExternalLink>
           }
           data-testid="tx-not_found"
         >

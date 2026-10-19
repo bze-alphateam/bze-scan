@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
 import { LuChevronDown, LuTriangleAlert } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { useModules, useParams, useStats } from "@/api/hooks";
 import type { ChainParams, ModuleAccount } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -188,9 +189,7 @@ function GroupHeader({ g, count }: { g: GroupDef; count?: string }) {
                 <NextLink href={g.see.href}>{g.see.label}</NextLink>
               </Link>
             ) : (
-              <Link href={g.see.href} target="_blank" rel="noopener noreferrer" color="accent.fg">
-                {g.see.label}
-              </Link>
+              <ExternalLink href={g.see.href}>{g.see.label}</ExternalLink>
             )}
             .
           </>
@@ -444,9 +443,9 @@ function RawValues({ params }: { params: ChainParams }) {
         </Box>
         <HStack gap="4">
           <CopyAllButton params={params} />
-          <Link href={`${externalLinks.pingPub}/params`} target="_blank" rel="noopener noreferrer" color="accent.fg" fontSize="14px">
-            Open on Ping.pub ↗
-          </Link>
+          <ExternalLink href={`${externalLinks.pingPub}/params`} fontSize="14px">
+            Open on Ping.pub
+          </ExternalLink>
         </HStack>
       </Flex>
     </ListPanel>

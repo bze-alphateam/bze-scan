@@ -105,8 +105,8 @@ describe("TokensPage", () => {
     await screen.findAllByTestId("tile");
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Tokens on BZE61 native · 2 Factory · 2 cross-chain · 1 pool share",
-      "On the DEX4with a price on the DEX ↗",
-      "Created this month1on Factory ↗",
+      "On the DEX4with a price on DEX",
+      "Created this month1on Factory",
       "Cross-chain2 chainsCosmos Hub, Noble",
     ]);
     expect(symbols()).toEqual(["BZE", "HONEY", "VDL", "ATOM", "USDC", "BZE/USDC LP"]);
@@ -119,12 +119,12 @@ describe("TokensPage", () => {
       "href",
       "/tokens/factory%2Fbze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk%2Fuhoney",
     );
-    expect(within(honey).getByRole("link", { name: /View on DEX/ })).toHaveAttribute(
+    expect(within(honey).getByRole("link", { name: "DEX" })).toHaveAttribute(
       "href",
       expect.stringContaining("denom=factory%2Fbze13gzq"),
     );
     expect(vdl).toHaveTextContent("— no market");
-    expect(within(vdl).queryByRole("link", { name: /View on DEX/ })).not.toBeInTheDocument();
+    expect(within(vdl).queryByRole("link", { name: "DEX" })).not.toBeInTheDocument();
     expect(within(atom).getByTestId("token-badges")).toHaveTextContent("Cross-chainCosmos Hub");
     expect(atom).toHaveTextContent("— Halted on the DEX");
     expect(usdc).toHaveTextContent("$1.00");

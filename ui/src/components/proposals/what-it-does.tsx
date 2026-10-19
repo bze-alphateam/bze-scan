@@ -3,6 +3,7 @@
 import { Box, Grid, HStack, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { useModules } from "@/api/hooks";
 import type { Proposal, TokenSummary } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -112,12 +113,8 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
             Wallets, balances and tokens are not affected.
           </Text>
           <HStack gap="18px" wrap="wrap" fontSize="13px">
-            <Link href={`https://github.com/bze-alphateam/bze/releases/tag/${encodeURIComponent(a.name)}`} target="_blank" rel="noopener noreferrer" color="accent.fg">
-              Release notes on GitHub ↗
-            </Link>
-            <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" color="accent.fg">
-              How upgrades work, in the docs ↗
-            </Link>
+            <ExternalLink href={`https://github.com/bze-alphateam/bze/releases/tag/${encodeURIComponent(a.name)}`}>Release notes on GitHub</ExternalLink>
+            <ExternalLink href={externalLinks.docs}>How upgrades work, in the docs</ExternalLink>
           </HStack>
         </Stack>
       );

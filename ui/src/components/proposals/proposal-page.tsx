@@ -5,6 +5,8 @@ import NextLink from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { LuChevronDown, LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
+import { AppLink } from "@/components/layout/app-link";
 import { isNotFound } from "@/api/client";
 import {
   useAllValidators,
@@ -35,7 +37,7 @@ import { TimeAgo } from "@/components/ui/time-ago";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { VTabs, VTabPanel, VTabsBar } from "@/components/ui/vtabs";
 import { formatCount, formatDate, formatDateTime, formatPct, shortHash } from "@/lib/format";
-import { pingPubProposal, voteDestinations } from "@/lib/links";
+import { pingPubProposal, stakingVoteHref } from "@/lib/links";
 import {
   checks,
   coinsText,
@@ -257,9 +259,9 @@ function FromProposer({ p, divided }: { p: Proposal; divided: boolean }) {
       )}
       {meta &&
         ("href" in meta ? (
-          <Link href={meta.href} target="_blank" rel="noopener noreferrer nofollow" display="block" mt="2" color="accent.fg" wordBreak="break-all">
-            {meta.href} ↗
-          </Link>
+          <ExternalLink href={meta.href} userContent display="block" mt="2" wordBreak="break-all">
+            {meta.href}
+          </ExternalLink>
         ) : (
           <Text mt="2" color="fg.muted" wordBreak="break-word">
             {meta.text}
@@ -382,17 +384,12 @@ function WantToVote({ p }: { p: Proposal }) {
         The explorer only shows the vote. Vote from a wallet with the account you stake from: your vote then counts for your stake
         instead of your validator&apos;s, and you can change it until voting ends.
       </Text>
-      <Stack gap="2" mt="3" role="list" aria-label="Where to vote">
-        {voteDestinations(p.id).map((d) => (
-          <Box key={d.href} role="listitem">
-            <Button asChild colorPalette="blue" size="sm" h="36px">
-              <a href={d.href} target="_blank" rel="noopener noreferrer">
-                {d.label} ↗
-              </a>
-            </Button>
-          </Box>
-        ))}
-      </Stack>
+      <Text mt="3" color="fg.muted">
+        Vote on{" "}
+        <AppLink app="staking" href={stakingVoteHref(p.id)}>
+          Staking
+        </AppLink>
+      </Text>
       <Text mt="2.5" color="fg.muted">
         More places to vote will be listed here as they open.
       </Text>
@@ -854,9 +851,9 @@ function Details({ p, actions, vetoed, denoms }: { p: Proposal; actions: Action[
         </DetailList>
       </ListPanel>
       <JsonBlock value={p} />
-      <Link href={pingPubProposal(p.id)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" alignSelf="start">
-        Open on Ping.pub ↗
-      </Link>
+      <ExternalLink href={pingPubProposal(p.id)} fontSize="13px" alignSelf="start">
+        Open on Ping.pub
+      </ExternalLink>
     </Stack>
   );
 }
