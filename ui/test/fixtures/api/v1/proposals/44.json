@@ -53,5 +53,12 @@
   },
   "votes_count": 3,
   "active_set": null,
+  "upgrade": {
+    "height": 20250000,
+    "halt_time": "2025-11-25T10:00:06Z",
+    "resume_time": "2025-11-25T10:12:14Z",
+    "watched": false,
+    "downtime_seconds": 728
+  },
   "updated_at": "2025-11-22T09:06:00Z"
 }

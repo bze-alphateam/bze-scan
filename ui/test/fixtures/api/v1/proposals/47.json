@@ -1,0 +1,64 @@
+{
+  "id": 47,
+  "title": "Upgrade network to v8.1.1",
+  "kind": "software_upgrade",
+  "status": "passed",
+  "expedited": false,
+  "submit_time": "2026-07-16T10:28:03Z",
+  "deposit_end_time": "2026-07-18T10:28:03Z",
+  "voting_start_time": "2026-07-16T10:28:03Z",
+  "voting_end_time": "2026-07-21T10:28:03Z",
+  "tally": {
+    "yes": "106584798486204",
+    "no": "0",
+    "abstain": "0",
+    "no_with_veto": "0"
+  },
+  "turnout_pct": "72.49317",
+  "tally_source": "sync",
+  "summary": "Upgrades the network to v8.1.1 at block 23,855,000.",
+  "metadata": "",
+  "proposer": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+  "proposer_label": null,
+  "message_types": [
+    "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade"
+  ],
+  "messages": [
+    {
+      "@type": "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+      "authority": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
+      "plan": {
+        "name": "v8.1.1",
+        "time": "0001-01-01T00:00:00Z",
+        "height": "23855000",
+        "info": "",
+        "upgraded_client_state": null
+      }
+    }
+  ],
+  "total_deposit": [
+    {
+      "denom": "ubze",
+      "amount": "100000000000"
+    }
+  ],
+  "tally_bonded_tokens": "147006041227802",
+  "tally_updated_at": "2026-07-21T10:29:00Z",
+  "submit_height": null,
+  "submit_tx_hash": null,
+  "resolved_height": 23180000,
+  "validators_voted": {
+    "voted": 1,
+    "total": null
+  },
+  "votes_count": 3,
+  "active_set": null,
+  "upgrade": {
+    "height": 23855000,
+    "halt_time": "2026-07-30T12:00:00Z",
+    "resume_time": "2026-07-30T12:02:31Z",
+    "watched": true,
+    "downtime_seconds": 151
+  },
+  "updated_at": "2026-07-30T13:00:00Z"
+}

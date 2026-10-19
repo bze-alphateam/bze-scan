@@ -64,6 +64,7 @@ import {
 } from "@/render/proposals";
 
 import { ChecksList, HistoricalChip, OPTION_COLORS, ProposalStatusTag, TallyBars, VerdictTag } from "./parts";
+import { haltedUpgrade, UpgradeRecovery } from "./upgrade-recovery";
 import { ActionView } from "./what-it-does";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -480,6 +481,7 @@ const NOT_VOTED_SHOWN = 5;
 function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | undefined }) {
   if (!votes) return <ListSkeleton rows={5} />;
   const voting = p.status === "voting_period";
+  const upgrade = haltedUpgrade(p);
   return (
     <Box>
       {votes.length === 0 ? (
@@ -501,6 +503,7 @@ function ValidatorsTab({ p, votes }: { p: Proposal; votes: ProposalVote[] | unde
       ) : (
         <TodayNotVoted votes={votes} voting={voting} recording={isTallied(p.status)} />
       )}
+      {upgrade && <UpgradeRecovery upgrade={upgrade} />}
     </Box>
   );
 }
