@@ -677,6 +677,8 @@ export interface Proposal extends ProposalSummary {
    * it, and while voting is open.
    */
   active_set: ActiveSet | null;
+  /** A passed software upgrade's halt (`GET /upgrades/{height}` has who came back when); null for every other proposal. */
+  upgrade: ProposalUpgrade | null;
   updated_at: string;
 }
 
@@ -684,6 +686,59 @@ export interface ActiveSet {
   height: number;
   size: number;
   non_voters_count: number;
+}
+
+/**
+ * The halt of a passed software upgrade planned at `height`: the old binary
+ * decides that block and stops, so `halt_time` is when `height` was decided
+ * and `resume_time` when the next block was. Both null until the explorer has
+ * read the blocks after the halt; `watched` when its halt watch ran during it.
+ */
+export interface ProposalUpgrade {
+  height: number;
+  halt_time: string | null;
+  resume_time: string | null;
+  watched: boolean;
+  downtime_seconds: number | null;
+}
+
+/** `GET /upgrades/{height}`: the upgrade's halt and every validator of the set at the halt, with when it came back. */
+export interface Upgrade extends ProposalUpgrade {
+  proposal_id: number;
+  name: string;
+  active_set_size: number | null;
+  /** The last height read for signatures: the window ends `window_end_height − height` blocks after the halt. */
+  window_end_height: number | null;
+  /** Null while the blocks after the halt are still being read. */
+  computed_at: string | null;
+  /** Sorted by `back_time`, the ones not back (null) last, then by power. */
+  members: UpgradeMember[];
+}
+
+/**
+ * A validator of the set at an upgrade's halt. `back_source` `halt_vote`: the
+ * halt watch saw it voting during the halt, `back_time` is that poll (about
+ * 5 s precise); `commit`: `back_time` is when the first block it signed was
+ * decided (the restart itself for one that signed the first block), with
+ * `first_signed_height` and `blocks_needed` (blocks after the halt). All
+ * null while it is not back.
+ */
+export interface UpgradeMember {
+  /** Null (and `moniker` too) when no validator is known with the consensus address. */
+  operator_address: string | null;
+  /** Upper-case hex. */
+  consensus_address: string;
+  moniker: string | null;
+  voting_power: number;
+  /** Its share of the set's power, percent with five decimals. */
+  power_pct: string;
+  back_time: string | null;
+  back_source: "halt_vote" | "commit" | null;
+  vote_time: string | null;
+  /** `back_time` minus the halt, never negative. */
+  seconds_back: number | null;
+  first_signed_height: number | null;
+  blocks_needed: number | null;
 }
 
 /** A validator of a closed proposal's tally set that did not vote, largest power first. */

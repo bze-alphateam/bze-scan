@@ -1,0 +1,65 @@
+{
+  "items": [
+    {
+      "voter": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "voter_label": null,
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 21490000,
+      "tx_index": 0,
+      "tx_hash": "000000000000000000000000000000000000000000000000000000000147E950",
+      "time": "2025-12-12T08:00:00Z",
+      "validator": null,
+      "validator_operator": null,
+      "voting_power_pct": null,
+      "source": "event"
+    },
+    {
+      "voter": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "voter_label": null,
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 21480000,
+      "tx_index": 0,
+      "tx_hash": "000000000000000000000000000000000000000000000000000000000147C240",
+      "time": "2025-12-11T08:00:00Z",
+      "validator": null,
+      "validator_operator": null,
+      "voting_power_pct": null,
+      "source": "event"
+    },
+    {
+      "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "voter_label": {
+        "name": "Honeycomb",
+        "kind": "validator_owner"
+      },
+      "option": "yes",
+      "options": [
+        {
+          "option": 1,
+          "weight": "1.000000000000000000"
+        }
+      ],
+      "height": 21460000,
+      "tx_index": 0,
+      "tx_hash": "0000000000000000000000000000000000000000000000000000000001477420",
+      "time": "2025-12-09T08:00:00Z",
+      "validator": "Honeycomb",
+      "validator_operator": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "voting_power_pct": "12.34567",
+      "source": "event"
+    }
+  ],
+  "next_cursor": null
+}

@@ -3,23 +3,27 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { ChainParams, Page, Proposal, ProposalDeposit, ProposalNonVoter, ProposalVote, Stats, Status, TokenSummary, ValidatorList } from "@/api/types";
+import type { ChainParams, Page, Proposal, ProposalDeposit, ProposalNonVoter, ProposalVote, Stats, Status, TokenSummary, Upgrade, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
 import p43Json from "../../../test/fixtures/api/v1/proposals/43.json";
 import deposits43 from "../../../test/fixtures/api/v1/proposals/43/deposits.json";
 import votes43 from "../../../test/fixtures/api/v1/proposals/43/votes.json";
+import p44Json from "../../../test/fixtures/api/v1/proposals/44.json";
 import p45Json from "../../../test/fixtures/api/v1/proposals/45.json";
 import deposits45 from "../../../test/fixtures/api/v1/proposals/45/deposits.json";
 import nonVoters45 from "../../../test/fixtures/api/v1/proposals/45/non-voters.json";
 import votes45 from "../../../test/fixtures/api/v1/proposals/45/votes.json";
+import p47Json from "../../../test/fixtures/api/v1/proposals/47.json";
 import p48Json from "../../../test/fixtures/api/v1/proposals/48.json";
 import deposits48 from "../../../test/fixtures/api/v1/proposals/48/deposits.json";
 import votes48 from "../../../test/fixtures/api/v1/proposals/48/votes.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
 import status from "../../../test/fixtures/api/v1/status.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
+import upgrade20250000 from "../../../test/fixtures/api/v1/upgrades/20250000.json";
+import upgrade23855000 from "../../../test/fixtures/api/v1/upgrades/23855000.json";
 import validators from "../../../test/fixtures/api/v1/validators.json";
 
 import { ProposalPage } from "./proposal-page";
@@ -30,13 +34,24 @@ const p45 = p45Json as Proposal;
 const p43 = p43Json as Proposal;
 // 45 again, rejected by a No majority.
 const rejected: Proposal = { ...p45, status: "rejected", tally: { yes: "0", no: p45.tally!.yes, abstain: "0", no_with_veto: "0" } };
+// 47 (v8.1.1) was watched by the halt watch; 44 (v8.0.0) was not.
+const p47 = p47Json as Proposal;
+const p44 = p44Json as Proposal;
+const UPGRADES: Record<number, Upgrade> = {
+  23855000: upgrade23855000 as Upgrade,
+  20250000: upgrade20250000 as Upgrade,
+};
 const VOTES: Record<number, Page<ProposalVote>> = {
   48: votes48 as Page<ProposalVote>,
+  47: votes45 as Page<ProposalVote>,
+  44: votes45 as Page<ProposalVote>,
   45: votes45 as Page<ProposalVote>,
   43: votes43 as Page<ProposalVote>,
 };
 const DEPOSITS: Record<number, Page<ProposalDeposit>> = {
   48: deposits48 as Page<ProposalDeposit>,
+  47: deposits45 as Page<ProposalDeposit>,
+  44: deposits45 as Page<ProposalDeposit>,
   45: deposits45 as Page<ProposalDeposit>,
   43: deposits43 as Page<ProposalDeposit>,
 };
@@ -58,6 +73,7 @@ function api(p: Proposal = p48, extra: Partial<ExplorerApi> = {}): ExplorerApi {
     proposalVotes,
     proposalDeposits: (id) => Promise.resolve(DEPOSITS[id]),
     proposalNonVoters: () => Promise.resolve(nonVoters45 as Page<ProposalNonVoter>),
+    upgrade: (height) => Promise.resolve(UPGRADES[height]),
     params: () => Promise.resolve(params as ChainParams),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     validators: () => Promise.resolve(validators as ValidatorList),
@@ -253,6 +269,86 @@ describe("ProposalPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
     expect(await screen.findByTestId("not-voted")).toHaveTextContent(/^All 4 active validators voted\.$/);
     expect(nonVoters).not.toHaveBeenCalled();
+  });
+
+  it("lists when each validator came back after a watched upgrade, in arrival order", async () => {
+    renderWithProviders(<ProposalPage id={47} />, { api: api(p47) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    const section = await screen.findByTestId("upgrade-recovery");
+    expect(within(section).getByRole("heading", { name: "After the upgrade" })).toBeInTheDocument();
+    expect(await within(section).findByTestId("recovery-header")).toHaveTextContent(
+      "The chain halted at block 23,855,000 on Jul 30, 2026, 12:00 UTC and restarted 2 min later.",
+    );
+    expect(within(section).getByRole("link", { name: "23,855,000" })).toHaveAttribute("href", "/blocks/23855000");
+    const rows = within(section).getAllByTestId("recovery-row");
+    expect(rows.map((r) => within(r).getByTestId("recovery-back").textContent)).toEqual([
+      "back in under a minute",
+      "back in 1 min",
+      "back in 2 min",
+      "back when the chain restarted",
+      "back 2 h 14 min after the restart · 600 blocks",
+      "not back within 10,000 blocks",
+    ]);
+    expect(within(rows[0]).getByRole("link", { name: "Honeycomb" })).toHaveAttribute(
+      "href",
+      "/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    );
+    // No validator is known with this consensus address: no link.
+    expect(within(rows[4]).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(rows[4]).getByTitle("C3B2A1F0E9D8C7B6A5948372615F4E3D2C1B0A9F")).toHaveTextContent("C3B2…0A9F");
+    expect(within(section).queryByTestId("recovery-unwatched")).not.toBeInTheDocument();
+    expect(within(section).queryByTestId("recovery-pending")).not.toBeInTheDocument();
+  });
+
+  it("says an unwatched upgrade has no exact times before the restart", async () => {
+    renderWithProviders(<ProposalPage id={44} />, { api: api(p44) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    const section = await screen.findByTestId("upgrade-recovery");
+    expect(await within(section).findByTestId("recovery-unwatched")).toHaveTextContent(
+      "The explorer was not watching during this halt, so validators back before the restart show no exact time.",
+    );
+    expect(within(section).getAllByTestId("recovery-back").map((b) => b.textContent)).toEqual([
+      "back when the chain restarted",
+      "back when the chain restarted",
+      "back under a minute after the restart · 2 blocks",
+      "back 2 min after the restart · 18 blocks",
+      "not back within 10,000 blocks",
+    ]);
+  });
+
+  it("shows the rows so far while the blocks after the halt are still being read", async () => {
+    const u = upgrade23855000 as Upgrade;
+    const pending: Upgrade = {
+      ...u,
+      computed_at: null,
+      window_end_height: null,
+      members: u.members.map((m) => (m.back_source === "halt_vote" ? m : { ...m, back_time: null, back_source: null, seconds_back: null, first_signed_height: null, blocks_needed: null })),
+    };
+    renderWithProviders(<ProposalPage id={47} />, { api: api(p47, { upgrade: () => Promise.resolve(pending) }) });
+    await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+    const section = await screen.findByTestId("upgrade-recovery");
+    expect(await within(section).findByTestId("recovery-pending")).toHaveTextContent("Still collecting");
+    expect(within(section).getAllByTestId("recovery-back").map((b) => b.textContent)).toEqual([
+      "back in under a minute",
+      "back in 1 min",
+      "back in 2 min",
+      "not back yet",
+      "not back yet",
+      "not back yet",
+    ]);
+  });
+
+  it("leaves other proposals, and an upgrade the chain has not halted for, without the section", async () => {
+    const upgrade = vi.fn();
+    const ahead: Proposal = { ...p47, upgrade: { ...p47.upgrade!, halt_time: null, resume_time: null, downtime_seconds: null } };
+    for (const p of [p45, ahead]) {
+      const { unmount } = renderWithProviders(<ProposalPage id={p.id} />, { api: api(p, { upgrade }) });
+      await userEvent.click(await screen.findByRole("button", { name: "See every vote" }));
+      expect(await screen.findAllByTestId("validator-vote")).not.toHaveLength(0);
+      expect(screen.queryByTestId("upgrade-recovery")).not.toBeInTheDocument();
+      unmount();
+    }
+    expect(upgrade).not.toHaveBeenCalled();
   });
 
   it("marks what the archive read as historical: the turnout, the votes and the deposit", async () => {

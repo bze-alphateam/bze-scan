@@ -102,6 +102,23 @@ test.describe("proposal page", () => {
     await expect(page.getByTestId("historical-explainer")).toHaveCount(0);
   });
 
+  test("a passed upgrade lists when each validator came back after the halt", async ({ page }) => {
+    await page.goto("/proposals/47");
+    await page.getByTestId("who-voted").getByRole("button", { name: "See every vote" }).click();
+    const recovery = page.getByTestId("upgrade-recovery");
+    await expect(recovery.getByTestId("recovery-header")).toHaveText(
+      "The chain halted at block 23,855,000 on Jul 30, 2026, 12:00 UTC and restarted 2 min later.",
+    );
+    await expect(recovery.getByTestId("recovery-back").first()).toHaveText("back in under a minute");
+    await expect(recovery.getByTestId("recovery-back").nth(1)).toHaveText("back in 1 min");
+    await expect(recovery.getByTestId("recovery-row").first().getByRole("link", { name: "Honeycomb" })).toHaveAttribute(
+      "href",
+      "/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+    );
+    await expect(recovery.getByTestId("recovery-unwatched")).toHaveCount(0);
+    await noHorizontalScroll(page);
+  });
+
   test("a proposal tallied before the explorer ran marks its archive values historical", async ({ page }) => {
     await page.goto("/proposals/43");
     await expect(page.getByTestId("summary-tiles").getByTestId("tile").nth(2)).toHaveText("Turnout67.3%33.4% needed · historical");

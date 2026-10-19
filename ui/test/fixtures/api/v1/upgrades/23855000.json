@@ -1,0 +1,92 @@
+{
+  "height": 23855000,
+  "proposal_id": 47,
+  "name": "v8.1.1",
+  "halt_time": "2026-07-30T12:00:00Z",
+  "resume_time": "2026-07-30T12:02:31Z",
+  "downtime_seconds": 151,
+  "watched": true,
+  "active_set_size": 6,
+  "window_end_height": 23865000,
+  "computed_at": "2026-07-30T13:00:00Z",
+  "members": [
+    {
+      "operator_address": "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
+      "consensus_address": "1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D",
+      "moniker": "Honeycomb",
+      "voting_power": 40000000,
+      "power_pct": "36.03604",
+      "back_time": "2026-07-30T12:00:42Z",
+      "back_source": "halt_vote",
+      "vote_time": "2026-07-30T12:00:40Z",
+      "seconds_back": 42,
+      "first_signed_height": null,
+      "blocks_needed": null
+    },
+    {
+      "operator_address": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+      "consensus_address": "6A1B7C2D3E4F5061728394A5B6C7D8E9F0A1B2C3",
+      "moniker": "Thamar Node",
+      "voting_power": 31250000,
+      "power_pct": "28.15315",
+      "back_time": "2026-07-30T12:01:35Z",
+      "back_source": "halt_vote",
+      "vote_time": "2026-07-30T12:01:33Z",
+      "seconds_back": 95,
+      "first_signed_height": null,
+      "blocks_needed": null
+    },
+    {
+      "operator_address": "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440",
+      "consensus_address": "0F4E2D1C3B5A69788796A5B4C3D2E1F00F1E2D3C",
+      "moniker": "Deep Fields",
+      "voting_power": 8400000,
+      "power_pct": "7.56757",
+      "back_time": "2026-07-30T12:02:20Z",
+      "back_source": "halt_vote",
+      "vote_time": "2026-07-30T12:02:18Z",
+      "seconds_back": 140,
+      "first_signed_height": null,
+      "blocks_needed": null
+    },
+    {
+      "operator_address": "bzevaloper1jr90yqzvqr5g894qxqly4vaae3u032wlljd0ev",
+      "consensus_address": "5D4C3B2A19F8E7D6C5B4A3928170F6E5D4C3B2A1",
+      "moniker": "Old Timer",
+      "voting_power": 5000000,
+      "power_pct": "4.50450",
+      "back_time": "2026-07-30T12:02:31Z",
+      "back_source": "commit",
+      "vote_time": "2026-07-30T12:02:30Z",
+      "seconds_back": 151,
+      "first_signed_height": 23855001,
+      "blocks_needed": 0
+    },
+    {
+      "operator_address": null,
+      "consensus_address": "C3B2A1F0E9D8C7B6A5948372615F4E3D2C1B0A9F",
+      "moniker": null,
+      "voting_power": 1200000,
+      "power_pct": "1.08108",
+      "back_time": "2026-07-30T14:16:31Z",
+      "back_source": "commit",
+      "vote_time": "2026-07-30T14:16:30Z",
+      "seconds_back": 8191,
+      "first_signed_height": 23855601,
+      "blocks_needed": 600
+    },
+    {
+      "operator_address": "bzevaloper12ngv3tq3fqaevdlu5hznemz5m999l2t8zpggf8",
+      "consensus_address": "9E8D7C6B5A49382716F5E4D3C2B1A09F8E7D6C5B",
+      "moniker": "Sleepy Node",
+      "voting_power": 25150000,
+      "power_pct": "22.65766",
+      "back_time": null,
+      "back_source": null,
+      "vote_time": null,
+      "seconds_back": null,
+      "first_signed_height": null,
+      "blocks_needed": null
+    }
+  ]
+}
