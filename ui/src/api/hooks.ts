@@ -23,6 +23,7 @@ import type {
   TokenSummary,
   Tx,
   TxListParams,
+  Upgrade,
   ValidatorList,
   ValidatorListParams,
   VoteOption,
@@ -62,6 +63,7 @@ export const queryKeys = {
   validatorVotes: (id: number) => ["proposal-votes", id, "validators"] as const,
   proposalDeposits: (id: number) => ["proposal-deposits", id] as const,
   proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
+  upgrade: (height: number) => ["upgrade", height] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
@@ -552,6 +554,23 @@ export function useProposalNonVoters(id: number, enabled = true) {
     getNextPageParam: nextPage(100),
     enabled,
     ...immutable,
+  });
+}
+
+/**
+ * A software upgrade's halt and who came back when: polled while the blocks
+ * after the halt are still being read, fetched once after (`computed_at`).
+ */
+export function useUpgrade(height: number, enabled = true) {
+  const api = useApi();
+  const computed = (u: Upgrade | undefined) => u?.computed_at != null;
+  return useQuery({
+    queryKey: queryKeys.upgrade(height),
+    queryFn: ({ signal }) => api.upgrade(height, signal),
+    enabled,
+    ...live,
+    refetchInterval: (q) => (computed(q.state.data) ? false : live.refetchInterval),
+    staleTime: (q) => (computed(q.state.data) ? Infinity : live.staleTime),
   });
 }
 
