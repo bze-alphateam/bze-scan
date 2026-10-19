@@ -52,7 +52,12 @@ test.describe("proposal page", () => {
     const votes = page.getByTestId("votes-card");
     await expect(votes.getByTestId("check")).toHaveCount(3);
     await expect(votes.getByTestId("verdict")).toHaveText("On track to pass");
-    await expect(page.getByTestId("want-to-vote").getByRole("link", { name: /Vote in the BZE Staking app/ })).toHaveAttribute("href", /\/governance\/48$/);
+    await expect(page.getByTestId("want-to-vote").getByRole("link", { name: "Staking" })).toHaveAttribute("href", /\/governance\/48$/);
+    // A link written in the proposal's summary: an ExternalLink, nofollow, in a new tab.
+    const notes = page.getByRole("link", { name: "release page" });
+    await expect(notes).toHaveAttribute("data-testid", "external-link");
+    await expect(notes).toHaveAttribute("target", "_blank");
+    await expect(notes).toHaveAttribute("rel", "noopener noreferrer nofollow");
 
     const who = page.getByTestId("who-voted");
     await expect(who.getByTestId("validator-vote")).toHaveCount(2);

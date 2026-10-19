@@ -135,7 +135,8 @@ describe("DEX outcome", () => {
     expect(screen.getByRole("link", { name: "order #1042" })).toHaveAttribute("href", `/accounts/${A}?tab=activity`);
     expect(screen.getByTestId("dex-filled")).toHaveTextContent("60% filled");
     expect(screen.getByText(/Buy 1,000 BZE at 0.0125 USDC each · 12.5 USDC total/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open BZE\/USDC on the DEX/ })).toHaveAttribute("href", dexMarketUrl(MARKET));
+    expect(screen.getByText(/Open BZE\/USDC on/)).toHaveTextContent("Open BZE/USDC on DEX");
+    expect(screen.getByRole("link", { name: "DEX" })).toHaveAttribute("href", dexMarketUrl(MARKET));
     expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
   });
 

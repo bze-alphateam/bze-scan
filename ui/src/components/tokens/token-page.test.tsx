@@ -130,8 +130,9 @@ describe("TokenPage", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "HONEY" })).toBeInTheDocument();
     expect(screen.getByTestId("token-chips")).toHaveTextContent("FactoryTrading on the DEXhoney.example");
     expect(screen.getByTestId("token-created")).toHaveTextContent("Created Oct 2, 2099 by3Gbze13gz…yhqk");
-    expect(screen.getByRole("link", { name: /View on the DEX/ })).toHaveAttribute("href", expect.stringContaining("uhoney"));
-    expect(appIconsIn(screen.getByRole("link", { name: /View on the DEX/ }))).toEqual(["dex"]);
+    expect(screen.getByTestId("token-trade")).toHaveTextContent("Trade on DEX");
+    expect(screen.getByRole("link", { name: "DEX" })).toHaveAttribute("href", expect.stringContaining("uhoney"));
+    expect(appIconsIn(screen.getByRole("link", { name: "DEX" }))).toEqual(["dex"]);
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Total supply500K HONEYcan change · see below",
       "Holders310accounts with at least 1 HONEY",

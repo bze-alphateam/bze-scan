@@ -3,6 +3,7 @@
 import { Box, Flex, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 
+import { AppLink } from "@/components/layout/app-link";
 import { useAllValidators } from "@/api/hooks";
 import type { Account, Validator } from "@/api/types";
 import { Chip } from "@/components/ui/chip";
@@ -98,23 +99,12 @@ export function StakingTab({ a }: { a: Account }) {
           {bondFull(a.total_staked ?? "0")} staked with {formatCount(n)} {n === 1 ? "validator" : "validators"} ·{" "}
           {bondFull(rewards)} of rewards waiting
         </Text>
-        <Link
-          href={externalLinks.staking}
-          target="_blank"
-          rel="noopener noreferrer"
-          display="inline-flex"
-          alignItems="center"
-          h="30px"
-          px="3"
-          borderWidth="1px"
-          borderColor="border.panel"
-          rounded="l2"
-          fontSize="13px"
-          color="fg"
-          _hover={{ borderColor: "accent.fg", color: "accent.fg", textDecoration: "none" }}
-        >
-          Manage on Staking ↗
-        </Link>
+        <Text color="fg.muted" whiteSpace="nowrap">
+          Manage on{" "}
+          <AppLink app="staking" href={externalLinks.staking}>
+            Staking
+          </AppLink>
+        </Text>
       </Flex>
       <ListPanel>
         <ListHead templateColumns={COLUMNS} aria-hidden>

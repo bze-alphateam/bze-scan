@@ -111,8 +111,8 @@ export function websiteLink(website: string | null): { href: string; text: strin
  * proposal page lists these as data. The BZE Staking app's proposal page
  * votes with the staked BZE (Keplr, Leap and the other wallets it supports).
  */
-export function voteDestinations(id: number): NavLink[] {
-  return [{ label: "Vote in the BZE Staking app", href: `${externalLinks.staking}/governance/${id}` }];
+export function stakingVoteHref(id: number): string {
+  return `${externalLinks.staking}/governance/${id}`;
 }
 
 /** A proposal on Ping.pub. */

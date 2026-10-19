@@ -5,6 +5,7 @@ import NextLink from "next/link";
 import { useMemo, useState } from "react";
 import { LuTriangleAlert } from "react-icons/lu";
 
+import { AppLink } from "@/components/layout/app-link";
 import { useAllTokens } from "@/api/hooks";
 import type { LpPair, TokenSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -98,18 +99,24 @@ function Tiles({ tokens }: { tokens: TokenSummary[] }) {
         label="On the DEX"
         value={formatCount(tiles.onDex)}
         sub={
-          <Link href={externalLinks.dex} target="_blank" rel="noopener noreferrer" color="accent.fg">
-            with a price on the DEX ↗
-          </Link>
+          <>
+            with a price on{" "}
+            <AppLink app="dex" href={externalLinks.dex}>
+              DEX
+            </AppLink>
+          </>
         }
       />
       <Tile
         label="Created this month"
         value={formatCount(tiles.createdThisMonth)}
         sub={
-          <Link href={externalLinks.factory} target="_blank" rel="noopener noreferrer" color="accent.fg">
-            on Factory ↗
-          </Link>
+          <>
+            on{" "}
+            <AppLink app="factory" href={externalLinks.factory}>
+              Factory
+            </AppLink>
+          </>
         }
       />
       <Tile
@@ -174,9 +181,9 @@ function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSum
       <PriceCell t={t} />
       <Box hideBelow="c3" textAlign="right">
         {t.price_usd != null && (
-          <Link href={dexAssetUrl(t.denom)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" whiteSpace="nowrap">
-            View on DEX ↗
-          </Link>
+          <AppLink app="dex" href={dexAssetUrl(t.denom)}>
+            DEX
+          </AppLink>
         )}
       </Box>
     </ListRow>
