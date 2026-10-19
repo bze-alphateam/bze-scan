@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -15,9 +16,10 @@ type DB interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// PGStore reads and closes explorer.orders rows.
+// PGStore reads, names and closes explorer.orders rows.
 type PGStore struct {
 	db DB
 }
@@ -48,14 +50,14 @@ func (s *PGStore) Cursor(ctx context.Context) (Position, bool, error) {
 
 // Open returns the open orders created at or below height.
 func (s *PGStore) Open(ctx context.Context, height int64) ([]OpenOrder, error) {
-	rows, err := s.db.Query(ctx, `SELECT order_id, owner FROM explorer.orders
+	rows, err := s.db.Query(ctx, `SELECT order_id, owner, market_id, side FROM explorer.orders
 		WHERE status = 'open' AND created_height <= $1 ORDER BY order_id`, height)
 	if err != nil {
 		return nil, fmt.Errorf("open orders: %w", err)
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (OpenOrder, error) {
 		var o OpenOrder
-		err := r.Scan(&o.OrderID, &o.Owner)
+		err := r.Scan(&o.OrderID, &o.Owner, &o.MarketID, &o.Side)
 		return o, err
 	})
 	if err != nil {
@@ -73,6 +75,42 @@ func (s *PGStore) Close(ctx context.Context, ids []string, pos Position) (int64,
 		 WHERE order_id IN (SELECT order_id FROM locked) AND status = 'open'`, ids, pos.Height, pos.Time)
 	if err != nil {
 		return 0, fmt.Errorf("close orders: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// Name sets the owner of the orders without one among owners and the maker
+// of their fills without one, in one transaction.
+func (s *PGStore) Name(ctx context.Context, owners map[string]string) (int64, error) {
+	ids := make([]string, 0, len(owners))
+	for id := range owners {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	names := make([]string, len(ids))
+	for i, id := range ids {
+		names[i] = owners[id]
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("name orders: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	tag, err := tx.Exec(ctx, `WITH r AS (SELECT * FROM unnest($1::text[], $2::text[]) AS r(order_id, owner)),
+		locked AS (SELECT o.order_id FROM explorer.orders o JOIN r ON r.order_id = o.order_id
+		            WHERE o.owner = '' ORDER BY o.order_id FOR UPDATE OF o)
+		UPDATE explorer.orders AS o SET owner = r.owner, updated_at = now()
+		  FROM r WHERE o.order_id = r.order_id AND o.order_id IN (SELECT order_id FROM locked)`, ids, names)
+	if err != nil {
+		return 0, fmt.Errorf("name orders: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE explorer.order_fills AS f SET maker = r.owner
+		  FROM unnest($1::text[], $2::text[]) AS r(order_id, owner)
+		 WHERE f.order_id = r.order_id AND f.maker = ''`, ids, names); err != nil {
+		return 0, fmt.Errorf("name fill makers: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("name orders: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
