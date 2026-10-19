@@ -8,7 +8,8 @@ import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
-import { AppButton } from "@/components/layout/app-button";
+import { AppLink } from "@/components/layout/app-link";
+import { ExternalLink } from "@/components/ui/external-link";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Callout, type CalloutTone } from "@/components/ui/callout";
 import { Chip } from "@/components/ui/chip";
@@ -133,9 +134,9 @@ function Header({ t }: { t: Token }) {
           <DetailMeta data-testid="token-chips">
             <ExplainedBadges badges={headerChips(t)} />
             {site && (
-              <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" color="accent.fg">
-                {site.text} ↗
-              </Link>
+              <ExternalLink href={site.href} userContent>
+                {site.text}
+              </ExternalLink>
             )}
           </DetailMeta>
           {t.kind === "factory" && t.creator && (
@@ -152,9 +153,12 @@ function Header({ t }: { t: Token }) {
           )}
         </Box>
         {onDex(t) && (
-          <AppButton app="dex" href={dexAssetUrl(t.denom)}>
-            View on the DEX
-          </AppButton>
+          <Text as="span" fontSize="sm" color="fg.muted" whiteSpace="nowrap" data-testid="token-trade">
+            Trade on{" "}
+            <AppLink app="dex" href={dexAssetUrl(t.denom)}>
+              DEX
+            </AppLink>
+          </Text>
         )}
       </Flex>
     </Box>
@@ -741,9 +745,9 @@ function RecentActivity({ t, events }: { t: Token; events: TokenEvent[] }) {
 
 function PingPubOpen(props: { hideBelow?: "c2"; hideFrom?: "c2"; display?: string; px?: string; pb?: string }) {
   return (
-    <Link href={externalLinks.pingPub} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
-      Open on Ping.pub ↗
-    </Link>
+    <ExternalLink href={externalLinks.pingPub} fontSize="12px" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub
+    </ExternalLink>
   );
 }
 

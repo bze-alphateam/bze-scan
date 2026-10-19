@@ -5,6 +5,7 @@ import NextLink from "next/link";
 import { useMemo, type ReactNode } from "react";
 import { LuChevronLeft, LuChevronRight, LuClock, LuTriangleAlert } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { isNotFound } from "@/api/client";
 import {
   useBlock,
@@ -271,12 +272,12 @@ function Signatures({ block }: { block: Block }) {
   );
 }
 
-/** "Open on Ping.pub ↗": on the tab bar from c2 up, under the JSON on phones where the tabs fill the bar. */
+/** "Open on Ping.pub": on the tab bar from c2 up, under the JSON on phones where the tabs fill the bar. */
 function PingPubOpen({ height, ...props }: { height: number } & Omit<LinkProps, "href" | "children">) {
   return (
-    <Link href={pingPubBlockUrl(height)} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
-      Open on Ping.pub ↗
-    </Link>
+    <ExternalLink href={pingPubBlockUrl(height)} fontSize="12px" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub
+    </ExternalLink>
   );
 }
 
@@ -386,9 +387,7 @@ function GapIcon() {
 
 function PingPubLookup({ height }: { height: number }) {
   return (
-    <Link href={pingPubBlockUrl(height)} target="_blank" rel="noopener noreferrer" color="accent.fg">
-      Look it up on Ping.pub ↗
-    </Link>
+    <ExternalLink href={pingPubBlockUrl(height)}>Look it up on Ping.pub</ExternalLink>
   );
 }
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useId, useState, type ReactNode } from "react";
 import { LuTriangleAlert } from "react-icons/lu";
 
+import { AppLink } from "@/components/layout/app-link";
 import { ApiError, isNotFound } from "@/api/client";
 import { useAccount, useAllValidators, useDenoms, useModules } from "@/api/hooks";
 import type { Account, ActivityCategory, ModuleAccount } from "@/api/types";
@@ -183,9 +184,12 @@ function PersonalTiles({ a }: { a: Account }) {
         label="Rewards to claim"
         value={bondCompact(amountOf(a.total_rewards, BOND_DENOM))}
         sub={
-          <Link href={externalLinks.staking} target="_blank" rel="noopener noreferrer" color="accent.fg">
-            Claim on Staking ↗
-          </Link>
+          <>
+            Claim on{" "}
+            <AppLink app="staking" href={externalLinks.staking}>
+              Staking
+            </AppLink>
+          </>
         }
       />
       <Tile

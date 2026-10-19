@@ -1,8 +1,9 @@
 import { Box, HStack, Link, Stack, Text } from "@chakra-ui/react";
 import BigNumber from "bignumber.js";
 import NextLink from "next/link";
-import { LuClock, LuExternalLink } from "react-icons/lu";
+import { LuClock } from "react-icons/lu";
 
+import { AppLink } from "@/components/layout/app-link";
 import type { Coin, Order, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { shortOrderId } from "@/lib/format";
@@ -199,9 +200,12 @@ function createdPct(msg: RenderMessage, outcome: MessageOutcome | null): number 
 function DexLink({ marketId, ctx }: { marketId: string | null; ctx: RenderContext }) {
   if (!splitMarket(marketId)) return null;
   return (
-    <Link href={dexMarketUrl(marketId as string)} target="_blank" rel="noopener noreferrer" fontSize="sm">
-      Open {marketName(marketId, ctx)} on the DEX <LuExternalLink aria-hidden />
-    </Link>
+    <Text fontSize="sm">
+      Open {marketName(marketId, ctx)} on{" "}
+      <AppLink app="dex" href={dexMarketUrl(marketId as string)}>
+        DEX
+      </AppLink>
+    </Text>
   );
 }
 

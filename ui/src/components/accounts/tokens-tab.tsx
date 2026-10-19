@@ -4,6 +4,7 @@ import { Box, Flex, Link, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useState } from "react";
 
+import { AppLink } from "@/components/layout/app-link";
 import { useDenoms } from "@/api/hooks";
 import type { Account } from "@/api/types";
 import { TokenLogo } from "@/components/tokens/tokens-page";
@@ -104,9 +105,9 @@ function Row({ row, staked, unstaking }: { row: TokenRow; staked: string | null;
       </Text>
       <Box hideBelow="c3" textAlign="right">
         {row.valueUsd != null && (
-          <Link href={dexAssetUrl(row.denom)} target="_blank" rel="noopener noreferrer" fontSize="13px" color="accent.fg" whiteSpace="nowrap">
-            View on DEX ↗
-          </Link>
+          <AppLink app="dex" href={dexAssetUrl(row.denom)}>
+            DEX
+          </AppLink>
         )}
       </Box>
     </ListRow>
