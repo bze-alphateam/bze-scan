@@ -1,11 +1,12 @@
 "use client";
 
-import { Box, Button, Skeleton, Spinner, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Skeleton, Spinner, Stack, Text } from "@chakra-ui/react";
 import { useMemo } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { ExternalLink } from "@/components/ui/external-link";
 import { useTokenDirectory, useTransaction, useValidatorDirectory } from "@/api/hooks";
+import { AppLink } from "@/components/layout/app-link";
 import type { Transfer, Tx } from "@/api/types";
 import { StepList } from "@/components/funds-flow/step-list";
 import { isSimple } from "@/components/funds-flow/net";
@@ -18,6 +19,7 @@ import { StateBox } from "@/components/ui/state-box";
 import { failureReason } from "@/render/errors";
 import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext, RenderMessage } from "@/render/messages/types";
+import { appDestinations } from "@/render/tx-apps";
 
 import { FailureCard, Overview, pingPubTxUrl, TxDetails, TxHead, TxHeader } from "./tx-sections";
 
@@ -119,6 +121,24 @@ function Actions({ tx, ctx }: { tx: Tx; ctx: RenderContext }) {
   );
 }
 
+/** "Vote on Staking": where the action can be done again, one link per app; failed transactions too. */
+function AppLinks({ tx }: { tx: Tx }) {
+  const apps = appDestinations(tx.messages.map(asRenderMessage));
+  if (apps.length === 0) return null;
+  return (
+    <Flex mt="3" gap="4" wrap="wrap" data-testid="tx-apps">
+      {apps.map((d) => (
+        <Text key={d.app} as="span" fontSize="sm" color="fg.muted" whiteSpace="nowrap">
+          {d.verb}{" "}
+          <AppLink app={d.app} href={d.href}>
+            {d.name}
+          </AppLink>
+        </Text>
+      ))}
+    </Flex>
+  );
+}
+
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <Box as="section" mt="8" aria-labelledby={id}>
@@ -166,6 +186,7 @@ export function TxView({ tx }: { tx: Tx }) {
   return (
     <Box>
       <TxHeader tx={tx} />
+      <AppLinks tx={tx} />
       {failure && <FailureCard reason={failure} log={tx.error_log} />}
       <Section id="tx-actions-title" title="What happened">
         <Actions tx={tx} ctx={ctx} />

@@ -20,9 +20,15 @@ const OPTIONS: Record<string, string> = {
 
 const optionName = (value: unknown) => OPTIONS[String(value)] ?? "an option";
 
-/** `#14`, from the body, else from the `submit_proposal` event; empty when neither has it. */
+/** The proposal a gov message is about: from the body, else from the `submit_proposal` event; null when neither has it. */
+export function govProposalId(msg: RenderMessage): number | null {
+  const id = Number(str(msg, "proposal_id") ?? eventAttr(msg, "submit_proposal", "proposal_id"));
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/** `#14`; empty when the proposal is unknown. */
 function proposalId(msg: RenderMessage): string {
-  const id = str(msg, "proposal_id") ?? eventAttr(msg, "submit_proposal", "proposal_id");
+  const id = govProposalId(msg);
   return id ? `#${id}` : "";
 }
 

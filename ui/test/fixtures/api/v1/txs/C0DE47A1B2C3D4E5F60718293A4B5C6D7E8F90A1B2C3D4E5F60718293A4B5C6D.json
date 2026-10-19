@@ -1,0 +1,82 @@
+{
+  "height": 25120440,
+  "tx_index": 4,
+  "hash": "C0DE47A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/cosmos.gov.v1.MsgVote"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/cosmos.gov.v1.MsgVote",
+    "module": "governance",
+    "body": {
+      "proposal_id": "47",
+      "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "option": "VOTE_OPTION_YES",
+      "metadata": ""
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 200000,
+  "gas_used": 81234,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/cosmos.gov.v1.MsgVote",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "governance",
+      "body": {
+        "proposal_id": "47",
+        "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "option": "VOTE_OPTION_YES",
+        "metadata": ""
+      },
+      "events": [
+        {
+          "type": "proposal_vote",
+          "attrs": {
+            "option": "[{\"option\":1,\"weight\":\"1.000000000000000000\"}]",
+            "proposal_id": "47",
+            "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": null
+}
