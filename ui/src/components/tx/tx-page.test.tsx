@@ -14,6 +14,8 @@ import tokens from "../../../test/fixtures/api/v1/tokens.json";
 import failedTx from "../../../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0.json";
 import sendTx from "../../../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
 import dexTx from "../../../test/fixtures/api/v1/txs/5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60.json";
+import raffleTx from "../../../test/fixtures/api/v1/txs/B0A1F2E3D4C5B6A79881726354453627180918273645546372819203A4B5C6D7.json";
+import voteTx from "../../../test/fixtures/api/v1/txs/C0DE47A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D.json";
 import ibcTx from "../../../test/fixtures/api/v1/txs/9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E.json";
 import validators from "../../../test/fixtures/api/v1/validators.json";
 
@@ -252,5 +254,44 @@ describe("TxPage with BZE actions", () => {
     await act(() => vi.advanceTimersByTimeAsync(live.refetchInterval * 3));
     expect(screen.getByTestId("ibc-status")).toHaveTextContent("Expired, waiting for the refund");
     expect(once).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TxPage app links", () => {
+  const HONEY = "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney";
+
+  it("links a raffle to its coin's page on the Burner", async () => {
+    renderWithProviders(<TxPage hash={raffleTx.hash} />, { api: api(raffleTx) });
+    const apps = await screen.findByTestId("tx-apps");
+    expect(apps).toHaveTextContent("Open raffle on Burner");
+    const link = within(apps).getByRole("link", { name: /Burner/ });
+    expect(link).toHaveAttribute("href", `https://burner.getbze.com/coin?coin=${encodeURIComponent(HONEY)}`);
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("links a vote to its proposal on Staking, failed or not", async () => {
+    const failed = { ...voteTx, success: false, code: 5, error_log: "insufficient funds" };
+    renderWithProviders(<TxPage hash={voteTx.hash} />, { api: api(failed) });
+    const apps = await screen.findByTestId("tx-apps");
+    expect(apps).toHaveTextContent("Vote on Staking");
+    expect(within(apps).getByRole("link", { name: /Staking/ })).toHaveAttribute("href", "https://staking.getbze.com/governance/47");
+  });
+
+  it("shows both apps once each for a tx mixing raffles and votes", async () => {
+    const vote = voteTx.messages[0];
+    const raffle = raffleTx.messages[0];
+    const mixed = {
+      ...voteTx,
+      messages: [vote, { ...raffle, msg_index: 1 }, { ...vote, msg_index: 2 }, { ...raffle, msg_index: 3 }],
+    };
+    renderWithProviders(<TxPage hash={voteTx.hash} />, { api: api(mixed) });
+    const apps = await screen.findByTestId("tx-apps");
+    expect(within(apps).getAllByTestId("app-link").map((a) => a.dataset.app)).toEqual(["staking", "burner"]);
+  });
+
+  it("links no app for a send", async () => {
+    renderWithProviders(<TxPage hash={SEND} />, { api: api(sendTx) });
+    expect(await screen.findByRole("heading", { level: 1, name: "Transaction" })).toBeInTheDocument();
+    expect(screen.queryByTestId("tx-apps")).not.toBeInTheDocument();
   });
 });

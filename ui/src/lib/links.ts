@@ -115,6 +115,11 @@ export function stakingVoteHref(id: number): string {
   return `${externalLinks.staking}/governance/${id}`;
 }
 
+/** The Burner's page for one coin, where its raffle is joined. */
+export function burnerRaffleHref(denom: string): string {
+  return `${externalLinks.burner}/coin?coin=${encodeURIComponent(denom)}`;
+}
+
 /** A proposal on Ping.pub. */
 export function pingPubProposal(id: number): string {
   return `${env.pingPubUrl}/gov/${id}`;
