@@ -78,10 +78,10 @@ test.describe("block page", () => {
     await page.getByRole("button", { name: /More details/ }).click();
     await expect(page.getByText("474,968", { exact: true })).toBeVisible();
     await expect(page.getByText(/"chain_id": "beezee-1"/)).toBeVisible();
-    await expect(page.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute(
-      "href",
-      `https://explorer.getbze.com/beezee/block/${block.height}`,
-    );
+    const ping = page.getByRole("link", { name: "Open on Ping.pub" });
+    await expect(ping).toHaveAttribute("href", `https://explorer.getbze.com/beezee/block/${block.height}`);
+    await expect(ping).toHaveAttribute("data-testid", "external-link");
+    await expect(ping).toHaveAttribute("rel", "noopener noreferrer");
     await noHorizontalScroll(page);
   });
 

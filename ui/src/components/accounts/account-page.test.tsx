@@ -73,10 +73,11 @@ describe("AccountPage", () => {
     expect(tiles()).toEqual([
       "Available1.2K BZE≈ $1.85",
       "Staked1K BZEwith 3 validators",
-      "Rewards to claim15.75 BZEClaim on Staking ↗",
+      "Rewards to claim15.75 BZEClaim on Staking",
       "Unstaking300 BZEnext unlock in 9 days",
     ]);
-    expect(screen.getByRole("link", { name: /Claim on Staking/ })).toHaveAttribute("href", "https://staking.getbze.com");
+    expect(screen.getByRole("link", { name: "Staking" })).toHaveAttribute("href", "https://staking.getbze.com");
+    expect(screen.getByRole("link", { name: "Staking" })).toHaveAttribute("data-testid", "app-link");
 
     expect(screen.getByRole("tab", { name: "Activity 1,530" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Tokens 5" })).toBeInTheDocument();
@@ -261,14 +262,14 @@ describe("Tokens tab", () => {
     expect(within(rows[0]).getByTestId("direct-tag")).toHaveAttribute("title", "USDC comes from Noble, sent straight to BZE.");
     expect(rows[0]).toHaveTextContent("25.5 USDC");
     expect(rows[0]).toHaveTextContent("≈ $25.50");
-    expect(within(rows[0]).getByRole("link", { name: /View on DEX/ })).toHaveAttribute(
+    expect(within(rows[0]).getByRole("link", { name: "DEX" })).toHaveAttribute(
       "href",
       expect.stringContaining("denom=ibc%2F6490A7EA"),
     );
     expect(rows[2]).toHaveTextContent("+ 1,000 BZE staked · 300 BZE unstaking");
     expect(rows[3]).toHaveTextContent("DEX pool share");
     expect(rows[3]).toHaveTextContent("no price");
-    expect(within(rows[3]).queryByRole("link", { name: /View on DEX/ })).not.toBeInTheDocument();
+    expect(within(rows[3]).queryByRole("link", { name: "DEX" })).not.toBeInTheDocument();
     expect(within(rows[0]).getByTestId("token-symbol")).toHaveAttribute("href", expect.stringMatching(/^\/tokens\/ibc/));
     expect(within(rows[4]).getByTestId("token-symbol").tagName).not.toBe("A");
     expect(rows[4]).toHaveTextContent("42 uzzz");

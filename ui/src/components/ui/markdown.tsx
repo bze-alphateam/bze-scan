@@ -1,9 +1,10 @@
 "use client";
 
-import { Box, Code, Heading, Link, List, Table, Text } from "@chakra-ui/react";
+import { Box, Code, Heading, List, Table, Text } from "@chakra-ui/react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { safeUrl } from "@/lib/markdown";
 
 // Text anyone can write on chain (a proposal's summary), shown as Markdown.
@@ -20,9 +21,9 @@ const components: Components = {
   p: ({ children }) => <Text>{children}</Text>,
   a: ({ href, children }) =>
     href ? (
-      <Link href={href} target="_blank" rel="noopener noreferrer nofollow" color="blue.fg" wordBreak="break-word">
+      <ExternalLink href={href} userContent wordBreak="break-word">
         {children}
-      </Link>
+      </ExternalLink>
     ) : (
       <>{children}</>
     ),
@@ -30,9 +31,9 @@ const components: Components = {
     const href = typeof src === "string" ? safeUrl(src) : "";
     const text = alt || "image";
     return href ? (
-      <Link href={href} target="_blank" rel="noopener noreferrer nofollow" color="blue.fg" wordBreak="break-word">
+      <ExternalLink href={href} userContent wordBreak="break-word">
         {text}
-      </Link>
+      </ExternalLink>
     ) : (
       <>{text}</>
     );

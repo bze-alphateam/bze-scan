@@ -145,7 +145,8 @@ describe("ProposalPage", () => {
     expect(votes).toHaveTextContent("5 accounts have voted so far.");
 
     const vote = screen.getByTestId("want-to-vote");
-    expect(within(vote).getByRole("link", { name: /Vote in the BZE Staking app/ })).toHaveAttribute(
+    expect(vote).toHaveTextContent("Vote on Staking");
+    expect(within(vote).getByRole("link", { name: "Staking" })).toHaveAttribute(
       "href",
       "https://staking.getbze.com/governance/48",
     );

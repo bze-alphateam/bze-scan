@@ -5,6 +5,8 @@ import NextLink from "next/link";
 import { useId, useMemo, useRef, useState } from "react";
 import { LuTriangleAlert } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
+import { AppLink } from "@/components/layout/app-link";
 import { useAllValidators, useHallOfFame, useParams, useStats } from "@/api/hooks";
 import type { HallOfFame, HallOfFameRules, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -212,12 +214,13 @@ function PickingPanel({ seats }: { seats: number | null }) {
         Inactive validators are outside the {seats ? formatCount(seats) : "active"} seats or were jailed, and pay no rewards.
       </Text>
       <Flex gap="5" wrap="wrap" mt="3" fontSize="13px">
-        <Link href={externalLinks.staking} target="_blank" rel="noopener noreferrer" color="accent.fg">
-          Stake on the Staking app ↗
-        </Link>
-        <Link href={externalLinks.docs} target="_blank" rel="noopener noreferrer" color="accent.fg">
-          How staking works, in the docs ↗
-        </Link>
+        <Text as="span" color="fg.muted">
+          Stake on{" "}
+          <AppLink app="staking" href={externalLinks.staking}>
+            Staking
+          </AppLink>
+        </Text>
+        <ExternalLink href={externalLinks.docs}>How staking works, in the docs</ExternalLink>
       </Flex>
     </Box>
   );

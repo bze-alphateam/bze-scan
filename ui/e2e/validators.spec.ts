@@ -56,12 +56,13 @@ test.describe("validators list", () => {
     await expect(rows(page).first()).toContainText("Thamar Node");
 
     await page.getByRole("textbox", { name: "Find a validator" }).fill("honey");
-    // No Stake button in the rows: people stake from the validator's page.
-    await expect(page.getByRole("link", { name: /^Stake with/ })).toHaveCount(0);
+    // No stake link in the rows: people stake from the validator's page.
+    await expect(rows(page).getByTestId("app-link")).toHaveCount(0);
     await rows(page).first().getByRole("link", { name: "Honeycomb", exact: true }).click();
     await expect(page).toHaveURL(`/validators/${OP}`);
     await expect(page.getByRole("heading", { level: 1, name: "Honeycomb" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Stake with this validator/ })).toBeVisible();
+    await expect(page.getByTestId("validator-stake")).toHaveText("Stake on Staking");
+    await expect(page.getByTestId("validator-stake").getByTestId("app-link")).toHaveAttribute("data-app", "staking");
     await noHorizontalScroll(page);
   });
 });

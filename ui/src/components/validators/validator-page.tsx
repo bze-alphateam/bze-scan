@@ -22,7 +22,8 @@ import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 import { isNotFound } from "@/api/client";
 import { useAllValidators, useHallOfFame, useParams, useStats, useValidator } from "@/api/hooks";
 import type { HallOfFame, ValidatorDetail, ValidatorsSummary, ValidatorVote } from "@/api/types";
-import { AppButton } from "@/components/layout/app-button";
+import { AppLink } from "@/components/layout/app-link";
+import { ExternalLink } from "@/components/ui/external-link";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Avatar } from "@/components/ui/avatar";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -106,9 +107,9 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
             </Tag>
             <OnlineTag v={v} />
             {site && (
-              <Link href={site.href} target="_blank" rel="noopener noreferrer nofollow" color="accent.fg">
-                {site.text} ↗
-              </Link>
+              <ExternalLink href={site.href} userContent>
+                {site.text}
+              </ExternalLink>
             )}
           </DetailMeta>
           <DetailMeta mt="1">
@@ -126,9 +127,12 @@ function Header({ v, activeCount, fame }: { v: ValidatorDetail; activeCount: num
         </Box>
         {/* An inactive validator pays no rewards: no stake button. */}
         {v.status === "bonded" && (
-          <AppButton app="staking" href={stakeHref(v.operator_address)}>
-            Stake with this validator
-          </AppButton>
+          <Text as="span" fontSize="sm" color="fg.muted" whiteSpace="nowrap" data-testid="validator-stake">
+            Stake on{" "}
+            <AppLink app="staking" href={stakeHref(v.operator_address)}>
+              Staking
+            </AppLink>
+          </Text>
         )}
       </Flex>
     </Box>
@@ -356,20 +360,12 @@ function History({ v }: { v: ValidatorDetail }) {
   );
 }
 
-/** "Open on Ping.pub ↗": on the raw bar from c2 up, under the JSON on phones. */
+/** "Open on Ping.pub": on the raw bar from c2 up, under the JSON on phones. */
 function PingPubOpen({ operator, ...props }: { operator: string } & Omit<LinkProps, "href" | "children">) {
   return (
-    <Link
-      href={pingPubValidatorUrl(operator)}
-      target="_blank"
-      rel="noopener noreferrer"
-      fontSize="12px"
-      color="accent.fg"
-      whiteSpace="nowrap"
-      {...props}
-    >
-      Open on Ping.pub ↗
-    </Link>
+    <ExternalLink href={pingPubValidatorUrl(operator)} fontSize="12px" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub
+    </ExternalLink>
   );
 }
 
@@ -500,9 +496,7 @@ export function ValidatorPage({ operator }: { operator: string }) {
           icon={<LuCircleHelp size={20} />}
           title="Validator not found"
           actions={
-            <Link href={pingPubValidatorUrl(operator)} target="_blank" rel="noopener noreferrer" color="accent.fg">
-              Look it up on Ping.pub ↗
-            </Link>
+            <ExternalLink href={pingPubValidatorUrl(operator)}>Look it up on Ping.pub</ExternalLink>
           }
           data-testid="validator-not_found"
         >

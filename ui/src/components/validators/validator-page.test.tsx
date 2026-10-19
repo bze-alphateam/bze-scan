@@ -43,11 +43,12 @@ describe("ValidatorPage", () => {
     expect(await screen.findByText("Active · rank 1 of 3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /honeycomb\.example\.org/ })).toHaveAttribute("href", "https://honeycomb.example.org/");
     expect(screen.getByText("Validating since Apr 17, 2022 · 1,204 accounts stake here")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Stake with this validator/ })).toHaveAttribute(
+    expect(screen.getByTestId("validator-stake")).toHaveTextContent("Stake on Staking");
+    expect(screen.getByRole("link", { name: "Staking" })).toHaveAttribute(
       "href",
       "https://staking.getbze.com/?stake=bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c",
     );
-    expect(appIconsIn(screen.getByRole("link", { name: /Stake with this validator/ }))).toEqual(["staking"]);
+    expect(appIconsIn(screen.getByRole("link", { name: "Staking" }))).toEqual(["staking"]);
 
     const tiles = screen.getAllByTestId("tile").map((t) => t.textContent);
     expect(tiles).toEqual([
@@ -165,7 +166,8 @@ describe("ValidatorPage", () => {
     expect(screen.getByText("Honeycomb has not voted yet.")).toBeInTheDocument();
     expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("outside the active set");
     // It pays no rewards, so the page offers no stake.
-    expect(screen.queryByRole("link", { name: /Stake with this validator/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("validator-stake")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Staking" })).not.toBeInTheDocument();
   });
 
   it("tolerates a null summary in the reward tile", async () => {
@@ -182,7 +184,7 @@ describe("ValidatorPage", () => {
     expect(await screen.findByRole("heading", { name: "Validator not found" })).toBeInTheDocument();
     expect(screen.getByTestId("validator-not_found")).toHaveAttribute("data-state", "neutral");
     expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Validators/bzevaloper1hc9…5w6c");
-    expect(screen.getByRole("link", { name: "Look it up on Ping.pub ↗" })).toHaveAttribute("href", expect.stringContaining(`/staking/${OP}`));
+    expect(screen.getByRole("link", { name: "Look it up on Ping.pub" })).toHaveAttribute("href", expect.stringContaining(`/staking/${OP}`));
   });
 
   it("tags an active validator online, with no callout", async () => {
