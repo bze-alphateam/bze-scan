@@ -33,6 +33,9 @@ type Deps struct {
 	// AccountState reads accounts live from the node; nil answers every
 	// account with the live part unavailable.
 	AccountState controller.AccountState
+	// OpenOrders answers the accounts' open orders; nil leaves
+	// /api/v1/accounts/{address}/open-orders out.
+	OpenOrders controller.OpenOrdersReader
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
@@ -103,12 +106,15 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)
 	if deps.Accounts != nil {
-		accounts := controller.NewAccountController(deps.Accounts, deps.AccountState)
+		accounts := controller.NewAccountController(deps.Accounts, deps.AccountState, deps.OpenOrders)
 		api.GET("/accounts/:address", accounts.Account)
 		api.GET("/accounts/:address/activity", accounts.Activity)
 		api.GET("/accounts/:address/orders", accounts.Orders)
 		api.GET("/accounts/:address/fills", accounts.Fills)
 		api.GET("/accounts/:address/ibc", accounts.IBCTransfers)
+		if deps.OpenOrders != nil {
+			api.GET("/accounts/:address/open-orders", accounts.OpenOrders)
+		}
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)

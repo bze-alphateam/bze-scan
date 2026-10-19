@@ -55,12 +55,12 @@ e2e: e2e-up ## Run acceptance tests (starts PostgreSQL, runs tests, tears it dow
 	go test -tags=e2e -race -v -count=1 ./e2e/ ; ret=$$? ; $(MAKE) e2e-down ; exit $$ret
 
 .PHONY: fixtures
-fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1] [ARCHIVE_RPC=...]
-	HEIGHTS="$(HEIGHTS)" BLOCKS="$(BLOCKS)" COMMITS="$(COMMITS)" ABCI="$(ABCI)" VALSETS="$(VALSETS)" CONSENSUS_STATE="$(CONSENSUS_STATE)" ARCHIVE_RPC="$(ARCHIVE_RPC)" scripts/record-fixtures.sh
+fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1] [ORDERS="bze1…@25159796"] [ARCHIVE_RPC=...] [REST=...]
+	HEIGHTS="$(HEIGHTS)" BLOCKS="$(BLOCKS)" COMMITS="$(COMMITS)" ABCI="$(ABCI)" VALSETS="$(VALSETS)" CONSENSUS_STATE="$(CONSENSUS_STATE)" ORDERS="$(ORDERS)" ARCHIVE_RPC="$(ARCHIVE_RPC)" REST="$(REST)" scripts/record-fixtures.sh
 
 .PHONY: grpc-fixtures
-grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [DENOMS="ubze …"] [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [REST=...]
-	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" DENOMS="$(DENOMS)" PROPOSALS="$(PROPOSALS)" HOLDERS="$(HOLDERS)" HOLDERS_PAGE_LIMIT="$(or $(HOLDERS_PAGE_LIMIT),1000)" OWNERS="$(OWNERS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
+grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validators accounts"] VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" [DENOMS="ubze …"] [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE" HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [ORDERS_HEIGHT=25159796] [REST=...]
+	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" DENOMS="$(DENOMS)" PROPOSALS="$(PROPOSALS)" HOLDERS="$(HOLDERS)" HOLDERS_PAGE_LIMIT="$(or $(HOLDERS_PAGE_LIMIT),1000)" OWNERS="$(OWNERS)" ORDERS_HEIGHT="$(ORDERS_HEIGHT)" REST="$(REST)" scripts/record-grpc-fixtures.sh
 
 .PHONY: registry-fixtures
 registry-fixtures: ## Record fake chain-registry fixtures: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [RAW=...]

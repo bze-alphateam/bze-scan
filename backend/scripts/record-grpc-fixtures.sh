@@ -52,9 +52,14 @@
 #     channel/ChannelClientState.transfer.<channel>.json (the light client
 #     naming the counterparty chain) and client/ClientStatus.<client>.json
 #     (whether that client is active or expired)
-#   orders (the open orders' reconciliation), per address in OWNERS:
+#   orders (the open orders' reconciliation and the open orders route), per
+#     address in OWNERS, every read pinned to ORDERS_HEIGHT (x-cosmos-block-height;
+#     default: the node's latest height):
 #     tradebin/UserMarketOrders.<address>.json, the owner's order references
-#     in every market (one page of 1000)
+#     in every market (one page of 1000), and for each reference
+#     tradebin/MarketOrder.<market>.<side>.<id>.json (the market path-escaped).
+#     Record the archive's answers at the same height with
+#     make fixtures ORDERS="<address>@<height>" (record-fixtures.sh).
 #   chain (the chain_state and params syncs):
 #     staking/Pool.json, staking/Params.json, bank/SupplyOf.ubze.json,
 #     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
@@ -64,7 +69,8 @@
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
-#         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"] [REST=…])
+#         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"]
+#         [ORDERS_HEIGHT=25159796] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -77,6 +83,9 @@ PROPOSALS="${PROPOSALS:-}"
 HOLDERS="${HOLDERS:-}"
 HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
 OWNERS="${OWNERS:-}"
+ORDERS_HEIGHT="${ORDERS_HEIGHT:-}"
+# PIN, when set, pins every fetch to that height (x-cosmos-block-height).
+PIN=""
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
@@ -93,7 +102,7 @@ CONV="${TMPDIR}/bech32conv"
 fetch() {
   local route="$1" dest="${OUT}/$2" allow="${3:-}" tmp code
   tmp="$(mktemp)"
-  code="$(curl -sS -o "${tmp}" -w '%{http_code}' "${REST}/${route}")"
+  code="$(curl -sS -o "${tmp}" -w '%{http_code}' ${PIN:+-H "x-cosmos-block-height: ${PIN}"} "${REST}/${route}")"
   if [[ "${code}" != "200" && ( -z "${allow}" || "${code}" != "${allow}" ) ]]; then
     echo "GET ${route}: HTTP ${code}" >&2
     cat "${tmp}" >&2
@@ -212,9 +221,17 @@ if has channels; then
 fi
 
 if has orders; then
+  PIN="${ORDERS_HEIGHT:-$(curl -sS "${REST}/cosmos/base/tendermint/v1beta1/blocks/latest" | jq -r .block.header.height)}"
+  echo "orders pinned to height ${PIN}"
   for a in ${OWNERS}; do
     fetch "bze/tradebin/user_market_orders/${a}?pagination.limit=1000" "tradebin/UserMarketOrders.${a}.json"
+    jq -r '.list[] | [.market_id, .order_type, .id] | @tsv' "${OUT}/tradebin/UserMarketOrders.${a}.json" |
+      while IFS=$'\t' read -r market side id; do
+        fetch "bze/tradebin/market_order?market=$(esc "${market}")&order_type=${side}&order_id=${id}" \
+          "tradebin/MarketOrder.$(esc "${market}").${side}.${id}.json"
+      done
   done
+  PIN=""
 fi
 
 if has chain; then
