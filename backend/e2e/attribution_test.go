@@ -151,7 +151,7 @@ func TestCrossBlockAttributionInEveryOrder(t *testing.T) {
 const (
 	reconcileH    = int64(26_200_000)
 	marketMaker   = "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
-	listedOrder   = 6515921 // listed in the market maker's recorded order book
+	listedOrder   = 6717724 // listed in the market maker's recorded order book
 	vanishedOrder = 42
 	newerOrder    = 43
 )

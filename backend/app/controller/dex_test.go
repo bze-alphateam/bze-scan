@@ -20,7 +20,7 @@ import (
 func newDexAPI(r controller.AccountReader) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	h := controller.NewAccountController(r, nil)
+	h := controller.NewAccountController(r, nil, nil)
 	e.GET("/accounts/:address/orders", h.Orders)
 	e.GET("/accounts/:address/fills", h.Fills)
 	return e

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "./client";
-import { createQueryClient, immutable, live, reference, shouldRetry, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
+import { createQueryClient, immutable, live, reference, shouldRetry, slow, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 
 describe("policies", () => {
   it("holds the UI Design numbers", () => {
@@ -17,6 +17,7 @@ describe("policies", () => {
       refetchOnReconnect: false,
     });
     expect(status).toMatchObject({ staleTime: 60_000, refetchInterval: 60_000 });
+    expect(slow).toMatchObject({ staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false });
   });
 
   it("never retries a 4xx", () => {

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainstate"
+	"github.com/bze-alphateam/bze-scan/backend/internal/openorders"
 )
 
 // AccountReader is the read side of the explorer tables the account route
@@ -51,18 +53,27 @@ type AccountState interface {
 	Account(ctx context.Context, address string) (*chainstate.Account, error)
 }
 
+// OpenOrdersReader answers what an account has locked in open DEX orders.
+// Implemented by openorders.Reader; a node path failure wraps
+// openorders.ErrUpstream.
+type OpenOrdersReader interface {
+	OpenOrders(ctx context.Context, address string) (openorders.Summary, error)
+}
+
 // AccountController serves GET /api/v1/accounts/{address} and its
 // activity list.
 type AccountController struct {
-	repo AccountReader
-	live AccountState
+	repo       AccountReader
+	live       AccountState
+	openOrders OpenOrdersReader
 }
 
 // NewAccountController returns a controller reading the explorer tables
-// from repo and the live state from live; a nil live reports the live state
-// as unavailable.
-func NewAccountController(repo AccountReader, live AccountState) *AccountController {
-	return &AccountController{repo: repo, live: live}
+// from repo, the live state from live and the open orders from openOrders;
+// a nil live reports the live state as unavailable, a nil openOrders
+// answers the open orders route with a 404.
+func NewAccountController(repo AccountReader, live AccountState, openOrders OpenOrdersReader) *AccountController {
+	return &AccountController{repo: repo, live: live, openOrders: openOrders}
 }
 
 // Account serves GET /api/v1/accounts/{address}: the explorer's first sight,
@@ -182,4 +193,28 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
+}
+
+// OpenOrders serves GET /api/v1/accounts/{address}/open-orders: what the
+// address has locked in open DEX orders, per denom, then per market, from
+// the explorer's orders table when its history is complete and from the node
+// otherwise. Anything but a bze1 address is a 400; an account without open
+// orders is a 200 with no assets; nodes that do not answer are a 502.
+func (h *AccountController) OpenOrders(c *echo.Context) error {
+	if h.openOrders == nil {
+		return echo.ErrNotFound
+	}
+	address, err := accountParam(c)
+	if err != nil {
+		return err
+	}
+	s, err := h.openOrders.OpenOrders(c.Request().Context(), address)
+	if errors.Is(err, openorders.ErrUpstream) {
+		return echo.NewHTTPError(http.StatusBadGateway, "the nodes did not answer").Wrap(err)
+	}
+	if err != nil {
+		return err
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, dto.NewOpenOrders(s))
 }

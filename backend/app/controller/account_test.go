@@ -169,7 +169,7 @@ func seenAccount() *repository.Account {
 func newAccountAPI(r controller.AccountReader, s controller.AccountState) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	e.GET("/accounts/:address", controller.NewAccountController(r, s).Account)
+	e.GET("/accounts/:address", controller.NewAccountController(r, s, nil).Account)
 	return e
 }
 

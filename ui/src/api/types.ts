@@ -379,6 +379,34 @@ export interface Account {
   live: { available: boolean };
 }
 
+/** What the account's open orders on one market lock of an asset: its sells under the base denom, its buys under the quote. */
+export interface OpenOrdersMarket {
+  market_id: string;
+  base: string;
+  quote: string;
+  /** Base units of the asset. */
+  amount: string;
+  orders_count: number;
+}
+
+/** What the account's open orders lock of one denom, per market (largest first). */
+export interface OpenOrdersAsset {
+  denom: string;
+  amount: string;
+  orders_count: number;
+  markets: OpenOrdersMarket[];
+}
+
+/** `/accounts/{address}/open-orders`: the tokens locked in the account's open DEX orders. */
+export interface OpenOrders {
+  /** "index" or "node": for debugging, the UI ignores it. */
+  source: string;
+  height: number;
+  orders_count: number;
+  markets_count: number;
+  assets: OpenOrdersAsset[];
+}
+
 /** The activity list's category filters. */
 export type ActivityCategory =
   | "sent"

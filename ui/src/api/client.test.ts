@@ -49,6 +49,7 @@ describe("createHttpApi", () => {
     await api.search("thamar node");
     await api.accountActivity("bze1x", { category: "dex", cursor: "a", limit: 25 });
     await api.accountIbc("bze1x", { limit: 100 });
+    await api.accountOpenOrders("bze1x");
     await api.tokens({ kind: "ibc", limit: 100 });
     await api.token("factory/bze1x/uhoney");
     await api.tokenEvents("ubze", { cursor: "c" });
@@ -81,6 +82,7 @@ describe("createHttpApi", () => {
       "/v1/search?q=thamar+node",
       "/v1/accounts/bze1x/activity?cursor=a&limit=25&category=dex",
       "/v1/accounts/bze1x/ibc?limit=100",
+      "/v1/accounts/bze1x/open-orders",
       "/v1/tokens?limit=100&kind=ibc",
       "/v1/tokens/factory%2Fbze1x%2Fuhoney",
       "/v1/tokens/ubze/events?cursor=c",

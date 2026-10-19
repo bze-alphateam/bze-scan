@@ -4,7 +4,7 @@ import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { isNotFound } from "./client";
-import { immutable, live, reference, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
+import { immutable, live, reference, slow, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
 import type {
@@ -46,6 +46,7 @@ export const queryKeys = {
   accountActivity: (address: string, category: ActivityCategory | null, page: number, limit: number) =>
     ["account-activity", address, category ?? "all", page, limit] as const,
   accountIbc: (address: string) => ["account-ibc", address] as const,
+  accountOpenOrders: (address: string) => ["account-open-orders", address] as const,
   tokens: (p: TokenListParams) => ["tokens", p] as const,
   validatorDirectory: () => ["validator-directory"] as const,
   tokenDirectory: () => ["token-directory"] as const,
@@ -310,6 +311,21 @@ export function useAccountIbc(address: string) {
     queryFn: ({ signal }) => api.accountIbc(address, { limit: 100 }, signal),
     select: (page) => page.items,
     ...live,
+  });
+}
+
+/**
+ * What the account's open DEX orders lock, per asset then market: the Orders
+ * tab and the Tokens tab's "in orders" lines read the same query. It starts
+ * with the page and nothing waits for it.
+ */
+export function useAccountOpenOrders(address: string, { enabled = true }: { enabled?: boolean } = {}) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.accountOpenOrders(address),
+    queryFn: ({ signal }) => api.accountOpenOrders(address, signal),
+    enabled,
+    ...slow,
   });
 }
 
