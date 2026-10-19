@@ -32,7 +32,7 @@ describe("app links", () => {
     vi.stubEnv("NEXT_PUBLIC_BURNER_URL", "https://testnet-burner.getbze.com");
     vi.stubEnv("NEXT_PUBLIC_FACTORY_URL", "https://testnet-factory.getbze.com");
     vi.stubEnv("NEXT_PUBLIC_COMMUNITIES_URL", "https://testnet-communities.getbze.com");
-    const { appLinks, externalLinks, stakeHref, dexAssetUrl, dexMarketUrl, PARAM_GROUPS } = await load();
+    const { appLinks, externalLinks, stakeHref, burnerRaffleHref, stakingVoteHref, dexAssetUrl, dexMarketUrl, PARAM_GROUPS } = await load();
 
     expect(appLinks.map((l) => l.href)).toEqual([
       "https://getbze.com",
@@ -44,6 +44,8 @@ describe("app links", () => {
       "https://docs.getbze.com",
     ]);
     expect(stakeHref("bzevaloper1x")).toBe("https://testnet-staking.getbze.com/?stake=bzevaloper1x");
+    expect(burnerRaffleHref("factory/bze1x/uhoney")).toBe("https://testnet-burner.getbze.com/coin?coin=factory%2Fbze1x%2Fuhoney");
+    expect(stakingVoteHref(47)).toBe("https://testnet-staking.getbze.com/governance/47");
     expect(dexAssetUrl("ubze")).toBe("https://testnet-dex.getbze.com/assets/details?denom=ubze");
     expect(dexMarketUrl("ubze/uvdl")).toBe("https://testnet-dex.getbze.com/exchange/market?id=ubze%2Fuvdl");
     expect(PARAM_GROUPS.find((g) => g.group === "burner")?.see).toEqual({

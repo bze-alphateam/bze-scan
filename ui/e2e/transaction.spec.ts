@@ -5,6 +5,8 @@ import { noHorizontalScroll } from "./layout";
 import dexTx from "../test/fixtures/api/v1/txs/5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60.json";
 import ibcTx from "../test/fixtures/api/v1/txs/9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E.json";
 import failedTx from "../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0.json";
+import raffleTx from "../test/fixtures/api/v1/txs/B0A1F2E3D4C5B6A79881726354453627180918273645546372819203A4B5C6D7.json";
+import voteTx from "../test/fixtures/api/v1/txs/C0DE47A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D.json";
 import sendTx from "../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
 
 // The mock API answers these hashes from test/fixtures/api/v1/txs and 404s any
@@ -170,5 +172,26 @@ test.describe("BZE actions on a phone", () => {
     await page.goto(`/txs/${ibcTx.hash}`);
     await expect(page.getByTestId("ibc-status")).toBeVisible();
     await noHorizontalScroll(page);
+  });
+});
+
+test.describe("links to the BZE apps", () => {
+  test("a raffle opens its coin on the Burner, a vote its proposal on Staking", async ({ page }) => {
+    await page.goto(`/txs/${raffleTx.hash}`);
+    const raffle = page.getByTestId("tx-apps");
+    await expect(raffle).toHaveText(/Open raffle on\s*Burner/);
+    await expect(raffle.getByRole("link", { name: /Burner/ })).toHaveAttribute(
+      "href",
+      `https://burner.getbze.com/coin?coin=${encodeURIComponent(raffleTx.messages[0].body.denom)}`,
+    );
+
+    await page.goto(`/txs/${voteTx.hash}`);
+    const vote = page.getByTestId("tx-apps");
+    await expect(vote).toHaveText(/Vote on\s*Staking/);
+    await expect(vote.getByRole("link", { name: /Staking/ })).toHaveAttribute("href", "https://staking.getbze.com/governance/47");
+
+    await page.goto(`/txs/${SEND}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Transaction" })).toBeVisible();
+    await expect(page.getByTestId("tx-apps")).toHaveCount(0);
   });
 });
