@@ -1,0 +1,11 @@
+{
+  "order": {
+    "id": "000000000000000006717729",
+    "market_id": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518/ubze",
+    "order_type": "buy",
+    "amount": "357248",
+    "price": "235",
+    "created_at": "1792414408",
+    "owner": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d"
+  }
+}

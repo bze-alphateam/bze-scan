@@ -19,7 +19,7 @@ import (
 func newIBCAPI(r controller.AccountReader) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	e.GET("/accounts/:address/ibc", controller.NewAccountController(r, nil).IBCTransfers)
+	e.GET("/accounts/:address/ibc", controller.NewAccountController(r, nil, nil).IBCTransfers)
 	return e
 }
 

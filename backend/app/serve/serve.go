@@ -25,6 +25,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/ordercoverage"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
@@ -47,6 +48,9 @@ type Options struct {
 	// BackfillLockRetry overrides how often serve tries again for the
 	// backfill's lock while another process holds it.
 	BackfillLockRetry time.Duration
+	// OrderCoverage overrides the open orders' coverage checker (DEX start
+	// heights, interval); ChainID is always CHAIN_ID.
+	OrderCoverage ordercoverage.Config
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -141,6 +145,19 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		liveParams = lp
 	}
 
+	// The open orders route reads the orders table when its history is
+	// complete (checked by a component of its own) and the nodes otherwise.
+	var openOrders controller.OpenOrdersReader
+	var coverage component
+	if cfg.NodeGRPCAddr != "" {
+		reader, cov, closeOpenOrders, err := NewOpenOrders(cfg, codec, apiPool, opts.OrderCoverage)
+		if err != nil {
+			return err
+		}
+		defer closeOpenOrders()
+		openOrders, coverage = reader, component{name: "order coverage", run: cov.Run}
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
@@ -153,6 +170,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Params:             liveParams,
 		ParamChanges:       explorerRepo,
 		AccountState:       accountState,
+		OpenOrders:         openOrders,
 		Status:             checker,
 		Raw:                raw,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -163,6 +181,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			return server.Run(ctx, e, cfg.HTTPAddr, opts.OnListen)
 		}},
 		{name: "status checker", run: checker.Run},
+	}
+	if coverage.run != nil {
+		components = append(components, coverage)
 	}
 	if cfg.DebugAddr != "" {
 		components = append(components, component{name: "debug server", run: func(ctx context.Context) error {

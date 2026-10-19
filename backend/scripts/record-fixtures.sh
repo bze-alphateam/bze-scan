@@ -41,8 +41,15 @@
 # requests are encoded here by hand and must stay byte for byte what the Go
 # code marshals.
 #
+# ORDERS lists owners as <address>@<height>, the open orders route's archive
+# fallback (BFE-250). At that height: the abci_query answers of tradebin
+# AllMarkets and UserMarketOrders (one page of 100 each, the Go code's page
+# size) and MarketOrder of every reference, the references read from the
+# REST gateway (REST) pinned to the same height. Record the gRPC fixtures at
+# the same height with make grpc-fixtures SETS=orders OWNERS=… ORDERS_HEIGHT=….
+#
 # Usage: HEIGHTS="24998316 24998321..24998330" scripts/record-fixtures.sh
-#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1])
+#        (or: make fixtures HEIGHTS="..." [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1] [ORDERS="bze1…@25159796"])
 set -euo pipefail
 
 ARCHIVE_RPC="${ARCHIVE_RPC:-https://rpc.getbze.com}"
@@ -50,6 +57,9 @@ ARCHIVE_RPC="${ARCHIVE_RPC%/}"
 HEIGHTS="${HEIGHTS:-}"
 BLOCKS="${BLOCKS:-}"
 ABCI="${ABCI:-}"
+ORDERS="${ORDERS:-}"
+REST="${REST:-https://rest.getbze.com}"
+REST="${REST%/}"
 VALSETS="${VALSETS:-}"
 COMMITS="${COMMITS:-}"
 CONSENSUS_STATE="${CONSENSUS_STATE:-}"
@@ -61,8 +71,8 @@ PER_PAGE=100
 BONDED_POOL="bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq"
 PAGE_LIMIT=1000
 
-if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}${VALSETS}${COMMITS}${CONSENSUS_STATE}" ]]; then
-  echo "HEIGHTS, BLOCKS, COMMITS, ABCI, VALSETS or CONSENSUS_STATE is required, e.g. HEIGHTS=\"24998316\"" >&2
+if [[ -z "${HEIGHTS}${BLOCKS}${ABCI}${VALSETS}${COMMITS}${CONSENSUS_STATE}${ORDERS}" ]]; then
+  echo "HEIGHTS, BLOCKS, COMMITS, ABCI, VALSETS, CONSENSUS_STATE or ORDERS is required, e.g. HEIGHTS=\"24998316\"" >&2
   exit 2
 fi
 
@@ -180,6 +190,16 @@ balance_req() { printf '%s%s' "$(field 1 "$(text "$1")")" "$(field 2 "$(text "$2
 # Query{Votes,Deposits}Request{proposal_id, pagination: {limit}}
 by_proposal_req() { printf '08%s%s' "$(varint "$1")" "$(field 2 "18$(varint "${PAGE_LIMIT}")")"; }
 
+# PageRequest{limit: 100}, the open orders route's page size
+# (openorders.PageLimit).
+page100() { printf '18%s' "$(varint 100)"; }
+# QueryAllMarketsRequest{pagination}
+all_markets_req() { field 1 "$(page100)"; }
+# QueryUserMarketOrdersRequest{address, pagination}
+user_orders_req() { printf '%s%s' "$(field 1 "$(text "$1")")" "$(field 3 "$(page100)")"; }
+# QueryMarketOrderRequest{market, order_type, order_id}
+market_order_req() { printf '%s%s%s' "$(field 1 "$(text "$1")")" "$(field 2 "$(text "$2")")" "$(field 3 "$(text "$3")")"; }
+
 # abci <query path> <hex request> <height>
 abci() {
   local qpath="$1" data="$2" h="$3" file
@@ -206,6 +226,25 @@ for item in ${ABCI}; do
   mkdir -p "${OUT}/${at}" "${OUT}/${h}"
   fetch "block?height=${at}" "${OUT}/${at}/block.json" 200
   fetch "block_results?height=${h}" "${OUT}/${h}/block_results.json" 200
+done
+
+for item in ${ORDERS}; do
+  if ! [[ "${item}" =~ ^(bze1[0-9a-z]+)@([1-9][0-9]*)$ ]]; then
+    echo "invalid ORDERS item (want <address>@<height>): ${item}" >&2
+    exit 2
+  fi
+  owner="${BASH_REMATCH[1]}" h="${BASH_REMATCH[2]}"
+  abci /bze.tradebin.Query/AllMarkets "$(all_markets_req)" "${h}"
+  abci /bze.tradebin.Query/UserMarketOrders "$(user_orders_req "${owner}")" "${h}"
+  refs="$(curl -sS -H "x-cosmos-block-height: ${h}" \
+    "${REST}/bze/tradebin/user_market_orders/${owner}?pagination.limit=100")"
+  if [[ "$(jq -r '.pagination.next_key // empty' <<<"${refs}")" != "" ]]; then
+    echo "${owner} has more than 100 orders at ${h}: later pages are not recorded" >&2
+    exit 1
+  fi
+  while IFS=$'\t' read -r market side id; do
+    abci /bze.tradebin.Query/MarketOrder "$(market_order_req "${market}" "${side}" "${id}")" "${h}"
+  done < <(jq -r '.list[] | [.market_id, .order_type, .id] | @tsv' <<<"${refs}")
 done
 
 fetch "status" "${OUT}/status.json" 200

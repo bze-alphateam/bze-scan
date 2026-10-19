@@ -222,6 +222,12 @@ internal/grpcclient/
 internal/chainstate/
                    live account reads (balances, delegations, unbonding,
                    rewards) behind a 5 s in-memory cache
+internal/ordercoverage/
+                   whether explorer.orders is complete for open orders (the
+                   indexed history from the DEX's first market)
+internal/openorders/
+                   an account's open orders per denom and market, from the
+                   orders table or the nodes, behind a 15 s cache
 internal/labels/   the module and known account labels `migrate` seeds
 internal/statesync/
                    the state sync: dirty sets, coalescing queue, workers,
@@ -343,6 +349,7 @@ every later route follows:
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
+| `GET /api/v1/accounts/{address}/open-orders` | what the address has locked in open DEX orders: `source` (`index` or `node`, for debugging), `height` (the height the answer describes), `orders_count`, `markets_count` and `assets`, one per locked denom sorted by denom: `denom`, `amount` (base units, a string), `orders_count` and `markets` (largest amount first: `market_id`, `base`, `quote`, `amount`, `orders_count`). A sell locks its remaining amount of the base denom, a buy trunc(remaining × price) of the quote denom, truncated per order as the chain does, so a market's `orders_count` under an asset counts only the orders locking that asset. Read from the orders table when its history is complete, from the node otherwise (see Open orders below); cached 15 s per address; no-store. An account without open orders has empty `assets` and zero counts. 400 unless a `bze1…` address; 502 when neither node answers |
 | `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
@@ -849,6 +856,41 @@ its cancels names an order still open. It resolves when the cross-block
 attribution links the outcome. A fill message whose orders were gone is
 refunded by the chain without any event, so it stays pending (BZE-161 makes
 the chain emit an event for it).
+
+### Open orders
+
+`GET /api/v1/accounts/{address}/open-orders` answers from one of two
+sources. `explorer.orders` is built from events only, so it holds every open
+order only when the indexed history covers the DEX from its first market
+(an order placed below the oldest indexed height and still open is missing;
+the testnet never has that history).
+
+- Coverage (`internal/ordercoverage`, a serve component): the first
+  `MarketCreatedEvent` per chain id is hardcoded (`beezee-1`: 12,940,553);
+  another chain id has none and always uses the node. The table counts as
+  complete when every height from that start up to `last_indexed_height`
+  has a `blocks` row and no unresolved `index_failures` row lies in that
+  range. A verified watermark is kept in memory: the first check counts the
+  whole range, then every minute only (watermark, last]. Blocks rows are
+  never deleted, so the watermark only grows; a gap or an open failure
+  makes it incomplete and the next check starts over. Requests never wait
+  for it: before the first check, or after a database error, the node
+  answers.
+- Index path: one query over the owner's open rows (`idx_orders_open_owner`),
+  remaining = `amount − filled_amount`, as of `last_indexed_height`. A
+  remainder the chain drops below the market minimum without an event stays
+  open until the hourly `orders` set closes it.
+- Node path (`internal/openorders`): tradebin `UserMarketOrders` (every
+  market, pages of 100), then `MarketOrder` per reference (8 at a time; a
+  NotFound, filled or cancelled between the two reads, is skipped), every
+  read pinned to the node's `/status` height. The local node's gRPC is asked
+  first; when it cannot be reached (an RPC transport error, gRPC Unavailable
+  or a timed-out call) the same queries go through the archive's
+  `/abci_query` at its latest height. Both unreachable, or a node answering
+  an error: 502.
+- Markets (base and quote) come from tradebin `AllMarkets`, cached 5 minutes
+  and reloaded once for a market id the list does not have; ids are looked
+  up whole, never split on `/` (factory denoms contain slashes).
 
 ### Cross-chain transfers
 
@@ -1561,9 +1603,15 @@ of chain v8.2.0+, whose denom only a test adds to the supply.
 records the holders set: `bank/DenomOwners.json`, the answer for a denom
 nobody holds (the fallback for every other denom), and every page of each
 listed denom (GGE: five owners on three pages of two, recorded 2026-10-09).
-`make grpc-fixtures SETS=orders OWNERS="bze1…"` records the orders set: each
-owner's `UserMarketOrders` (every market, one page of 1,000; the market
-maker `bze10kw8…` recorded 2026-10-11 with 41 orders).
+`make grpc-fixtures SETS=orders OWNERS="bze1…" ORDERS_HEIGHT=…` records the
+orders set and the open orders route, every read pinned to that height:
+each owner's `UserMarketOrders` (every market, one page of 1,000) and the
+`MarketOrder` of each reference. `make fixtures ORDERS="bze1…@<height>"`
+records the archive's `abci_query` answers of the same reads (`AllMarkets`,
+`UserMarketOrders` in pages of 100 and every `MarketOrder`) at that height,
+for the archive fallback; record both at one height. The market maker
+`bze10kw8…` is recorded at 25,159,888 (2026-10-19, 29 orders in one market:
+9 sells, 20 buys).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
 gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47

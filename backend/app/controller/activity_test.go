@@ -20,7 +20,7 @@ import (
 func newActivityAPI(r controller.AccountReader) *echo.Echo {
 	e := echo.New()
 	e.HTTPErrorHandler = middleware.ErrorHandler
-	e.GET("/accounts/:address/activity", controller.NewAccountController(r, nil).Activity)
+	e.GET("/accounts/:address/activity", controller.NewAccountController(r, nil, nil).Activity)
 	return e
 }
 
