@@ -80,6 +80,10 @@ type Order struct {
 	// CreatedTxHash is the transaction that placed the order when it is in
 	// the same block; empty otherwise.
 	CreatedTxHash string `json:"created_tx_hash"`
+	// OwnerFromMessage is true when the event named no owner (chain v7.0
+	// and v7.1) and Owner is the creator of the message that placed it: the
+	// order's fills named no maker either.
+	OwnerFromMessage bool `json:"-"`
 }
 
 // OrderFill is one explorer.order_fills row: an OrderExecutedEvent, a queue
@@ -300,8 +304,9 @@ func otherSide(side string) string {
 // it. It is approximate: an outcome of a message queued in an earlier block
 // that looks the same can be claimed, and a message whose outcome was only a
 // refund claims nothing. Outcomes without a match stay unattributed; chain
-// v7.0 events name no owner or taker, so its outcomes match on market,
-// side, price and amount alone.
+// v7.0 and v7.1 events name no owner or taker, so their outcomes match on
+// market, side, price and amount alone and take the matched message's
+// creator as their owner or taker.
 func attributeByQueue(ents *Entities, queue []queued, seq []outcome) {
 	if len(queue) == 0 || len(seq) == 0 {
 		return
@@ -353,11 +358,21 @@ func claim(ents *Entities, q queued, outs []outcome) (int, bool) {
 	if n == 0 && !saved {
 		return 0, false
 	}
+	// A chain v7.0 event names no owner or taker: the message's creator is
+	// the one, or the order would belong to no account.
 	for _, o := range outs[:n] {
-		ents.OrderFills[o.i].TakerTxHash = q.txHash
+		f := &ents.OrderFills[o.i]
+		f.TakerTxHash = q.txHash
+		if f.Taker == "" {
+			f.Taker = q.owner
+		}
 	}
 	if saved {
-		ents.Orders[outs[n].i].CreatedTxHash = q.txHash
+		ord := &ents.Orders[outs[n].i]
+		ord.CreatedTxHash = q.txHash
+		if ord.Owner == "" {
+			ord.Owner, ord.OwnerFromMessage = q.owner, true
+		}
 		n++
 	}
 	return n, true

@@ -15,7 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
@@ -43,6 +45,25 @@ type fakeTradebin struct {
 	failFor string
 	heights []string
 	calls   []string
+	// owners are the owners MarketOrder names, by order id; an id absent is
+	// not found, "fail" fails the read.
+	owners map[string]string
+	asked  []string
+}
+
+func (f *fakeTradebin) MarketOrder(ctx context.Context, in *tradebintypes.QueryMarketOrderRequest,
+	_ ...grpc.CallOption) (*tradebintypes.QueryMarketOrderResponse, error) {
+	md, _ := metadata.FromOutgoingContext(ctx)
+	f.heights = append(f.heights, md.Get(grpctypes.GRPCBlockHeightHeader)...)
+	f.asked = append(f.asked, in.Market+"/"+in.OrderType+"/"+in.OrderId)
+	owner, ok := f.owners[in.OrderId]
+	switch {
+	case !ok:
+		return nil, status.Error(codes.NotFound, "not found")
+	case owner == "fail":
+		return nil, errors.New("node down")
+	}
+	return &tradebintypes.QueryMarketOrderResponse{Order: tradebintypes.Order{Id: in.OrderId, Owner: owner}}, nil
 }
 
 func (f *fakeTradebin) UserMarketOrders(ctx context.Context, in *tradebintypes.QueryUserMarketOrdersRequest,
@@ -77,6 +98,16 @@ type fakeStore struct {
 	closed   []string
 	closedAt orders.Position
 	closeErr error
+	named    map[string]string
+	nameErr  error
+}
+
+func (s *fakeStore) Name(_ context.Context, owners map[string]string) (int64, error) {
+	if s.nameErr != nil {
+		return 0, s.nameErr
+	}
+	s.named = owners
+	return int64(len(owners)), nil
 }
 
 func (s *fakeStore) Cursor(context.Context) (orders.Position, bool, error) {
@@ -173,4 +204,40 @@ func TestFailuresBeforeAnyRead(t *testing.T) {
 	st := &fakeStore{open: open("bze1alice", "1"), closeErr: errors.New("db down")}
 	s, _ = newSet(fakeNode{height: 5}, &fakeTradebin{}, st)
 	require.ErrorContains(t, s.ResyncOne(context.Background(), statesync.All), "db down")
+}
+
+func unowned(ids ...string) []orders.OpenOrder {
+	var out []orders.OpenOrder
+	for _, id := range ids {
+		out = append(out, orders.OpenOrder{OrderID: id, MarketID: "m", Side: "sell"})
+	}
+	return out
+}
+
+// Regression: a chain v7.0 order whose event named no owner was looked up
+// as owner "" and never reconciled, and the account's open orders missed it.
+func TestOrdersWithoutOwnerAreNamedOrClosedFromTheNode(t *testing.T) {
+	cur := orders.Position{Height: 90, Time: time.Date(2026, 10, 11, 11, 59, 0, 0, time.UTC)}
+	st := &fakeStore{cursor: &cur, open: append(open("bze1alice", "1"), unowned("7", "8", "9")...)}
+	tb := &fakeTradebin{book: map[string][]string{"bze1alice": {"1"}}, owners: map[string]string{"7": "bze1bob", "9": "fail"}}
+	s, hook := newSet(fakeNode{height: 100}, tb, st)
+
+	err := s.FullResync(context.Background())
+	require.ErrorContains(t, err, "order 9: node down")
+	assert.Equal(t, map[string]string{"7": "bze1bob"}, st.named)
+	assert.Equal(t, []string{"8"}, st.closed, "the node no longer has it; 9 failed and stays open")
+	assert.Equal(t, []string{"bze1alice@"}, tb.calls, "no UserMarketOrders for the empty owner")
+	assert.Equal(t, []string{"m/sell/7", "m/sell/8", "m/sell/9"}, tb.asked)
+	for _, h := range tb.heights {
+		assert.Equal(t, "90", h)
+	}
+	require.Len(t, hook.AllEntries(), 2)
+	assert.Equal(t, int64(1), hook.AllEntries()[0].Data["named"])
+}
+
+func TestNamingFailureIsReturned(t *testing.T) {
+	st := &fakeStore{open: unowned("7"), nameErr: errors.New("db down")}
+	s, _ := newSet(fakeNode{height: 5}, &fakeTradebin{owners: map[string]string{"7": "bze1bob"}}, st)
+	require.ErrorContains(t, s.FullResync(context.Background()), "db down")
+	assert.Nil(t, st.closed)
 }

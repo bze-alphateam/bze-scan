@@ -49,7 +49,7 @@ var (
 			{name: "side", typ: "text"},
 			{name: "price", typ: "numeric"},
 			{name: "amount", typ: "numeric"},
-			{name: "maker", typ: "text"},
+			{name: "maker", typ: "text", expr: fillMaker},
 			{name: "taker", typ: "text"},
 			{name: "taker_message_id", typ: "text"},
 			{name: "taker_tx_hash", typ: "text", expr: fillTakerTxHash},
@@ -63,6 +63,13 @@ var (
 // link made after the write).
 const fillTakerTxHash = `COALESCE(r.taker_tx_hash,
 		(SELECT f.taker_tx_hash FROM explorer.order_fills f WHERE f.height = r.height AND f.seq = r.seq))`
+
+// fillMaker names the maker of a fill whose event names none (chain v7.0
+// and v7.1): the owner of the filled order when its row has one, else the
+// maker the row already holds.
+const fillMaker = `COALESCE(NULLIF(r.maker, ''),
+		(SELECT o.owner FROM explorer.orders o WHERE o.order_id = r.order_id AND o.owner <> ''),
+		(SELECT f.maker FROM explorer.order_fills f WHERE f.height = r.height AND f.seq = r.seq), '')`
 
 // orderMessageRow, orderRow, orderFillRow, fillDeltaRow and orderCancelRow
 // are the JSON shapes of the order book writes.
@@ -86,6 +93,8 @@ type (
 		Time          time.Time `json:"time"`
 		MessageID     *string   `json:"message_id"`
 		CreatedTxHash *string   `json:"created_tx_hash"`
+		// ownerFromMessage selects the orders whose fills need a maker.
+		ownerFromMessage bool
 	}
 	orderFillRow struct {
 		Height         int64     `json:"height"`
@@ -147,19 +156,28 @@ const ordersSQL = `INSERT INTO explorer.orders (order_id, market_id, owner, side
 	ON CONFLICT (order_id) DO NOTHING`
 
 // ordersUpdateSQL rewrites, for the reindex, the columns of a stored order
-// that its OrderSavedEvent gives; the placing transaction is kept when the
-// transformer found none. filled_amount, the status and closed_* belong to
+// that its OrderSavedEvent gives; the placing transaction and the owner are
+// kept when the transformer found none (a chain v7.0 order the state sync
+// named). filled_amount, the status and closed_* belong to
 // the fills and the cancel.
 const ordersUpdateSQL = `UPDATE explorer.orders AS o SET
-		market_id = r.market_id, owner = r.owner, side = r.side, price = r.price, amount = r.amount,
+		market_id = r.market_id, owner = COALESCE(NULLIF(r.owner, ''), o.owner), side = r.side, price = r.price, amount = r.amount,
 		created_height = r.height, created_time = r.time, message_id = r.message_id,
 		created_tx_hash = COALESCE(r.created_tx_hash, o.created_tx_hash), updated_at = now()
 	  FROM ` + orderRecordset + `
 	 WHERE o.order_id = r.order_id
 	   AND (o.market_id, o.owner, o.side, o.price, o.amount, o.created_height, o.created_time, o.message_id,
 	        o.created_tx_hash) IS DISTINCT FROM
-	       (r.market_id, r.owner, r.side, r.price, r.amount, r.height, r.time, r.message_id,
+	       (r.market_id, COALESCE(NULLIF(r.owner, ''), o.owner), r.side, r.price, r.amount, r.height, r.time, r.message_id,
 	        COALESCE(r.created_tx_hash, o.created_tx_hash))`
+
+// fillMakersSQL names the maker of the stored fills of the written orders
+// whose events named no owner (chain v7.0 and v7.1, whose fills name no
+// maker): the backfill walks down, so an order's fills are written before
+// it.
+const fillMakersSQL = `UPDATE explorer.order_fills AS f SET maker = r.owner
+	  FROM ` + orderRecordset + `
+	 WHERE f.order_id = r.order_id AND f.maker = '' AND r.owner <> ''`
 
 // orderCancelsSQL closes cancelled orders, locking them in order id order.
 const orderCancelsSQL = `WITH r AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(order_id text, height bigint, time timestamptz)),
@@ -193,7 +211,8 @@ const fillDeltasSQL = `WITH d AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS
 
 // dexStatements returns the order book writes of ents that do not depend on
 // the rows inserted: the order messages, the orders (inserted, and in
-// ModeUpdate rewritten), the fills, then the cancels.
+// ModeUpdate rewritten), the makers of their stored fills, the fills, then
+// the cancels.
 func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	messages := make([]orderMessageRow, 0, len(ents.OrderMessages))
 	for _, m := range ents.OrderMessages {
@@ -206,6 +225,7 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		orders = append(orders, orderRow{
 			OrderID: o.OrderID, MarketID: o.MarketID, Owner: o.Owner, Side: o.Side, Price: o.Price, Amount: o.Amount,
 			Height: o.Height, Time: o.Time, MessageID: nullIfEmpty(o.MessageID), CreatedTxHash: nullIfEmpty(o.CreatedTxHash),
+			ownerFromMessage: o.OwnerFromMessage,
 		})
 	}
 	slices.SortFunc(orders, func(a, b orderRow) int { return cmp.Compare(a.OrderID, b.OrderID) })
@@ -244,6 +264,16 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
+	var named []orderRow
+	for _, o := range orders {
+		if o.ownerFromMessage {
+			named = append(named, o)
+		}
+	}
+	makers, err := plainStatements(top, "fill makers", fillMakersSQL, named)
+	if err != nil {
+		return nil, err
+	}
 	fillStmts, err := chunked(top, "order_fills", orderFillsTable, mode, fills, scanFillKeys)
 	if err != nil {
 		return nil, err
@@ -252,7 +282,7 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(msgs, ords, inserts, fillStmts, cancelStmts), nil
+	return slices.Concat(msgs, ords, inserts, makers, fillStmts, cancelStmts), nil
 }
 
 // fillDeltas merges the fills of ents that were inserted per order, in
