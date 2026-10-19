@@ -11,6 +11,11 @@
 // to one height: the live indexer's cursor (the node's latest height when
 // the indexer has not written yet), so the rows compared are those the
 // events up to that height left open.
+//
+// An order of chain v7.0 or v7.1 whose placing message the transformer did
+// not find has no owner (those events name none): the set reads it from the
+// node by its market, side and id, names its owner and the maker of its
+// fills, and closes it when the node no longer has it.
 package orders
 
 import (
@@ -26,7 +31,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
@@ -48,6 +55,8 @@ type Node interface {
 type Tradebin interface {
 	UserMarketOrders(ctx context.Context, in *tradebintypes.QueryUserMarketOrdersRequest,
 		opts ...grpc.CallOption) (*tradebintypes.QueryUserMarketOrdersResponse, error)
+	MarketOrder(ctx context.Context, in *tradebintypes.QueryMarketOrderRequest,
+		opts ...grpc.CallOption) (*tradebintypes.QueryMarketOrderResponse, error)
 }
 
 // Position is a height and its block time.
@@ -60,9 +69,12 @@ type Position struct {
 type OpenOrder struct {
 	OrderID string
 	Owner   string
+	// MarketID and Side locate an order without owner on the node.
+	MarketID string
+	Side     string
 }
 
-// Store reads and closes the orders rows.
+// Store reads, names and closes the orders rows.
 type Store interface {
 	// Cursor returns the live indexer's cursor and its block time; false
 	// when the live indexer has not written yet.
@@ -72,6 +84,10 @@ type Store interface {
 	// Close closes the orders still open among ids as filled at pos and
 	// returns how many it closed.
 	Close(ctx context.Context, ids []string, pos Position) (int64, error)
+	// Name sets the owner of the orders without one among owners (order id
+	// to owner) and the maker of their fills without one, and returns how
+	// many orders it named.
+	Name(ctx context.Context, owners map[string]string) (int64, error)
 }
 
 // Deps of the set.
@@ -132,7 +148,12 @@ func (s *Set) FullResync(ctx context.Context) error {
 		return err
 	}
 	byOwner := map[string][]string{}
+	var unowned []OpenOrder
 	for _, o := range open {
+		if o.Owner == "" {
+			unowned = append(unowned, o)
+			continue
+		}
 		byOwner[o.Owner] = append(byOwner[o.Owner], o.OrderID)
 	}
 	owners := make([]string, 0, len(byOwner))
@@ -156,6 +177,27 @@ func (s *Set) FullResync(ctx context.Context) error {
 			}
 		}
 	}
+	named := map[string]string{}
+	for _, o := range unowned {
+		owner, found, err := s.owner(at, o)
+		switch {
+		case err != nil:
+			errs = append(errs, fmt.Errorf("order %s: %w", o.OrderID, err))
+		case found:
+			named[o.OrderID] = owner
+		default:
+			gone = append(gone, o.OrderID)
+		}
+	}
+	if len(named) > 0 {
+		n, err := s.deps.Store.Name(ctx, named)
+		if err != nil {
+			errs = append(errs, err)
+		} else if n > 0 {
+			s.deps.Log.WithFields(log.Fields{"named": n, "height": pos.Height}).
+				Info("orders: named the owners of open orders whose events named none")
+		}
+	}
 	if len(gone) > 0 {
 		slices.Sort(gone)
 		closed, err := s.deps.Store.Close(ctx, gone, pos)
@@ -167,6 +209,24 @@ func (s *Set) FullResync(ctx context.Context) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// owner reads an order without owner from the node: its owner, or false
+// when the node no longer has it.
+func (s *Set) owner(ctx context.Context, o OpenOrder) (string, bool, error) {
+	res, err := s.deps.Tradebin.MarketOrder(ctx, &tradebintypes.QueryMarketOrderRequest{
+		Market: o.MarketID, OrderType: o.Side, OrderId: o.OrderID,
+	})
+	if status.Code(err) == codes.NotFound {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if res.Order.Owner == "" {
+		return "", false, errors.New("the node names no owner")
+	}
+	return res.Order.Owner, true, nil
 }
 
 // listed returns the order ids the node lists for owner, every page.

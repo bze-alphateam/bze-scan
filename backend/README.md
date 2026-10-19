@@ -844,9 +844,14 @@ the queue message id (24 zero-filled digits, unique within a block).
   without a message id, so it needs no upgrade height (and works on the
   testnet too). It is approximate: a look-alike outcome of a message queued
   in an earlier block can be claimed, a message only refunded claims
-  nothing, chain v7.0 events name no owner or taker (market, side, price
-  and amount only); an outcome without a match stays unattributed and
-  `message_id` stays null.
+  nothing, chain v7.0 and v7.1 events (below 15,951,000) name no owner,
+  maker or taker (market, side, price and amount only); an outcome without
+  a match stays unattributed and `message_id` stays null.
+- Owners before v7.2.0: a matched order takes its message's creator as
+  `owner`, a matched fill as `taker`. The writer names the `maker` of such
+  an order's fills from its owner, whichever of the two is written first,
+  and a reindex keeps an owner the state sync named. A reindex of
+  12,940,553..15,950,999 fills the rows of a database written before.
 - Reconciliation: the chain removes a remainder below the market minimum
   without an event; the hourly `orders` set (see the state sync) closes it.
 
@@ -1160,7 +1165,11 @@ that the node no longer lists is closed as `filled` with `closed_height` /
 `closed_time` that height and its block time (locked in order id order like
 the writers). It never reopens a row and never touches a row the node still
 lists; a later fill or cancel event still applies to a row it closed. An
-owner whose read fails keeps its rows and fails the run.
+owner whose read fails keeps its rows and fails the run. An open row without
+owner (chain v7.0/v7.1, its message not matched) is read with tradebin
+`MarketOrder` (market, side, id): the node's owner names the row and the
+maker of its fills, a not-found closes it like the others, a failed read
+keeps it and fails the run.
 
 **Prices.** With `AGGREGATOR_URL` set, every minute `GET /api/prices` of the
 BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A

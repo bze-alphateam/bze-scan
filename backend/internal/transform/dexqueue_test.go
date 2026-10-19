@@ -220,6 +220,39 @@ func TestQueueOrderAttribution(t *testing.T) {
 		assert.Equal(t, []int{0}, fills)
 	})
 
+	// Regression: a v7.0 order kept no owner, so the account's open orders
+	// missed it.
+	t.Run("chain v7.0 names no owner: the matched message's creator owns the order and takes the fills", func(t *testing.T) {
+		ents, err := realTransformer(t).Transform(queueInput(t,
+			[]func(*testing.T) (string, node.TxResult){create(trader, market, "buy", "100", "2")},
+			executed(msgID(9), market, "sell", "40", "2", ""), saved(msgID(1), market, "buy", "60", "2", "")))
+		require.NoError(t, err)
+		require.Len(t, ents.Orders, 1)
+		require.Len(t, ents.OrderFills, 1)
+		assert.Equal(t, trader, ents.Orders[0].Owner)
+		assert.Equal(t, trader, ents.OrderFills[0].Taker)
+		assert.Equal(t, maker1, ents.OrderFills[0].Maker, "an event's own maker is kept")
+	})
+
+	t.Run("an event's own owner and taker win over the message's creator", func(t *testing.T) {
+		ents, err := realTransformer(t).Transform(queueInput(t,
+			[]func(*testing.T) (string, node.TxResult){create(trader, market, "buy", "100", "2")},
+			executed(msgID(9), market, "sell", "40", "2", trader), saved(msgID(1), market, "buy", "60", "2", trader)))
+		require.NoError(t, err)
+		assert.Equal(t, trader, ents.Orders[0].Owner)
+		assert.Equal(t, trader, ents.OrderFills[0].Taker)
+	})
+
+	t.Run("an unmatched v7.0 order keeps no owner", func(t *testing.T) {
+		ents, err := realTransformer(t).Transform(queueInput(t,
+			[]func(*testing.T) (string, node.TxResult){create(trader, market, "buy", "100", "2")},
+			saved(msgID(1), market, "buy", "99", "2", "")))
+		require.NoError(t, err)
+		require.Len(t, ents.Orders, 1)
+		assert.Empty(t, ents.Orders[0].Owner, "the orders state sync names it from the node")
+		assert.Empty(t, ents.Orders[0].CreatedTxHash)
+	})
+
 	t.Run("a MsgFillOrders takes its fills, never a saved order", func(t *testing.T) {
 		fillOrders := func(t *testing.T) (string, node.TxResult) {
 			return encodedTx(t, &tradebintypes.MsgFillOrders{Creator: trader, MarketId: market, OrderType: "sell",
