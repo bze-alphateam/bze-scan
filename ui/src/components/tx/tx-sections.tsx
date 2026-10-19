@@ -4,6 +4,7 @@ import { Box, HStack, Heading, Link, Text, type LinkProps } from "@chakra-ui/rea
 import NextLink from "next/link";
 import type { ReactNode } from "react";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { useBlock, useRawTx, useStatus } from "@/api/hooks";
 import type { Tx } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -175,12 +176,12 @@ function RawTx({ hash }: { hash: string }) {
   return data ? <JsonBlock value={data} /> : <JsonSkeleton />;
 }
 
-/** "Open on Ping.pub ↗": on the raw bar from c2 up, under the JSON on phones. */
+/** "Open on Ping.pub": on the raw bar from c2 up, under the JSON on phones. */
 function PingPubOpen({ hash, ...props }: { hash: string } & Omit<LinkProps, "href" | "children">) {
   return (
-    <Link href={pingPubTxUrl(hash)} target="_blank" rel="noopener noreferrer" fontSize="12px" color="accent.fg" whiteSpace="nowrap" {...props}>
-      Open on Ping.pub ↗
-    </Link>
+    <ExternalLink href={pingPubTxUrl(hash)} fontSize="12px" whiteSpace="nowrap" {...props}>
+      Open on Ping.pub
+    </ExternalLink>
   );
 }
 

@@ -76,8 +76,8 @@ describe("ValidatorsPage", () => {
     expect(honeycomb).toHaveTextContent("50M BZE · 12.3%");
     expect(honeycomb).toHaveTextContent("5%");
     expect(honeycomb).toHaveTextContent("99.9%");
-    // No Stake button in the rows: people stake from the validator's page.
-    expect(screen.queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
+    // No stake link in the rows: people stake from the validator's page.
+    expect(screen.getAllByTestId("validator-row").flatMap((r) => within(r).queryAllByTestId("app-link"))).toEqual([]);
 
     expect(await screen.findByText(/share of the last 10,000 blocks the validator signed/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Picking a validator" })).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("ValidatorsPage", () => {
     expect(rows.every((r) => r.querySelector('[data-ring="gold"]') && r.querySelector("[data-gold]"))).toBe(true);
     expect(within(rows[1]).getByTestId("hall-of-fame-votes")).toHaveTextContent("Voted on all of the last 10 proposals");
     expect(rows[1]).toHaveTextContent("50M BZE · 12.3% of the voting power");
-    expect(screen.queryByRole("link", { name: /^Stake with/ })).not.toBeInTheDocument();
+    expect(rows.flatMap((r) => within(r).queryAllByTestId("app-link"))).toEqual([]);
 
     // The list ends with a way to every active validator.
     await userEvent.click(screen.getByRole("button", { name: "See all active validators" }));

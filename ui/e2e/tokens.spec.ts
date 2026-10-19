@@ -50,6 +50,11 @@ test.describe("token page", () => {
     await expect(page).toHaveTitle("HONEY · Honey · BZE Explorer");
     await expect(page.getByTestId("token-chips")).toContainText("Factory");
     await expect(page.getByTestId("supply-box")).toHaveAttribute("data-state", "admin");
+    // The DEX is a BZE app: a ghost AppLink after the verb, in a new tab.
+    await expect(page.getByTestId("token-trade")).toHaveText("Trade on DEX");
+    const dex = page.getByTestId("token-trade").getByRole("link", { name: "DEX" });
+    await expect(dex).toHaveAttribute("data-testid", "app-link");
+    await expect(dex).toHaveAttribute("target", "_blank");
     await expect(page.getByTestId("supply-box")).toContainText("So far: 2 mints adding 1,000,500 HONEY, 1 burn removing 200 HONEY.");
     await expect(page.getByTestId("holder-row")).toHaveCount(6);
     await expect(page.getByText("the top 5 hold 87.5%")).toBeVisible();

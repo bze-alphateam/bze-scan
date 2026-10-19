@@ -469,5 +469,5 @@ export function mergeEvents(newest: TokenEvent[], older: TokenEvent[] | undefine
 /** Holders of at least one display unit: "accounts with at least 1 HONEY". */
 export const holdersSub = (t: Pick<TokenSummary, "symbol" | "denom">) => `accounts with at least 1 ${tokenSymbol(t)}`;
 
-/** True when the token has a market or a price on the DEX: its "View on the DEX" link is worth showing. */
+/** True when the token has a market or a price on the DEX: its DEX link is worth showing. */
 export const onDex = (t: Pick<Token, "markets" | "price_usd">) => t.markets.length > 0 || t.price_usd != null;

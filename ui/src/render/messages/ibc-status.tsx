@@ -1,7 +1,7 @@
 import { Badge, HStack, Image, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
-import { LuExternalLink } from "react-icons/lu";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import type { IbcTransfer } from "@/api/types";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { shortHash } from "@/lib/format";
@@ -135,9 +135,9 @@ export function IbcStatus({ t }: { t: IbcTransfer }) {
         </Text>
       )}
       {foreign && (
-        <Link href={foreign} target="_blank" rel="noopener noreferrer" fontSize="sm" alignSelf="start">
-          See on {chainName(t)}&apos;s explorer <LuExternalLink aria-hidden />
-        </Link>
+        <ExternalLink href={foreign} fontSize="sm" alignSelf="start">
+          {`See on ${chainName(t)}'s explorer`}
+        </ExternalLink>
       )}
     </Stack>
   );

@@ -1,6 +1,6 @@
-import { Link, Text } from "@chakra-ui/react";
-import { LuExternalLink } from "react-icons/lu";
+import { Text } from "@chakra-ui/react";
 
+import { ExternalLink } from "@/components/ui/external-link";
 import { websiteLink } from "@/lib/links";
 
 import { Account, accountName, coinsText, Coins, Fields, parseCoins, str } from "./common";
@@ -26,9 +26,9 @@ const addArticle = renderer({
           {
             label: "Article",
             value: link && (
-              <Link href={link.href} target="_blank" rel="noopener noreferrer nofollow" wordBreak="break-all">
-                {link.text} <LuExternalLink aria-hidden />
-              </Link>
+              <ExternalLink href={link.href} userContent wordBreak="break-all">
+                {link.text}
+              </ExternalLink>
             ),
           },
         ]}
