@@ -164,7 +164,7 @@ func TestTxCarriesItsOrderOutcome(t *testing.T) {
 	rec = get(t, e, "/txs/"+hashUpper)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
-	assert.Contains(t, rec.Body.String(), `"dex":{"placed":[],"fills":[],"cancelled":[],"pending":true}`)
+	assert.Contains(t, rec.Body.String(), `"dex":{"placed":[],"fills":[],"cancelled":[],"refunds":[],"skipped_cancels":[],"failed":[],"pending":true}`)
 
 	f.dex[hashUpper] = &repository.TxDex{}
 	rec = get(t, e, "/txs/"+hashUpper)
@@ -172,6 +172,43 @@ func TestTxCarriesItsOrderOutcome(t *testing.T) {
 
 	f.dexErr = errors.New("db down")
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/txs/"+hashUpper).Code)
+}
+
+// The chain v8.3.0 outcomes: the refund coin string reads as a coin, an
+// empty one (dust) as null; a transaction whose only outcome is one of them
+// still has a dex.
+func TestTxCarriesItsV830Outcomes(t *testing.T) {
+	tx := &repository.Tx{TxSummary: repository.TxSummary{Height: 30, TxIndex: 0, Hash: hashUpper, Success: true}}
+	f := &fakeReader{tx: tx, dex: map[string]*repository.TxDex{hashUpper: {
+		Refunds: []repository.OrderRefund{
+			{Height: 30, MessageID: orderA, MarketID: "factory/x/uhoney/ubze", OrderType: "buy", Amount: "100",
+				Refund: "16087378657factory/x/uhoney", Reason: "no_match"},
+			{Height: 31, MessageID: orderA, MarketID: "factory/x/uhoney/ubze", OrderType: "buy", Amount: "1",
+				Refund: "", Reason: "below_min_amount"},
+		},
+	}}}
+	e := newAPI(f)
+	rec := get(t, e, "/txs/"+hashUpper)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	got := decode[dto.Tx](t, rec)
+	require.NotNil(t, got.Dex)
+	require.Len(t, got.Dex.Refunds, 2)
+	assert.Equal(t, &dto.Coin{Denom: "factory/x/uhoney", Amount: "16087378657"}, got.Dex.Refunds[0].Refund)
+	assert.Nil(t, got.Dex.Refunds[1].Refund, "rounded to zero")
+	assert.Equal(t, []dto.SkippedCancel{}, got.Dex.SkippedCancels)
+
+	f.dex[hashUpper] = &repository.TxDex{
+		SkippedCancels: []repository.CancelSkip{{Height: 30, MessageID: orderA, OrderID: orderA, Reason: "order_not_found"}},
+	}
+	got = decode[dto.Tx](t, get(t, e, "/txs/"+hashUpper))
+	require.NotNil(t, got.Dex, "a skipped cancel is an outcome")
+	assert.Equal(t, "order_not_found", got.Dex.SkippedCancels[0].Reason)
+
+	f.dex[hashUpper] = &repository.TxDex{Failed: []repository.OrderFailure{{MessageID: orderA, MessageType: "buy", Height: 32}},
+		Pending: true}
+	rec = get(t, e, "/txs/"+hashUpper)
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.Equal(t, []dto.FailedOrder{{MessageID: orderA, MessageType: "buy", Height: 32}}, decode[dto.Tx](t, rec).Dex.Failed)
 }
 
 func TestOrderCursorsRoundTrip(t *testing.T) {

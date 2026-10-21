@@ -173,8 +173,11 @@ func TestBZEBlockEventsAreTheChainsBlockLevelEmitters(t *testing.T) {
 		"bze.rewards.TradingRewardDistributionEvent", // hourly hook
 		"bze.rewards.TradingRewardExpireEvent",       // hourly hook
 		"bze.tradebin.LiquidityAddedEvent",           // periodic burn: locked coins into BZE liquidity
+		"bze.tradebin.OrderCancelSkippedEvent",       // EndBlock queue (v8.3.0)
 		"bze.tradebin.OrderCanceledEvent",            // EndBlock queue
 		"bze.tradebin.OrderExecutedEvent",            // EndBlock queue
+		"bze.tradebin.OrderMessageFailedEvent",       // EndBlock queue (v8.3.0)
+		"bze.tradebin.OrderMessageRefundedEvent",     // EndBlock queue (v8.3.0)
 		"bze.tradebin.OrderSavedEvent",               // EndBlock queue
 		"bze.tradebin.SwapEvent",                     // fee collector's conversion to BZE
 	}, got)

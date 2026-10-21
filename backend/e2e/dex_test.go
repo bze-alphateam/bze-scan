@@ -370,3 +370,118 @@ func TestTheOrdersInsertFindsCancelsThroughTheirIndex(t *testing.T) {
 	assert.Equal(t, []string{fmt.Sprint(orders / 2)},
 		queryStrings(t, db, `SELECT count(*) FROM explorer.orders WHERE status = 'cancelled'`))
 }
+
+// outcomeEvent is a chain v8.3.0 order book outcome event as the
+// transformer stores it.
+func outcomeEvent(h int64, seq int, typ string, attrs map[string]any) transform.BlockEvent {
+	return transform.BlockEvent{Height: h, Seq: seq, Type: "bze.tradebin." + typ, Attrs: attrs}
+}
+
+func refundEvent(h int64, seq, msg int, amount, refund, reason string) transform.BlockEvent {
+	return outcomeEvent(h, seq, "OrderMessageRefundedEvent", map[string]any{"message_id": oid(msg),
+		"market_id": dexMarket, "order_type": "buy", "owner": dexOwner, "amount": amount, "refund": refund,
+		"reason": reason})
+}
+
+// Chain v8.3.0 outcomes, built by hand (no network has them yet): at dexH a
+// MsgFillOrders (messages 1 and 2) finds nothing at its prices, a cancel
+// (message 3) finds no order, a create (message 4) fails at dexH and dexH+1,
+// a create (message 6) is too small to rest and its refund is dust; at
+// dexH+1 a new create reuses message id 1 and is sent back in the next
+// block.
+func TestDexV830OutcomeEvents(t *testing.T) {
+	fill, cancel, failing, dust, reused := txHash(11), txHash(12), txHash(13), txHash(14), txHash(15)
+	at := dexBlock(dexH,
+		transform.Transaction{Hash: fill, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgFillOrders"}},
+		transform.Transaction{Hash: cancel, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCancelOrder"}},
+		transform.Transaction{Hash: failing, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}},
+		transform.Transaction{Hash: dust, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}},
+	)
+	at.Messages = []transform.Message{{Height: dexH, TxIndex: 1, MsgIndex: 0, TypeURL: "/bze.tradebin.MsgCancelOrder",
+		Events: []transform.Event{{Type: "bze.tradebin.OrderCancelMessageEvent",
+			Attrs: map[string]any{"orderId": oid(30), "message_id": oid(3)}}}}}
+	at.OrderMessages = []transform.OrderMessage{
+		{Height: dexH, MessageID: oid(1), TxIndex: 0, TxHash: fill, Kind: "fill"},
+		{Height: dexH, MessageID: oid(2), TxIndex: 0, TxHash: fill, Kind: "fill"},
+		{Height: dexH, MessageID: oid(3), TxIndex: 1, TxHash: cancel, Kind: "cancel"},
+		{Height: dexH, MessageID: oid(4), TxIndex: 2, TxHash: failing, Kind: "create"},
+		{Height: dexH, MessageID: oid(6), TxIndex: 3, TxHash: dust, Kind: "create"},
+	}
+	at.BlockEvents = []transform.BlockEvent{
+		refundEvent(dexH, 0, 1, "100", "200ubze", "no_match"),
+		refundEvent(dexH, 1, 2, "50", "100ubze", "no_match"),
+		outcomeEvent(dexH, 2, "OrderCancelSkippedEvent", map[string]any{"message_id": oid(3), "market_id": dexMarket,
+			"order_type": "sell", "order_id": oid(30), "owner": dexOwner, "reason": "order_not_found"}),
+		outcomeEvent(dexH, 3, "OrderMessageFailedEvent", map[string]any{"message_id": oid(4), "market_id": dexMarket,
+			"message_type": "buy", "owner": dexOwner, "reason": "processing_error"}),
+		refundEvent(dexH, 4, 6, "1", "", "below_min_amount"),
+	}
+
+	next := dexBlock(dexH+1,
+		transform.Transaction{Hash: reused, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
+	next.OrderMessages = []transform.OrderMessage{{Height: dexH + 1, MessageID: oid(1), TxIndex: 0, TxHash: reused, Kind: "create"}}
+	next.BlockEvents = []transform.BlockEvent{
+		outcomeEvent(dexH+1, 0, "OrderMessageFailedEvent", map[string]any{"message_id": oid(4), "market_id": dexMarket,
+			"message_type": "buy", "owner": dexOwner, "reason": "processing_error"}),
+	}
+	last := dexBlock(dexH + 2)
+	last.BlockEvents = []transform.BlockEvent{refundEvent(dexH+2, 0, 1, "7", "14ubze", "below_min_amount")}
+
+	e := newSyncEnv(t)
+	w := batchWriter(t, e.url)
+	ctx := context.Background()
+	heights := []*transform.Entities{at, next, last}
+	require.NoError(t, w.Write(ctx, heights, writer.ModeInsert))
+	require.NoError(t, w.Write(ctx, heights, writer.ModeUpdate), "a reindex")
+
+	base := e.serveAPI(t)
+	tx := func(hash string) (*dto.TxDex, response) {
+		r := fetch(t, base+"/txs/"+hash)
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		return into[dto.Tx](t, r).Dex, r
+	}
+
+	refunded, r := tx(fill)
+	require.NotNil(t, refunded)
+	assert.False(t, refunded.Pending, "every fill message was sent back")
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
+	assert.Empty(t, refunded.Fills)
+	assert.Equal(t, []dto.Refund{
+		{Height: dexH, MessageID: oid(1), MarketID: dexMarket, OrderType: "buy", Amount: "100",
+			Refund: &dto.Coin{Denom: "ubze", Amount: "200"}, Reason: "no_match"},
+		{Height: dexH, MessageID: oid(2), MarketID: dexMarket, OrderType: "buy", Amount: "50",
+			Refund: &dto.Coin{Denom: "ubze", Amount: "100"}, Reason: "no_match"},
+	}, refunded.Refunds, "the refund of the later message reusing id 1 is not this one's")
+
+	skipped, _ := tx(cancel)
+	require.NotNil(t, skipped)
+	assert.False(t, skipped.Pending)
+	assert.Equal(t, []dto.SkippedCancel{{Height: dexH, MessageID: oid(3), MarketID: dexMarket, OrderType: "sell",
+		OrderID: oid(30), Reason: "order_not_found"}}, skipped.SkippedCancels)
+
+	failed, r := tx(failing)
+	require.NotNil(t, failed)
+	assert.True(t, failed.Pending, "a failed message is retried: still pending")
+	assert.Equal(t, "no-store", r.header.Get("Cache-Control"))
+	assert.Equal(t, []dto.FailedOrder{{MessageID: oid(4), MessageType: "buy", Height: dexH + 1}}, failed.Failed,
+		"one entry per message, its latest failure")
+
+	dusty, _ := tx(dust)
+	require.NotNil(t, dusty)
+	assert.False(t, dusty.Pending)
+	require.Len(t, dusty.Refunds, 1)
+	assert.Nil(t, dusty.Refunds[0].Refund, "rounded to zero: only dust was kept")
+	assert.Equal(t, "below_min_amount", dusty.Refunds[0].Reason)
+
+	later, _ := tx(reused)
+	require.NotNil(t, later)
+	assert.False(t, later.Pending, "sent back a block later")
+	require.Len(t, later.Refunds, 1)
+	assert.Equal(t, dexH+2, later.Refunds[0].Height)
+	assert.Equal(t, &dto.Coin{Denom: "ubze", Amount: "14"}, later.Refunds[0].Refund)
+
+	activity := queryStrings(t, e.db, `SELECT concat_ws(' ', height, seq) FROM explorer.block_events
+		WHERE type = 'bze.tradebin.OrderMessageFailedEvent' ORDER BY height`)
+	assert.Equal(t, []string{fmt.Sprint(dexH, " 3"), fmt.Sprint(dexH+1, " 0")}, activity,
+		"one stored event per failing block, written once despite the reindex")
+}
