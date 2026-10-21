@@ -193,6 +193,51 @@ describe("DEX outcome", () => {
     expect(outcomeOf(noIds, old)?.fills.map((f) => f.taker)).toEqual([A]);
   });
 
+  it("says a settled fill filled nothing, never that its orders were filled", () => {
+    // Mainnet tx 775A6F91…: both orders were gone, v8.1.1 refunded the coins and emitted no DEX event (dex null).
+    const fillMsg = fixture("tradebin-fill-orders");
+    const ctx = createRenderContext({ transfers: [], tokens, dex: null, dexSettled: true });
+    body(fillMsg, ctx);
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent(
+      "Nothing was filled: these orders were no longer on the book at their price when the block ended, so the coins were sent back.",
+    );
+    expect(screen.queryByText(/filled by/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Sent by")).toBeInTheDocument();
+  });
+
+  it("says how much of a settled fill was not filled", () => {
+    const fillMsg = fixture("tradebin-fill-orders");
+    const creator = String(fillMsg.body?.creator);
+    const ctx = createRenderContext({
+      transfers: [],
+      tokens,
+      dex: { placed: [], fills: [fill({ taker: creator, taker_message_id: null, amount: "200000000", price: "0.0124" })], cancelled: [], pending: false },
+      dexSettled: true,
+    });
+    body(fillMsg, ctx);
+    expect(screen.getByTestId("dex-fills")).toHaveTextContent("Filled right away: 200 BZE");
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("300 BZE not filled");
+  });
+
+  it("claims nothing about a fill's outcome in a list or for a failed transaction", () => {
+    const fillMsg = fixture("tradebin-fill-orders");
+    body(fillMsg, createRenderContext({ transfers: [], tokens }));
+    body(fillMsg, createRenderContext({ transfers: [], tokens, dex: null, dexSettled: false }));
+    expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
+  });
+
+  it("never leaves a settled fill pending: v8.2.0 refunds a fill with an id but no event", () => {
+    const fillMsg = { ...fixture("tradebin-fill-orders"), events: [{ type: "bze.tradebin.OrderCreateMessageEvent", attrs: { message_id: "000000000000000000000007" } }] };
+    body(fillMsg, createRenderContext({ transfers: [], tokens, dex: { placed: [], fills: [], cancelled: [], pending: true }, dexSettled: true }));
+    expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled");
+  });
+
+  it("keeps a placed order pending until the order book processes it", () => {
+    body(create, createRenderContext({ transfers: [], tokens, dex: { placed: [], fills: [], cancelled: [], pending: true }, dexSettled: true }));
+    expect(screen.getByTestId("dex-pending")).toBeInTheDocument();
+  });
+
   it("shows nothing without an outcome (a list's context)", () => {
     body(create, createRenderContext({ transfers: [], tokens }));
     expect(screen.queryByTestId("dex-outcome")).not.toBeInTheDocument();

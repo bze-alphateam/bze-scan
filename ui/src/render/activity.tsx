@@ -323,7 +323,8 @@ const SENTENCES: Record<string, Sentence> = {
   },
   dex_fill: (i) => {
     const fills = fillPhrases(i.row, i.address, i.ctx);
-    if (fills.length === 0) return ["Filled orders on the DEX"];
+    // A fill message's own row: its fills settle at the end of the block, in rows of their own.
+    if (fills.length === 0) return ["Sent orders to fill on the DEX"];
     const more = fills.length - 1;
     return [`Order filled · ${fills[0]}${more > 0 ? ` + ${more} more` : ""}`];
   },
