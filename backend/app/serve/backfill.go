@@ -30,8 +30,9 @@ type history struct {
 	deps   backfill.Deps
 }
 
-// newHistory builds the backfill side. Close its pool when done.
-func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *chain.Codec) (*history, error) {
+// newHistory builds the backfill side; its writer runs hooks after the
+// order attribution. Close its pool when done.
+func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *chain.Codec, hooks ...writer.PostFlush) (*history, error) {
 	// The archive's release history is per chain: the same height is a
 	// different release on mainnet and on testnet.
 	releases, err := archive.ForChain(cfg.ChainID)
@@ -47,7 +48,7 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 	if cfg.ArchiveRPCRetryURL != "" {
 		retry = node.New(cfg.ArchiveRPCRetryURL)
 	}
-	w := writer.NewBatchWriter(pool, writer.AttributeOrders)
+	w := writer.NewBatchWriter(pool, append([]writer.PostFlush{writer.AttributeOrders}, hooks...)...)
 	limit := rate.Limit(cfg.BackfillRateLimit)
 	if limit <= 0 {
 		limit = rate.Inf // config.Load never yields 0; a hand-built config means no limit

@@ -27,6 +27,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/ordercoverage"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
+	"github.com/bze-alphateam/bze-scan/backend/internal/stakeflow"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
@@ -158,6 +159,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		openOrders, coverage = reader, component{name: "order coverage", run: cov.Run}
 	}
 
+	// The validators' stake movements of the last 7 days live in memory:
+	// loaded once by a component of their own, then fed by both writers.
+	flows := stakeflow.New(stakeflow.Config{}, stakeflow.Deps{Store: stakeflow.NewPGStore(apiPool)})
+
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
@@ -171,6 +176,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		ParamChanges:       explorerRepo,
 		AccountState:       accountState,
 		OpenOrders:         openOrders,
+		StakeFlows:         flows,
+		ValidatorNames:     explorerRepo,
 		Status:             checker,
 		Raw:                raw,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -181,6 +188,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			return server.Run(ctx, e, cfg.HTTPAddr, opts.OnListen)
 		}},
 		{name: "status checker", run: checker.Run},
+		{name: "stake movements", run: flows.Run},
 	}
 	if coverage.run != nil {
 		components = append(components, coverage)
@@ -195,7 +203,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// its own pool, the batch writer and one archive rate limiter.
 	var hist *history
 	if cfg.IndexerEnabled || cfg.BackfillEnabled {
-		if hist, err = newHistory(ctx, cfg, opts, codec); err != nil {
+		if hist, err = newHistory(ctx, cfg, opts, codec, flows.PostFlush); err != nil {
 			return err
 		}
 		// Closed after every component has returned.
@@ -232,7 +240,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
 				Node:        nodeClient,
-				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders),
+				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, flows.PostFlush),
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),

@@ -85,6 +85,7 @@ func TestAPI(t *testing.T) {
 		"cors":                          testCORSHeadersWhenConfigured,
 		"partition pruning":             testListQueriesPrunePartitions,
 		"failed txs index":              testFailedTxsUseTheirIndex,
+		"stake movements":               testStakeMovementsFromTheStoredEvents,
 	} {
 		t.Run(name, func(t *testing.T) { test(t, base, ix) })
 	}
