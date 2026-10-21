@@ -261,6 +261,9 @@ internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
 internal/status/   the status checker and its snapshot
+internal/stakeflow/
+                   the validators' stake movements of the last 7 days, in
+                   memory, with their 24 h / 7 d running totals
 internal/testutil/ acceptance-test helpers (database URL, Migrate)
 internal/testutil/fakenode/
                    fake CometBFT RPC node and fake gRPC server for tests,
@@ -343,6 +346,8 @@ every later route follows:
 | `GET /api/v1/validators/hall-of-fame` | the Hall of Fame, in one page (`next_cursor` null): the bonded, unjailed validators whose account voted, whatever the option, on every one of the last two proposals whose voting ended (all of them while the chain has fewer; nobody while none ended) and that missed at most ten blocks of the slashing signing window, by voting power ascending; items as in `/validators`, except that `recent_votes` counts on those two proposals. `rules` states the rule for clients to word it: `{proposals: 2, max_missed_blocks: 10, signed_blocks_window}` (the window null until synced) |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
+| `GET /api/v1/validators/stake-changes` | every validator's net stake change over the last 24 hours and the last 7 days: `{complete, as_of_height, items: {"<operator>": {"24h", "7d"}}}`, signed ubze strings (`"0"` for a window without net change); a validator without movements in the last 7 days is left out. Served from memory (see [Stake movements](#stake-movements)); `complete` is false while some height of the window is not indexed (the figures are then partial), and before the set is loaded (`as_of_height` 0, no items) |
+| `GET /api/v1/validators/{operator}/movements?page&limit` | the validator's stake movements of the last 7 days, newest first, from memory: `{complete, window_from, page, total, items}`, page from 1, `limit` 10 by default, at most 50; each item has height, tx_hash, time, `kind` (`delegate`, `undelegate`, `redelegate_in`, `redelegate_out`, `cancel_unbonding`, `create` = the initial self-stake), delegator, amount (ubze, positive) and `counterparty_validator` (`{operator_address, moniker}`, moniker null when unknown; null except on redelegations). `window_from` is null before the set is loaded; 400 unless a `bzevaloper1…` address or for a bad page/limit, 404 when not synced |
 | `GET /api/v1/modules` | `{"items": [{"address", "name", "module"}]}`: every module account the labels seed names (`labels` of kind `module`), by name; no pages. Cached `public, max-age=60`: only a migration's seed changes them |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
 | `GET /api/v1/accounts/{address}/activity?category=&cursor\|page&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list. `page=<n>` (n ≥ 1, else 400; not with `cursor`) skips the newest `(n−1)·limit` rows and adds `total`: the address's row count (`activity_count`, 0 when the explorer never saw it) or, with `category`, that category's count; a page past the end is an empty list with the total; `next_cursor` still leads to the older rows. Without `page` there is no `total` |
@@ -923,6 +928,39 @@ and the timeouts and never touches the status or `result_*`. The settling
 write changes only a `pending` row, so replays and backfill overlap are
 idempotent, and both orders end with the same row. A transfer no relayer
 ever settles stays `pending`, shown as `expired` past its timeout time.
+
+### Stake movements
+
+`internal/stakeflow` keeps the validators' stake movements of the last 7 days
+in memory; nothing is stored for them. They come from the stored message events
+(`explorer.messages.events`), not from type URLs, so authz `MsgExec` delegations
+count too:
+
+| event | movement |
+| --- | --- |
+| `delegate` | `delegate`, + on `validator` |
+| `unbond` | `undelegate`, − on `validator` |
+| `redelegate` | `redelegate_out` − on `source_validator`, `redelegate_in` + on `destination_validator` |
+| `cancel_unbonding_delegation` | `cancel_unbonding`, + on `validator` |
+| `create_validator` | `create`, + on `validator` (the delegator is the operator's account) |
+
+Only bond denom amounts count; slashes are not movements (they are
+`validator_events`). `serve` builds the set and runs it as a component: one
+read-only, repeatable-read load at start (the indexed height spans from the
+last block before the window, and the window's messages with one of these
+events), then every flush of the live writer and of the backfill's batch writer
+reaches it through a `PostFlush` hook (`stakeflow.FromEntities`, the same
+movements the load reads back). Flushes seen before the load ends are applied
+after it; a height already applied (in the load, or a write retried after a
+rollback) counts once.
+
+The window is anchored on the newest indexed block's time, never on a clock:
+each new block moves it, a movement leaves the 24-hour total once older than a
+day and the set once older than 7 days. Each validator's two totals are running
+sums, adjusted as movements arrive and leave. `complete` is true once every
+height from before the window's start up to the newest is indexed: a fresh
+explorer younger than 7 days, a backfill still inside the window or a catch-up
+gap all make it false. The set is a few MB even on a busy week.
 
 ## Reindex
 

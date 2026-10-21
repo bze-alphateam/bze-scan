@@ -381,6 +381,29 @@ func (r *Explorer) ValidatorMoniker(ctx context.Context, operator string) (strin
 	return moniker, nil
 }
 
+// ValidatorMonikers returns the monikers of the known validators among
+// operators, keyed by operator address.
+func (r *Explorer) ValidatorMonikers(ctx context.Context, operators []string) (map[string]string, error) {
+	out := make(map[string]string, len(operators))
+	rows, err := r.db.Query(ctx, `SELECT operator_address, moniker FROM explorer.validators
+		WHERE operator_address = ANY($1)`, operators)
+	if err != nil {
+		return nil, fmt.Errorf("validator monikers: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var op, moniker string
+		if err := rows.Scan(&op, &moniker); err != nil {
+			return nil, fmt.Errorf("validator monikers: %w", err)
+		}
+		out[op] = moniker
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("validator monikers: %w", err)
+	}
+	return out, nil
+}
+
 func (r *Explorer) exists(ctx context.Context, q string, arg any) (bool, error) {
 	var ok bool
 	if err := r.db.QueryRow(ctx, q, arg).Scan(&ok); err != nil {
