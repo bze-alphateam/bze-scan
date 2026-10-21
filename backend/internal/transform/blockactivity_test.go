@@ -237,3 +237,52 @@ func TestUnclassifiedBZEBlockEventsWarn(t *testing.T) {
 	assert.Equal(t, []any{"bze.burner.FutureEvent", "bze.rewards.DenomRewardDistributionEvent"}, warned,
 		"once per BZE type; other modules' events are routine")
 }
+
+// Chain v8.3.0 reports the queue messages that end without an order or a
+// fill; no network has them yet, so the events are synthetic, in the
+// chain's typed-event encoding. They are stored as block events, decoded,
+// and are block-level activity of their owner.
+func TestSyntheticOrderOutcomeBlockEvents(t *testing.T) {
+	const owner = "bze1fdyfrv09slmg0q9c8hu334h5gdq4aexcgjghpf"
+	tr, hook := mockTransformer(mockDecoder{})
+	in := baseInput()
+	in.Results.FinalizeBlockEvents = []node.Event{
+		{Type: "bze.tradebin.OrderMessageRefundedEvent", Attributes: []node.Attribute{
+			attr("message_id", `"000000000000000000000001"`), attr("market_id", `"factory/x/uhoney/ubze"`),
+			attr("order_type", `"sell"`), attr("owner", `"`+owner+`"`), attr("amount", `"16087378657"`),
+			attr("refund", `"16087378657ubze"`), attr("reason", `"no_match"`), attr("mode", "EndBlock"),
+		}},
+		{Type: "bze.tradebin.OrderCancelSkippedEvent", Attributes: []node.Attribute{
+			attr("message_id", `"000000000000000000000002"`), attr("market_id", `"factory/x/uhoney/ubze"`),
+			attr("order_type", `"buy"`), attr("order_id", `"000000000000000000000012"`), attr("owner", `"`+owner+`"`),
+			attr("reason", `"order_not_found"`), attr("mode", "EndBlock"),
+		}},
+		{Type: "bze.tradebin.OrderMessageFailedEvent", Attributes: []node.Attribute{
+			attr("message_id", `"000000000000000000000003"`), attr("market_id", `"factory/x/uhoney/ubze"`),
+			attr("message_type", `"fill_buy"`), attr("owner", `"`+owner+`"`), attr("reason", `"processing_error"`),
+			attr("mode", "EndBlock"),
+		}},
+	}
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	assert.Empty(t, hook.AllEntries(), "every event is classified")
+
+	require.Len(t, ents.BlockEvents, 3)
+	refund := ents.BlockEvents[0]
+	assert.Equal(t, "bze.tradebin.OrderMessageRefundedEvent", refund.Type)
+	assert.Equal(t, "000000000000000000000001", refund.Attrs["message_id"], "the lookup key, a plain string")
+	assert.Equal(t, "16087378657ubze", refund.Attrs["refund"])
+	assert.Equal(t, "no_match", refund.Attrs["reason"])
+	assert.Equal(t, "order_not_found", ents.BlockEvents[1].Attrs["reason"])
+	assert.Equal(t, "fill_buy", ents.BlockEvents[2].Attrs["message_type"])
+
+	var kinds []string
+	for _, r := range ents.Activity {
+		assert.Equal(t, owner, r.Address)
+		assert.Equal(t, transform.BlockTxIndex, r.TxIndex)
+		assert.Equal(t, "dex", r.Category)
+		kinds = append(kinds, r.Kind)
+		assert.Len(t, r.Details, 3, "the owner's three events")
+	}
+	assert.Equal(t, []string{"dex_refund"}, kinds, "one row per address and block, kind of its first event")
+}

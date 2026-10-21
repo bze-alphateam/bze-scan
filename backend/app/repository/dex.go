@@ -56,13 +56,54 @@ type FillKey struct {
 }
 
 // TxDex is the order book outcome of one transaction: the orders it placed,
-// the fills it took, the orders it cancelled, and whether an order message
-// it queued has no outcome indexed yet.
+// the fills it took, the orders it cancelled, what was sent back, the
+// cancels that found no order, the messages the engine failed to process,
+// and whether an order message it queued has no outcome indexed yet.
 type TxDex struct {
-	Placed    []Order
-	Fills     []OrderFill
-	Cancelled []Order
-	Pending   bool
+	Placed         []Order
+	Fills          []OrderFill
+	Cancelled      []Order
+	Refunds        []OrderRefund
+	SkippedCancels []CancelSkip
+	Failed         []OrderFailure
+	Pending        bool
+}
+
+// OrderRefund is an OrderMessageRefundedEvent (chain v8.3.0): the part of a
+// queue message that was not executed went back to its owner.
+type OrderRefund struct {
+	Height    int64
+	MessageID string
+	MarketID  string
+	OrderType string
+	Owner     string
+	// Amount is the base amount not executed.
+	Amount string
+	// Refund is the coin sent back as the chain writes it; empty when it
+	// rounded to zero and only dust was stored.
+	Refund string
+	Reason string
+}
+
+// CancelSkip is an OrderCancelSkippedEvent (chain v8.3.0): a cancel found
+// no order, which was filled or cancelled meanwhile.
+type CancelSkip struct {
+	Height    int64
+	MessageID string
+	MarketID  string
+	OrderType string
+	OrderID   string
+	Owner     string
+	Reason    string
+}
+
+// OrderFailure is the latest OrderMessageFailedEvent of a queue message
+// (chain v8.3.0): the engine could not process it at Height; it stays
+// queued and is retried every block.
+type OrderFailure struct {
+	MessageID   string
+	MessageType string
+	Height      int64
 }
 
 const (
@@ -104,6 +145,19 @@ func (r *Explorer) fills(ctx context.Context, what, sql string, args ...any) ([]
 		return nil, fmt.Errorf("%s: %w", what, err)
 	}
 	out, err := pgx.CollectRows(rows, scanFill)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	return out, nil
+}
+
+// collect runs sql and scans every row with scan.
+func collect[T any](ctx context.Context, db DB, what string, scan pgx.RowToFunc[T], sql string, args ...any) ([]T, error) {
+	rows, err := db.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
+	}
+	out, err := pgx.CollectRows(rows, scan)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", what, err)
 	}
@@ -174,18 +228,66 @@ func (r *Explorer) OrderFills(ctx context.Context, id string, limit int) (int64,
 const cancelledIDs = `SELECT e->'attrs'->>'orderId' FROM explorer.messages m, jsonb_array_elements(m.events) e
 	WHERE m.height = $1 AND m.tx_index = $2 AND e->>'type' = 'bze.tradebin.OrderCancelMessageEvent'`
 
+// Since chain v8.3.0 the engine also reports the queue messages that end
+// without an order or a fill. Those events are only kept as block_events
+// rows; one belongs to an order message of the transaction (at $1, $2)
+// when it carries its message id at or above its height and no later
+// order message took the id before it: the ids are reused once the queue
+// empties, never while a message holding one is queued (see
+// writer.AttributeOrders). A failure repeats every block the message stays
+// queued; the read keeps the latest.
+const (
+	evRefunded      = "bze.tradebin.OrderMessageRefundedEvent"
+	evCancelSkipped = "bze.tradebin.OrderCancelSkippedEvent"
+	evFailed        = "bze.tradebin.OrderMessageFailedEvent"
+)
+
+// txOutcomeEvents selects the events of type $3 of the transaction's order
+// messages; a query adds its own columns and ordering.
+const txOutcomeEvents = ` FROM explorer.order_messages om
+	  JOIN explorer.block_events e ON e.type = $3 AND e.attrs->>'message_id' = om.message_id AND e.height >= $1
+	 WHERE om.height = $1 AND om.tx_index = $2
+	   AND NOT EXISTS (SELECT 1 FROM explorer.order_messages n
+	                    WHERE n.message_id = om.message_id AND n.height > om.height AND n.height <= e.height)`
+
+// settledByEvent is true when the order message om has a refund or a
+// skipped cancel (chain v8.3.0).
+const settledByEvent = `EXISTS (SELECT 1 FROM explorer.block_events e
+	 WHERE e.type IN ('` + evRefunded + `', '` + evCancelSkipped + `')
+	   AND e.attrs->>'message_id' = om.message_id AND e.height >= om.height
+	   AND NOT EXISTS (SELECT 1 FROM explorer.order_messages n
+	                    WHERE n.message_id = om.message_id AND n.height > om.height AND n.height <= e.height))`
+
 // txPendingSQL is true when an order message of the transaction has no
 // outcome indexed: a create or fill message (chain v8.2.0 and later) with
-// no fill and no order attributed to it, or a cancel whose order is still
-// open.
+// no fill, no order and no refund attributed to it, a cancel whose order is
+// still open, or (chain v8.3.0) a cancel with neither its cancel nor a
+// skip. A failure is no outcome: the message is retried.
 const txPendingSQL = `SELECT EXISTS (
 		SELECT 1 FROM explorer.order_messages om
 		 WHERE om.height = $1 AND om.tx_index = $2 AND om.kind <> 'cancel'
 		   AND NOT EXISTS (SELECT 1 FROM explorer.order_fills f
 		                    WHERE f.taker_tx_hash = $3 AND f.taker_message_id = om.message_id AND f.height >= om.height)
 		   AND NOT EXISTS (SELECT 1 FROM explorer.orders o
-		                    WHERE o.created_tx_hash = $3 AND o.message_id = om.message_id))
+		                    WHERE o.created_tx_hash = $3 AND o.message_id = om.message_id)
+		   AND NOT ` + settledByEvent + `)
 	OR EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))`
+
+// txRefundsSQL, txSkippedCancelsSQL and txFailuresSQL read the
+// transaction's v8.3.0 outcome events.
+const (
+	txRefundsSQL = `SELECT e.height, om.message_id, coalesce(e.attrs->>'market_id', ''),
+		coalesce(e.attrs->>'order_type', ''), coalesce(e.attrs->>'owner', ''), coalesce(e.attrs->>'amount', ''),
+		coalesce(e.attrs->>'refund', ''), coalesce(e.attrs->>'reason', '')` + txOutcomeEvents + `
+	 ORDER BY e.height, e.seq`
+	txSkippedCancelsSQL = `SELECT e.height, om.message_id, coalesce(e.attrs->>'market_id', ''),
+		coalesce(e.attrs->>'order_type', ''), coalesce(e.attrs->>'order_id', ''), coalesce(e.attrs->>'owner', ''),
+		coalesce(e.attrs->>'reason', '')` + txOutcomeEvents + `
+	 ORDER BY e.height, e.seq`
+	txFailuresSQL = `SELECT DISTINCT ON (om.message_id) om.message_id, coalesce(e.attrs->>'message_type', ''), e.height` +
+		txOutcomeEvents + `
+	 ORDER BY om.message_id, e.height DESC`
+)
 
 // TxDex returns the order book outcome of the transaction with hash at
 // (height, txIndex).
@@ -203,6 +305,27 @@ func (r *Explorer) TxDex(ctx context.Context, height, txIndex int64, hash string
 	if out.Cancelled, err = r.orders(ctx, "orders cancelled by "+hash, `SELECT `+orderCols+` FROM explorer.orders o
 		WHERE o.status = 'cancelled' AND o.order_id IN (`+cancelledIDs+`) ORDER BY o.order_id`,
 		height, txIndex); err != nil {
+		return nil, err
+	}
+	if out.Refunds, err = collect(ctx, r.db, "refunds of "+hash, func(row pgx.CollectableRow) (OrderRefund, error) {
+		var x OrderRefund
+		err := row.Scan(&x.Height, &x.MessageID, &x.MarketID, &x.OrderType, &x.Owner, &x.Amount, &x.Refund, &x.Reason)
+		return x, err
+	}, txRefundsSQL, height, txIndex, evRefunded); err != nil {
+		return nil, err
+	}
+	if out.SkippedCancels, err = collect(ctx, r.db, "skipped cancels of "+hash, func(row pgx.CollectableRow) (CancelSkip, error) {
+		var x CancelSkip
+		err := row.Scan(&x.Height, &x.MessageID, &x.MarketID, &x.OrderType, &x.OrderID, &x.Owner, &x.Reason)
+		return x, err
+	}, txSkippedCancelsSQL, height, txIndex, evCancelSkipped); err != nil {
+		return nil, err
+	}
+	if out.Failed, err = collect(ctx, r.db, "failed messages of "+hash, func(row pgx.CollectableRow) (OrderFailure, error) {
+		var x OrderFailure
+		err := row.Scan(&x.MessageID, &x.MessageType, &x.Height)
+		return x, err
+	}, txFailuresSQL, height, txIndex, evFailed); err != nil {
 		return nil, err
 	}
 	err = r.db.QueryRow(ctx, txPendingSQL, height, txIndex, hash).Scan(&out.Pending)

@@ -63,11 +63,54 @@ type OrderDetail struct {
 // the orders it cancelled, and pending when an order message it queued has
 // no outcome indexed yet (never a failure: the outcome may land in a later
 // block).
+//
+// Since chain v8.3.0 the engine also reports the messages that end without
+// an order or a fill: refunds (the part of a message not executed went
+// back), skipped_cancels (a cancel found no order) and failed (the latest
+// block in which the engine could not process a message, which stays
+// queued). They are empty for older heights.
 type TxDex struct {
-	Placed    []Order `json:"placed"`
-	Fills     []Fill  `json:"fills"`
-	Cancelled []Order `json:"cancelled"`
-	Pending   bool    `json:"pending"`
+	Placed         []Order         `json:"placed"`
+	Fills          []Fill          `json:"fills"`
+	Cancelled      []Order         `json:"cancelled"`
+	Refunds        []Refund        `json:"refunds"`
+	SkippedCancels []SkippedCancel `json:"skipped_cancels"`
+	Failed         []FailedOrder   `json:"failed"`
+	Pending        bool            `json:"pending"`
+}
+
+// Refund is the part of a queue message that was not executed: amount is
+// the base amount, refund the coin sent back (null when it rounded to zero
+// and only dust was kept), reason no_match | unfilled_remainder |
+// below_min_amount.
+type Refund struct {
+	Height    int64  `json:"height"`
+	MessageID string `json:"message_id"`
+	MarketID  string `json:"market_id"`
+	OrderType string `json:"order_type"`
+	Amount    string `json:"amount"`
+	Refund    *Coin  `json:"refund"`
+	Reason    string `json:"reason"`
+}
+
+// SkippedCancel is a cancel that found no order (filled or cancelled
+// meanwhile): reason order_not_found.
+type SkippedCancel struct {
+	Height    int64  `json:"height"`
+	MessageID string `json:"message_id"`
+	MarketID  string `json:"market_id"`
+	OrderType string `json:"order_type"`
+	OrderID   string `json:"order_id"`
+	Reason    string `json:"reason"`
+}
+
+// FailedOrder is a queue message the engine failed to process; height is
+// the latest block it failed in. message_type is buy | sell | cancel |
+// fill_buy | fill_sell.
+type FailedOrder struct {
+	MessageID   string `json:"message_id"`
+	MessageType string `json:"message_type"`
+	Height      int64  `json:"height"`
 }
 
 // NewOrder maps an orders row.
@@ -96,11 +139,38 @@ func NewOrderDetail(o *repository.Order, fillCount int64, fills []repository.Ord
 // and nothing pending (the transaction placed, filled and cancelled
 // nothing).
 func NewTxDex(d *repository.TxDex) *TxDex {
-	if d == nil || (len(d.Placed) == 0 && len(d.Fills) == 0 && len(d.Cancelled) == 0 && !d.Pending) {
+	if d == nil || (len(d.Placed) == 0 && len(d.Fills) == 0 && len(d.Cancelled) == 0 && len(d.Refunds) == 0 &&
+		len(d.SkippedCancels) == 0 && len(d.Failed) == 0 && !d.Pending) {
 		return nil
 	}
-	return &TxDex{Placed: newOrders(d.Placed), Fills: newFills(d.Fills), Cancelled: newOrders(d.Cancelled),
-		Pending: d.Pending}
+	out := &TxDex{Placed: newOrders(d.Placed), Fills: newFills(d.Fills), Cancelled: newOrders(d.Cancelled),
+		Refunds: make([]Refund, 0, len(d.Refunds)), SkippedCancels: make([]SkippedCancel, 0, len(d.SkippedCancels)),
+		Failed: make([]FailedOrder, 0, len(d.Failed)), Pending: d.Pending}
+	for _, r := range d.Refunds {
+		out.Refunds = append(out.Refunds, Refund{Height: r.Height, MessageID: r.MessageID, MarketID: r.MarketID,
+			OrderType: r.OrderType, Amount: r.Amount, Refund: parseCoin(r.Refund), Reason: r.Reason})
+	}
+	for _, c := range d.SkippedCancels {
+		out.SkippedCancels = append(out.SkippedCancels, SkippedCancel{Height: c.Height, MessageID: c.MessageID,
+			MarketID: c.MarketID, OrderType: c.OrderType, OrderID: c.OrderID, Reason: c.Reason})
+	}
+	for _, f := range d.Failed {
+		out.Failed = append(out.Failed, FailedOrder{MessageID: f.MessageID, MessageType: f.MessageType, Height: f.Height})
+	}
+	return out
+}
+
+// parseCoin reads a coin string ("16087378657ubze"); nil when it is empty
+// or not a coin.
+func parseCoin(s string) *Coin {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 || i == len(s) {
+		return nil
+	}
+	return &Coin{Denom: s[i:], Amount: s[:i]}
 }
 
 func newOrders(rows []repository.Order) []Order {

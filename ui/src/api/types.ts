@@ -190,10 +190,48 @@ export interface Fill {
   taker_message_id: string | null;
 }
 
+/** Why the order book sent part of a message back (chain v8.3.0). */
+export type RefundReason = "no_match" | "unfilled_remainder" | "below_min_amount";
+
+/** The part of a queue message that was not executed and went back to its owner (chain v8.3.0). */
+export interface Refund {
+  height: number;
+  message_id: string;
+  market_id: string;
+  order_type: string;
+  /** Base amount not executed. */
+  amount: string;
+  /** The coin sent back; null when it rounded to zero and only dust was kept. */
+  refund: Coin | null;
+  reason: RefundReason | string;
+}
+
+/** A cancel that found no order: filled or cancelled meanwhile (chain v8.3.0). */
+export interface SkippedCancel {
+  height: number;
+  message_id: string;
+  market_id: string;
+  order_type: string;
+  order_id: string;
+  reason: string;
+}
+
+/** A queue message the order book failed to process; it stays queued and is retried every block (chain v8.3.0). */
+export interface FailedOrderMessage {
+  message_id: string;
+  message_type: string;
+  /** The latest block it failed in. */
+  height: number;
+}
+
 export interface TxDex {
   placed: Order[];
   fills: Fill[];
   cancelled: Order[];
+  /** Empty before chain v8.3.0; absent from older API answers. */
+  refunds?: Refund[];
+  skipped_cancels?: SkippedCancel[];
+  failed?: FailedOrderMessage[];
   pending: boolean;
 }
 

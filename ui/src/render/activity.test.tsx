@@ -119,6 +119,19 @@ describe("activityLine", () => {
     expect(text(of({ kind: "dex_fill" }))).toBe("Sent orders to fill on the DEX");
   });
 
+  it("reads the order book's chain v8.3.0 outcomes", () => {
+    const refunded = {
+      type: "bze.tradebin.OrderMessageRefundedEvent",
+      attrs: { owner: ADDR, market_id: `ubze/${USDC}`, amount: "16087378657", refund: "16087378657ubze", reason: "no_match" },
+    };
+    expect(text(of({ kind: "dex_refund", tx_hash: null, details: [refunded] }))).toBe("Refunded · 16,087.378657 BZE on BZE/USDC");
+    const dust = { ...refunded, attrs: { ...refunded.attrs, refund: "" } };
+    expect(text(of({ kind: "dex_refund", tx_hash: null, details: [dust] }))).toBe("Refund too small to send back on BZE/USDC");
+    expect(text(of({ kind: "dex_refund" }))).toBe("Refunded by the DEX");
+    expect(text(of({ kind: "dex_cancel_skipped", tx_hash: null }))).toBe("Cancel skipped, the order was gone");
+    expect(text(of({ kind: "dex_failed", tx_hash: null }))).toBe("The DEX could not process an order yet");
+  });
+
   it("reads an order resting on the book, a chain-made cancel and a swap", () => {
     const saved = {
       type: "bze.tradebin.OrderSavedEvent",
