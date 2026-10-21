@@ -26,6 +26,8 @@ import type {
   RawRpcResponse,
   RawTx,
   SearchResponse,
+  StakeChanges,
+  StakeMovements,
   Stats,
   Status,
   Tx,
@@ -63,6 +65,8 @@ export interface ExplorerApi {
   hallOfFame(signal?: AbortSignal): Promise<HallOfFame>;
   validator(operator: string, signal?: AbortSignal): Promise<ValidatorDetail>;
   validatorBlocks(operator: string, params: PageParams, signal?: AbortSignal): Promise<Page<BlockSummary>>;
+  stakeChanges(signal?: AbortSignal): Promise<StakeChanges>;
+  validatorMovements(operator: string, params: { page: number; limit: number }, signal?: AbortSignal): Promise<StakeMovements>;
 
   account(address: string, signal?: AbortSignal): Promise<Account>;
   accountActivity(address: string, params: ActivityParams, signal?: AbortSignal): Promise<ActivityPage>;
@@ -179,6 +183,9 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     hallOfFame: (signal) => get("/validators/hall-of-fame", {}, signal),
     validator: (operator, signal) => get(`/validators/${seg(operator)}`, {}, signal),
     validatorBlocks: (operator, params, signal) => get(`/validators/${seg(operator)}/blocks`, page(params), signal),
+    stakeChanges: (signal) => get("/validators/stake-changes", {}, signal),
+    validatorMovements: (operator, params, signal) =>
+      get(`/validators/${seg(operator)}/movements`, { page: params.page, limit: params.limit }, signal),
 
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
     accountActivity: (address, params, signal) =>

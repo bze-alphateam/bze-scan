@@ -1,13 +1,14 @@
 // A dependency-free mock of the backend API for the end-to-end tests: every
 // GET answers the JSON file at test/fixtures/api/<path>.json (the query
 // string ignored), e.g. /api/v1/status → test/fixtures/api/v1/status.json;
-// anything else is a 404 with the API's error envelope. Two computed routes:
+// anything else is a 404 with the API's error envelope. Three computed routes:
 // /v1/blocks?before=H answers the `limit` heights below H (down to the status'
 // history start), made from blocks.json's rows; /v1/accounts/A/activity?page=n
 // answers the account's activity.json rows (of `category`) on every page up to
 // the last, with `total` = the account's activity_count (the category's row
-// count with one). Specs override single browser-side answers with mockApi()
-// (e2e/mock-api.ts).
+// count with one); /v1/validators/V/movements?page=n answers page n of the
+// validator's movements.json rows (`limit` a page, 10 by default). Specs
+// override single browser-side answers with mockApi() (e2e/mock-api.ts).
 //
 //   node test/mock-api/server.mjs [port]   (default 8089, or MOCK_API_PORT)
 
@@ -60,6 +61,16 @@ async function activityPage(res, address, page, limit, category) {
   }
 }
 
+/** `/validators/V/movements?page=n&limit=m`: page n of the fixture's rows, newest first, with their total. */
+async function movementsPage(res, operator, page, limit) {
+  try {
+    const all = await fixture(`validators/${operator}/movements`);
+    send(res, 200, { ...all, page, total: all.items.length, items: all.items.slice((page - 1) * limit, page * limit) });
+  } catch {
+    notFound(res, `validator ${operator} is not known`);
+  }
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, { ...headers, "Access-Control-Allow-Methods": "GET", "Access-Control-Allow-Headers": "*" });
@@ -77,6 +88,10 @@ const server = createServer(async (req, res) => {
   const page = Number(searchParams.get("page"));
   if (activity && Number.isSafeInteger(page) && page > 0) {
     return activityPage(res, activity[1], page, Number(searchParams.get("limit")) || 25, searchParams.get("category"));
+  }
+  const movements = pathname.match(/^\/api\/v1\/validators\/(bzevaloper1[0-9a-z]+)\/movements\/?$/);
+  if (movements) {
+    return movementsPage(res, movements[1], Math.max(1, page || 1), Number(searchParams.get("limit")) || 10);
   }
   const file = path.resolve(root, `.${decodeURIComponent(pathname).replace(/\/+$/, "")}.json`);
   if (!file.startsWith(root + path.sep)) {
