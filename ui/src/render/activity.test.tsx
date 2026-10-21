@@ -116,7 +116,7 @@ describe("activityLine", () => {
 
     const second = { ...fill.details![0], attrs: { ...fill.details![0].attrs, market_id: `${HONEY}/ubze`, amount: "5000000", price: "2" } };
     expect(text({ ...fill, details: [...fill.details!, second] })).toBe("Order filled · sold 200 BZE for 2.56 USDC on BZE/USDC + 1 more");
-    expect(text(of({ kind: "dex_fill" }))).toBe("Filled orders on the DEX");
+    expect(text(of({ kind: "dex_fill" }))).toBe("Sent orders to fill on the DEX");
   });
 
   it("reads an order resting on the book, a chain-made cancel and a swap", () => {

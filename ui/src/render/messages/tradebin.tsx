@@ -324,6 +324,30 @@ function fillItems(msg: RenderMessage): FillItem[] {
     : [];
 }
 
+/**
+ * What a settled fill message did not fill: the orders it named were no
+ * longer on the book at their price when the block ended, so the order book
+ * sent their coins back. Fill messages never rest, so nothing comes later.
+ */
+function NotFilledLine({ msg, ctx }: BodyProps) {
+  if (!ctx.dexSettled) return null;
+  const outcome = outcomeOf(msg, ctx);
+  if (outcome?.pending) return null;
+  const market = str(msg, "market_id");
+  const asked = fillItems(msg).reduce((sum, f) => sum.plus(f.amount ?? 0), new BigNumber(0));
+  const filled = new BigNumber(fillTotals(outcome?.fills ?? []).base);
+  const rest = asked.minus(filled);
+  if (!rest.gt(0)) return null;
+  const text = filled.gt(0)
+    ? `${baseText(market, rest.toFixed(), ctx)} not filled: those orders were no longer on the book at their price, so their coins were sent back`
+    : "Nothing was filled: these orders were no longer on the book at their price when the block ended, so the coins were sent back";
+  return (
+    <Text fontSize="sm" color="orange.fg" role="status" data-testid="dex-not-filled">
+      {text}.
+    </Text>
+  );
+}
+
 const fillOrders = renderer({
   category: "dex",
   title: (msg, ctx) => {
@@ -340,7 +364,7 @@ const fillOrders = renderer({
         <Fields
           rows={[
             {
-              label: "Filled by",
+              label: "Sent by",
               value: <Account address={str(msg, "creator")} ctx={ctx} />,
             },
             {
@@ -356,6 +380,7 @@ const fillOrders = renderer({
           ]}
         />
         <DexOutcome msg={msg} ctx={ctx} />
+        <NotFilledLine msg={msg} ctx={ctx} />
         <DexLink marketId={market} ctx={ctx} />
       </Stack>
     );

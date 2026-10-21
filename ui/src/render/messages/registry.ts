@@ -44,6 +44,8 @@ export interface ContextSources {
   validators?: ReadonlyMap<string, { moniker: string }>;
   /** The transaction's DEX outcome (`dex` of the transaction response). */
   dex?: TxDex | null;
+  /** Whether `dex` is the settled outcome of a successful transaction (`RenderContext.dexSettled`). */
+  dexSettled?: boolean;
   /** The transaction's cross-chain transfers (`ibc_transfers` of the transaction response). */
   ibcTransfers?: IbcTransfer[] | null;
 }
@@ -52,7 +54,7 @@ export interface ContextSources {
  * The renderers' context: denoms from the transaction's own transfers first
  * (the API resolved them), then the tokens list; labels from the transfers.
  */
-export function createRenderContext({ transfers, tokens, validators, dex, ibcTransfers }: ContextSources): RenderContext {
+export function createRenderContext({ transfers, tokens, validators, dex, dexSettled, ibcTransfers }: ContextSources): RenderContext {
   const denoms = new Map<string, DenomInfo>();
   const labels = new Map<string, Label>();
   for (const t of transfers) {
@@ -77,6 +79,7 @@ export function createRenderContext({ transfers, tokens, validators, dex, ibcTra
     label: (address) => labels.get(address) ?? null,
     rendererFor,
     dex: dex ?? null,
+    dexSettled: dexSettled ?? false,
     ibcTransfers: ibcTransfers ?? [],
   };
 }
