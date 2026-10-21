@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Flex,
-  Grid,
   Heading,
   HStack,
   Link,
@@ -20,7 +19,7 @@ import type { ReactNode } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useAllValidators, useHallOfFame, useParams, useStats, useValidator } from "@/api/hooks";
+import { useAllValidators, useHallOfFame, useParams, useStakeChanges, useStats, useValidator } from "@/api/hooks";
 import type { HallOfFame, ValidatorDetail, ValidatorsSummary, ValidatorVote } from "@/api/types";
 import { AppLink } from "@/components/layout/app-link";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -51,6 +50,7 @@ import {
   rewardRateAfterCommission,
   signedBlocksWindow,
   splitValidators,
+  stakeChangeLines,
   statusLine,
   uptimeDetail,
   uptimeText,
@@ -60,6 +60,8 @@ import {
 
 import { CrownMark, Moniker } from "./hall-of-fame";
 import { OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
+import { StakeChangeText } from "./stake-change";
+import { StakeMovements } from "./stake-movements";
 
 type Fame = Pick<HallOfFame, "items" | "rules">;
 
@@ -152,12 +154,19 @@ function Tiles({
 }) {
   const yours = rewardRateAfterCommission(summary?.reward_rate, v.commission_rate);
   const signedWindow = v.signed_blocks_window ?? window;
+  // The change fills in when it answers; the tiles never wait for it.
+  const change = stakeChangeLines(useStakeChanges().data, v.operator_address);
   return (
     <SimpleGrid columns={{ base: 1, sm: 2, lg: 4 }} gap="3" mt="6" data-testid="validator-tiles">
       <Tile
         label="Staked with them"
         value={bondCompact(v.tokens)}
-        sub={v.voting_power_pct ? `${pctText(v.voting_power_pct)} of all staked BZE` : "outside the active set"}
+        sub={
+          <>
+            <StakeChangeText lines={change} display="flex" mb="2px" />
+            {v.voting_power_pct ? `${pctText(v.voting_power_pct)} of all staked BZE` : "outside the active set"}
+          </>
+        }
       />
       <Tile
         label="Commission"
@@ -236,7 +245,7 @@ function About({ v }: { v: ValidatorDetail }) {
 function RecentBlocks({ v }: { v: ValidatorDetail }) {
   const blocks = v.recent_blocks;
   return (
-    <ListPanel as="section" aria-labelledby="validator-blocks">
+    <ListPanel as="section" aria-labelledby="validator-blocks" mt="8">
       <PanelHead id="validator-blocks" title="Recent blocks proposed" note={proposalFrequency(v.voting_power_pct)} />
       {blocks.length === 0 ? (
         <Text px="4" py="3" fontSize="13px" color="fg.muted">
@@ -290,10 +299,10 @@ function History({ v }: { v: ValidatorDetail }) {
   const items = historyItems(v.events);
   const clean = cleanRecord(v);
   return (
-    <ListPanel as="section" aria-labelledby="validator-history">
+    <ListPanel as="section" aria-labelledby="validator-history" mt="8">
       <PanelHead id="validator-history" title="History" note="changes worth knowing about" />
       {clean && (
-        <Flex align="center" gap="10px" wrap="wrap" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
+        <Flex align="center" gap="10px" wrap="wrap" px="4" py="3" borderBottomWidth={items.length > 0 ? "1px" : "0"} borderColor="border.panel">
           <Tag tone="ok">Clean</Tag>
           <Text as="span">{clean}</Text>
         </Flex>
@@ -301,7 +310,16 @@ function History({ v }: { v: ValidatorDetail }) {
       {items.length > 0 && (
         <Box role="list" aria-label="Validator history">
           {items.map((h) => (
-            <Box key={h.key} role="listitem" px="4" py="10px" borderBottomWidth="1px" borderColor="border.panel" data-testid="history-item">
+            <Box
+              key={h.key}
+              role="listitem"
+              px="4"
+              py="10px"
+              borderBottomWidth="1px"
+              borderColor="border.panel"
+              _last={{ borderBottomWidth: "0" }}
+              data-testid="history-item"
+            >
               <Text>{h.text}</Text>
               <HStack gap="1" color="fg.muted" fontSize="12px" mt="2px">
                 <Text as="span">{h.date}</Text>
@@ -318,42 +336,45 @@ function History({ v }: { v: ValidatorDetail }) {
           ))}
         </Box>
       )}
+    </ListPanel>
+  );
+}
+
+function Votes({ v }: { v: ValidatorDetail }) {
+  return (
+    <ListPanel as="section" aria-labelledby="validator-votes-head" mt="8">
+      <PanelHead id="validator-votes-head" title="Last governance votes" />
       <Box data-testid="validator-votes">
         {v.votes.length === 0 ? (
           <Text px="4" py="3" color="fg.muted" fontSize="13px">
             {v.moniker} has not voted yet.
           </Text>
         ) : (
-          <>
-            <Text px="4" pt="3" pb="6px" fontSize="11px" fontWeight="600" letterSpacing="0.06em" textTransform="uppercase" color="fg.muted">
-              Last governance votes
-            </Text>
-            <Box role="list" aria-label="Last governance votes">
-              {v.votes.map((vote) => (
-                <Flex
-                  key={`${vote.proposal_id}-${vote.height}`}
-                  role="listitem"
-                  align="baseline"
-                  gap="10px"
-                  px="4"
-                  py="7px"
-                  borderTopWidth="1px"
-                  borderColor="border.panel"
-                  data-testid="validator-vote"
-                >
-                  <VoteTag vote={vote} />
-                  <Link asChild color="fg" minW="0" _hover={{ color: "accent.fg" }}>
-                    <NextLink href={`/proposals/${vote.proposal_id}`}>
-                      <Text as="span" fontFamily="mono" color="fg.muted">
-                        #{vote.proposal_id}
-                      </Text>
-                      {vote.title ? ` ${vote.title}` : ""}
-                    </NextLink>
-                  </Link>
-                </Flex>
-              ))}
-            </Box>
-          </>
+          <Box role="list" aria-label="Last governance votes">
+            {v.votes.map((vote, i) => (
+              <Flex
+                key={`${vote.proposal_id}-${vote.height}`}
+                role="listitem"
+                align="baseline"
+                gap="10px"
+                px="4"
+                py="7px"
+                borderTopWidth={i === 0 ? "0" : "1px"}
+                borderColor="border.panel"
+                data-testid="validator-vote"
+              >
+                <VoteTag vote={vote} />
+                <Link asChild color="fg" minW="0" _hover={{ color: "accent.fg" }}>
+                  <NextLink href={`/proposals/${vote.proposal_id}`}>
+                    <Text as="span" fontFamily="mono" color="fg.muted">
+                      #{vote.proposal_id}
+                    </Text>
+                    {vote.title ? ` ${vote.title}` : ""}
+                  </NextLink>
+                </Link>
+              </Flex>
+            ))}
+          </Box>
         )}
       </Box>
     </ListPanel>
@@ -453,18 +474,12 @@ export function ValidatorView({ v }: { v: ValidatorDetail }) {
       <OfflineCallout v={v} params={params.data} avgBlockMs={avgBlockMs} />
       <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} avgBlockMs={avgBlockMs} />
       <About v={v} />
-      <Grid
-        templateColumns={{
-          base: "minmax(0, 1fr)",
-          lg: "repeat(2, minmax(0, 1fr))",
-        }}
-        gap="4"
-        alignItems="start"
-        mt="8"
-      >
-        <RecentBlocks v={v} />
-        <History v={v} />
-      </Grid>
+      <RecentBlocks v={v} />
+      <Box mt="8">
+        <StakeMovements operator={v.operator_address} />
+      </Box>
+      <History v={v} />
+      <Votes v={v} />
       <Box mt="8">
         <MoreDetails hint="consensus key, limits, raw JSON">
           <Details v={v} />

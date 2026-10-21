@@ -384,6 +384,45 @@ export interface ValidatorDetail extends Validator {
   votes: ValidatorVote[];
 }
 
+/** A validator's net stake change in ubze, signed, over the last 24 hours and the last 7 days. */
+export interface StakeChange {
+  "24h": string;
+  "7d": string;
+}
+
+/** `GET /v1/validators/stake-changes`, keyed by operator; a validator without movements in the last 7 days is left out. */
+export interface StakeChanges {
+  /** False while the 7-day window is not fully indexed: the figures are then partial. */
+  complete: boolean;
+  as_of_height: number;
+  items: Record<string, StakeChange>;
+}
+
+export type StakeMovementKind = "delegate" | "undelegate" | "redelegate_in" | "redelegate_out" | "cancel_unbonding" | "create";
+
+/** An item of `GET /v1/validators/{operator}/movements`. */
+export interface StakeMovement {
+  height: number;
+  tx_hash: string;
+  time: string;
+  kind: StakeMovementKind;
+  delegator: string;
+  /** The other validator of a redelegation; null on every other kind. */
+  counterparty_validator: { operator_address: string; moniker: string | null } | null;
+  /** Positive ubze; `kind` tells the direction. */
+  amount: string;
+}
+
+/** One numbered page of a validator's movements of the last 7 days, newest first. */
+export interface StakeMovements {
+  complete: boolean;
+  /** The window's start; null before the backend has loaded it. */
+  window_from: string | null;
+  page: number;
+  total: number;
+  items: StakeMovement[];
+}
+
 // Accounts
 
 export interface AccountDelegation {
