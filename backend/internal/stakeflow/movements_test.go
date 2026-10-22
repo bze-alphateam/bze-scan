@@ -53,8 +53,12 @@ func TestFromEventsReadsEveryMovementKind(t *testing.T) {
 }
 
 func TestFromEventsSplitsARedelegation(t *testing.T) {
+	// The events of a MsgBeginRedelegate as SDK 0.50 emits them: the
+	// redelegate event has no delegator, the source's withdraw_rewards has.
 	got := stakeflow.FromEvents(ref(10), []transform.Event{
-		ev("redelegate", "source_validator", valA, "destination_validator", valB, "delegator", del1, "amount", "640ubze"),
+		ev("withdraw_rewards", "amount", "0ubze", "validator", valA, "delegator", del1),
+		ev("withdraw_rewards", "amount", "9ubze", "validator", valB, "delegator", del1),
+		ev("redelegate", "source_validator", valA, "destination_validator", valB, "amount", "640ubze", "completion_time", "x"),
 	})
 
 	require.Len(t, got, 2)
@@ -67,6 +71,30 @@ func TestFromEventsSplitsARedelegation(t *testing.T) {
 	assert.Equal(t, valA, got[1].Counterparty)
 	assert.Equal(t, int64(640), got[1].Delta())
 	assert.Equal(t, got[0].Seq, got[1].Seq)
+	assert.Equal(t, del1, got[0].Delegator, "the account comes from the source's withdraw_rewards")
+	assert.Equal(t, del1, got[1].Delegator)
+}
+
+func TestFromEventsNamesTheAccountOfEachAuthzRedelegation(t *testing.T) {
+	// Two nested redelegations from the same source by different granters:
+	// authz_msg_index pairs each with its own withdraw_rewards.
+	got := stakeflow.FromEvents(ref(10), []transform.Event{
+		ev("withdraw_rewards", "amount", "1ubze", "validator", valA, "delegator", del1, "authz_msg_index", "0"),
+		ev("redelegate", "source_validator", valA, "destination_validator", valB, "amount", "5ubze", "authz_msg_index", "0"),
+		ev("withdraw_rewards", "amount", "1ubze", "validator", valA, "delegator", del2, "authz_msg_index", "1"),
+		ev("redelegate", "source_validator", valA, "destination_validator", valB, "amount", "7ubze", "authz_msg_index", "1"),
+	})
+
+	require.Len(t, got, 4)
+	assert.Equal(t, []string{del1, del1, del2, del2},
+		[]string{got[0].Delegator, got[1].Delegator, got[2].Delegator, got[3].Delegator})
+
+	// Without a withdraw_rewards the account stays unknown.
+	got = stakeflow.FromEvents(ref(10), []transform.Event{
+		ev("redelegate", "source_validator", valA, "destination_validator", valB, "amount", "5ubze"),
+	})
+	require.Len(t, got, 2)
+	assert.Empty(t, got[0].Delegator)
 }
 
 func TestFromEventsCreateValidatorIsTheOperatorsSelfStake(t *testing.T) {

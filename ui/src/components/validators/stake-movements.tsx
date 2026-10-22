@@ -11,14 +11,15 @@ import { ListHead, ListPanel } from "@/components/ui/list";
 import { PanelHead } from "@/components/ui/page-head";
 import { Pager } from "@/components/ui/pager";
 import { TimeAgo } from "@/components/ui/time-ago";
+import { shortHash } from "@/lib/format";
 import { lastPage } from "@/render/account";
 import { movementAdds, movementAmount, movementLabel, movementsRange } from "@/render/validators";
 
-// When · Account · Movement · Amount from c2 up; on phones two lines: the
-// movement and the amount, then the account and the time.
+// When · Transaction · Account · Movement · Amount from c2 up; on phones two
+// lines: the movement and the amount, then the account, the hash and the time.
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
-const COLUMNS = { base: "minmax(0, 1fr) auto", c2: "110px 170px minmax(0, 1fr) auto" };
-const AREAS = { base: `"what amount" "who when"`, c2: `"when who what amount"` };
+const COLUMNS = { base: "minmax(0, 1fr) auto auto", c2: "110px 110px 170px minmax(0, 1fr) auto" };
+const AREAS = { base: `"what what amount" "who tx when"`, c2: `"when tx who what amount"` };
 const WHEN_ALIGN = { base: "right", c2: "left" } as const;
 
 const validatorHref = (operator: string) => `/validators/${encodeURIComponent(operator)}`;
@@ -57,14 +58,23 @@ function MovementRow({ m }: { m: StakeMovement }) {
       data-kind={m.kind}
     >
       <Text gridArea="when" fontSize="13px" textAlign={WHEN_ALIGN} color="fg.muted">
-        <Link asChild color="inherit" _hover={{ color: "accent.fg" }}>
-          <NextLink href={`/txs/${m.tx_hash.toUpperCase()}`} aria-label="See transaction" data-testid="stake-movement-tx">
-            <TimeAgo time={m.time} />
+        <TimeAgo time={m.time} />
+      </Text>
+      <Text gridArea="tx" fontSize="13px">
+        <Link asChild fontFamily="mono">
+          <NextLink href={`/txs/${m.tx_hash.toUpperCase()}`} title={m.tx_hash.toUpperCase()} data-testid="stake-movement-tx">
+            {shortHash(m.tx_hash)}
           </NextLink>
         </Link>
       </Text>
       <Box gridArea="who" minW="0" fontSize="13px">
-        <AccountChip address={m.delegator} />
+        {m.delegator ? (
+          <AccountChip address={m.delegator} />
+        ) : (
+          <Text as="span" color="fg.muted" data-testid="stake-movement-no-account">
+            —
+          </Text>
+        )}
       </Box>
       <Text gridArea="what" minW="0" wordBreak="break-word" data-testid="stake-movement-what">
         {label.text}
@@ -146,6 +156,7 @@ export function StakeMovements({ operator }: { operator: string }) {
             <>
               <ListHead templateColumns={COLUMNS} hideBelow="c2" aria-hidden>
                 <Text>When</Text>
+                <Text>Transaction</Text>
                 <Text>Account</Text>
                 <Text>Movement</Text>
                 <Text textAlign="right">Amount</Text>

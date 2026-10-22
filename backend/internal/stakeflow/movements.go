@@ -114,6 +114,9 @@ func FromEvents(ref Ref, events []transform.Event) []Movement {
 			if src == "" || dst == "" {
 				continue
 			}
+			if m.Delegator == "" {
+				m.Delegator = redelegator(events, e, src)
+			}
 			outSide, inSide := m, m
 			outSide.Kind, outSide.Validator, outSide.Counterparty = KindRedelegateOut, src, dst
 			inSide.Kind, inSide.Validator, inSide.Counterparty = KindRedelegateIn, dst, src
@@ -166,6 +169,21 @@ func FromEntities(ents *transform.Entities) ([]Block, []Movement) {
 		}, m.Events)...)
 	}
 	return blocks, out
+}
+
+// redelegator is the account of a redelegation. The redelegate event does
+// not name it, but moving the shares withdraws the source delegation's
+// rewards first, and that withdraw_rewards event (emitted even for zero
+// rewards) does. Inside an authz MsgExec both carry the nested message's
+// authz_msg_index, which keeps two nested redelegations apart.
+func redelegator(events []transform.Event, redelegate transform.Event, src string) string {
+	index := attr(redelegate, "authz_msg_index")
+	for _, e := range events {
+		if e.Type == "withdraw_rewards" && attr(e, "validator") == src && attr(e, "authz_msg_index") == index {
+			return attr(e, "delegator")
+		}
+	}
+	return ""
 }
 
 func attr(e transform.Event, key string) string {

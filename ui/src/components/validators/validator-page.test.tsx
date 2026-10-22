@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { ChainParams, HallOfFame, StakeChanges, StakeMovements, Stats, ValidatorDetail, ValidatorList } from "@/api/types";
+import { shortHash } from "@/lib/format";
 import { websiteLink } from "@/lib/links";
 import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
@@ -163,7 +164,9 @@ describe("ValidatorPage", () => {
       "+25,000 BZE",
       "\u22127,500 BZE",
     ]);
-    expect(within(rows[0]).getByTestId("stake-movement-tx")).toHaveAttribute("href", `/txs/${movements.items[0].tx_hash}`);
+    const tx = within(rows[0]).getByTestId("stake-movement-tx");
+    expect(tx).toHaveAttribute("href", `/txs/${movements.items[0].tx_hash}`);
+    expect(tx).toHaveTextContent(shortHash(movements.items[0].tx_hash));
     expect(within(rows[0]).getByRole("link", { name: "bze1m3k…9ds4" })).toHaveAttribute(
       "href",
       "/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
@@ -176,6 +179,16 @@ describe("ValidatorPage", () => {
     expect(within(section).getByTestId("pager-current")).toHaveTextContent("2");
     expect(window.location.search).toBe("?movements=2");
     window.history.replaceState(null, "", `/validators/${OP}`);
+  });
+
+  it("shows a dash, not a broken link, when a movement's account is unknown", async () => {
+    const first = { ...(movements as StakeMovements).items[0], delegator: "" };
+    renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(detail, { validatorMovements: () => Promise.resolve(movementsPage(1, 10, { total: 1, items: [first] })) }),
+    });
+    const row = await screen.findByTestId("stake-movement");
+    expect(within(row).getByTestId("stake-movement-no-account")).toHaveTextContent("—");
+    expect(within(row).queryByRole("link", { name: /bze1/ })).not.toBeInTheDocument();
   });
 
   it("shows skeleton rows while the movements load, without holding up the page", async () => {
