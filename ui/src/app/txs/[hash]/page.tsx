@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 
 import type { Tx } from "@/api/types";
 import { TxPage } from "@/components/tx/tx-page";
-import { serverApiUrl } from "@/lib/env";
 import { shortHash } from "@/lib/format";
 import { createRenderContext } from "@/render/messages/registry";
 import { shareMeta } from "@/lib/page-meta";
+import { serverJson } from "@/lib/server-json";
 
 const HASH = /^[0-9a-fA-F]{64}$/;
 
@@ -16,13 +16,9 @@ interface Props {
 
 /** The transaction, or "pending" (a 404) or null (any other failure), read on the server for the title. */
 async function fetchTx(hash: string): Promise<Tx | "pending" | null> {
-  try {
-    const res = await fetch(`${serverApiUrl()}/v1/txs/${hash}`, { cache: "no-store", headers: { Accept: "application/json" } });
-    if (res.status === 404) return "pending";
-    return res.ok ? ((await res.json()) as Tx) : null;
-  } catch {
-    return null;
-  }
+  const res = await serverJson<Tx>(`/v1/txs/${hash}`);
+  if (res.ok) return res.data;
+  return res.status === 404 ? "pending" : null;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

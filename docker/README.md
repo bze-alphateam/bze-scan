@@ -126,12 +126,14 @@ docker build -f docker/ui.Dockerfile --secret id=build_env,src=ui/.env.dist --bu
   file out of the context, the layers and the log, and the copy Next traces
   into the standalone output is deleted. The image holds no other value:
   server-only settings (`API_URL`) come from the container environment.
-- Build stage: `node:24-alpine`, corepack's pnpm, `pnpm install
+- Build stage: `node:24-slim`, corepack's pnpm, `pnpm install
   --frozen-lockfile`, `next build` with `output: "standalone"`.
-- Runtime stage: `node:24-alpine` with the standalone server, `.next/static`
-  and `public/`, `NODE_ENV=production`, `HOSTNAME=0.0.0.0`, `PORT=3000`, user
-  `node`, port 3000 exposed, `node server.js` under `tini`. Next drains and
-  exits with 143 on SIGTERM; `tini -e 143` reports that as 0.
+- Runtime stage: `node:24-slim` (glibc: musl's allocator is known to keep freed memory
+  under steady traffic) with the standalone server, `.next/static` and
+  `public/`, `NODE_ENV=production`, `MALLOC_ARENA_MAX=2`, `HOSTNAME=0.0.0.0`,
+  `PORT=3000`, user `node`, port 3000 exposed, `node server.js` under `tini`
+  (`wget` installed for the healthcheck). Next drains and exits with 143 on
+  SIGTERM; `tini -e 143` reports that as 0.
 - OCI labels `source`, `revision` (the sha), `description`, `licenses`.
 
 CI (`.github/workflows/ui-image.yml`) builds it on every pull request touching
