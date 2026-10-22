@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 
 import type { Token } from "@/api/types";
 import { TokenPage } from "@/components/tokens/token-page";
-import { serverApiUrl } from "@/lib/env";
 import { denomFromSegments, tokenSymbol } from "@/render/tokens";
 import { shareMeta } from "@/lib/page-meta";
+import { serverJson } from "@/lib/server-json";
 
 interface Props {
   // A catch-all: `/tokens/factory%2Fbze1…%2Fuhoney` and `/tokens/factory/bze1…/uhoney` are the same page.
@@ -14,15 +14,8 @@ interface Props {
 
 /** The token, or null for any failure, read on the server for the title. */
 async function fetchToken(denom: string): Promise<Token | null> {
-  try {
-    const res = await fetch(`${serverApiUrl()}/v1/tokens/${encodeURIComponent(denom)}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    return res.ok ? ((await res.json()) as Token) : null;
-  } catch {
-    return null;
-  }
+  const res = await serverJson<Token>(`/v1/tokens/${encodeURIComponent(denom)}`);
+  return res.ok ? res.data : null;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 
 import type { SearchResult } from "@/api/types";
 import { SearchResultsPage } from "@/components/search/search-results-page";
-import { serverApiUrl } from "@/lib/env";
 import { classifyQuery } from "@/lib/search";
+import { serverJson } from "@/lib/server-json";
 
 interface Props {
   searchParams: Promise<{ q?: string | string[] }>;
@@ -17,15 +17,8 @@ const queryOf = async (searchParams: Props["searchParams"]) => {
 
 /** The search route's matches, read on the server so the page works without JavaScript; null on any failure. */
 async function fetchResults(q: string): Promise<SearchResult[] | null> {
-  try {
-    const res = await fetch(`${serverApiUrl()}/v1/search?q=${encodeURIComponent(q)}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    return res.ok ? ((await res.json()) as { results: SearchResult[] }).results : null;
-  } catch {
-    return null;
-  }
+  const res = await serverJson<{ results: SearchResult[] }>(`/v1/search?q=${encodeURIComponent(q)}`);
+  return res.ok ? res.data.results : null;
 }
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
