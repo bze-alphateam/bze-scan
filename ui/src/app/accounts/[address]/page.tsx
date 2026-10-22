@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 
 import type { Account } from "@/api/types";
 import { AccountPage } from "@/components/accounts/account-page";
-import { serverApiUrl } from "@/lib/env";
 import { accountTitle, parsePage } from "@/render/account";
 import { parseCategory } from "@/render/activity";
 import { shareMeta } from "@/lib/page-meta";
+import { serverJson } from "@/lib/server-json";
 
 // A `bze1…` account; contracts and interchain accounts are longer than 38.
 const ADDRESS = /^bze1[02-9ac-hj-np-z]{38,}$/;
@@ -18,15 +18,8 @@ interface Props {
 
 /** The account, or null for any failure, read on the server for the title. */
 async function fetchAccount(address: string): Promise<Account | null> {
-  try {
-    const res = await fetch(`${serverApiUrl()}/v1/accounts/${address}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    return res.ok ? ((await res.json()) as Account) : null;
-  } catch {
-    return null;
-  }
+  const res = await serverJson<Account>(`/v1/accounts/${address}`);
+  return res.ok ? res.data : null;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

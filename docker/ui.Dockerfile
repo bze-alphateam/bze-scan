@@ -14,7 +14,10 @@
 # values such as API_URL are read at run time from the container environment.
 # The context is trimmed to ui/ by ui.Dockerfile.dockerignore.
 
-FROM node:24-alpine AS build
+# Debian slim (glibc) for both stages: musl's allocator is known to keep freed
+# memory under steady page traffic, and the build stage must match the
+# runtime's libc for the native packages the standalone output carries.
+FROM node:24-slim AS build
 ENV NEXT_TELEMETRY_DISABLED=1 COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 WORKDIR /app
@@ -29,7 +32,7 @@ RUN --mount=type=secret,id=build_env,target=/app/.env.production,required=true \
     pnpm build \
     && rm -f .next/standalone/.env.production
 
-FROM node:24-alpine
+FROM node:24-slim
 ARG GIT_SHA=dev
 LABEL org.opencontainers.image.source="https://github.com/bze-alphateam/bze-scan" \
       org.opencontainers.image.revision="${GIT_SHA}" \
@@ -37,9 +40,15 @@ LABEL org.opencontainers.image.source="https://github.com/bze-alphateam/bze-scan
       org.opencontainers.image.licenses="MIT"
 
 # tini as PID 1 forwards SIGTERM to node. Next exits with 143 after draining
-# on SIGTERM; -e 143 reports that clean stop as 0.
-RUN apk add --no-cache tini
+# on SIGTERM; -e 143 reports that clean stop as 0. wget is the deploy
+# healthcheck's client.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini wget \
+    && rm -rf /var/lib/apt/lists/*
+# MALLOC_ARENA_MAX: glibc gives each thread (libuv pool, GC helpers) its own
+# arena by default, which inflates RSS for a mostly single-threaded server.
 ENV NODE_ENV=production \
+    MALLOC_ARENA_MAX=2 \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
@@ -54,5 +63,5 @@ COPY --from=build /app/public ./public
 
 USER node
 EXPOSE 3000
-ENTRYPOINT ["/sbin/tini", "-e", "143", "--"]
+ENTRYPOINT ["/usr/bin/tini", "-e", "143", "--"]
 CMD ["node", "server.js"]
