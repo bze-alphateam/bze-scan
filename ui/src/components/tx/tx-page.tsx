@@ -159,9 +159,10 @@ export function TxView({ tx }: { tx: Tx }) {
         tokens: tokens.data,
         validators: validators.data,
         dex: tx.dex,
+        dexSettled: tx.success,
         ibcTransfers: tx.ibc_transfers,
       }),
-    [tx.transfers, tokens.data, validators.data, tx.dex, tx.ibc_transfers],
+    [tx.transfers, tokens.data, validators.data, tx.dex, tx.success, tx.ibc_transfers],
   );
 
   // A failed transaction only paid its fee.

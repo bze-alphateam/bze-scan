@@ -46,6 +46,8 @@ describe("createHttpApi", () => {
     await api.hallOfFame();
     await api.validator("bzevaloper1x");
     await api.validatorBlocks("bzevaloper1x", { limit: 5 });
+    await api.stakeChanges();
+    await api.validatorMovements("bzevaloper1x", { page: 2, limit: 10 });
     await api.search("thamar node");
     await api.accountActivity("bze1x", { category: "dex", cursor: "a", limit: 25 });
     await api.accountIbc("bze1x", { limit: 100 });
@@ -79,6 +81,8 @@ describe("createHttpApi", () => {
       "/v1/validators/hall-of-fame",
       "/v1/validators/bzevaloper1x",
       "/v1/validators/bzevaloper1x/blocks?limit=5",
+      "/v1/validators/stake-changes",
+      "/v1/validators/bzevaloper1x/movements?page=2&limit=10",
       "/v1/search?q=thamar+node",
       "/v1/accounts/bze1x/activity?cursor=a&limit=25&category=dex",
       "/v1/accounts/bze1x/ibc?limit=100",

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { ChainParams, HallOfFame, Stats, ValidatorDetail, ValidatorList } from "@/api/types";
+import type { ChainParams, HallOfFame, StakeChanges, StakeMovements, Stats, ValidatorDetail, ValidatorList } from "@/api/types";
 import { websiteLink } from "@/lib/links";
 import { appIconsIn, fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
@@ -12,8 +12,12 @@ import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
 import detail from "../../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
+import changes from "../../../test/fixtures/api/v1/validators/stake-changes.json";
+import movements from "../../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c/movements.json";
 
 import { ValidatorPage } from "./validator-page";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const OP = detail.operator_address;
 
@@ -23,8 +27,16 @@ function api(v: unknown = detail, extra: Partial<ExplorerApi> = {}): ExplorerApi
     validators: () => Promise.resolve(list as ValidatorList),
     params: () => Promise.resolve(params as ChainParams),
     hallOfFame: () => Promise.resolve(fame as HallOfFame),
+    stakeChanges: () => Promise.resolve(changes as StakeChanges),
+    validatorMovements: (_op, { page, limit }) => Promise.resolve(movementsPage(page, limit)),
     ...extra,
   });
+}
+
+/** Page `page` of the movements fixture, as the API pages it. */
+function movementsPage(page: number, limit: number, base: Partial<StakeMovements> = {}): StakeMovements {
+  const all = { ...(movements as StakeMovements), ...base };
+  return { ...all, page, total: all.items.length, items: all.items.slice((page - 1) * limit, page * limit) };
 }
 
 describe("ValidatorPage", () => {
@@ -50,9 +62,11 @@ describe("ValidatorPage", () => {
     );
     expect(appIconsIn(screen.getByRole("link", { name: "Staking" }))).toEqual(["staking"]);
 
+    // The stake change sits under the stake, above its share.
+    await waitFor(() => expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("24h ▲ +122.0K7d ▲ +185.0K"));
     const tiles = screen.getAllByTestId("tile").map((t) => t.textContent);
     expect(tiles).toEqual([
-      "Staked with them50M BZE12.3% of all staked BZE",
+      "Staked with them50M BZE24h ▲ +122.0K7d ▲ +185.0K12.3% of all staked BZE",
       "Commission5%can change by at most 5 points a day, never above 30%",
       "Your reward rate here≈ 8.5%8.9% base, minus the 5% commission",
       "Uptime99.9%OnlineSigned the latest block, 25,120,450.missed 1 of the last 10,000 blocks",
@@ -93,6 +107,92 @@ describe("ValidatorPage", () => {
     expect(rows.map((r) => r.textContent)).toEqual(["Yes#14 Raise the block size", "Split vote#12 Community call"]);
     expect(within(rows[0]).getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
     expect(within(votes).getByRole("link", { name: "#14 Raise the block size" })).toHaveAttribute("href", "/proposals/14");
+  });
+
+  it("orders the sections, every one a row of its own, the votes apart from the history", async () => {
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api() });
+    await screen.findByRole("heading", { level: 1, name: "Honeycomb" });
+    const heads = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(heads).toEqual(["About", "Recent blocks proposed", "Recent stake movements", "History", "Last governance votes"]);
+    const history = screen.getByRole("heading", { name: "History" }).closest("section")!;
+    expect(within(history).queryByTestId("validator-votes")).not.toBeInTheDocument();
+    const votes = screen.getByRole("heading", { name: "Last governance votes" }).closest("section")!;
+    expect(within(votes).getAllByTestId("validator-vote")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /More details/ })).toBeInTheDocument();
+  });
+
+  it("leaves the tile without a change line while the window is incomplete or the validator did not move", async () => {
+    const { unmount } = renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(detail, { stakeChanges: () => Promise.resolve({ ...(changes as StakeChanges), complete: false }) }),
+    });
+    await screen.findByRole("heading", { level: 1, name: "Honeycomb" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.getAllByTestId("tile")[0].textContent).toBe("Staked with them50M BZE12.3% of all staked BZE");
+    unmount();
+
+    renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(detail, { stakeChanges: () => Promise.resolve({ ...(changes as StakeChanges), items: {} }) }),
+    });
+    await screen.findByRole("heading", { level: 1, name: "Honeycomb" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.queryByTestId("stake-change")).not.toBeInTheDocument();
+  });
+
+  it("lists the recent stake movements, 10 a page, each linking to its transaction", async () => {
+    window.history.replaceState(null, "", `/validators/${OP}`);
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api() });
+    const section = (await screen.findByRole("heading", { name: "Recent stake movements" })).closest("section")!;
+    expect(within(section).getByText("last 7 days")).toBeInTheDocument();
+    const rows = await within(section).findAllByTestId("stake-movement");
+    expect(rows).toHaveLength(10);
+    expect(rows.slice(0, 6).map((r) => within(r).getByTestId("stake-movement-what").textContent)).toEqual([
+      "Delegated",
+      "Moved to Thamar Node",
+      "Moved from bzevaloper10dc…0nyg",
+      "Undelegated",
+      "Cancelled unbonding",
+      "Initial self-stake",
+    ]);
+    expect(within(rows[1]).getByRole("link", { name: "Thamar Node" })).toHaveAttribute(
+      "href",
+      "/validators/bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+    );
+    expect(rows.slice(0, 4).map((r) => within(r).getByTestId("stake-movement-amount").textContent)).toEqual([
+      "+120,000 BZE",
+      "\u221240,000 BZE",
+      "+25,000 BZE",
+      "\u22127,500 BZE",
+    ]);
+    expect(within(rows[0]).getByTestId("stake-movement-tx")).toHaveAttribute("href", `/txs/${movements.items[0].tx_hash}`);
+    expect(within(rows[0]).getByRole("link", { name: "bze1m3k…9ds4" })).toHaveAttribute(
+      "href",
+      "/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    );
+    expect(within(section).getByTestId("stake-movements-range")).toHaveTextContent("Movements 1–10 of 12");
+
+    await userEvent.click(within(section).getByRole("link", { name: "Page 2" }));
+    await waitFor(() => expect(within(section).getAllByTestId("stake-movement")).toHaveLength(2));
+    expect(within(section).getByTestId("stake-movements-range")).toHaveTextContent("Movements 11–12 of 12");
+    expect(within(section).getByTestId("pager-current")).toHaveTextContent("2");
+    expect(window.location.search).toBe("?movements=2");
+    window.history.replaceState(null, "", `/validators/${OP}`);
+  });
+
+  it("shows skeleton rows while the movements load, without holding up the page", async () => {
+    renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(detail, { validatorMovements: () => new Promise<StakeMovements>(() => {}) }),
+    });
+    expect(await screen.findByRole("heading", { name: "History" })).toBeInTheDocument();
+    expect(screen.getByTestId("stake-movements-skeleton")).toBeInTheDocument();
+  });
+
+  it("says when there were no movements, and when the window is still being indexed", async () => {
+    renderWithProviders(<ValidatorPage operator={OP} />, {
+      api: api(detail, { validatorMovements: () => Promise.resolve(movementsPage(1, 10, { complete: false, items: [] })) }),
+    });
+    expect(await screen.findByTestId("stake-movements-empty")).toHaveTextContent("No stake movements in the last 7 days.");
+    expect(screen.getByTestId("stake-movements-incomplete")).toHaveTextContent("The last 7 days are still being indexed.");
+    expect(screen.queryByTestId("pager")).not.toBeInTheDocument();
   });
 
   it("keeps the details collapsed until asked, then shows them with the raw JSON", async () => {

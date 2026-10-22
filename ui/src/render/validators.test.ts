@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { ChainParams, Validator, ValidatorDetail, ValidatorEvent } from "@/api/types";
+import type { ChainParams, StakeChanges, Validator, ValidatorDetail, ValidatorEvent } from "@/api/types";
 
 import detail from "../../test/fixtures/api/v1/validators/bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c.json";
 import list from "../../test/fixtures/api/v1/validators.json";
 import params from "../../test/fixtures/api/v1/params.json";
+import changes from "../../test/fixtures/api/v1/validators/stake-changes.json";
 
 import {
   downtimeSlashText,
@@ -19,12 +20,17 @@ import {
   eventText,
   filterByMoniker,
   historyItems,
+  movementAmount,
+  movementLabel,
+  movementsRange,
   pointsText,
   proposalFrequency,
   rateText,
   rewardRateAfterCommission,
   signedBlocksWindow,
+  signedBondCompact,
   splitValidators,
+  stakeChangeLines,
   statusLine,
   unbondingText,
   uptimeDetail,
@@ -223,5 +229,74 @@ describe("online status", () => {
     expect(jailedInText({ missed_blocks: 9000, signed_blocks_window: 10000 }, p, null)).toBeNull();
     expect(downtimeSlashText(p)).toBe("0.01%");
     expect(downtimeSlashText(undefined)).toBeNull();
+  });
+});
+
+describe("stake changes", () => {
+  const all = changes as StakeChanges;
+
+  it("formats a signed change compactly, sign always shown", () => {
+    expect(signedBondCompact("122000000000")).toBe("+122.0K");
+    expect(signedBondCompact("-1640000000000")).toBe("\u22121.64M");
+    expect(signedBondCompact("-2925000000000")).toBe("\u22122.93M");
+    expect(signedBondCompact("1500000000000000")).toBe("+1.50B");
+    expect(signedBondCompact("250000000")).toBe("+250");
+    expect(signedBondCompact("-500000")).toBe("\u22120.5");
+    expect(signedBondCompact("3")).toBe("+<0.01");
+  });
+
+  it("shows growth and shrink per window, and never a zero window", () => {
+    expect(stakeChangeLines(all, "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c")).toEqual([
+      { window: "24h", up: true, text: "+122.0K" },
+      { window: "7d", up: true, text: "+185.0K" },
+    ]);
+    expect(stakeChangeLines(all, "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e")).toEqual([
+      { window: "24h", up: false, text: "\u22121.64M" },
+      { window: "7d", up: false, text: "\u22122.93M" },
+    ]);
+    expect(stakeChangeLines(all, "bzevaloper1c0673y65z89fuqmw3jhhx6a3gvs67wtuw9l440")).toEqual([{ window: "7d", up: true, text: "+48.5K" }]);
+    // Both windows at 0, and a validator without movements: nothing.
+    expect(stakeChangeLines(all, "bzevaloper12ngv3tq3fqaevdlu5hznemz5m999l2t8zpggf8")).toEqual([]);
+    expect(stakeChangeLines(all, "bzevaloper1jr90yqzvqr5g894qxqly4vaae3u032wlljd0ev")).toEqual([]);
+  });
+
+  it("shows nothing while the window is not fully indexed, or not loaded", () => {
+    expect(stakeChangeLines({ ...all, complete: false }, "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c")).toEqual([]);
+    expect(stakeChangeLines(undefined, "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c")).toEqual([]);
+  });
+});
+
+describe("stake movements", () => {
+  const cp = (moniker: string | null) => ({ operator_address: "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e", moniker });
+
+  it("names every kind, and the other validator of a redelegation", () => {
+    expect(movementLabel({ kind: "delegate", counterparty_validator: null })).toEqual({ text: "Delegated", counterparty: null });
+    expect(movementLabel({ kind: "undelegate", counterparty_validator: null }).text).toBe("Undelegated");
+    expect(movementLabel({ kind: "cancel_unbonding", counterparty_validator: null }).text).toBe("Cancelled unbonding");
+    expect(movementLabel({ kind: "create", counterparty_validator: null }).text).toBe("Initial self-stake");
+    expect(movementLabel({ kind: "redelegate_out", counterparty_validator: cp("Thamar Node") })).toEqual({
+      text: "Moved to",
+      counterparty: { operator: cp(null).operator_address, name: "Thamar Node" },
+    });
+    // An unknown validator goes by its short address.
+    expect(movementLabel({ kind: "redelegate_in", counterparty_validator: cp(null) })).toEqual({
+      text: "Moved from",
+      counterparty: { operator: cp(null).operator_address, name: "bzevaloper1x7y…gz3e" },
+    });
+    expect(movementLabel({ kind: "redelegate_in", counterparty_validator: null }).text).toBe("Moved from another validator");
+  });
+
+  it("signs the amount by its direction", () => {
+    expect(movementAmount({ kind: "delegate", amount: "120000000000" })).toBe("+120,000 BZE");
+    expect(movementAmount({ kind: "cancel_unbonding", amount: "2000000" })).toBe("+2 BZE");
+    expect(movementAmount({ kind: "redelegate_out", amount: "40000000000" })).toBe("\u221240,000 BZE");
+    expect(movementAmount({ kind: "undelegate", amount: "7500000" })).toBe("\u22127.5 BZE");
+  });
+
+  it("says which rows a page shows", () => {
+    expect(movementsRange(1, 10, 12)).toBe("Movements 1–10 of 12");
+    expect(movementsRange(2, 10, 12)).toBe("Movements 11–12 of 12");
+    expect(movementsRange(1, 10, 0)).toBe("Movements 0 of 0");
+    expect(movementsRange(3, 10, 12)).toBe("Movements 0 of 12");
   });
 });

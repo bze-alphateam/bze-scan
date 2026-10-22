@@ -7,8 +7,8 @@ import { LuTriangleAlert } from "react-icons/lu";
 
 import { ExternalLink } from "@/components/ui/external-link";
 import { AppLink } from "@/components/layout/app-link";
-import { useAllValidators, useHallOfFame, useParams, useStats } from "@/api/hooks";
-import type { HallOfFame, HallOfFameRules, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
+import { useAllValidators, useHallOfFame, useParams, useStakeChanges, useStats } from "@/api/hooks";
+import type { HallOfFame, HallOfFameRules, StakeChanges, Validator, ValidatorList, ValidatorsSummary } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Chip } from "@/components/ui/chip";
 import { FindBox } from "@/components/ui/find-box";
@@ -30,6 +30,7 @@ import {
   signedBlocksWindow,
   signingText,
   splitValidators,
+  stakeChangeLines,
   unbondingText,
   uptimeText,
   uptimeTone,
@@ -37,6 +38,7 @@ import {
 
 import { Crown, CrownMark, Moniker } from "./hall-of-fame";
 import { OnlineDot } from "./online-status";
+import { StakeChangeText } from "./stake-change";
 
 type Fame = Pick<HallOfFame, "items" | "rules">;
 
@@ -76,13 +78,14 @@ export function SummaryTiles({ summary }: { summary: ValidatorsSummary | null })
   );
 }
 
-// # · Validator · Staked (c2) · Commission (c2) · Uptime (c3). On phones the stake sits under the name.
+// # · Validator · Staked (c2) · Change (c2) · Commission (c2) · Uptime (c3). On phones the stake and
+// its change sit under the name.
 // No Stake button in the rows: people stake from the validator's page, after seeing its details.
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
 const COLUMNS = {
   base: "24px minmax(0, 1fr)",
-  c2: "28px minmax(0, 1fr) 170px 100px",
-  c3: "28px minmax(0, 1fr) 170px 100px 104px",
+  c2: "28px minmax(0, 1fr) 170px 116px 100px",
+  c3: "28px minmax(0, 1fr) 170px 116px 100px 104px",
 };
 const FAME_COLUMNS = {
   base: "24px minmax(0, 1fr)",
@@ -115,8 +118,19 @@ interface FameMarks {
   seeAll: () => void;
 }
 
-function ValidatorRow({ v, fame, avgBlockMs }: { v: Validator; fame: FameMarks | null; avgBlockMs: number | null }) {
+function ValidatorRow({
+  v,
+  fame,
+  avgBlockMs,
+  changes,
+}: {
+  v: Validator;
+  fame: FameMarks | null;
+  avgBlockMs: number | null;
+  changes: StakeChanges | undefined;
+}) {
   const member = fame?.members.get(v.operator_address);
+  const change = stakeChangeLines(changes, v.operator_address);
   const tone = uptimeTone(v.uptime);
   return (
     <ListRow role="listitem" templateColumns={COLUMNS} _last={LAST_ROW} data-testid="validator-row" data-fame={member ? "" : undefined}>
@@ -151,11 +165,15 @@ function ValidatorRow({ v, fame, avgBlockMs }: { v: Validator; fame: FameMarks |
           <Text hideFrom="c2" fontFamily="mono" fontSize="12px" mt="2px">
             <Staked v={v} />
           </Text>
+          <StakeChangeText lines={change} hideFrom="c2" mt="2px" />
         </Box>
       </HStack>
       <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
         <Staked v={v} />
       </Text>
+      <Box hideBelow="c2" textAlign="right" data-testid="validator-change">
+        <StakeChangeText lines={change} stacked />
+      </Box>
       <Text hideBelow="c2" textAlign="right" fontFamily="mono" fontSize="13px">
         {rateText(v.commission_rate)}
       </Text>
@@ -171,6 +189,8 @@ function ValidatorRow({ v, fame, avgBlockMs }: { v: Validator; fame: FameMarks |
 
 function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame: FameMarks | null }) {
   const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
+  // The change fills in when it answers; the table never waits for it.
+  const changes = useStakeChanges().data;
   return (
     <ListPanel overflow="visible">
       <ListHead templateColumns={COLUMNS} aria-hidden>
@@ -178,6 +198,9 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
         <Text>Validator</Text>
         <Text hideBelow="c2" textAlign="right">
           Staked with them
+        </Text>
+        <Text hideBelow="c2" textAlign="right">
+          Change
         </Text>
         <Text hideBelow="c2" textAlign="right">
           Commission
@@ -188,7 +211,7 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
       </ListHead>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} fame={fame} avgBlockMs={avgBlockMs} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame} avgBlockMs={avgBlockMs} changes={changes} />
         ))}
       </Box>
       {items.length === 0 && (
@@ -234,7 +257,7 @@ export function ValidatorsSkeleton() {
           <TileSkeleton key={i} />
         ))}
       </SimpleGrid>
-      <TableSkeleton rows={10} columns={5} />
+      <TableSkeleton rows={10} columns={6} />
     </Stack>
   );
 }

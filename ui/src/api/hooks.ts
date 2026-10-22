@@ -43,6 +43,8 @@ export const queryKeys = {
   hallOfFame: () => ["validators", "hall-of-fame"] as const,
   validator: (operator: string) => ["validator", operator] as const,
   validatorBlocks: (operator: string, p: PageParams) => ["validator-blocks", operator, p] as const,
+  stakeChanges: () => ["validators", "stake-changes"] as const,
+  validatorMovements: (operator: string, page: number) => ["validator-movements", operator, page] as const,
   account: (address: string) => ["account", address] as const,
   accountActivity: (address: string, category: ActivityCategory | null, page: number, limit: number) =>
     ["account-activity", address, category ?? "all", page, limit] as const,
@@ -267,6 +269,36 @@ export function useValidatorBlocks(operator: string, params: PageParams = {}) {
     queryKey: queryKeys.validatorBlocks(operator, params),
     queryFn: ({ signal }) => api.validatorBlocks(operator, params, signal),
     ...listPolicy(params),
+  });
+}
+
+/**
+ * Every validator's net stake change over 24 h and 7 d, polled on its own:
+ * pages decorate with it once it answers and never wait for it.
+ */
+export function useStakeChanges() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.stakeChanges(),
+    queryFn: ({ signal }) => api.stakeChanges(signal),
+    ...live,
+  });
+}
+
+/** Rows a page of a validator's stake movements holds. */
+export const MOVEMENTS_PER_PAGE = 10;
+
+/**
+ * Page `page` of a validator's stake movements of the last 7 days, newest
+ * first, with the total. Every page is live: the window slides, so even an
+ * older page changes.
+ */
+export function useValidatorMovements(operator: string, page: number) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.validatorMovements(operator, page),
+    queryFn: ({ signal }) => api.validatorMovements(operator, { page, limit: MOVEMENTS_PER_PAGE }, signal),
+    ...live,
   });
 }
 

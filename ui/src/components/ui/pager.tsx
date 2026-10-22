@@ -24,6 +24,8 @@ const square = {
 // (Custom breakpoints are not in Chakra's generated types, so these objects are hoisted.)
 const JUMP_INDENT = { base: "0", c2: "3" };
 const JUMP_LINE = { base: "0", c2: "1px" };
+// `touch`: 44px squares on phones, the usual 30px from c2 up.
+const TOUCH = { minW: { base: "44px", c2: "30px" }, h: { base: "44px", c2: "30px" } };
 
 /**
  * One pager square: a link (`href`), a button (`onClick`), or dimmed when
@@ -34,8 +36,10 @@ function Pg({
   onClick,
   onFollow,
   label,
+  touch,
   children,
 }: {
+  touch?: boolean;
   href?: string | null;
   onClick?: (() => void) | null;
   /** With `href`: a plain click runs this instead of navigating (a new tab still opens the link). */
@@ -43,12 +47,14 @@ function Pg({
   label?: string;
   children: ReactNode;
 }) {
+  const size = touch ? TOUCH : null;
   if (onClick !== undefined) {
     return (
       <Box
         as="button"
         {...{ type: "button", disabled: onClick == null }}
         {...square}
+        {...size}
         cursor="pointer"
         _enabled={{ _hover: hoverSquare }}
         _disabled={{ color: "fg.muted", opacity: 0.5, cursor: "default", borderColor: "border.panel" }}
@@ -61,13 +67,13 @@ function Pg({
   }
   if (href == null) {
     return (
-      <Box as="span" {...square} color="fg.muted" opacity={0.5} aria-label={label} aria-disabled="true" role="link">
+      <Box as="span" {...square} {...size} color="fg.muted" opacity={0.5} aria-label={label} aria-disabled="true" role="link">
         {children}
       </Box>
     );
   }
   return (
-    <Link asChild {...square} _hover={{ textDecoration: "none", ...hoverSquare }}>
+    <Link asChild {...square} {...size} _hover={{ textDecoration: "none", ...hoverSquare }}>
       <NextLink
         href={href}
         aria-label={label}
@@ -89,9 +95,9 @@ function Pg({
 const hoverSquare = { borderColor: "accent.fg", color: "accent.fg" } as const;
 
 /** The current page's square. */
-function Current({ page }: { page: number }) {
+function Current({ page, touch }: { page: number; touch?: boolean }) {
   return (
-    <Box as="span" {...square} bg="accent.subtle" borderColor="accent.fg" color="accent.fg" aria-current="page" data-testid="pager-current">
+    <Box as="span" {...square} {...(touch ? TOUCH : null)} bg="accent.subtle" borderColor="accent.fg" color="accent.fg" aria-current="page" data-testid="pager-current">
       {page}
     </Box>
   );
@@ -172,6 +178,8 @@ interface PagerProps {
   numbered?: boolean;
   /** Move in the page instead of navigating: the links keep their `href` for a new tab. */
   onGo?: (page: number) => void;
+  /** 44px squares on phones. */
+  touch?: boolean;
 }
 
 /** The pages a numbered pager shows: first, last and the current ±1, a null for each gap. */
@@ -184,7 +192,7 @@ function pageWindow(page: number, last: number): (number | null)[] {
  * The bar under a numbered list: the range on the left; « ‹ page › » and a
  * "Page [#]" box on the right. A typed page is clamped to 1…last.
  */
-export function Pager({ children, page, last, hasNext, href, firstHref, numbered, onGo }: PagerProps) {
+export function Pager({ children, page, last, hasNext, href, firstHref, numbered, onGo, touch }: PagerProps) {
   const router = useRouter();
   const [typed, setTyped] = useState("");
   const id = useId();
@@ -197,10 +205,10 @@ export function Pager({ children, page, last, hasNext, href, firstHref, numbered
     <PagerBar
       nav={
         <>
-          <Pg href={atStart ? null : firstHref} onFollow={follow(1)} label="First page">
+          <Pg touch={touch} href={atStart ? null : firstHref} onFollow={follow(1)} label="First page">
             «
           </Pg>
-          <Pg href={atStart ? null : href(page - 1)} onFollow={follow(page - 1)} label="Previous page">
+          <Pg touch={touch} href={atStart ? null : href(page - 1)} onFollow={follow(page - 1)} label="Previous page">
             ‹
           </Pg>
           {numbered && last != null ? (
@@ -210,20 +218,20 @@ export function Pager({ children, page, last, hasNext, href, firstHref, numbered
                   …
                 </Text>
               ) : n === page ? (
-                <Current key={n} page={n} />
+                <Current key={n} page={n} touch={touch} />
               ) : (
-                <Pg key={n} href={n === 1 ? firstHref : href(n)} onFollow={follow(n)} label={`Page ${n}`}>
+                <Pg key={n} touch={touch} href={n === 1 ? firstHref : href(n)} onFollow={follow(n)} label={`Page ${n}`}>
                   {n}
                 </Pg>
               ),
             )
           ) : (
-            <Current page={page} />
+            <Current page={page} touch={touch} />
           )}
-          <Pg href={atEnd ? null : href(page + 1)} onFollow={follow(page + 1)} label="Next page">
+          <Pg touch={touch} href={atEnd ? null : href(page + 1)} onFollow={follow(page + 1)} label="Next page">
             ›
           </Pg>
-          <Pg href={atEnd || last == null ? null : href(last)} onFollow={last != null ? follow(last) : undefined} label="Last page">
+          <Pg touch={touch} href={atEnd || last == null ? null : href(last)} onFollow={last != null ? follow(last) : undefined} label="Last page">
             »
           </Pg>
           <HStack

@@ -1,6 +1,6 @@
 import BigNumber from "bignumber.js";
 
-import type { Coin, Fill, Order } from "@/api/types";
+import type { Coin, FailedOrderMessage, Fill, Order, Refund, SkippedCancel } from "@/api/types";
 import { externalLinks } from "@/lib/links";
 
 import { eventAttr, str } from "./common";
@@ -98,6 +98,12 @@ export interface MessageOutcome {
   placed: Order[];
   fills: Fill[];
   cancelled: Order[];
+  /** What the order book sent back (chain v8.3.0). */
+  refunds: Refund[];
+  /** Cancels that found no order (chain v8.3.0). */
+  skippedCancels: SkippedCancel[];
+  /** Messages the order book failed to process and retries (chain v8.3.0). */
+  failed: FailedOrderMessage[];
   /** The order book has not processed this transaction's messages yet. */
   pending: boolean;
 }
@@ -135,6 +141,10 @@ export function outcomeOf(msg: RenderMessage, ctx: RenderContext): MessageOutcom
     placed: dex.placed.filter((o) => own(o.message_id, o.market_id, o.owner)),
     fills: dex.fills.filter((f) => own(f.taker_message_id, f.market_id, f.taker)),
     cancelled: orderId == null ? [] : dex.cancelled.filter((o) => o.order_id === orderId && o.market_id === market),
+    // These carry a message id always: they exist only since chain v8.3.0.
+    refunds: (dex.refunds ?? []).filter((r) => ids.has(r.message_id)),
+    skippedCancels: (dex.skipped_cancels ?? []).filter((c) => ids.has(c.message_id)),
+    failed: (dex.failed ?? []).filter((f) => ids.has(f.message_id)),
     pending: dex.pending,
   };
 }
@@ -148,6 +158,25 @@ export function fillTotals(fills: Fill[]): { base: string; quote: string } {
     quote = quote.plus(new BigNumber(f.amount).times(f.price).integerValue(BigNumber.ROUND_DOWN));
   }
   return { base: base.toFixed(), quote: quote.toFixed() };
+}
+
+/**
+ * What refunds sent back, one coin per denom (a market's messages refund one
+ * denom), and whether one of them was only dust.
+ */
+export function refundTotals(refunds: Refund[]): { coins: Coin[]; dust: boolean; base: string } {
+  const byDenom = new Map<string, BigNumber>();
+  let dust = false;
+  let base = new BigNumber(0);
+  for (const r of refunds) {
+    base = base.plus(r.amount);
+    if (!r.refund || !new BigNumber(r.refund.amount).gt(0)) {
+      dust = true;
+      continue;
+    }
+    byDenom.set(r.refund.denom, (byDenom.get(r.refund.denom) ?? new BigNumber(0)).plus(r.refund.amount));
+  }
+  return { coins: [...byDenom].map(([denom, amount]) => ({ denom, amount: amount.toFixed() })), dust, base: base.toFixed() };
 }
 
 /** How much of an order is filled, a whole percentage rounded down (0–100). */

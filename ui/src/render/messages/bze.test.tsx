@@ -4,7 +4,7 @@ import path from "node:path";
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { Fill, IbcTransfer, Order, Transfer, TxDex } from "@/api/types";
+import type { Fill, IbcTransfer, Order, Refund, Transfer, TxDex } from "@/api/types";
 import { renderWithProviders } from "@/test/render";
 
 import { dexMarketUrl, marketName, outcomeOf, priceText, splitMarket } from "./dex";
@@ -191,6 +191,128 @@ describe("DEX outcome", () => {
     const noIds = { ...create, events: [] };
     const old = dexCtx({ placed: [], fills: [fill({ taker_message_id: null }), fill({ taker_message_id: null, taker: B })], cancelled: [], pending: false });
     expect(outcomeOf(noIds, old)?.fills.map((f) => f.taker)).toEqual([A]);
+  });
+
+  it("says a settled fill filled nothing, never that its orders were filled", () => {
+    // Mainnet tx 775A6F91…: both orders were gone, v8.1.1 refunded the coins and emitted no DEX event (dex null).
+    const fillMsg = fixture("tradebin-fill-orders");
+    const ctx = createRenderContext({ transfers: [], tokens, dex: null, dexSettled: true });
+    body(fillMsg, ctx);
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent(
+      "Nothing was filled: these orders were no longer on the book at their price when the block ended, so the coins were sent back.",
+    );
+    expect(screen.queryByText(/filled by/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Sent by")).toBeInTheDocument();
+  });
+
+  it("says how much of a settled fill was not filled", () => {
+    const fillMsg = fixture("tradebin-fill-orders");
+    const creator = String(fillMsg.body?.creator);
+    const ctx = createRenderContext({
+      transfers: [],
+      tokens,
+      dex: { placed: [], fills: [fill({ taker: creator, taker_message_id: null, amount: "200000000", price: "0.0124" })], cancelled: [], pending: false },
+      dexSettled: true,
+    });
+    body(fillMsg, ctx);
+    expect(screen.getByTestId("dex-fills")).toHaveTextContent("Filled right away: 200 BZE");
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("300 BZE not filled");
+  });
+
+  it("claims nothing about a fill's outcome in a list or for a failed transaction", () => {
+    const fillMsg = fixture("tradebin-fill-orders");
+    body(fillMsg, createRenderContext({ transfers: [], tokens }));
+    body(fillMsg, createRenderContext({ transfers: [], tokens, dex: null, dexSettled: false }));
+    expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
+  });
+
+  it("never leaves a settled fill pending: v8.2.0 refunds a fill with an id but no event", () => {
+    const fillMsg = { ...fixture("tradebin-fill-orders"), events: [{ type: "bze.tradebin.OrderCreateMessageEvent", attrs: { message_id: "000000000000000000000007" } }] };
+    body(fillMsg, createRenderContext({ transfers: [], tokens, dex: { placed: [], fills: [], cancelled: [], pending: true }, dexSettled: true }));
+    expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled");
+  });
+
+  describe("chain v8.3.0 outcomes", () => {
+    const id = (n: number) => String(n).padStart(24, "0");
+    const v830Fill = {
+      ...fixture("tradebin-fill-orders"),
+      events: [1, 2].map((n) => ({ type: "bze.tradebin.OrderCreateMessageEvent", attrs: { message_id: id(n) } })),
+    };
+    const refund = (r: Partial<Refund>): Refund => ({
+      height: 25191401,
+      message_id: id(1),
+      market_id: MARKET,
+      order_type: "sell",
+      amount: "200000000",
+      refund: { denom: "ubze", amount: "200000000" },
+      reason: "no_match",
+      ...r,
+    });
+    const settled = (dex: Partial<TxDex>) =>
+      createRenderContext({
+        transfers: [],
+        tokens,
+        dex: { placed: [], fills: [], cancelled: [], refunds: [], skipped_cancels: [], failed: [], pending: false, ...dex },
+        dexSettled: true,
+      });
+
+    it("says what a fill that found nothing got back", () => {
+      body(v830Fill, settled({ refunds: [refund({}), refund({ message_id: id(2), amount: "300000000", refund: { denom: "ubze", amount: "300000000" } })] }));
+      expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled (no order at that price): 500 BZE sent back.");
+    });
+
+    it("says how much of a partly matched fill went back", () => {
+      const taken = fill({ taker: A, taker_message_id: id(1), amount: "200000000", price: "0.0124" });
+      body(v830Fill, settled({ fills: [taken], refunds: [refund({ message_id: id(2), amount: "300000000", refund: { denom: "ubze", amount: "300000000" }, reason: "unfilled_remainder" })] }));
+      expect(screen.getByTestId("dex-fills")).toHaveTextContent("Filled right away: 200 BZE");
+      expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("300 BZE not filled: 300 BZE sent back.");
+    });
+
+    it("says a refund too small to send back was kept as dust", () => {
+      body(v830Fill, settled({ refunds: [refund({ amount: "1", refund: null })] }));
+      expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled (no order at that price): too small to send back, kept as dust.");
+    });
+
+    it("ignores another message's refund", () => {
+      body(v830Fill, settled({ refunds: [refund({ message_id: id(9) })] }));
+      // No refund of its own: the PR #121 inference.
+      expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled: these orders were no longer on the book");
+    });
+
+    it("says a create's remainder below the minimum went back", () => {
+      const placedFill = fill({});
+      body(create, settled({ fills: [placedFill], refunds: [refund({ message_id: id(3), order_type: "buy", amount: "400000000", refund: { denom: USDC, amount: "5000000" }, reason: "below_min_amount" })] }));
+      expect(screen.getByTestId("dex-below-min")).toHaveTextContent("The rest was below the minimum order: 5 USDC sent back.");
+      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    });
+
+    it("says a cancel found its order already gone", () => {
+      const cancel = fixture("tradebin-cancel-order");
+      body(cancel, settled({ skipped_cancels: [{ height: 25191401, message_id: id(4), market_id: MARKET, order_type: "buy", order_id: "1042", reason: "order_not_found" }] }));
+      expect(screen.getByTestId("dex-cancel-skipped")).toHaveTextContent("Order #1042 was already filled or cancelled; nothing to cancel.");
+      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    });
+
+    it("says a failed message is retried, never that a fill filled nothing", () => {
+      const failed = [{ message_id: id(1), message_type: "fill_buy", height: 25191402 }];
+      body(v830Fill, settled({ failed, pending: true }));
+      expect(screen.getByTestId("dex-failed")).toHaveTextContent("The order book could not process this yet; it retries every block.");
+      expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    });
+
+    it("keeps a failure quiet once the message was processed", () => {
+      const failed = [{ message_id: id(3), message_type: "buy", height: 25191402 }];
+      body(create, settled({ failed, placed: [order({})], pending: false }));
+      expect(screen.queryByTestId("dex-failed")).not.toBeInTheDocument();
+      expect(screen.getByTestId("dex-placed")).toBeInTheDocument();
+    });
+  });
+
+  it("keeps a placed order pending until the order book processes it", () => {
+    body(create, createRenderContext({ transfers: [], tokens, dex: { placed: [], fills: [], cancelled: [], pending: true }, dexSettled: true }));
+    expect(screen.getByTestId("dex-pending")).toBeInTheDocument();
   });
 
   it("shows nothing without an outcome (a list's context)", () => {

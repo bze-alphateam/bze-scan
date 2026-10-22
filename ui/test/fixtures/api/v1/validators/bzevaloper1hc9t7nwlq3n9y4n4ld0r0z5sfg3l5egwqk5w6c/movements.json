@@ -1,0 +1,122 @@
+{
+  "complete": true,
+  "window_from": "2026-10-04T11:59:50Z",
+  "page": 1,
+  "total": 12,
+  "items": [
+    {
+      "height": 25120440,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "time": "2026-10-11T11:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "counterparty_validator": null,
+      "amount": "120000000000"
+    },
+    {
+      "height": 25120140,
+      "tx_hash": "5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60",
+      "time": "2026-10-11T09:30:00Z",
+      "kind": "redelegate_out",
+      "delegator": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "counterparty_validator": {
+        "operator_address": "bzevaloper1x7ym3n6d9kjwz0q4u5r2a8l4tqs9vfmyh2gz3e",
+        "moniker": "Thamar Node"
+      },
+      "amount": "40000000000"
+    },
+    {
+      "height": 25119840,
+      "tx_hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "time": "2026-10-11T07:30:00Z",
+      "kind": "redelegate_in",
+      "delegator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "counterparty_validator": {
+        "operator_address": "bzevaloper10dcm7hqv9a5ajdjr9ctcu5pgg2969ag7qx0nyg",
+        "moniker": null
+      },
+      "amount": "25000000000"
+    },
+    {
+      "height": 25119540,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "time": "2026-10-11T05:30:00Z",
+      "kind": "undelegate",
+      "delegator": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "counterparty_validator": null,
+      "amount": "7500000000"
+    },
+    {
+      "height": 25119240,
+      "tx_hash": "5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60",
+      "time": "2026-10-10T11:30:00Z",
+      "kind": "cancel_unbonding",
+      "delegator": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "counterparty_validator": null,
+      "amount": "2000000000"
+    },
+    {
+      "height": 25118940,
+      "tx_hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "time": "2026-10-10T09:30:00Z",
+      "kind": "create",
+      "delegator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "counterparty_validator": null,
+      "amount": "1000000"
+    },
+    {
+      "height": 25118640,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "time": "2026-10-10T07:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "counterparty_validator": null,
+      "amount": "7000000000"
+    },
+    {
+      "height": 25118340,
+      "tx_hash": "5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60",
+      "time": "2026-10-10T05:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "counterparty_validator": null,
+      "amount": "8000000000"
+    },
+    {
+      "height": 25118040,
+      "tx_hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "time": "2026-10-09T11:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "counterparty_validator": null,
+      "amount": "9000000000"
+    },
+    {
+      "height": 25117740,
+      "tx_hash": "3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E",
+      "time": "2026-10-09T09:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "counterparty_validator": null,
+      "amount": "10000000000"
+    },
+    {
+      "height": 25117440,
+      "tx_hash": "5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60",
+      "time": "2026-10-09T07:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "counterparty_validator": null,
+      "amount": "11000000000"
+    },
+    {
+      "height": 25117140,
+      "tx_hash": "7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0",
+      "time": "2026-10-09T05:30:00Z",
+      "kind": "delegate",
+      "delegator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "counterparty_validator": null,
+      "amount": "12000000000"
+    }
+  ]
+}

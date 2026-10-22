@@ -45,6 +45,12 @@ export interface RenderContext {
   rendererFor(typeUrl: string): MessageRenderer;
   /** The transaction's DEX outcome from the API; null when it has none (or in a list). */
   dex: TxDex | null;
+  /**
+   * Whether `dex` is the settled outcome of a successful transaction (the
+   * transaction page), so an empty one means the order book did nothing; false
+   * in a list or for a failed transaction.
+   */
+  dexSettled: boolean;
   /** The cross-chain transfers the transaction created or settled; empty when none (or in a list). */
   ibcTransfers: IbcTransfer[];
 }

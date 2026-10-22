@@ -3,13 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ExplorerApi } from "@/api/client";
-import type { ChainParams, HallOfFame, Stats, ValidatorList } from "@/api/types";
+import type { ChainParams, HallOfFame, StakeChanges, Stats, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import params from "../../../test/fixtures/api/v1/params.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
 import fame from "../../../test/fixtures/api/v1/validators/hall-of-fame.json";
 import list from "../../../test/fixtures/api/v1/validators.json";
+import changes from "../../../test/fixtures/api/v1/validators/stake-changes.json";
 
 import { SummaryTiles, ValidatorsPage } from "./validators-page";
 
@@ -18,6 +19,7 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
     validators: () => Promise.resolve(list as ValidatorList),
     hallOfFame: () => Promise.resolve(fame as HallOfFame),
     params: () => Promise.resolve(params as ChainParams),
+    stakeChanges: () => Promise.resolve(changes as StakeChanges),
     ...extra,
   });
 }
@@ -81,6 +83,44 @@ describe("ValidatorsPage", () => {
 
     expect(await screen.findByText(/share of the last 10,000 blocks the validator signed/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Picking a validator" })).toBeInTheDocument();
+  });
+
+  it("fills in each validator's stake change once it answers, never waiting for it", async () => {
+    let answer: (c: StakeChanges) => void = () => {};
+    renderWithProviders(<ValidatorsPage />, {
+      api: api({ stakeChanges: () => new Promise<StakeChanges>((resolve) => (answer = resolve)) }),
+    });
+    await openActive();
+    // The rows are there, the Change cells empty: no loader.
+    const cells = () => screen.getAllByTestId("validator-change").map((c) => c.textContent);
+    expect(cells()).toEqual(["", "", ""]);
+    expect(screen.queryByTestId("stake-change")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+    act(() => answer(changes as StakeChanges));
+    await waitFor(() => expect(cells()).toEqual(["24h ▲ +122.0K7d ▲ +185.0K", "24h ▼ \u22121.64M7d ▼ \u22122.93M", "7d ▲ +48.5K"]));
+    const rows = screen.getAllByTestId("validator-row");
+    // Growth in the ok tone, shrink in the warn tone; the phone line under the stake says the same.
+    expect(within(rows[0]).getAllByTestId("stake-change-line").map((l) => l.dataset.dir)).toEqual(["up", "up", "up", "up"]);
+    expect(within(rows[1]).getAllByTestId("stake-change-line").map((l) => l.dataset.dir)).toEqual(["down", "down", "down", "down"]);
+    expect(within(rows[0]).getAllByTestId("stake-change")).toHaveLength(2);
+    expect(screen.getByText("Change")).toBeInTheDocument();
+  });
+
+  it("leaves the change out of a validator without movements, and of all while the window is incomplete", async () => {
+    const { unmount } = renderWithProviders(<ValidatorsPage />, { api: api() });
+    await userEvent.click(await screen.findByRole("tab", { name: /Inactive/ }));
+    await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(2));
+    // Sleepy Node: both windows 0; Old Timer: absent from the answer.
+    expect(screen.getAllByTestId("validator-change").map((c) => c.textContent)).toEqual(["", ""]);
+    unmount();
+
+    renderWithProviders(<ValidatorsPage />, {
+      api: api({ stakeChanges: () => Promise.resolve({ ...(changes as StakeChanges), complete: false }) }),
+    });
+    await openActive();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.getAllByTestId("validator-change").map((c) => c.textContent)).toEqual(["", "", ""]);
   });
 
   it("switches to the inactive tab: no rank, a JAILED tag on jailed rows, unbonding named", async () => {

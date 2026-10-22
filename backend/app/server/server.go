@@ -56,6 +56,12 @@ type Deps struct {
 	// recorded changes; /api/v1/params needs both.
 	Params       controller.LiveParams
 	ParamChanges controller.ParamChangeReader
+	// StakeFlows serves the validators' stake movements of the last 7 days
+	// from memory and ValidatorNames names their validators; nil StakeFlows
+	// leaves /api/v1/validators/stake-changes and
+	// /api/v1/validators/{operator}/movements out.
+	StakeFlows     controller.StakeFlowReader
+	ValidatorNames controller.ValidatorNames
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
@@ -102,6 +108,13 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/hall-of-fame", explorer.HallOfFame)
+	if deps.StakeFlows != nil {
+		flows := controller.NewStakeFlowController(deps.StakeFlows, deps.ValidatorNames)
+		// Before /validators/:operator, which would otherwise read the path
+		// as an operator.
+		api.GET("/validators/stake-changes", flows.StakeChanges)
+		api.GET("/validators/:operator/movements", flows.Movements)
+	}
 	api.GET("/validators/:operator", explorer.Validator)
 	api.GET("/validators/:operator/blocks", explorer.ValidatorBlocks)
 	api.GET("/search", explorer.Search)

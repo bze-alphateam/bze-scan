@@ -190,10 +190,48 @@ export interface Fill {
   taker_message_id: string | null;
 }
 
+/** Why the order book sent part of a message back (chain v8.3.0). */
+export type RefundReason = "no_match" | "unfilled_remainder" | "below_min_amount";
+
+/** The part of a queue message that was not executed and went back to its owner (chain v8.3.0). */
+export interface Refund {
+  height: number;
+  message_id: string;
+  market_id: string;
+  order_type: string;
+  /** Base amount not executed. */
+  amount: string;
+  /** The coin sent back; null when it rounded to zero and only dust was kept. */
+  refund: Coin | null;
+  reason: RefundReason | string;
+}
+
+/** A cancel that found no order: filled or cancelled meanwhile (chain v8.3.0). */
+export interface SkippedCancel {
+  height: number;
+  message_id: string;
+  market_id: string;
+  order_type: string;
+  order_id: string;
+  reason: string;
+}
+
+/** A queue message the order book failed to process; it stays queued and is retried every block (chain v8.3.0). */
+export interface FailedOrderMessage {
+  message_id: string;
+  message_type: string;
+  /** The latest block it failed in. */
+  height: number;
+}
+
 export interface TxDex {
   placed: Order[];
   fills: Fill[];
   cancelled: Order[];
+  /** Empty before chain v8.3.0; absent from older API answers. */
+  refunds?: Refund[];
+  skipped_cancels?: SkippedCancel[];
+  failed?: FailedOrderMessage[];
   pending: boolean;
 }
 
@@ -344,6 +382,45 @@ export interface ValidatorDetail extends Validator {
   recent_blocks: BlockSummary[];
   events: ValidatorEvent[];
   votes: ValidatorVote[];
+}
+
+/** A validator's net stake change in ubze, signed, over the last 24 hours and the last 7 days. */
+export interface StakeChange {
+  "24h": string;
+  "7d": string;
+}
+
+/** `GET /v1/validators/stake-changes`, keyed by operator; a validator without movements in the last 7 days is left out. */
+export interface StakeChanges {
+  /** False while the 7-day window is not fully indexed: the figures are then partial. */
+  complete: boolean;
+  as_of_height: number;
+  items: Record<string, StakeChange>;
+}
+
+export type StakeMovementKind = "delegate" | "undelegate" | "redelegate_in" | "redelegate_out" | "cancel_unbonding" | "create";
+
+/** An item of `GET /v1/validators/{operator}/movements`. */
+export interface StakeMovement {
+  height: number;
+  tx_hash: string;
+  time: string;
+  kind: StakeMovementKind;
+  delegator: string;
+  /** The other validator of a redelegation; null on every other kind. */
+  counterparty_validator: { operator_address: string; moniker: string | null } | null;
+  /** Positive ubze; `kind` tells the direction. */
+  amount: string;
+}
+
+/** One numbered page of a validator's movements of the last 7 days, newest first. */
+export interface StakeMovements {
+  complete: boolean;
+  /** The window's start; null before the backend has loaded it. */
+  window_from: string | null;
+  page: number;
+  total: number;
+  items: StakeMovement[];
 }
 
 // Accounts

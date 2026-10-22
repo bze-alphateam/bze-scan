@@ -1,7 +1,17 @@
 import BigNumber from "bignumber.js";
 
-import type { ChainParams, HallOfFameRules, Validator, ValidatorDetail, ValidatorEvent, ValidatorVote } from "@/api/types";
-import { formatAmount, formatCount, formatDate, formatDateTime, formatPct } from "@/lib/format";
+import type {
+  ChainParams,
+  HallOfFameRules,
+  StakeChange,
+  StakeChanges,
+  StakeMovement,
+  Validator,
+  ValidatorDetail,
+  ValidatorEvent,
+  ValidatorVote,
+} from "@/api/types";
+import { formatAmount, formatCount, formatDate, formatDateTime, formatPct, shortAddress } from "@/lib/format";
 import { aboutDuration } from "@/lib/parameters";
 
 // The validators pages' words and numbers, kept pure so they are tested
@@ -316,4 +326,102 @@ export function downtimeSlashText(params: ChainParams | undefined): string | nul
   const f = new BigNumber(String(raw ?? "NaN"));
   // Small fractions keep their digits (0.0001 is 0.01%, not 0%).
   return f.isFinite() ? `${f.times(100).decimalPlaces(4).toFixed()}%` : null;
+}
+
+// Stake changes and movements
+
+const MINUS = "\u2212";
+
+/**
+ * A signed BZE amount from signed ubze, compact and always with its sign:
+ * `+122.0K`, `\u22121.64M`, `+250`, `+0.5`. Millions and up keep two decimals,
+ * thousands one, smaller amounts at most two (rounded half up).
+ */
+export function signedBondCompact(ubze: string): string {
+  const units = new BigNumber(ubze).shiftedBy(-BOND.exponent);
+  if (!units.isFinite()) return ubze;
+  const sign = units.isNegative() ? MINUS : "+";
+  const abs = units.abs();
+  const scaled: [number, string, number][] = [
+    [1e9, "B", 2],
+    [1e6, "M", 2],
+    [1e3, "K", 1],
+  ];
+  const unit = scaled.find(([size]) => abs.gte(size));
+  if (unit) {
+    const [size, suffix, decimals] = unit;
+    return `${sign}${abs.dividedBy(size).toFixed(decimals, BigNumber.ROUND_HALF_UP)}${suffix}`;
+  }
+  const small = abs.decimalPlaces(2, BigNumber.ROUND_HALF_UP);
+  return `${sign}${small.isZero() ? "<0.01" : small.toFormat()}`;
+}
+
+/** One window of a stake change as shown: `24h ▲ +122.0K`. */
+export interface StakeChangeLine {
+  window: "24h" | "7d";
+  /** Growth (`ok` tone, ▲) or shrink (`warn` tone, ▼). */
+  up: boolean;
+  text: string;
+}
+
+/**
+ * The windows of a validator's change worth showing: none while the window is
+ * not fully indexed (or not loaded), none for a validator without movements,
+ * and never a window whose net is 0.
+ */
+export function stakeChangeLines(changes: StakeChanges | undefined, operator: string): StakeChangeLine[] {
+  if (!changes?.complete) return [];
+  const change: StakeChange | undefined = changes.items[operator];
+  if (!change) return [];
+  return (["24h", "7d"] as const).flatMap((window) => {
+    const net = new BigNumber(change[window]);
+    if (!net.isFinite() || net.isZero()) return [];
+    return [{ window, up: net.gt(0), text: signedBondCompact(change[window]) }];
+  });
+}
+
+/** True for the movements that add stake to the validator. */
+export function movementAdds(kind: StakeMovement["kind"]): boolean {
+  return kind !== "undelegate" && kind !== "redelegate_out";
+}
+
+/** A movement's amount, signed by its direction: `+640,000 BZE`, `\u22125 BZE`. */
+export function movementAmount(m: Pick<StakeMovement, "kind" | "amount">): string {
+  return `${movementAdds(m.kind) ? "+" : MINUS}${bondFull(m.amount)}`;
+}
+
+/**
+ * A movement in words: `Delegated`, or for a redelegation the words before the
+ * other validator (`Moved to`) and that validator's name (its moniker, else
+ * its shortened address).
+ */
+export function movementLabel(m: Pick<StakeMovement, "kind" | "counterparty_validator">): {
+  text: string;
+  counterparty: { operator: string; name: string } | null;
+} {
+  const cp = m.counterparty_validator;
+  const counterparty = cp ? { operator: cp.operator_address, name: cp.moniker ?? shortAddress(cp.operator_address) } : null;
+  switch (m.kind) {
+    case "delegate":
+      return { text: "Delegated", counterparty: null };
+    case "undelegate":
+      return { text: "Undelegated", counterparty: null };
+    case "redelegate_out":
+      return { text: counterparty ? "Moved to" : "Moved to another validator", counterparty };
+    case "redelegate_in":
+      return { text: counterparty ? "Moved from" : "Moved from another validator", counterparty };
+    case "cancel_unbonding":
+      return { text: "Cancelled unbonding", counterparty: null };
+    case "create":
+      return { text: "Initial self-stake", counterparty: null };
+    default:
+      return { text: String(m.kind), counterparty: null };
+  }
+}
+
+/** "Movements 11–20 of 214"; "Movements 0 of 0" when there is none. */
+export function movementsRange(page: number, perPage: number, total: number): string {
+  const from = (page - 1) * perPage + 1;
+  if (total === 0 || from > total) return `Movements 0 of ${formatCount(total)}`;
+  return `Movements ${formatCount(from)}–${formatCount(Math.min(total, page * perPage))} of ${formatCount(total)}`;
 }

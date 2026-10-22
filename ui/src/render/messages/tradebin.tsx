@@ -4,7 +4,7 @@ import NextLink from "next/link";
 import { LuClock } from "react-icons/lu";
 
 import { AppLink } from "@/components/layout/app-link";
-import type { Coin, Order, Transfer } from "@/api/types";
+import type { Coin, Order, Refund, SkippedCancel, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { shortOrderId } from "@/lib/format";
 
@@ -18,6 +18,7 @@ import {
   orderSide,
   outcomeOf,
   priceText,
+  refundTotals,
   returnedCoin,
   splitMarket,
   type MessageOutcome,
@@ -52,6 +53,44 @@ function PendingLine() {
       </Box>
       <Text>The order book processes this at the end of the block; the outcome will appear here.</Text>
     </HStack>
+  );
+}
+
+/** A message the order book failed to process (chain v8.3.0): it stays queued and is retried. */
+function FailedLine() {
+  return (
+    <HStack gap="2" color="orange.fg" fontSize="sm" align="start" role="status" data-testid="dex-failed">
+      <Box as="span" display="inline-flex" mt="0.5" aria-hidden>
+        <LuClock />
+      </Box>
+      <Text>The order book could not process this yet; it retries every block.</Text>
+    </HStack>
+  );
+}
+
+/** "16,087 BZE sent back", or that it was too small to send. */
+function sentBackText(refunds: Refund[], ctx: RenderContext): string {
+  const t = refundTotals(refunds);
+  const coins = t.coins.map((c) => coinText(c, ctx)).join(" and ");
+  if (coins && t.dust) return `${coins} sent back, the rest too small to send back`;
+  return coins ? `${coins} sent back` : "too small to send back, kept as dust";
+}
+
+/** A create's remainder that could not rest (chain v8.3.0). */
+function BelowMinLine({ refunds, ctx }: { refunds: Refund[]; ctx: RenderContext }) {
+  return (
+    <Text fontSize="sm" data-testid="dex-below-min">
+      The rest was below the minimum order: {sentBackText(refunds, ctx)}.
+    </Text>
+  );
+}
+
+/** A cancel that found its order gone (chain v8.3.0). */
+function SkippedCancelLine({ c }: { c: SkippedCancel }) {
+  return (
+    <Text fontSize="sm" data-testid="dex-cancel-skipped">
+      Order <OrderId id={c.order_id} /> was already filled or cancelled; nothing to cancel.
+    </Text>
   );
 }
 
@@ -143,12 +182,20 @@ function FillsLine({ outcome, marketId, ctx }: { outcome: MessageOutcome; market
  * pending until processed, then the fills, the order left on the book and
  * the cancels. Nothing when the transaction has no outcome.
  */
-export function DexOutcome({ msg, ctx }: BodyProps) {
+export function DexOutcome({ msg, ctx, final = false }: BodyProps & { final?: boolean }) {
   const outcome = outcomeOf(msg, ctx);
   if (!outcome) return null;
   const market = str(msg, "market_id");
-  const empty = outcome.fills.length + outcome.placed.length + outcome.cancelled.length === 0;
-  if (outcome.pending && empty) return <PendingLine />;
+  // A fill message's refunds are its not-filled line (NotFilledLine); a create's say why its rest did not rest.
+  const belowMin = outcome.refunds.filter((r) => r.reason === "below_min_amount");
+  const empty =
+    outcome.fills.length + outcome.placed.length + outcome.cancelled.length + belowMin.length + outcome.skippedCancels.length === 0;
+  // Failed and retried (chain v8.3.0): the outcome is still to come, whatever else the transaction settled.
+  const stuck = isStuck(outcome);
+  // A final message's outcome is complete once settled, whatever the transaction's pending flag says.
+  const pending = outcome.pending && (stuck || !(final && ctx.dexSettled));
+  const waiting = stuck ? <FailedLine /> : <PendingLine />;
+  if (pending && empty) return waiting;
   return (
     <Stack gap="1.5" data-testid="dex-outcome">
       <FillsLine outcome={outcome} marketId={market} ctx={ctx} />
@@ -158,10 +205,17 @@ export function DexOutcome({ msg, ctx }: BodyProps) {
       {outcome.cancelled.map((o) => (
         <CancelledLine key={o.order_id} o={o} ctx={ctx} />
       ))}
-      {outcome.pending && <PendingLine />}
+      {outcome.skippedCancels.map((c) => (
+        <SkippedCancelLine key={c.message_id} c={c} />
+      ))}
+      {belowMin.length > 0 && <BelowMinLine refunds={belowMin} ctx={ctx} />}
+      {pending && waiting}
     </Stack>
   );
 }
+
+/** A message the order book failed to process and has not processed since. */
+const isStuck = (outcome: MessageOutcome) => outcome.pending && outcome.failed.length > 0;
 
 /** "60% filled", the bar and its label. */
 function FilledBar({ pct }: { pct: number }) {
@@ -324,6 +378,44 @@ function fillItems(msg: RenderMessage): FillItem[] {
     : [];
 }
 
+/**
+ * What a settled fill message did not fill: the orders it named were no
+ * longer on the book at their price when the block ended, so the order book
+ * sent their coins back. Since chain v8.3.0 the refunds say what went back;
+ * before, it is inferred from the fills. Fill messages never rest and settle
+ * in the block of their transaction, so nothing comes later: a pending flag
+ * here is the chain leaving a refund without an event (v8.2.0 gives the
+ * message an id, its refund none), not an outcome still to come, unless the
+ * order book failed to process it (v8.3.0).
+ */
+function NotFilledLine({ msg, ctx }: BodyProps) {
+  if (!ctx.dexSettled) return null;
+  const outcome = outcomeOf(msg, ctx);
+  if (outcome && isStuck(outcome)) return null;
+  const market = str(msg, "market_id");
+  const filled = new BigNumber(fillTotals(outcome?.fills ?? []).base);
+  const refunds = (outcome?.refunds ?? []).filter((r) => r.reason !== "below_min_amount");
+  let text: string;
+  if (refunds.length > 0) {
+    const back = sentBackText(refunds, ctx);
+    text = filled.gt(0)
+      ? `${baseText(market, refundTotals(refunds).base, ctx)} not filled: ${back}`
+      : `Nothing was filled (no order at that price): ${back}`;
+  } else {
+    const asked = fillItems(msg).reduce((sum, f) => sum.plus(f.amount ?? 0), new BigNumber(0));
+    const rest = asked.minus(filled);
+    if (!rest.gt(0)) return null;
+    text = filled.gt(0)
+      ? `${baseText(market, rest.toFixed(), ctx)} not filled: those orders were no longer on the book at their price, so their coins were sent back`
+      : "Nothing was filled: these orders were no longer on the book at their price when the block ended, so the coins were sent back";
+  }
+  return (
+    <Text fontSize="sm" color="orange.fg" role="status" data-testid="dex-not-filled">
+      {text}.
+    </Text>
+  );
+}
+
 const fillOrders = renderer({
   category: "dex",
   title: (msg, ctx) => {
@@ -340,7 +432,7 @@ const fillOrders = renderer({
         <Fields
           rows={[
             {
-              label: "Filled by",
+              label: "Sent by",
               value: <Account address={str(msg, "creator")} ctx={ctx} />,
             },
             {
@@ -355,7 +447,8 @@ const fillOrders = renderer({
             },
           ]}
         />
-        <DexOutcome msg={msg} ctx={ctx} />
+        <DexOutcome msg={msg} ctx={ctx} final />
+        <NotFilledLine msg={msg} ctx={ctx} />
         <DexLink marketId={market} ctx={ctx} />
       </Stack>
     );

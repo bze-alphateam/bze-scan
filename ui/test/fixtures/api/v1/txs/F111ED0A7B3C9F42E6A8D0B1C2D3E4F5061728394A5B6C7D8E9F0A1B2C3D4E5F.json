@@ -1,0 +1,179 @@
+{
+  "height": 25191401,
+  "tx_index": 0,
+  "hash": "F111ED0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/bze.tradebin.MsgFillOrders"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/bze.tradebin.MsgFillOrders",
+    "module": "tradebin",
+    "body": {
+      "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "order_type": "sell",
+      "orders": [
+        {
+          "price": "0.00024",
+          "amount": "8000000000"
+        },
+        {
+          "price": "0.00023",
+          "amount": "8087378657"
+        }
+      ]
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 250000,
+  "gas_used": 120334,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/bze.tradebin.MsgFillOrders",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "tradebin",
+      "body": {
+        "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "order_type": "sell",
+        "orders": [
+          {
+            "price": "0.00024",
+            "amount": "8000000000"
+          },
+          {
+            "price": "0.00023",
+            "amount": "8087378657"
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "order_type": "sell",
+            "amount": "8000000000",
+            "price": "0.00024",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "message_id": "000000000000000000000001"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderCreateMessageEvent",
+          "attrs": {
+            "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "order_type": "sell",
+            "amount": "8087378657",
+            "price": "0.00023",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "message_id": "000000000000000000000002"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "seq": 1,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "recipient_label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "100000",
+      "symbol": "BZE",
+      "exponent": 6
+    },
+    {
+      "seq": 2,
+      "msg_index": 0,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "recipient_label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "16087378657",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": {
+    "placed": [],
+    "fills": [],
+    "cancelled": [],
+    "refunds": [
+      {
+        "height": 25191401,
+        "message_id": "000000000000000000000001",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "order_type": "sell",
+        "amount": "8000000000",
+        "refund": {
+          "denom": "ubze",
+          "amount": "8000000000"
+        },
+        "reason": "no_match"
+      },
+      {
+        "height": 25191401,
+        "message_id": "000000000000000000000002",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "order_type": "sell",
+        "amount": "8087378657",
+        "refund": {
+          "denom": "ubze",
+          "amount": "8087378657"
+        },
+        "reason": "no_match"
+      }
+    ],
+    "skipped_cancels": [],
+    "failed": [],
+    "pending": false
+  },
+  "ibc_transfers": null
+}

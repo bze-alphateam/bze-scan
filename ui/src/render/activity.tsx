@@ -323,7 +323,8 @@ const SENTENCES: Record<string, Sentence> = {
   },
   dex_fill: (i) => {
     const fills = fillPhrases(i.row, i.address, i.ctx);
-    if (fills.length === 0) return ["Filled orders on the DEX"];
+    // A fill message's own row: its fills settle at the end of the block, in rows of their own.
+    if (fills.length === 0) return ["Sent orders to fill on the DEX"];
     const more = fills.length - 1;
     return [`Order filled · ${fills[0]}${more > 0 ? ` + ${more} more` : ""}`];
   },
@@ -334,6 +335,16 @@ const SENTENCES: Record<string, Sentence> = {
     if (!m || !amount) return ["Order placed on the book"];
     return [`Order placed on the book · ${coinText({ denom: m.base, amount }, i.ctx)} still waiting`];
   },
+  dex_refund: (i) => {
+    const d = ownEvent(i.row, "bze.tradebin.OrderMessageRefundedEvent", "owner", i.address);
+    const market = d ? attr(d, "market_id") : null;
+    const back = d ? (parseCoins(attr(d, "refund"))[0] ?? null) : null;
+    const on = market ? ` on ${marketName(market, i.ctx)}` : "";
+    if (!d) return ["Refunded by the DEX"];
+    return [back ? `Refunded · ${coinText(back, i.ctx)}${on}` : `Refund too small to send back${on}`];
+  },
+  dex_cancel_skipped: () => ["Cancel skipped, the order was gone"],
+  dex_failed: () => ["The DEX could not process an order yet"],
   dex_swap: (i) => {
     if (i.losses.length && i.gains.length) return [`Swapped ${amounts(i.losses, i.ctx)} for ${amounts(i.gains, i.ctx)}`];
     return ["Swapped on the DEX"];

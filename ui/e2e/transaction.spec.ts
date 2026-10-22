@@ -8,6 +8,7 @@ import failedTx from "../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D
 import raffleTx from "../test/fixtures/api/v1/txs/B0A1F2E3D4C5B6A79881726354453627180918273645546372819203A4B5C6D7.json";
 import voteTx from "../test/fixtures/api/v1/txs/C0DE47A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D.json";
 import sendTx from "../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
+import refundedTx from "../test/fixtures/api/v1/txs/F111ED0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F.json";
 
 // The mock API answers these hashes from test/fixtures/api/v1/txs and 404s any
 // other; the e2e build shortens the pending window to 4 s.
@@ -127,6 +128,17 @@ test.describe("transaction page with BZE actions", () => {
     await expect(steps.nth(3)).toContainText("held for the buy order");
     await expect(steps.nth(4)).toContainText("staking-reward prize");
     await expect(page.getByTestId("net-box")).toBeVisible();
+  });
+
+  test("says what a fill message that found no orders got back (chain v8.3.0)", async ({ page }) => {
+    await page.goto(`/txs/${refundedTx.hash}`);
+    const card = page.getByTestId("action-card");
+    await expect(card.getByRole("heading", { name: "Fill 2 orders on BZE/USDC" })).toBeVisible();
+    await expect(card.getByTestId("dex-not-filled")).toHaveText(
+      "Nothing was filled (no order at that price): 16,087.378657 BZE sent back.",
+    );
+    await expect(card.getByTestId("dex-fills")).toHaveCount(0);
+    await expect(card.getByTestId("dex-pending")).toHaveCount(0);
   });
 
   test("shows a pending order, then its outcome once the order book processed it", async ({ page }) => {
