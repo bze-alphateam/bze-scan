@@ -426,13 +426,15 @@ func (oneModule) Params(context.Context) (map[string]json.RawMessage, error) {
 	return map[string]json.RawMessage{"burner": json.RawMessage(`{}`)}, nil
 }
 
+func (oneModule) HaltedDenoms(context.Context) ([]string, error) { return nil, nil }
+
 func TestStatsAndParamsRoutes(t *testing.T) {
-	e := server.New(server.Deps{Stats: noStats{}, Params: oneModule{}, ParamChanges: noStats{}})
-	for _, path := range []string{"/api/v1/stats", "/api/v1/params"} {
+	e := server.New(server.Deps{Stats: noStats{}, Params: oneModule{}, ParamChanges: noStats{}, HaltedDenoms: oneModule{}})
+	for _, path := range []string{"/api/v1/stats", "/api/v1/params", "/api/v1/params/halted-denoms"} {
 		assert.Equal(t, http.StatusOK, serve(t, e, http.MethodGet, path).Code, path)
 	}
 	bare := server.New(server.Deps{Params: oneModule{}})
-	for _, path := range []string{"/api/v1/stats", "/api/v1/params"} {
+	for _, path := range []string{"/api/v1/stats", "/api/v1/params", "/api/v1/params/halted-denoms"} {
 		assert.Equal(t, http.StatusNotFound, serve(t, bare, http.MethodGet, path).Code, "no reader, no route: "+path)
 	}
 }

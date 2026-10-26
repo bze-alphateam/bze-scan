@@ -3,12 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/api/client";
-import type { ChainParams, ModuleAccount, Stats } from "@/api/types";
+import type { ChainParams, ModuleAccount, Page, Stats, TokenSummary } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import modules from "../../../test/fixtures/api/v1/modules.json";
 import params from "../../../test/fixtures/api/v1/params.json";
+import halted from "../../../test/fixtures/api/v1/params/halted-denoms.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
+import tokens from "../../../test/fixtures/api/v1/tokens.json";
 
 import { ParametersPage } from "./parameters-page";
 
@@ -21,6 +23,8 @@ const api = (over: Partial<Parameters<typeof fakeApi>[0]> = {}) =>
     params: () => Promise.resolve(params as ChainParams),
     stats: () => Promise.resolve(stats as Stats),
     modules: () => Promise.resolve({ items: modules.items as ModuleAccount[] }),
+    haltedDenoms: () => Promise.resolve(halted),
+    tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     ...over,
   });
 
@@ -35,7 +39,7 @@ describe("ParametersPage", () => {
   it("lists every group in the nav and shows the selected one's header while loading", () => {
     renderWithProviders(<ParametersPage />, { api: pendingApi() });
     expect(screen.getByTestId("parameters-skeleton")).toHaveTextContent("Fees");
-    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(10);
+    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(11);
     expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
   });
 
@@ -181,5 +185,52 @@ describe("ParametersPage", () => {
     renderWithProviders(<ParametersPage />, { api: api({ params: fail }) });
     await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
     expect(fail).toHaveBeenCalledTimes(2);
+  });
+
+  describe("halted denoms", () => {
+    const [atom, unknown] = halted.items;
+
+    it("lists them after DEX in the nav, with their count", async () => {
+      renderWithProviders(<ParametersPage />, { api: api() });
+      await shown();
+      const labels = screen.getAllByTestId("param-nav-item").map((i) => i.textContent);
+      const dex = labels.findIndex((l) => l?.startsWith("DEX"));
+      expect(labels[dex + 1]).toMatch(/^Halted denoms/);
+      expect(navItem("Halted denoms")).toHaveAttribute("href", "/parameters?group=halted");
+      expect(await within(navItem("Halted denoms")).findByText("2")).toBeInTheDocument();
+    });
+
+    it("shows each denom with the token's ticker, name and logo, the denom under them", async () => {
+      renderWithProviders(<ParametersPage group="halted" />, { api: api() });
+      const rows = await screen.findAllByTestId("halted-denom");
+      expect(rows).toHaveLength(2);
+      expect(screen.queryByTestId("param-group")).not.toBeInTheDocument();
+      expect(screen.getByTestId("halted-denoms")).toHaveTextContent(/no trading, swaps, new pools or fee payment/);
+      expect(screen.getByTestId("param-count")).toHaveTextContent("2 denoms");
+
+      expect(await within(rows[0]).findByRole("link", { name: "ATOM" })).toHaveAttribute("href", `/tokens/${encodeURIComponent(atom)}`);
+      expect(rows[0]).toHaveTextContent("Cosmos Hub Atom");
+      expect(within(rows[0]).getByTestId("halted-denom-raw")).toHaveTextContent(atom);
+
+      // A denom the explorer has no token for: named by its denom only.
+      expect(within(rows[1]).getByRole("link", { name: "Unknown token" })).toHaveAttribute("href", `/tokens/${encodeURIComponent(unknown)}`);
+      expect(within(rows[1]).getByTestId("halted-denom-raw")).toHaveTextContent(unknown);
+    });
+
+    it("says so when no denom is halted", async () => {
+      renderWithProviders(<ParametersPage group="halted" />, { api: api({ haltedDenoms: () => Promise.resolve({ items: [] }) }) });
+      expect(await screen.findByTestId("halted-empty")).toHaveTextContent("No denom is halted");
+      expect(screen.getByTestId("param-count")).toHaveTextContent("0 denoms");
+      expect(screen.queryByTestId("halted-denom")).not.toBeInTheDocument();
+    });
+
+    it("offers a retry when they fail, the parameters unaffected", async () => {
+      const fail = vi.fn(() => Promise.reject(new ApiError(502, "upstream_error", "node down")));
+      renderWithProviders(<ParametersPage group="halted" />, { api: api({ haltedDenoms: fail }) });
+      await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+      expect(fail).toHaveBeenCalledTimes(2);
+      await userEvent.click(navItem("DEX"));
+      expect(await shown()).toBe("dex");
+    });
   });
 });

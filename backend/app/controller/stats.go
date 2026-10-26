@@ -193,3 +193,38 @@ func (h *ParamsController) Params(c *echo.Context) error {
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, out)
 }
+
+// HaltedDenomsReader reads the denoms governance halted on the DEX.
+// Implemented by params.Cached.
+type HaltedDenomsReader interface {
+	HaltedDenoms(ctx context.Context) ([]string, error)
+}
+
+// HaltedDenomsController serves GET /api/v1/params/halted-denoms.
+type HaltedDenomsController struct {
+	halted HaltedDenomsReader
+}
+
+// NewHaltedDenomsController returns a controller over the halted denoms.
+func NewHaltedDenomsController(halted HaltedDenomsReader) *HaltedDenomsController {
+	return &HaltedDenomsController{halted: halted}
+}
+
+// HaltedDenomList is GET /api/v1/params/halted-denoms.
+type HaltedDenomList struct {
+	Items []string `json:"items"`
+}
+
+// HaltedDenoms serves the halted denoms as the node lists them; none is an
+// empty list, a node that did not answer a 502.
+func (h *HaltedDenomsController) HaltedDenoms(c *echo.Context) error {
+	denoms, err := h.halted.HaltedDenoms(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadGateway, "the node did not answer the halted denoms").Wrap(err)
+	}
+	if denoms == nil {
+		denoms = []string{}
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, HaltedDenomList{Items: denoms})
+}

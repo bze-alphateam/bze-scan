@@ -12,24 +12,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 )
 
 // fakeConn answers every Params call with an empty response, or an error
-// for the methods in fail, and records the methods called.
+// for the methods in fail, and HaltedDenoms with halted or haltErr; it
+// records the methods called and the halted denoms request.
 type fakeConn struct {
-	mu      sync.Mutex
-	methods []string
-	fail    map[string]bool
+	mu        sync.Mutex
+	methods   []string
+	fail      map[string]bool
+	halted    []string
+	haltErr   error
+	haltedReq *tradebintypes.QueryHaltedDenomsRequest
 }
 
-func (c *fakeConn) Invoke(_ context.Context, method string, _, _ any, _ ...grpc.CallOption) error {
+func (c *fakeConn) Invoke(_ context.Context, method string, args, reply any, _ ...grpc.CallOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.methods = append(c.methods, method)
 	if c.fail[method] {
 		return errors.New("unavailable")
+	}
+	if method == "/bze.tradebin.Query/HaltedDenoms" {
+		c.haltedReq, _ = args.(*tradebintypes.QueryHaltedDenomsRequest)
+		if c.haltErr != nil {
+			return c.haltErr
+		}
+		if r, ok := reply.(*tradebintypes.QueryHaltedDenomsResponse); ok {
+			r.Denoms = c.halted
+		}
 	}
 	return nil
 }
@@ -69,11 +86,49 @@ func TestGovWithoutParamsIsAFailure(t *testing.T) {
 	assert.NotContains(t, got, "gov")
 }
 
+func TestHaltedDenomsAreReadInOnePage(t *testing.T) {
+	conn := &fakeConn{halted: []string{"ibc/AAA", "factory/bze1x/usdc"}}
+	got, err := params.NewGRPC(conn, fakeJSON{}).HaltedDenoms(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ibc/AAA", "factory/bze1x/usdc"}, got)
+	assert.Equal(t, []string{"/bze.tradebin.Query/HaltedDenoms"}, conn.methods)
+	require.NotNil(t, conn.haltedReq.Pagination)
+	assert.Equal(t, uint64(params.HaltedLimit), conn.haltedReq.Pagination.Limit)
+	assert.Empty(t, conn.haltedReq.Pagination.Key)
+}
+
+func TestHaltedDenomsNoneIsAnEmptyList(t *testing.T) {
+	got, err := params.NewGRPC(&fakeConn{}, fakeJSON{}).HaltedDenoms(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, []string{}, got)
+
+	old := &fakeConn{haltErr: status.Error(codes.Unimplemented, "unknown method")}
+	got, err = params.NewGRPC(old, fakeJSON{}).HaltedDenoms(context.Background())
+	require.NoError(t, err, "a node from before the halt has none")
+	assert.Equal(t, []string{}, got)
+}
+
+func TestHaltedDenomsFailure(t *testing.T) {
+	conn := &fakeConn{haltErr: status.Error(codes.Unavailable, "down")}
+	_, err := params.NewGRPC(conn, fakeJSON{}).HaltedDenoms(context.Background())
+	require.ErrorContains(t, err, "tradebin halted denoms")
+}
+
 type countingReader struct {
-	mu    sync.Mutex
-	calls int
-	val   map[string]json.RawMessage
-	err   error
+	mu          sync.Mutex
+	calls       int
+	val         map[string]json.RawMessage
+	err         error
+	haltedCalls int
+	halted      []string
+	haltErr     error
+}
+
+func (r *countingReader) HaltedDenoms(context.Context) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.haltedCalls++
+	return r.halted, r.haltErr
 }
 
 func (r *countingReader) Params(context.Context) (map[string]json.RawMessage, error) {
@@ -109,4 +164,32 @@ func TestCachedReadsAPartialAnswerAgain(t *testing.T) {
 	assert.Contains(t, got, "staking", "the modules that answered are served")
 	_, _ = c.Params(context.Background())
 	assert.Equal(t, 2, r.calls)
+}
+
+func TestCachedServesTheHaltedDenomsForItsTTL(t *testing.T) {
+	now := time.Unix(0, 0)
+	r := &countingReader{halted: []string{"ibc/AAA"}}
+	c := params.NewCached(r, 0, func() time.Time { return now })
+
+	for range 3 {
+		got, err := c.HaltedDenoms(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, []string{"ibc/AAA"}, got)
+	}
+	assert.Equal(t, 1, r.haltedCalls)
+	assert.Equal(t, 0, r.calls, "the parameters are cached apart")
+
+	now = now.Add(params.DefaultTTL)
+	_, err := c.HaltedDenoms(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 2, r.haltedCalls, "read again once the TTL passed")
+}
+
+func TestCachedReadsTheHaltedDenomsAgainAfterAFailure(t *testing.T) {
+	r := &countingReader{haltErr: errors.New("down")}
+	c := params.NewCached(r, time.Minute, nil)
+	_, err := c.HaltedDenoms(context.Background())
+	require.Error(t, err)
+	_, _ = c.HaltedDenoms(context.Background())
+	assert.Equal(t, 2, r.haltedCalls)
 }

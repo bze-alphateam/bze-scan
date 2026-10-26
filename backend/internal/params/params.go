@@ -1,6 +1,7 @@
 // Package params reads the live parameters of every module the explorer's
 // parameters page shows, as proto JSON per module, from the local node's
-// gRPC. The API serves them through a short in-process cache (Cached) and
+// gRPC, with tradebin's halted denoms the page lists beside them. The API
+// serves them through a short in-process cache (Cached) and
 // the params set of the state sync snapshots them to explain changes; the
 // values shown are always the live ones.
 package params
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/types/query"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
@@ -21,6 +23,8 @@ import (
 	gogoproto "github.com/cosmos/gogoproto/proto"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	burnertypes "github.com/bze-alphateam/bze/x/burner/types"
 	cointrunktypes "github.com/bze-alphateam/bze/x/cointrunk/types"
@@ -170,55 +174,112 @@ func (g *GRPC) Params(ctx context.Context) (map[string]json.RawMessage, error) {
 	return out, errors.Join(errs...)
 }
 
+// HaltReader reads the denoms governance halted on the DEX. They are not a
+// parameter (tradebin keeps them in a store of their own) but the
+// parameters page lists them.
+type HaltReader interface {
+	HaltedDenoms(ctx context.Context) ([]string, error)
+}
+
+var _ HaltReader = (*GRPC)(nil)
+
+// HaltedDenoms reads tradebin's halted denoms in one page: the list is a
+// handful of denoms. A node from before the halt (Unimplemented) has none.
+func (g *GRPC) HaltedDenoms(ctx context.Context) ([]string, error) {
+	r, err := tradebintypes.NewQueryClient(g.conn).HaltedDenoms(ctx, &tradebintypes.QueryHaltedDenomsRequest{
+		Pagination: &query.PageRequest{Limit: HaltedLimit},
+	})
+	if status.Code(err) == codes.Unimplemented {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("tradebin halted denoms: %w", err)
+	}
+	if r.Denoms == nil {
+		return []string{}, nil
+	}
+	return r.Denoms, nil
+}
+
+// HaltedLimit caps the halted denoms read; governance halts a few.
+const HaltedLimit = 1000
+
 // DefaultTTL is how long Cached serves an answer.
 const DefaultTTL = 30 * time.Second
 
-// Cached serves a Reader's answers for a TTL; concurrent misses share one
-// read. Only a complete answer is cached: a partial one is served but read
-// again next time.
-type Cached struct {
-	from Reader
-	ttl  time.Duration
-	now  func() time.Time
+// Live is what Cached reads from; *GRPC satisfies it.
+type Live interface {
+	Reader
+	HaltReader
+}
 
-	group singleflight.Group
-	mu    sync.Mutex
-	val   map[string]json.RawMessage
-	at    time.Time
+// Cached serves a Live reader's answers for a TTL; concurrent misses share
+// one read. Only a complete answer is cached: a partial one is served but
+// read again next time.
+type Cached struct {
+	from   Live
+	params ttlCache[map[string]json.RawMessage]
+	halted ttlCache[[]string]
 }
 
 // NewCached caches from for ttl (zero is DefaultTTL); now nil is the wall
 // clock.
-func NewCached(from Reader, ttl time.Duration, now func() time.Time) *Cached {
+func NewCached(from Live, ttl time.Duration, now func() time.Time) *Cached {
 	if ttl <= 0 {
 		ttl = DefaultTTL
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &Cached{from: from, ttl: ttl, now: now}
+	return &Cached{
+		from:   from,
+		params: ttlCache[map[string]json.RawMessage]{ttl: ttl, now: now},
+		halted: ttlCache[[]string]{ttl: ttl, now: now},
+	}
 }
 
-var _ Reader = (*Cached)(nil)
+var _ Live = (*Cached)(nil)
 
-// Params returns the cached answer while it is fresh, else reads.
+// Params returns the cached parameters while they are fresh, else reads.
 func (c *Cached) Params(ctx context.Context) (map[string]json.RawMessage, error) {
+	return c.params.get(ctx, c.from.Params)
+}
+
+// HaltedDenoms returns the cached halted denoms while they are fresh, else
+// reads.
+func (c *Cached) HaltedDenoms(ctx context.Context) ([]string, error) {
+	return c.halted.get(ctx, c.from.HaltedDenoms)
+}
+
+// ttlCache holds one answer for a TTL.
+type ttlCache[T any] struct {
+	ttl time.Duration
+	now func() time.Time
+
+	group singleflight.Group
+	mu    sync.Mutex
+	val   T
+	ok    bool
+	at    time.Time
+}
+
+func (c *ttlCache[T]) get(ctx context.Context, read func(context.Context) (T, error)) (T, error) {
 	c.mu.Lock()
-	if c.val != nil && c.now().Sub(c.at) < c.ttl {
+	if c.ok && c.now().Sub(c.at) < c.ttl {
 		v := c.val
 		c.mu.Unlock()
 		return v, nil
 	}
 	c.mu.Unlock()
 	type answer struct {
-		val map[string]json.RawMessage
+		val T
 		err error
 	}
-	res, _, _ := c.group.Do("params", func() (any, error) {
-		v, err := c.from.Params(context.WithoutCancel(ctx))
+	res, _, _ := c.group.Do("read", func() (any, error) {
+		v, err := read(context.WithoutCancel(ctx))
 		if err == nil {
 			c.mu.Lock()
-			c.val, c.at = v, c.now()
+			c.val, c.ok, c.at = v, true, c.now()
 			c.mu.Unlock()
 		}
 		return answer{val: v, err: err}, nil

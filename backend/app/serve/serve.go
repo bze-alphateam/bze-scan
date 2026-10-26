@@ -135,16 +135,17 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		defer closeState()
 		accountState = state
 	}
-	// The parameters route reads them live too; without a gRPC address it
-	// is left out.
+	// The parameters routes (the halted denoms too) read them live; without
+	// a gRPC address they are left out.
 	var liveParams controller.LiveParams
+	var haltedDenoms controller.HaltedDenomsReader
 	if cfg.NodeGRPCAddr != "" {
 		lp, closeParams, err := NewLiveParams(cfg, codec)
 		if err != nil {
 			return err
 		}
 		defer closeParams()
-		liveParams = lp
+		liveParams, haltedDenoms = lp, lp
 	}
 
 	// The open orders route reads the orders table when its history is
@@ -188,6 +189,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Daily:              explorerRepo,
 		Params:             liveParams,
 		ParamChanges:       explorerRepo,
+		HaltedDenoms:       haltedDenoms,
 		AccountState:       accountState,
 		OpenOrders:         openOrders,
 		StakeFlows:         flows,

@@ -97,6 +97,13 @@ func TestChainStateParamsAndStats(t *testing.T) {
 	assert.JSONEq(t, `{"denom":"ubze","amount":"100000"}`, string(mods["tradebin"].Params["marketTakerFee"]))
 	assert.JSONEq(t, `"0.334000000000000000"`, string(mods["gov"].Params["quorum"]))
 
+	// The halted denoms, read live from tradebin like the parameters.
+	const halted = "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518"
+	e.grpc.SetResponse("tradebin", "HaltedDenoms", "", []byte(`{"denoms":["`+halted+`"],"pagination":{"next_key":null,"total":"0"}}`))
+	r = fetch(t, base+"/api/v1/params/halted-denoms")
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	assert.JSONEq(t, `{"items":["`+halted+`"]}`, string(r.body))
+
 	r = fetch(t, base+"/api/v1/validators?limit=1")
 	require.Equal(t, http.StatusOK, r.status)
 	assert.JSONEq(t, `{"bonded_tokens":"`+recordedBondedTokens+`","staked_share":"`+recordedStakedShare+`",
