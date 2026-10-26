@@ -20,6 +20,7 @@ import { Tag } from "@/components/ui/status-pill";
 import { Tile } from "@/components/ui/tile";
 import { VTabPanel, VTabs, VTabsBar } from "@/components/ui/vtabs";
 import { formatCount } from "@/lib/format";
+import { LiveHaltPanel } from "@/components/upgrades/live-halt";
 import { externalLinks } from "@/lib/links";
 import {
   bondCompact,
@@ -478,6 +479,7 @@ export function ValidatorsPage() {
           ) : undefined
         }
       />
+      <LiveHaltPanel mb="5" />
       {data ? (
         <ValidatorsView list={data} fame={fame.data ?? null} />
       ) : list.error ? (

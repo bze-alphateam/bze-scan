@@ -28,6 +28,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/ordercoverage"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/stakeflow"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
@@ -163,6 +164,19 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// loaded once by a component of their own, then fed by both writers.
 	flows := stakeflow.New(stakeflow.Config{}, stakeflow.Deps{Store: stakeflow.NewPGStore(apiPool)})
 
+	// The halt watch runs with the live indexer; the API reads its latest
+	// poll. A nil interface without it, never a typed nil.
+	var watch *upgrades.Watch
+	var liveHalt controller.LiveHaltReader
+	if cfg.IndexerEnabled && cfg.HaltWatchEnabled {
+		w, closeWatch, err := NewHaltWatch(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		defer closeWatch()
+		watch, liveHalt = w, w
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
@@ -178,6 +192,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		OpenOrders:         openOrders,
 		StakeFlows:         flows,
 		ValidatorNames:     explorerRepo,
+		LiveHalt:           liveHalt,
 		Status:             checker,
 		Raw:                raw,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
@@ -228,12 +243,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			}
 			defer closeSync()
 			components = append(components, component{name: "state sync", run: syncer.Run})
-			if cfg.HaltWatchEnabled {
-				watch, closeWatch, err := NewHaltWatch(ctx, cfg)
-				if err != nil {
-					return err
-				}
-				defer closeWatch()
+			if watch != nil {
 				components = append(components, component{name: "halt watch", run: watch.Run})
 			}
 

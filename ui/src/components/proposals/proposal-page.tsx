@@ -29,6 +29,7 @@ import { JsonBlock } from "@/components/ui/json-block";
 import { ListPanel } from "@/components/ui/list";
 import { Markdown } from "@/components/ui/markdown";
 import { MoreDetails } from "@/components/ui/more-details";
+import { LiveHaltPanel } from "@/components/upgrades/live-halt";
 import { Breadcrumb, PanelHead } from "@/components/ui/page-head";
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
@@ -898,6 +899,7 @@ export function ProposalView({ p }: { p: Proposal }) {
   return (
     <Box>
       <Header p={p} now={now} />
+      <LiveHaltPanel proposalId={p.id} mb="5" />
       <SummaryTiles p={p} c={c} now={now} denoms={denoms.data} />
       <Grid templateColumns="minmax(0, 1fr)" css={TWO_COLUMNS} gap="5" alignItems="start">
         <Stack gap="5" minW="0">

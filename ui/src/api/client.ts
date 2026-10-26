@@ -12,6 +12,7 @@ import type {
   HallOfFame,
   IbcListParams,
   IbcTransfer,
+  LiveHalt,
   ModuleAccount,
   OpenOrders,
   Page,
@@ -85,6 +86,7 @@ export interface ExplorerApi {
   proposalDeposits(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalDeposit>>;
   proposalNonVoters(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalNonVoter>>;
   upgrade(height: number, signal?: AbortSignal): Promise<Upgrade>;
+  liveHalt(signal?: AbortSignal): Promise<LiveHalt>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
@@ -207,6 +209,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     proposalDeposits: (id, params, signal) => get(`/proposals/${seg(String(id))}/deposits`, page(params), signal),
     proposalNonVoters: (id, params, signal) => get(`/proposals/${seg(String(id))}/non-voters`, page(params), signal),
     upgrade: (height, signal) => get(`/upgrades/${seg(String(height))}`, {}, signal),
+    liveHalt: (signal) => get("/upgrades/live", {}, signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 
