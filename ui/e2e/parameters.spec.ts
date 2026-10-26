@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 import { noHorizontalScroll } from "./layout";
+import { mockApi } from "./mock-api";
 
 import params from "../test/fixtures/api/v1/params.json";
 
 // The mock API answers /params from test/fixtures/api/v1/params.json (all
-// eleven modules), /stats from stats.json and /modules from modules.json.
+// eleven modules), /params/halted-denoms from params/halted-denoms.json (ATOM
+// and a denom the tokens list does not know), /stats from stats.json and
+// /modules from modules.json.
 
 test.describe("chain parameters", () => {
   test("shows Fees first, one group at a time, with its module accounts", async ({ page }) => {
@@ -53,13 +56,36 @@ test.describe("chain parameters", () => {
   });
 });
 
+test.describe("halted denoms", () => {
+  test("are a group of their own after DEX, each token named over its denom", async ({ page }) => {
+    await page.goto("/parameters?group=dex");
+    await page.getByTestId("param-nav").getByRole("link", { name: /^Halted denoms/ }).click();
+    await expect(page).toHaveURL(/\/parameters\?group=halted$/);
+    const section = page.getByTestId("halted-denoms");
+    await expect(section).toContainText("no trading, swaps, new pools or fee payment");
+    const rows = section.getByTestId("halted-denom");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first().getByRole("link", { name: "ATOM" })).toBeVisible();
+    await expect(rows.first()).toContainText("Cosmos Hub Atom");
+    await expect(rows.first().getByTestId("halted-denom-raw")).toHaveText(/^ibc\/27394FB0/);
+    await expect(rows.nth(1).getByRole("link", { name: "Unknown token" })).toBeVisible();
+    await noHorizontalScroll(page);
+  });
+
+  test("say so when none is halted", async ({ page }) => {
+    await mockApi(page, { "v1/params/halted-denoms": { items: [] } });
+    await page.goto("/parameters?group=halted");
+    await expect(page.getByTestId("halted-empty")).toContainText("No denom is halted");
+  });
+});
+
 test.describe("chain parameters on a phone", () => {
   test.skip(({ isMobile }) => !isMobile, "phone layout");
 
   test("shows the groups as chips and stays within the screen", async ({ page }) => {
     await page.goto("/parameters?group=burner");
     await expect(page.getByTestId("param-group")).toHaveAttribute("id", "burner");
-    await expect(page.getByTestId("param-nav-item")).toHaveCount(10);
+    await expect(page.getByTestId("param-nav-item")).toHaveCount(11);
     // Below c3 the short form shows; the full address stays hidden (and in the title).
     const address = page.getByTestId("module-account-address").first();
     await expect(address.getByText("bze1v7u…5qun")).toBeVisible();

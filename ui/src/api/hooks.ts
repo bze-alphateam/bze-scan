@@ -69,6 +69,7 @@ export const queryKeys = {
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
+  haltedDenoms: () => ["halted-denoms"] as const,
   modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -633,6 +634,16 @@ export function useParams({ poll = false }: { poll?: boolean } = {}) {
     queryKey: queryKeys.params(),
     queryFn: ({ signal }) => api.params(signal),
     ...(poll ? status : reference),
+  });
+}
+
+/** The denoms governance halted on the DEX, polled like the parameters. */
+export function useHaltedDenoms() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.haltedDenoms(),
+    queryFn: async ({ signal }) => (await api.haltedDenoms(signal)).items,
+    ...status,
   });
 }
 

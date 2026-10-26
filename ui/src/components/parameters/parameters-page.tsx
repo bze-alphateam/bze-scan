@@ -4,11 +4,11 @@ import { Box, Button, Flex, Grid, Heading, HStack, Link, Skeleton, Stack, Text }
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
-import { LuChevronDown, LuTriangleAlert } from "react-icons/lu";
+import { LuChevronDown, LuCircleCheck, LuTriangleAlert } from "react-icons/lu";
 
 import { ExternalLink } from "@/components/ui/external-link";
-import { useModules, useParams, useStats } from "@/api/hooks";
-import type { ChainParams, ModuleAccount } from "@/api/types";
+import { useDenoms, useHaltedDenoms, useModules, useParams, useStats } from "@/api/hooks";
+import type { ChainParams, ModuleAccount, TokenSummary } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Chip } from "@/components/ui/chip";
@@ -17,6 +17,7 @@ import { PageTitle } from "@/components/ui/page-head";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
 import { addressHref } from "@/components/ui/links";
+import { TokenLogo } from "@/components/tokens/tokens-page";
 import { shortAddress } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
 import {
@@ -29,6 +30,7 @@ import {
   type ParamGroupView,
   type ParamRow,
 } from "@/lib/parameters";
+import { tokenHref, tokenSymbol } from "@/render/tokens";
 
 // Parameter · Value · the info button.
 const COLUMNS = "minmax(0, 1fr) minmax(0, 1fr) auto";
@@ -37,6 +39,8 @@ const LAYOUT = { base: "minmax(0, 1fr)", c2: "240px minmax(0, 1fr)" };
 const LAYOUT_GAP = { base: "4", c2: "6" };
 const ADDRESS_JUSTIFY = { base: "flex-end", c2: "flex-start" };
 const ADDRESS_ALIGN = { base: "right", c2: "left" } as const;
+// Token (logo, ticker, name, the denom under them) · the copy button.
+const HALTED_COLUMNS = "minmax(0, 1fr) auto";
 
 // The group nav: a sticky side panel from c2 up, wrapping chips below.
 const NAV_LOOK = {
@@ -77,20 +81,45 @@ const NO_ACCOUNT: Partial<Record<ParamGroup, string>> = {
   cointrunk: "CoinTrunk has no module account: article fees go straight to the community pool.",
 };
 
+/** The halted denoms: not a parameter (tradebin keeps them in a store of their own), but listed as a group of their own. */
+const HALTED = "halted";
+
+/** What the side panel selects: a parameter group or the halted denoms. */
+type PageGroup = ParamGroup | typeof HALTED;
+
+type NavDef = Omit<GroupDef, "group"> & { group: PageGroup; count?: number };
+
+const HALTED_DEF: NavDef = {
+  group: HALTED,
+  label: "Halted denoms",
+  modules: ["tradebin"],
+  description:
+    "Halted by governance: no trading, swaps, new pools or fee payment; cancel, remove liquidity and transfers still work. A proposal halts a denom and another lifts the halt.",
+  see: { label: "the proposals", href: "/proposals" },
+};
+
+/** The side panel's entries: the parameter groups, with the halted denoms after DEX. */
+function navDefs(groups: NavDef[], halted: NavDef): NavDef[] {
+  const at = groups.findIndex((g) => g.group === "dex") + 1;
+  return [...groups.slice(0, at), halted, ...groups.slice(at)];
+}
+
+const NAV_GROUPS = navDefs(PARAM_GROUPS, HALTED_DEF);
+
 const FIRST = PARAM_GROUPS[0].group;
 
 /** A `?group=` value to a group: none or an unknown one is the first (Fees). */
-function parseGroup(value: string | null | undefined): ParamGroup {
-  return PARAM_GROUPS.find((g) => g.group === value)?.group ?? FIRST;
+function parseGroup(value: string | null | undefined): PageGroup {
+  return NAV_GROUPS.find((g) => g.group === value)?.group ?? FIRST;
 }
 
 /** A legacy `#dex` anchor to its group, null for anything else. */
-function hashGroup(): ParamGroup | null {
+function hashGroup(): PageGroup | null {
   const id = decodeURIComponent(window.location.hash.slice(1));
-  return PARAM_GROUPS.find((g) => g.group === id)?.group ?? null;
+  return NAV_GROUPS.find((g) => g.group === id)?.group ?? null;
 }
 
-const groupHref = (g: ParamGroup) => `/parameters?group=${g}`;
+const groupHref = (g: PageGroup) => `/parameters?group=${g}`;
 
 /** "6 + 2 advanced", or "1 parameter" when none is advanced. */
 function countText(rows: ParamRow[]): string {
@@ -104,7 +133,7 @@ function countText(rows: ParamRow[]): string {
  * wrapping chips on phones. A link per group, so a new tab works; a plain
  * click selects it in place.
  */
-function GroupNav({ groups, current, onPick }: { groups: (GroupDef & { rows?: ParamRow[] })[]; current: ParamGroup; onPick: (g: ParamGroup) => void }) {
+function GroupNav({ groups, current, onPick }: { groups: NavDef[]; current: PageGroup; onPick: (g: PageGroup) => void }) {
   return (
     <Box
       as="nav"
@@ -123,7 +152,7 @@ function GroupNav({ groups, current, onPick }: { groups: (GroupDef & { rows?: Pa
       </Text>
       {groups.map((g) => {
         const on = g.group === current;
-        const n = g.rows?.length;
+        const n = g.count;
         return (
           <Link
             key={g.group}
@@ -161,7 +190,7 @@ function GroupNav({ groups, current, onPick }: { groups: (GroupDef & { rows?: Pa
   );
 }
 
-function GroupHeader({ g, count }: { g: GroupDef; count?: string }) {
+function GroupHeader({ g, count }: { g: NavDef; count?: string }) {
   return (
     <Box>
       <Flex align="baseline" gap="10px" wrap="wrap">
@@ -466,6 +495,82 @@ function GroupView({ g, params }: { g: ParamGroupView; params: ChainParams }) {
   );
 }
 
+/** One halted denom: the token's logo, ticker and name when the explorer knows it, the denom under them. */
+function HaltedRow({ denom, token, denoms }: { denom: string; token?: TokenSummary; denoms?: Map<string, TokenSummary> }) {
+  const t = token ?? { denom, symbol: null, logo_url: null };
+  return (
+    <ListRow role="listitem" templateColumns={HALTED_COLUMNS} data-testid="halted-denom">
+      <Flex align="center" gap="10px" minW="0">
+        <TokenLogo t={t} denoms={denoms} />
+        <Box minW="0">
+          <Flex align="baseline" gap="2" minW="0">
+            <Link asChild fontWeight="500" color="accent.fg" truncate>
+              <NextLink href={tokenHref(denom)} data-testid="halted-denom-link">
+                {token ? tokenSymbol(token) : "Unknown token"}
+              </NextLink>
+            </Link>
+            {token?.name && (
+              <Text fontSize="13px" color="fg.muted" truncate>
+                {token.name}
+              </Text>
+            )}
+          </Flex>
+          <Text fontFamily="mono" fontSize="12px" color="fg.muted" overflowWrap="anywhere" data-testid="halted-denom-raw">
+            {denom}
+          </Text>
+        </Box>
+      </Flex>
+      <CopyButton value={denom} label="Copy denom" />
+    </ListRow>
+  );
+}
+
+/** The halted denoms, read live from the chain; the tokens list names them. */
+function HaltedView({ halted, onRetry }: { halted: { data?: string[]; error: Error | null }; onRetry: () => void }) {
+  const denoms = useDenoms();
+  const list = halted.data;
+  const count = list ? `${list.length} ${list.length === 1 ? "denom" : "denoms"}` : undefined;
+  return (
+    <Box as="section" id={HALTED} aria-labelledby={`${HALTED}-title`} minW="0" data-testid="halted-denoms">
+      <GroupHeader g={HALTED_DEF} count={count} />
+      {list ? (
+        list.length === 0 ? (
+          <StateBox icon={<LuCircleCheck size={20} />} title="No denom is halted" data-testid="halted-empty">
+            Every token can be traded on the DEX and used to pay fees.
+          </StateBox>
+        ) : (
+          <ListPanel>
+            <ListHead templateColumns={HALTED_COLUMNS} aria-hidden>
+              <Text>Token</Text>
+              <Box w="24px" />
+            </ListHead>
+            <Box role="list" aria-label="Halted denoms">
+              {list.map((d) => (
+                <HaltedRow key={d} denom={d} token={denoms.data?.get(d)} denoms={denoms.data} />
+              ))}
+            </Box>
+          </ListPanel>
+        )
+      ) : halted.error ? (
+        <StateBox
+          tone="error"
+          icon={<LuTriangleAlert size={20} />}
+          title="The halted denoms could not be loaded"
+          actions={
+            <Button size="sm" colorPalette="blue" onClick={onRetry}>
+              Try again
+            </Button>
+          }
+        >
+          The explorer did not answer. Try again in a moment.
+        </StateBox>
+      ) : (
+        <TableSkeleton rows={2} columns={1} />
+      )}
+    </Box>
+  );
+}
+
 const INTRO =
   "The rules the chain runs by, read live from the chain. Nobody can edit them by hand: a value changes only when a proposal passes, and the proposal that last changed it is linked next to it.";
 
@@ -476,14 +581,14 @@ const INTRO =
  */
 export function ParametersPage({ group: initial = null }: { group?: string | null }) {
   const router = useRouter();
-  const [group, setGroup] = useState<ParamGroup>(() => parseGroup(initial));
+  const [group, setGroup] = useState<PageGroup>(() => parseGroup(initial));
   // A navigation to another `?group=` (the header link, back) moves the selection too.
   const [seen, setSeen] = useState(initial);
   if (seen !== initial) {
     setSeen(initial);
     setGroup(parseGroup(initial));
   }
-  const pick = (g: ParamGroup) => {
+  const pick = (g: PageGroup) => {
     setGroup(g);
     router.replace(groupHref(g), { scroll: false });
   };
@@ -508,13 +613,20 @@ export function ParametersPage({ group: initial = null }: { group?: string | nul
   const ready = data && (stats.data || stats.error);
   const groups = ready ? parameterGroups(data, stats.data ?? null) : null;
   const shown = groups?.find((g) => g.group === group);
+  const halted = useHaltedDenoms();
+  const nav = navDefs(
+    groups?.map((g) => ({ ...g, count: g.rows.length })) ?? PARAM_GROUPS,
+    { ...HALTED_DEF, count: halted.data?.length },
+  );
 
   return (
     <Box>
       <PageTitle title="Chain parameters" intro={INTRO} />
       <Grid templateColumns={LAYOUT} gap={LAYOUT_GAP} alignItems="start" pb="10">
-        <GroupNav groups={groups ?? PARAM_GROUPS} current={group} onPick={pick} />
-        {groups && shown ? (
+        <GroupNav groups={nav} current={group} onPick={pick} />
+        {group === HALTED ? (
+          <HaltedView halted={halted} onRetry={() => void halted.refetch()} />
+        ) : groups && shown ? (
           <GroupView g={shown} params={data!} />
         ) : error ? (
           <StateBox
@@ -531,7 +643,7 @@ export function ParametersPage({ group: initial = null }: { group?: string | nul
           </StateBox>
         ) : (
           <Stack gap="3" aria-busy data-testid="parameters-skeleton">
-            <GroupHeader g={PARAM_GROUPS.find((g) => g.group === group)!} />
+            <GroupHeader g={NAV_GROUPS.find((g) => g.group === group)!} />
             <Skeleton h="4" w="40%" />
             <TableSkeleton rows={4} columns={2} />
           </Stack>

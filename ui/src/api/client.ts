@@ -90,6 +90,8 @@ export interface ExplorerApi {
 
   stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
+  /** The denoms governance halted on the DEX: not a parameter, listed beside them. */
+  haltedDenoms(signal?: AbortSignal): Promise<{ items: string[] }>;
   modules(signal?: AbortSignal): Promise<{ items: ModuleAccount[] }>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -212,6 +214,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
 
     stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),
+    haltedDenoms: (signal) => get("/params/halted-denoms", {}, signal),
     modules: (signal) => get("/modules", {}, signal),
 
     rawBlock: (height, signal) => get(`/raw/block/${seg(String(height))}`, {}, signal),

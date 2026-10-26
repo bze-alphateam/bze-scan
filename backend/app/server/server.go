@@ -56,6 +56,9 @@ type Deps struct {
 	// recorded changes; /api/v1/params needs both.
 	Params       controller.LiveParams
 	ParamChanges controller.ParamChangeReader
+	// HaltedDenoms reads the denoms governance halted on the DEX; nil
+	// leaves /api/v1/params/halted-denoms out.
+	HaltedDenoms controller.HaltedDenomsReader
 	// StakeFlows serves the validators' stake movements of the last 7 days
 	// from memory and ValidatorNames names their validators; nil StakeFlows
 	// leaves /api/v1/validators/stake-changes and
@@ -157,6 +160,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.Params != nil && deps.ParamChanges != nil {
 		api.GET("/params", controller.NewParamsController(deps.Params, deps.ParamChanges).Params)
+	}
+	if deps.HaltedDenoms != nil {
+		api.GET("/params/halted-denoms", controller.NewHaltedDenomsController(deps.HaltedDenoms).HaltedDenoms)
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

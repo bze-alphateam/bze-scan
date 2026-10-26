@@ -65,6 +65,7 @@ describe("createHttpApi", () => {
     await api.proposalNonVoters(45, { limit: 100, cursor: "n" });
     await api.stats();
     await api.params();
+    await api.haltedDenoms();
     await api.rawBlock(7);
     await api.rawBlockResults(7);
     await api.rawCommit(7);
@@ -100,6 +101,7 @@ describe("createHttpApi", () => {
       "/v1/proposals/45/non-voters?cursor=n&limit=100",
       "/v1/stats",
       "/v1/params",
+      "/v1/params/halted-denoms",
       "/v1/raw/block/7",
       "/v1/raw/block_results/7",
       "/v1/raw/commit/7",

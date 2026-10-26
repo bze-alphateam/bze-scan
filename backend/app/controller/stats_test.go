@@ -247,3 +247,34 @@ func TestParamsRouteFailures(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError,
 		get(t, paramsAPI(ok, fakeChanges{err: errors.New("db down")}), "/params").Code)
 }
+
+type fakeHalted struct {
+	denoms []string
+	err    error
+}
+
+func (f fakeHalted) HaltedDenoms(context.Context) ([]string, error) { return f.denoms, f.err }
+
+func haltedAPI(r controller.HaltedDenomsReader) *echo.Echo {
+	e := echo.New()
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	e.GET("/params/halted-denoms", controller.NewHaltedDenomsController(r).HaltedDenoms)
+	return e
+}
+
+func TestHaltedDenomsRoute(t *testing.T) {
+	rec := get(t, haltedAPI(fakeHalted{denoms: []string{"ibc/AAA", "ibc/BBB"}}), "/params/halted-denoms")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.JSONEq(t, `{"items":["ibc/AAA","ibc/BBB"]}`, rec.Body.String())
+
+	rec = get(t, haltedAPI(fakeHalted{}), "/params/halted-denoms")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"items":[]}`, rec.Body.String(), "none is an empty list")
+}
+
+func TestHaltedDenomsRouteFailure(t *testing.T) {
+	rec := get(t, haltedAPI(fakeHalted{err: errors.New("connection refused")}), "/params/halted-denoms")
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	assert.Equal(t, "upstream_error", errorCode(t, rec))
+}
