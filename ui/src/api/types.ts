@@ -970,3 +970,38 @@ export interface RawTx {
   tx: string;
   tx_result: Record<string, unknown>;
 }
+
+/** `GET /upgrades/live` while the chain is not halted for a software upgrade (or the explorer is merely behind). */
+export interface NotHalted {
+  halted: false;
+}
+
+/** A validator of the set at the halt height, by voting power. `back`: voted at the halt height, any round; `prevote`/`precommit`: in the current round. */
+export interface LiveHaltMember {
+  consensus_address: string;
+  operator_address: string | null;
+  moniker: string | null;
+  voting_power: string;
+  back: boolean;
+  prevote: boolean;
+  precommit: boolean;
+}
+
+/** `GET /upgrades/live` while consensus waits at `halt_height` for the upgrade planned at `height`. Powers are consensus powers; the chain resumes once precommits pass two thirds of `total_power`. */
+export interface Halted {
+  halted: true;
+  height: number;
+  halt_height: number;
+  proposal_id: number;
+  name: string;
+  round: number;
+  halted_since: string;
+  checked_at: string;
+  total_power: string;
+  back_power: string;
+  prevote_power: string;
+  precommit_power: string;
+  members: LiveHaltMember[];
+}
+
+export type LiveHalt = NotHalted | Halted;

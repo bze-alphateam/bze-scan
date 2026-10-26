@@ -23,6 +23,7 @@ import type {
   TokenSummary,
   Tx,
   TxListParams,
+  LiveHalt,
   Upgrade,
   ValidatorList,
   ValidatorListParams,
@@ -66,6 +67,7 @@ export const queryKeys = {
   proposalDeposits: (id: number) => ["proposal-deposits", id] as const,
   proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
   upgrade: (height: number) => ["upgrade", height] as const,
+  liveHalt: () => ["upgrade", "live"] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
@@ -695,5 +697,18 @@ export function useRawTx(hash: string, enabled = true) {
     queryFn: ({ signal }) => api.rawTx(hash, signal),
     enabled,
     ...immutable,
+  });
+}
+
+/** Whether the chain is halted for a software upgrade and who is back: polled `live` during a halt, `slow` otherwise. */
+export function useLiveHalt() {
+  const api = useApi();
+  const halted = (h: LiveHalt | undefined) => h?.halted === true;
+  return useQuery({
+    queryKey: queryKeys.liveHalt(),
+    queryFn: ({ signal }) => api.liveHalt(signal),
+    ...slow,
+    refetchInterval: (q) => (halted(q.state.data) ? live.refetchInterval : slow.refetchInterval),
+    staleTime: (q) => (halted(q.state.data) ? live.staleTime : slow.staleTime),
   });
 }

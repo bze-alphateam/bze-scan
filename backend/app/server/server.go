@@ -45,6 +45,9 @@ type Deps struct {
 	// Upgrades reads the software upgrades' recovery; nil leaves
 	// /api/v1/upgrades out.
 	Upgrades controller.UpgradeReader
+	// LiveHalt serves what the halt watch sees during an upgrade's halt;
+	// nil (no watch) answers /api/v1/upgrades/live as never halted.
+	LiveHalt controller.LiveHaltReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Stats reads the home tiles and the validators header; nil leaves
@@ -149,6 +152,7 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
 		api.GET("/proposals/:id/non-voters", proposals.ProposalNonVoters)
 	}
+	api.GET("/upgrades/live", controller.NewHaltController(deps.LiveHalt, deps.ValidatorNames).Live)
 	if deps.Upgrades != nil {
 		api.GET("/upgrades/:height", controller.NewUpgradeController(deps.Upgrades).Upgrade)
 	}
