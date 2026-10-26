@@ -45,6 +45,9 @@ type Deps struct {
 	// Upgrades reads the software upgrades' recovery; nil leaves
 	// /api/v1/upgrades out.
 	Upgrades controller.UpgradeReader
+	// LiveHalt serves what the halt watch sees during an upgrade's halt;
+	// nil (no watch) answers /api/v1/upgrades/live as never halted.
+	LiveHalt controller.LiveHaltReader
 	// Status serves the status snapshots; nil leaves /api/v1/status out.
 	Status controller.StatusReader
 	// Stats reads the home tiles and the validators header; nil leaves
@@ -56,6 +59,9 @@ type Deps struct {
 	// recorded changes; /api/v1/params needs both.
 	Params       controller.LiveParams
 	ParamChanges controller.ParamChangeReader
+	// HaltedDenoms reads the denoms governance halted on the DEX; nil
+	// leaves /api/v1/params/halted-denoms out.
+	HaltedDenoms controller.HaltedDenomsReader
 	// StakeFlows serves the validators' stake movements of the last 7 days
 	// from memory and ValidatorNames names their validators; nil StakeFlows
 	// leaves /api/v1/validators/stake-changes and
@@ -149,6 +155,7 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/proposals/:id/deposits", proposals.ProposalDeposits)
 		api.GET("/proposals/:id/non-voters", proposals.ProposalNonVoters)
 	}
+	api.GET("/upgrades/live", controller.NewHaltController(deps.LiveHalt, deps.ValidatorNames).Live)
 	if deps.Upgrades != nil {
 		api.GET("/upgrades/:height", controller.NewUpgradeController(deps.Upgrades).Upgrade)
 	}
@@ -157,6 +164,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.Params != nil && deps.ParamChanges != nil {
 		api.GET("/params", controller.NewParamsController(deps.Params, deps.ParamChanges).Params)
+	}
+	if deps.HaltedDenoms != nil {
+		api.GET("/params/halted-denoms", controller.NewHaltedDenomsController(deps.HaltedDenoms).HaltedDenoms)
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

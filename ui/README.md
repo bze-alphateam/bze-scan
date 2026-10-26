@@ -171,6 +171,12 @@ renders "not available"; a key no row covers is appended to its group as an
 that page; elsewhere it is `reference`. Parameter-change proposals name their
 keys with `describeParam` and link to the module's group (`groupOfModule`).
 
+The halted denoms (`/params/halted-denoms`, polled like the parameters by
+`useHaltedDenoms`) are not a parameter but a group of their own in the side
+panel, after DEX (`?group=halted`): each denom is named from `useDenoms()`
+(logo, ticker, name) with the raw denom under it, or "Unknown token" when the
+tokens list lacks it; none halted is an empty state.
+
 ## Messages in plain words
 
 `src/render/messages/registry.ts` maps a type URL to a `MessageRenderer`:

@@ -23,6 +23,7 @@ import type {
   TokenSummary,
   Tx,
   TxListParams,
+  LiveHalt,
   Upgrade,
   ValidatorList,
   ValidatorListParams,
@@ -66,9 +67,11 @@ export const queryKeys = {
   proposalDeposits: (id: number) => ["proposal-deposits", id] as const,
   proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
   upgrade: (height: number) => ["upgrade", height] as const,
+  liveHalt: () => ["upgrade", "live"] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
+  haltedDenoms: () => ["halted-denoms"] as const,
   modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -636,6 +639,16 @@ export function useParams({ poll = false }: { poll?: boolean } = {}) {
   });
 }
 
+/** The denoms governance halted on the DEX, polled like the parameters. */
+export function useHaltedDenoms() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.haltedDenoms(),
+    queryFn: async ({ signal }) => (await api.haltedDenoms(signal)).items,
+    ...status,
+  });
+}
+
 /** The chain's module accounts by name, for moving between them on an account page. */
 export function useModules() {
   const api = useApi();
@@ -695,5 +708,18 @@ export function useRawTx(hash: string, enabled = true) {
     queryFn: ({ signal }) => api.rawTx(hash, signal),
     enabled,
     ...immutable,
+  });
+}
+
+/** Whether the chain is halted for a software upgrade and who is back: polled `live` during a halt, `slow` otherwise. */
+export function useLiveHalt() {
+  const api = useApi();
+  const halted = (h: LiveHalt | undefined) => h?.halted === true;
+  return useQuery({
+    queryKey: queryKeys.liveHalt(),
+    queryFn: ({ signal }) => api.liveHalt(signal),
+    ...slow,
+    refetchInterval: (q) => (halted(q.state.data) ? live.refetchInterval : slow.refetchInterval),
+    staleTime: (q) => (halted(q.state.data) ? live.staleTime : slow.staleTime),
   });
 }

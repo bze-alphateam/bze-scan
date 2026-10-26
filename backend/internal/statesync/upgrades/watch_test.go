@@ -3,6 +3,7 @@ package upgrades_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -98,6 +99,7 @@ func (n *fakeWatchNode) votes(at map[int]time.Time) {
 }
 
 type watchEnv struct {
+	watch   *upgrades.Watch
 	clock   *stepClock
 	node    *fakeWatchNode
 	members *fakeSet
@@ -119,6 +121,7 @@ func startWatch(t *testing.T, store *memStore, n *fakeWatchNode) *watchEnv {
 		upgrades.WatchConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
+	e.watch = w
 	go func() { e.done <- w.Run(ctx) }()
 	t.Cleanup(func() { e.stop(t) })
 	return e
@@ -301,4 +304,54 @@ func TestWatchKeepsPollingWhenTheSetCannotBeRead(t *testing.T) {
 	e.members.mu.Unlock()
 	e.step(t, base.Add(5*time.Second))
 	assert.Equal(t, []string{"AAAA halt_vote 10:00:05", "BBBB -", "CCCC -", "DDDD -"}, store.recovery(planHeight))
+}
+
+func TestWatchLiveShowsTheVotesOfTheCurrentRound(t *testing.T) {
+	store := pendingStore()
+	n := &fakeWatchNode{}
+	e := startWatch(t, store, n)
+
+	// Blocks come in: no halt to show.
+	n.status = node.Status{LatestBlockHeight: 99, LatestBlockTime: base.Add(-5 * time.Second)}
+	n.votes(map[int]time.Time{0: base})
+	e.step(t, base)
+	_, ok := e.watch.Live()
+	assert.False(t, ok)
+
+	// Halted at round 1: A prevoted and precommitted in round 1, B only
+	// voted in round 0, C and D not at all.
+	n.halted(99, base.Add(time.Minute))
+	vote := func(index int, cons string, round int32, typ node.VoteType) node.RoundVote {
+		return node.RoundVote{ValidatorIndex: index, AddressPrefix: cons[:12], Height: haltHeight, Round: round, Type: typ,
+			Timestamp: base}
+	}
+	n.mu.Lock()
+	n.consensus = node.ConsensusState{Height: haltHeight, Round: 1, Votes: []node.RoundVote{
+		vote(0, consA, 1, node.Prevote), vote(0, consA, 1, node.Precommit), vote(1, consB, 0, node.Prevote),
+	}}
+	n.mu.Unlock()
+	e.step(t, base.Add(time.Minute))
+
+	l, ok := e.watch.Live()
+	require.True(t, ok)
+	assert.Equal(t, planHeight, l.Height)
+	assert.Equal(t, int32(1), l.Round)
+	assert.Equal(t, base.Add(time.Minute), l.CheckedAt)
+	assert.Equal(t, base.Add(-9*time.Minute), l.HaltedSince, "the time of the node's latest block")
+	got := make([]string, len(l.Members))
+	for i, m := range l.Members {
+		got[i] = fmt.Sprintf("%s back=%t prevote=%t precommit=%t", m.ConsensusAddress[:4], m.Back, m.Prevote, m.Precommit)
+	}
+	assert.Equal(t, []string{
+		"AAAA back=true prevote=true precommit=true",
+		"BBBB back=true prevote=false precommit=false",
+		"CCCC back=false prevote=false precommit=false",
+		"DDDD back=false prevote=false precommit=false",
+	}, got)
+
+	// Block 101 decided: the halt is over, nothing to show.
+	n.halted(haltHeight, base.Add(2*time.Minute))
+	e.step(t, base.Add(2*time.Minute))
+	_, ok = e.watch.Live()
+	assert.False(t, ok)
 }

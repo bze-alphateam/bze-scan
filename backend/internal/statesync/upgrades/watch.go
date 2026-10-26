@@ -3,6 +3,7 @@ package upgrades
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -70,6 +71,56 @@ type Watch struct {
 	seen    map[string]bool
 	marked  bool // the armed upgrade is marked watched
 	warned  map[string]bool
+
+	mu   sync.RWMutex
+	live *Live // nil while not armed
+}
+
+// Live is what the watch saw at its latest poll of a halt: the votes of
+// the round consensus is in, member by member.
+type Live struct {
+	// Height is the plan height U, ProposalID and Name its proposal.
+	Height     int64
+	ProposalID int64
+	Name       string
+	// Round is the consensus round at U+1.
+	Round int32
+	// HaltedSince is the time of the node's latest block.
+	HaltedSince time.Time
+	// CheckedAt is the poll that read the votes.
+	CheckedAt time.Time
+	// Members are the set at U+1, by voting power descending.
+	Members []LiveMember
+}
+
+// LiveMember is a validator of the set at U+1 during the halt.
+type LiveMember struct {
+	activeset.Member
+	// Prevote and Precommit: it voted in the current round.
+	Prevote   bool
+	Precommit bool
+	// Back: it voted at U+1, any round.
+	Back bool
+}
+
+// Live returns a copy of the latest snapshot of the halt the watch is
+// armed for; false when the chain is not halted for an upgrade (or no
+// poll read its votes yet). No I/O.
+func (w *Watch) Live() (Live, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.live == nil {
+		return Live{}, false
+	}
+	out := *w.live
+	out.Members = append([]LiveMember(nil), w.live.Members...)
+	return out, true
+}
+
+func (w *Watch) setLive(l *Live) {
+	w.mu.Lock()
+	w.live = l
+	w.mu.Unlock()
 }
 
 // NewWatch returns the watch.
@@ -129,12 +180,14 @@ func (w *Watch) poll(ctx context.Context) {
 		if w.armed != 0 {
 			w.deps.Log.WithField("upgrade", w.armed).Info("halt watch: disarmed")
 			w.armed, w.members, w.seen, w.marked = 0, nil, nil, false
+			w.setLive(nil)
 		}
 		return
 	}
 	lg := w.deps.Log.WithFields(log.Fields{"upgrade": u.Height, "name": u.Name})
 	if w.armed != u.Height {
 		w.armed, w.members, w.seen, w.marked = u.Height, nil, map[string]bool{}, false
+		w.setLive(nil)
 		lg.Info("halt watch: armed, the chain is halted for the upgrade")
 	}
 	if w.members == nil {
@@ -163,14 +216,22 @@ func (w *Watch) poll(ctx context.Context) {
 		return
 	}
 	earliest := map[int]node.RoundVote{}
+	voted := map[int]map[node.VoteType]bool{}
 	for _, v := range cs.Votes {
 		if v.Height != cs.Height {
 			continue
+		}
+		if v.Round == cs.Round {
+			if voted[v.ValidatorIndex] == nil {
+				voted[v.ValidatorIndex] = map[node.VoteType]bool{}
+			}
+			voted[v.ValidatorIndex][v.Type] = true
 		}
 		if e, ok := earliest[v.ValidatorIndex]; !ok || v.Timestamp.Before(e.Timestamp) {
 			earliest[v.ValidatorIndex] = v
 		}
 	}
+	w.snapshot(u, cs.Round, st.LatestBlockTime, at, earliest, voted)
 	var votes []HaltVote
 	for index, v := range earliest {
 		if index < 0 || index >= len(w.members) || !hasPrefix(w.members[index].ConsensusAddress, v.AddressPrefix) {
@@ -203,6 +264,25 @@ func (w *Watch) poll(ctx context.Context) {
 	if len(votes) > 0 {
 		lg.WithFields(log.Fields{"new": len(votes), "back": len(w.seen), "members": len(w.members)}).Info("halt watch: validators back")
 	}
+}
+
+// snapshot publishes what the poll saw: a member is back when it has a
+// vote at U+1 that matches it, in the current round or an earlier one.
+func (w *Watch) snapshot(u *Upgrade, round int32, since, at time.Time, earliest map[int]node.RoundVote, voted map[int]map[node.VoteType]bool) {
+	l := &Live{
+		Height: u.Height, ProposalID: u.ProposalID, Name: u.Name,
+		Round: round, HaltedSince: since, CheckedAt: at,
+		Members: make([]LiveMember, len(w.members)),
+	}
+	for i, m := range w.members {
+		lm := LiveMember{Member: m, Back: w.seen[m.ConsensusAddress]}
+		if v, ok := earliest[i]; ok && hasPrefix(m.ConsensusAddress, v.AddressPrefix) {
+			lm.Back = true
+			lm.Prevote, lm.Precommit = voted[i][node.Prevote], voted[i][node.Precommit]
+		}
+		l.Members[i] = lm
+	}
+	w.setLive(l)
 }
 
 // hasPrefix reports whether the consensus address starts with the

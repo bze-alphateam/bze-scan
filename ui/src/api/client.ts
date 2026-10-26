@@ -12,6 +12,7 @@ import type {
   HallOfFame,
   IbcListParams,
   IbcTransfer,
+  LiveHalt,
   ModuleAccount,
   OpenOrders,
   Page,
@@ -85,11 +86,14 @@ export interface ExplorerApi {
   proposalDeposits(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalDeposit>>;
   proposalNonVoters(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalNonVoter>>;
   upgrade(height: number, signal?: AbortSignal): Promise<Upgrade>;
+  liveHalt(signal?: AbortSignal): Promise<LiveHalt>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
   stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
+  /** The denoms governance halted on the DEX: not a parameter, listed beside them. */
+  haltedDenoms(signal?: AbortSignal): Promise<{ items: string[] }>;
   modules(signal?: AbortSignal): Promise<{ items: ModuleAccount[] }>;
 
   rawBlock(height: number, signal?: AbortSignal): Promise<RawRpcResponse>;
@@ -207,11 +211,13 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     proposalDeposits: (id, params, signal) => get(`/proposals/${seg(String(id))}/deposits`, page(params), signal),
     proposalNonVoters: (id, params, signal) => get(`/proposals/${seg(String(id))}/non-voters`, page(params), signal),
     upgrade: (height, signal) => get(`/upgrades/${seg(String(height))}`, {}, signal),
+    liveHalt: (signal) => get("/upgrades/live", {}, signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 
     stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),
+    haltedDenoms: (signal) => get("/params/halted-denoms", {}, signal),
     modules: (signal) => get("/modules", {}, signal),
 
     rawBlock: (height, signal) => get(`/raw/block/${seg(String(height))}`, {}, signal),
