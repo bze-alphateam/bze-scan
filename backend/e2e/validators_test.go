@@ -87,6 +87,7 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
 	t.Setenv("AGGREGATOR_URL", e.agg.URL)
+	t.Setenv("PRICE_CHANGE_MARKET", recordedPool)
 	t.Setenv("KEYBASE_URL", e.kb.URL)
 	t.Setenv("LOG_LEVEL", "warn")
 	root := cli.NewRootCmd()
