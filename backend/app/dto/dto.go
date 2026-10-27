@@ -291,11 +291,20 @@ type HallOfFame struct {
 // HallOfFameRules is the Hall of Fame rule, for clients to word it: a vote
 // on each of the last Proposals proposals whose voting ended, at most
 // MaxMissedBlocks missed of the last SignedBlocksWindow blocks (null until
-// known).
+// known) and, when Upgrade is not null, back at most MaxSecondsBack after
+// that upgrade's halt.
 type HallOfFameRules struct {
-	Proposals          int    `json:"proposals"`
-	MaxMissedBlocks    int    `json:"max_missed_blocks"`
-	SignedBlocksWindow *int64 `json:"signed_blocks_window"`
+	Proposals          int                `json:"proposals"`
+	MaxMissedBlocks    int                `json:"max_missed_blocks"`
+	SignedBlocksWindow *int64             `json:"signed_blocks_window"`
+	MaxSecondsBack     int                `json:"max_seconds_back"`
+	Upgrade            *HallOfFameUpgrade `json:"upgrade"`
+}
+
+// HallOfFameUpgrade is the upgrade the Hall of Fame counts.
+type HallOfFameUpgrade struct {
+	Height int64  `json:"height"`
+	Name   string `json:"name"`
 }
 
 // NewHallOfFame maps the Hall of Fame and its rule.
@@ -306,7 +315,11 @@ func NewHallOfFame(h *repository.HallOfFame) HallOfFame {
 			Proposals:          repository.HallOfFameProposals,
 			MaxMissedBlocks:    repository.HallOfFameMaxMissedBlocks,
 			SignedBlocksWindow: h.SignedBlocksWindow,
+			MaxSecondsBack:     repository.HallOfFameMaxSecondsBack,
 		},
+	}
+	if h.Upgrade != nil {
+		out.Rules.Upgrade = &HallOfFameUpgrade{Height: h.Upgrade.Height, Name: h.Upgrade.Name}
 	}
 	for _, v := range h.Members {
 		out.Items = append(out.Items, NewValidator(v))

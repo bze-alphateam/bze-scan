@@ -219,6 +219,7 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	f := &fakeReader{fame: &repository.HallOfFame{
 		Members:            []repository.ValidatorSummary{member("Small", "100"), member("Large", "900")},
 		SignedBlocksWindow: &window,
+		Upgrade:            &repository.HallOfFameUpgrade{Height: 25263600, Name: "v8.2.0"},
 	}}
 	rec := get(t, newAPI(f), "/validators/hall-of-fame")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -232,15 +233,18 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	assert.Nil(t, fame.NextCursor, "one page")
 	assert.Equal(t, dto.HallOfFameRules{
 		Proposals: repository.HallOfFameProposals, MaxMissedBlocks: repository.HallOfFameMaxMissedBlocks, SignedBlocksWindow: &window,
+		MaxSecondsBack: repository.HallOfFameMaxSecondsBack,
+		Upgrade:        &dto.HallOfFameUpgrade{Height: 25263600, Name: "v8.2.0"},
 	}, fame.Rules)
 	assert.Equal(t, 4, fame.Rules.Proposals, "the last four proposals")
 	assert.Equal(t, 10, fame.Rules.MaxMissedBlocks)
+	assert.Equal(t, 600, fame.Rules.MaxSecondsBack, "ten minutes")
 }
 
 func TestHallOfFameEmpty(t *testing.T) {
 	rec := get(t, newAPI(&fakeReader{}), "/validators/hall-of-fame")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":4,"max_missed_blocks":10,"signed_blocks_window":null}}`,
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":4,"max_missed_blocks":10,"signed_blocks_window":null,"max_seconds_back":600,"upgrade":null}}`,
 		rec.Body.String())
 }
 

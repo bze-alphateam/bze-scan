@@ -168,7 +168,7 @@ describe("history", () => {
 
 describe("hall of fame", () => {
   it("words the crown card's signing line with the rule's allowance", () => {
-    const rules = { proposals: 10, max_missed_blocks: 10, signed_blocks_window: 10_000 };
+    const rules = { proposals: 10, max_missed_blocks: 10, signed_blocks_window: 10_000, max_seconds_back: 600, upgrade: null };
     expect(fameMissedText({ missed_blocks: 4, signed_blocks_window: 5 }, rules)).toBe("Missed 4 of the last 10,000 blocks (10 allowed)");
     expect(fameMissedText({ missed_blocks: 0, signed_blocks_window: null }, rules)).toBe("Missed no blocks in the last 10,000 (10 allowed)");
     // The rule's window first, the validator's while the rule's is unknown.

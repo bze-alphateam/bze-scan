@@ -480,6 +480,10 @@ const HallOfFameProposals = 4
 // window a Hall of Fame validator may have missed (99.9% of 10,000).
 const HallOfFameMaxMissedBlocks = 10
 
+// HallOfFameMaxSecondsBack is how long after the halt of the last upgrade a
+// Hall of Fame validator may have taken to come back (ten minutes).
+const HallOfFameMaxSecondsBack = 600
+
 // recentProposals is the CTE of the last n proposals whose voting period
 // ended.
 func recentProposals(n int) string {
@@ -543,14 +547,40 @@ type HallOfFame struct {
 	// SignedBlocksWindow is the slashing signing window, nil until a
 	// validator's signing info is synced.
 	SignedBlocksWindow *int64
+	// Upgrade is the upgrade whose halt its members came back from in
+	// time, nil while no upgrade's recovery is computed.
+	Upgrade *HallOfFameUpgrade
+}
+
+// HallOfFameUpgrade is the upgrade the Hall of Fame counts.
+type HallOfFameUpgrade struct {
+	Height int64
+	Name   string
 }
 
 // HallOfFame returns the bonded, unjailed validators whose account voted,
 // whatever the option, on every one of the last HallOfFameProposals proposals
 // whose voting ended (all of them while there are fewer; nobody while
-// none ended) and that missed at most HallOfFameMaxMissedBlocks blocks of
-// the signing window, by voting power ascending.
+// none ended), that missed at most HallOfFameMaxMissedBlocks blocks of the
+// signing window and that came back at most HallOfFameMaxSecondsBack after
+// the halt of the last upgrade whose recovery is computed (a validator
+// outside the set at that upgrade does not qualify; no condition while no
+// upgrade is computed), by voting power ascending.
 func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
+	h := &HallOfFame{}
+	var up HallOfFameUpgrade
+	err := r.db.QueryRow(ctx, `SELECT height, name FROM explorer.upgrades
+		WHERE computed_at IS NOT NULL ORDER BY height DESC LIMIT 1`).Scan(&up.Height, &up.Name)
+	switch {
+	case err == nil:
+		h.Upgrade = &up
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, fmt.Errorf("hall of fame upgrade: %w", err)
+	}
+	var upgradeHeight *int64
+	if h.Upgrade != nil {
+		upgradeHeight = &h.Upgrade.Height
+	}
 	rows, err := r.db.Query(ctx, `
 		WITH `+recentProposals(HallOfFameProposals)+`
 		SELECT row_number() OVER (ORDER BY tokens, operator_address),
@@ -562,16 +592,17 @@ func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 		   AND EXISTS (SELECT 1 FROM recent)
 		   AND NOT EXISTS (SELECT 1 FROM recent r WHERE NOT EXISTS (
 		       SELECT 1 FROM explorer.proposal_votes pv WHERE pv.voter = account_address AND pv.proposal_id = r.id))
+		   AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM explorer.upgrade_recovery ur
+		       WHERE ur.upgrade_height = $2 AND ur.operator_address = v.operator_address AND ur.seconds_back <= $3))
 		 -- v.tokens: a bare "tokens" names the tokens::text output column, which sorts as text.
-		 ORDER BY v.tokens, v.operator_address`, HallOfFameMaxMissedBlocks)
+		 ORDER BY v.tokens, v.operator_address`, HallOfFameMaxMissedBlocks, upgradeHeight, HallOfFameMaxSecondsBack)
 	if err != nil {
 		return nil, fmt.Errorf("hall of fame: %w", err)
 	}
-	members, err := scanValidatorSummaries(rows)
+	h.Members, err = scanValidatorSummaries(rows)
 	if err != nil {
 		return nil, fmt.Errorf("hall of fame: %w", err)
 	}
-	h := &HallOfFame{Members: members}
 	if err := r.db.QueryRow(ctx, `SELECT max(signed_blocks_window) FROM explorer.validators`).
 		Scan(&h.SignedBlocksWindow); err != nil {
 		return nil, fmt.Errorf("hall of fame window: %w", err)
