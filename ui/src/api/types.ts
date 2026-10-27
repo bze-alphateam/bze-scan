@@ -327,11 +327,18 @@ export interface ValidatorList extends Page<Validator> {
   summary: ValidatorsSummary | null;
 }
 
-/** The Hall of Fame rule as the API states it: a vote on each of the last `proposals` closed proposals, at most `max_missed_blocks` missed of the last `signed_blocks_window` blocks (null until known). */
+/**
+ * The Hall of Fame rule as the API states it: a vote on each of the last `proposals` closed proposals, at most
+ * `max_missed_blocks` missed of the last `signed_blocks_window` blocks (null until known) and, when `upgrade` is set,
+ * back at most `max_seconds_back` after that upgrade's halt.
+ */
 export interface HallOfFameRules {
   proposals: number;
   max_missed_blocks: number;
   signed_blocks_window: number | null;
+  max_seconds_back: number;
+  /** The upgrade whose halt members came back from in time; null while none is computed. */
+  upgrade: { height: number; name: string } | null;
 }
 
 /** `GET /v1/validators/hall-of-fame`: the members, the smallest first, in one page, and the rule. */

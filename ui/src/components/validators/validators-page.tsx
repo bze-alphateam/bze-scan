@@ -323,10 +323,13 @@ function HallOfFameList({ fame, query, window }: { fame: Fame; query: string; wi
   return (
     <>
       <Text color="fg.muted" fontSize="13px" maxW="720px" mb="14px" lineHeight="1.55" data-testid="hall-of-fame-intro">
-        Active validators that voted on every one of the last {formatCount(proposals)} proposals, whatever their vote, and missed no more
+        Active validators that voted on every one of the last {formatCount(proposals)} proposals, whatever their vote, missed no more
         than {formatCount(rules.max_missed_blocks)}
-        {rules.signed_blocks_window != null ? ` of the last ${formatCount(rules.signed_blocks_window)}` : ""} blocks. The smallest come
-        first: staking with them spreads the voting power.
+        {rules.signed_blocks_window != null ? ` of the last ${formatCount(rules.signed_blocks_window)}` : ""} blocks
+        {rules.upgrade
+          ? ` and came back within ${formatCount(Math.round(rules.max_seconds_back / 60))} minutes of the ${rules.upgrade.name} upgrade halt`
+          : ""}
+        . The smallest come first: staking with them spreads the voting power.
       </Text>
       <ListPanel>
         {rows.length === 0 ? (

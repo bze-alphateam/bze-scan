@@ -47,6 +47,8 @@
   "rules": {
     "proposals": 10,
     "max_missed_blocks": 10,
-    "signed_blocks_window": 10000
+    "signed_blocks_window": 10000,
+    "max_seconds_back": 600,
+    "upgrade": { "height": 25263600, "name": "v8.2.0" }
   }
 }

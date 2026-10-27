@@ -138,7 +138,7 @@ describe("ValidatorsPage", () => {
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     expect(await screen.findByTestId("hall-of-fame-intro")).toHaveTextContent(
-      "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 10 of the last 10,000 blocks",
+      "voted on every one of the last 10 proposals, whatever their vote, missed no more than 10 of the last 10,000 blocks and came back within 10 minutes of the v8.2.0 upgrade halt. The smallest",
     );
     const rows = screen.getAllByTestId("hall-of-fame-row");
     // Deep Fields missed 160 blocks, Sleepy Node is not active and voted on 4: neither is listed.
@@ -163,10 +163,11 @@ describe("ValidatorsPage", () => {
   });
 
   it("words the Hall of Fame with the rule the API states", async () => {
-    const rules = { proposals: 10, max_missed_blocks: 5, signed_blocks_window: 20_000 };
+    // No upgrade computed yet: the rule has no upgrade clause.
+    const rules = { proposals: 10, max_missed_blocks: 5, signed_blocks_window: 20_000, max_seconds_back: 600, upgrade: null };
     renderWithProviders(<ValidatorsPage />, { api: api({ hallOfFame: () => Promise.resolve({ ...fame, rules } as HallOfFame) }) });
     expect(await screen.findByTestId("hall-of-fame-intro")).toHaveTextContent(
-      "voted on every one of the last 10 proposals, whatever their vote, and missed no more than 5 of the last 20,000 blocks",
+      "voted on every one of the last 10 proposals, whatever their vote, missed no more than 5 of the last 20,000 blocks. The smallest",
     );
     await openActive();
     const crown = within(screen.getAllByTestId("validator-row")[0]).getByTestId("fame-crown");
