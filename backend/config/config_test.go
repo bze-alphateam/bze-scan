@@ -386,8 +386,8 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.Empty(t, cfg.AggregatorURL, "no prices job by default")
-	assert.Equal(t, "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze", cfg.PriceChangeMarket,
-		"mainnet's BZE/USDC.n pool")
+	assert.Equal(t, "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838_ubze", cfg.PriceChangeMarket,
+		"mainnet's BZE/USDC.inj pool")
 	assert.Equal(t, "https://api.github.com/repos/cosmos/chain-registry/contents", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "https://raw.githubusercontent.com/cosmos/chain-registry/master", cfg.ChainRegistryRawURL)
 
