@@ -213,12 +213,13 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	member := func(moniker, tokens string) repository.ValidatorSummary {
 		return repository.ValidatorSummary{
 			Moniker: moniker, OperatorAddress: valoper, Tokens: tokens, CommissionRate: "0.05", Status: "bonded",
-			MissedBlocks: &missed, SignedBlocksWindow: &window, RecentVotes: 2, RecentProposals: 2,
+			MissedBlocks: &missed, SignedBlocksWindow: &window, RecentVotes: 4, RecentProposals: 4,
 		}
 	}
 	f := &fakeReader{fame: &repository.HallOfFame{
 		Members:            []repository.ValidatorSummary{member("Small", "100"), member("Large", "900")},
 		SignedBlocksWindow: &window,
+		Upgrade:            &repository.HallOfFameUpgrade{Height: 25263600, Name: "v8.2.0"},
 	}}
 	rec := get(t, newAPI(f), "/validators/hall-of-fame")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -228,19 +229,22 @@ func TestHallOfFameListsTheMembersWithTheRule(t *testing.T) {
 	require.Len(t, fame.Items, 2)
 	assert.Equal(t, "Small", fame.Items[0].Moniker, "the repository's order is kept")
 	assert.Equal(t, "99.99000", *fame.Items[0].Uptime)
-	assert.Equal(t, dto.RecentVotes{Voted: 2, Of: 2}, fame.Items[0].RecentVotes)
+	assert.Equal(t, dto.RecentVotes{Voted: 4, Of: 4}, fame.Items[0].RecentVotes)
 	assert.Nil(t, fame.NextCursor, "one page")
 	assert.Equal(t, dto.HallOfFameRules{
 		Proposals: repository.HallOfFameProposals, MaxMissedBlocks: repository.HallOfFameMaxMissedBlocks, SignedBlocksWindow: &window,
+		MaxSecondsBack: repository.HallOfFameMaxSecondsBack,
+		Upgrade:        &dto.HallOfFameUpgrade{Height: 25263600, Name: "v8.2.0"},
 	}, fame.Rules)
-	assert.Equal(t, 2, fame.Rules.Proposals, "the last two proposals")
+	assert.Equal(t, 4, fame.Rules.Proposals, "the last four proposals")
 	assert.Equal(t, 10, fame.Rules.MaxMissedBlocks)
+	assert.Equal(t, 600, fame.Rules.MaxSecondsBack, "ten minutes")
 }
 
 func TestHallOfFameEmpty(t *testing.T) {
 	rec := get(t, newAPI(&fakeReader{}), "/validators/hall-of-fame")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":2,"max_missed_blocks":10,"signed_blocks_window":null}}`,
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"rules":{"proposals":4,"max_missed_blocks":10,"signed_blocks_window":null,"max_seconds_back":600,"upgrade":null}}`,
 		rec.Body.String())
 }
 
