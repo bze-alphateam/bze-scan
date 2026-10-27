@@ -218,7 +218,7 @@ describe("token page", () => {
     expect(supplyState({ kind: "lp", admin: null })).toBe("pool");
     expect(supplyState({ kind: "unknown", admin: null })).toBeNull();
     expect(supplyTileSub("admin")).toBe("can change · see below");
-    expect(supplyTileSub("fixed")).toBe("fixed");
+    expect(supplyTileSub("fixed")).toBe("can only go down");
   });
 
   it("totals the mints and burns from the events", () => {
@@ -232,7 +232,7 @@ describe("token page", () => {
   it("words the admin and the base unit", () => {
     expect(adminNote(honey)).toBe("same account · can mint, burn and change the branding");
     expect(adminNote({ ...honey, admin: "bze1other" })).toBe("can mint, burn and change the branding");
-    expect(adminNote({ ...honey, admin: null })).toBe("renounced: nobody can mint or burn");
+    expect(adminNote({ ...honey, admin: null })).toBe("renounced: nobody can mint, holders can still burn");
     expect(baseUnitText(honey)).toBe("1 HONEY = 1,000,000 uhoney");
     expect(baseUnitText(usdc)).toBe("1 USDC = 1,000,000 uusdc");
     expect(baseUnitText({ ...honey, kind: "unknown", denom: "uzzz", symbol: null, exponent: 0 })).toBe("1 uzzz = 1 uzzz");
@@ -256,7 +256,7 @@ describe("token page", () => {
     expect(eventLine(market, honey).text).toBe("Market created on the DEX");
     const change = (to: string): TokenEvent => ({ ...created, kind: "admin_changed", details: { from: honey.creator, to } });
     expect(eventLine(change("bze1new"), honey)).toEqual({ text: "Admin changed to", party: { address: "bze1new", label: null } });
-    expect(eventLine(change(""), honey)).toEqual({ text: "Admin renounced: the supply is now fixed", party: null });
+    expect(eventLine(change(""), honey)).toEqual({ text: "Admin renounced: nobody can mint any more", party: null });
     expect(eventLine({ ...created, kind: "halted", actor: null }, honey).text).toBe("Halted on the DEX by governance");
   });
 

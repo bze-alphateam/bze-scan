@@ -233,13 +233,14 @@ describe("TokenPage", () => {
     expect(tokenEvents).toHaveBeenCalledWith(honey.denom, { limit: 100, cursor: "e1" }, expect.anything());
   });
 
-  it("says a renounced Factory token's supply is fixed", async () => {
+  it("says nobody can mint a renounced Factory token but holders can still burn it", async () => {
     renderWithProviders(<TokenPage denom={honey.denom} />, { api: api({ ...honey, admin: null }) });
     const box = await screen.findByTestId("supply-box");
     expect(box).toHaveAttribute("data-state", "fixed");
-    expect(box).toHaveTextContent("The supply of HONEY is fixed");
-    expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("Total supply500K HONEYfixed");
-    expect(screen.getByTestId("token-about")).toHaveTextContent("AdminRenouncednobody can mint or burn");
+    expect(box).toHaveTextContent("Nobody can create more HONEY");
+    expect(box).toHaveTextContent("holders can still burn theirs, so the supply can only go down");
+    expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("Total supply500K HONEYcan only go down");
+    expect(screen.getByTestId("token-about")).toHaveTextContent("AdminRenouncednobody can mint, holders can still burn");
     expect(box).toHaveAttribute("data-tone", "ok");
   });
 

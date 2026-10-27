@@ -269,7 +269,8 @@ export function supplyText(t: Pick<TokenSummary, "supply" | "exponent" | "symbol
 /**
  * Whether the supply can change, and who decides it:
  * `admin` (orange: a factory token's admin can mint and burn), `fixed` (a
- * factory token whose admin renounced), `elsewhere` (a cross-chain token,
+ * factory token whose admin renounced: nobody can mint, but holders can still
+ * burn, so it can only go down), `elsewhere` (a cross-chain token,
  * minted on its own chain), `inflation` (BZE, minted every block for the
  * stakers) and `pool` (pool shares follow the pool's liquidity).
  */
@@ -296,7 +297,7 @@ export function supplyTileSub(state: SupplyState | null): string | null {
     case "admin":
       return "can change · see below";
     case "fixed":
-      return "fixed";
+      return "can only go down";
     case "elsewhere":
       return "minted on its own chain";
     case "inflation":
@@ -323,7 +324,7 @@ export function mintBurnText(events: TokenEvent[], t: Pick<Token, "exponent" | "
 
 /** The About card's admin line next to the admin's chip; "renounced" when there is none. */
 export function adminNote(t: Pick<Token, "admin" | "creator">): string {
-  if (!t.admin) return "renounced: nobody can mint or burn";
+  if (!t.admin) return "renounced: nobody can mint, holders can still burn";
   return t.admin === t.creator
     ? "same account · can mint, burn and change the branding"
     : "can mint, burn and change the branding";
@@ -374,7 +375,7 @@ export function eventLine(e: TokenEvent, t: Pick<Token, "admin" | "exponent" | "
       return by(`Burned ${amount}`);
     case "admin_changed": {
       const to = detail(e, "to");
-      return to ? { text: "Admin changed to", party: { address: to, label: null } } : { text: "Admin renounced: the supply is now fixed", party: null };
+      return to ? { text: "Admin changed to", party: { address: to, label: null } } : { text: "Admin renounced: nobody can mint any more", party: null };
     }
     case "metadata_changed":
       return by("Name and symbol updated");
