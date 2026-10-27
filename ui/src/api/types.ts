@@ -337,7 +337,7 @@ export interface HallOfFameRules {
   max_missed_blocks: number;
   signed_blocks_window: number | null;
   max_seconds_back: number;
-  /** The upgrade whose halt members came back from in time; null while none is computed. */
+  /** The upgrade whose halt members came back from in time; null while none is decided. */
   upgrade: { height: number; name: string } | null;
 }
 
