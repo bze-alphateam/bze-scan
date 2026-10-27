@@ -474,7 +474,7 @@ const RecentProposals = 10
 // HallOfFameProposals is how many of the last proposals whose voting ended
 // a Hall of Fame validator must have voted on; its members' recent_votes
 // count on those.
-const HallOfFameProposals = 2
+const HallOfFameProposals = 4
 
 // HallOfFameMaxMissedBlocks is the most blocks of the slashing signing
 // window a Hall of Fame validator may have missed (99.9% of 10,000).
