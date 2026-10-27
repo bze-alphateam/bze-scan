@@ -102,7 +102,7 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 	assert.Equal(t, []string{small.moniker, large.moniker}, monikersOf(fame.Items), "by voting power ascending")
 	assert.Nil(t, fame.NextCursor)
 	require.NotNil(t, fame.Rules.SignedBlocksWindow)
-	assert.Equal(t, dto.HallOfFameRules{Proposals: 4, MaxMissedBlocks: 10, SignedBlocksWindow: fame.Rules.SignedBlocksWindow}, fame.Rules)
+	assert.Equal(t, dto.HallOfFameRules{Proposals: 4, MaxMissedBlocks: 10, SignedBlocksWindow: fame.Rules.SignedBlocksWindow, MaxSecondsBack: 600}, fame.Rules)
 	assert.Equal(t, int64(10000), *fame.Rules.SignedBlocksWindow)
 	assert.Equal(t, dto.RecentVotes{Voted: 4, Of: 4}, fame.Items[1].RecentVotes, "counted on the rule's proposals")
 	assert.Equal(t, int64(10), *fame.Items[1].MissedBlocks, "ten missed blocks are allowed")
