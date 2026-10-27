@@ -269,10 +269,11 @@ function SupplyCallout({ t, events, complete }: { t: Token; events: TokenEvent[]
       ),
     },
     fixed: {
-      title: `The supply of ${symbol} is fixed`,
+      title: `Nobody can create more ${symbol}`,
       text: (
         <>
-          The admin renounced: nobody can create more {symbol} or destroy any. {complete && mintBurnText(events, t)}
+          The admin renounced: nobody can create more {symbol}, but holders can still burn theirs, so the supply can only go down.{" "}
+          {complete && mintBurnText(events, t)}
         </>
       ),
     },
@@ -499,7 +500,7 @@ function About({ t, route }: { t: Token; route: IbcRoute | null }) {
       "Admin",
       <>
         {t.admin ? <AccountChip address={t.admin} label={t.admin_label} /> : <Chip variant="ok">Renounced</Chip>}
-        <Muted>{t.admin ? adminNote(t) : "nobody can mint or burn"}</Muted>
+        <Muted>{t.admin ? adminNote(t) : "nobody can mint, holders can still burn"}</Muted>
       </>,
     ]);
   }
