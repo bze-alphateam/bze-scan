@@ -33,6 +33,10 @@ const recordedTickers = `[{"base":"ubze","quote":"ibc/6490A7EAB61059BFC1CDDEB059
 	`"last_price":5747.1387947581325,"base_volume":144.033022,"quote_volume":828644.939685,"bid":0,"ask":0,` +
 	`"high":6040.911873237037,"low":5604.113494443305,"open_price":5624.368717574341,"change":2.18}]`
 
+// recordedPool is the recorded liquidity pool's market id. The tests point
+// PRICE_CHANGE_MARKET at it, since the default moved to the USDC.inj pool.
+const recordedPool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
+
 // fakeAggregator answers /api/prices with recordedPrices and
 // /api/dex/tickers with recordedTickers until it is told to fail.
 type fakeAggregator struct {

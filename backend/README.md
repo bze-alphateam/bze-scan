@@ -105,7 +105,7 @@ documented template with the defaults:
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 | `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/prices` feeds the prices job every minute; empty turns the job off |
-| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.n pool, `ibc/6490…8AF4_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves (the USDC.n → USDC.inj migration); empty leaves the change null |
+| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
 | `KEYBASE_URL` | `https://keybase.io/_/api/1.0/user/lookup.json` | the Keybase user lookup the validators set reads validator logos from (`?key_suffix=<identity>&fields=pictures`), at most once a day per validator, 10 s per call |
@@ -1227,8 +1227,8 @@ list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
 the origin chain's asset. A denom no longer priced is cleared; a failed fetch
 keeps every price. The explorer computes no DEX price. `ubze`'s
 `price_change_24h_pct` comes from the aggregator's `/api/dex/tickers`, read at
-most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.n
-liquidity pool, which prices USDC.n in ubze), as last over open when `ubze`
+most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.inj
+liquidity pool, which prices USDC.inj in ubze), as last over open when `ubze`
 is the market's base and open over last when it is the quote, in percent
 with four decimals. A market the aggregator no longer lists clears it, a
 failed read keeps it, a market that does not trade `ubze` is an error. Every

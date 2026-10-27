@@ -135,9 +135,10 @@ type Config struct {
 	DebugAddr string
 }
 
-// DefaultPriceChangeMarket is mainnet's BZE/USDC.n liquidity pool as the
-// aggregator names it (USDC.n priced in ubze).
-const DefaultPriceChangeMarket = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
+// DefaultPriceChangeMarket is mainnet's BZE/USDC.inj liquidity pool as the
+// aggregator names it (USDC.inj priced in ubze). It replaced the USDC.n pool,
+// which stops trading when USDC.n is halted.
+const DefaultPriceChangeMarket = "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838_ubze"
 
 // Load reads the environment (and a .env file when present), applies
 // defaults and validates. It returns an error describing every invalid
