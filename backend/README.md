@@ -106,6 +106,7 @@ documented template with the defaults:
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 | `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/api/prices` and the prices job |
 | `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
+| `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/api/articles/medium` serves |
 | `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/dex/tickers` gives BZE's 24-hour change; empty leaves the change alone |
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
@@ -437,6 +438,7 @@ result is `[]`, never `null`.
 | Route | Answers |
 | --- | --- |
 | `GET /api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+| `GET /api/articles/medium` | `[{"title","url","picture_url","description","publish_date","author_name"}]`, the first six articles of `MEDIUM_FEED_URL`, in the feed's order |
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
@@ -444,6 +446,19 @@ feed keeps the answer for 180 s; when CoinGecko fails (or prices none of the
 ids) the last read is served for up to 24 hours after it, then `[]` (the
 aggregator answers `null`). The route is always 200. The prices job of the
 state sync reads the same feed. `serve` and `sync-state` each hold one.
+
+**Medium articles.** `internal/medium`: the client reads the RSS feed at
+`MEDIUM_FEED_URL` (default `https://medium.com/feed/bzedge-community`) with
+gofeed, as the aggregator does, and keeps its first six items: `picture_url`
+is the first `<img>` src of the content (the item description when there is
+no content) when it holds `https://cdn`, else `""`; `description` is the
+content without HTML (bluemonday's strict policy, which escapes entities
+again) cut at 150 **bytes**, as the aggregator cuts, then `...`, so a
+multi-byte character across the cut becomes U+FFFD; `publish_date` is the
+item's date in RFC 3339, UTC. The feed keeps the answer for 600 s. When the
+feed fails (asked again at most every minute) the last read is served for up
+to 24 hours after it, then `[]`; the aggregator answers `[]` for 600 s. An
+empty feed is `[]` (the aggregator answers `null`). The route is always 200.
 
 ## Migrations
 

@@ -185,6 +185,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	if feed := NewPriceFeed(cfg); feed != nil {
 		compatPrices = feed
 	}
+	var compatArticles controller.ArticleFeed
+	if feed := NewArticleFeed(cfg); feed != nil {
+		compatArticles = feed
+	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
@@ -206,6 +210,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Status:             checker,
 		Raw:                raw,
 		CompatPrices:       compatPrices,
+		CompatArticles:     compatArticles,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})

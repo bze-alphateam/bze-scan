@@ -82,6 +82,9 @@ type Deps struct {
 	// CompatPrices serves CoinGecko's prices; nil leaves the
 	// aggregator-compatible /api/prices out.
 	CompatPrices controller.PriceFeed
+	// CompatArticles serves the Medium articles; nil leaves the
+	// aggregator-compatible /api/articles/medium out.
+	CompatArticles controller.ArticleFeed
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -203,6 +206,9 @@ func New(deps Deps) *echo.Echo {
 	compat := e.Group(CompatPrefix)
 	if deps.CompatPrices != nil {
 		compat.GET("/prices", controller.NewCompatPricesController(deps.CompatPrices).Prices)
+	}
+	if deps.CompatArticles != nil {
+		compat.GET("/articles/medium", controller.NewCompatArticlesController(deps.CompatArticles).Medium)
 	}
 
 	return e
