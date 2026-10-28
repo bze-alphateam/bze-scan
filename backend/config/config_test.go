@@ -19,7 +19,8 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
 	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
 	"COINGECKO_HOST", "COINGECKO_PRICE_IDS",
-	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW"}
+	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW",
+	"SINK_RETENTION", "SINK_CLEANUP_INTERVAL", "SINK_CLEANUP_BATCH"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -49,7 +50,8 @@ func TestLoadDefaults(t *testing.T) {
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
 		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
 		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -72,7 +74,35 @@ func TestLoadFromEnvironment(t *testing.T) {
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
 		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
 		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
+}
+
+func TestLoadSinkCleanup(t *testing.T) {
+	isolate(t)
+	t.Setenv("SINK_RETENTION", "48h")
+	t.Setenv("SINK_CLEANUP_INTERVAL", "6h")
+	t.Setenv("SINK_CLEANUP_BATCH", "250")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 48*time.Hour, cfg.SinkRetention)
+	assert.Equal(t, 6*time.Hour, cfg.SinkCleanupInterval)
+	assert.Equal(t, 250, cfg.SinkCleanupBatch)
+}
+
+func TestLoadRejectsInvalidSinkCleanup(t *testing.T) {
+	for key, v := range map[string]string{
+		"SINK_RETENTION": "2d", "SINK_CLEANUP_INTERVAL": "0s", "SINK_CLEANUP_BATCH": "-1",
+	} {
+		t.Run(key, func(t *testing.T) {
+			isolate(t)
+			t.Setenv(key, v)
+			_, err := config.Load()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), key)
+		})
+	}
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -165,7 +195,8 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
 		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
 		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {

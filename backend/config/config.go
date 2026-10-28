@@ -139,6 +139,17 @@ type Config struct {
 	// upgrade_recovery set reads commits for the validators not back yet.
 	UpgradeRecoveryWindow int64
 
+	// SinkRetention is how long the CometBFT psql sink keeps a block; serve
+	// deletes older heights every SinkCleanupInterval. Zero (the default)
+	// turns the cleanup off; it must stay off while another reader of the
+	// sink (the aggregator's listener) still needs its rows.
+	SinkRetention time.Duration
+	// SinkCleanupInterval is the period of the sink cleanup.
+	SinkCleanupInterval time.Duration
+	// SinkCleanupBatch is the heights the sink cleanup deletes per
+	// transaction.
+	SinkCleanupBatch int
+
 	// DebugAddr, when set, makes serve expose net/http/pprof on this
 	// host:port. Empty (the default) exposes nothing.
 	DebugAddr string
@@ -331,6 +342,21 @@ func Load() (*Config, error) {
 	} else {
 		cfg.UpgradeRecoveryWindow = n
 	}
+
+	if retention := envString("SINK_RETENTION", ""); retention != "" {
+		if d, err := time.ParseDuration(retention); err != nil || d <= 0 {
+			fail("SINK_RETENTION must be empty (off) or a positive duration like 48h (got %q)", retention)
+		} else {
+			cfg.SinkRetention = d
+		}
+	}
+	sinkInterval := envString("SINK_CLEANUP_INTERVAL", "24h")
+	if d, err := time.ParseDuration(sinkInterval); err != nil || d <= 0 {
+		fail("SINK_CLEANUP_INTERVAL must be a positive duration like 24h (got %q)", sinkInterval)
+	} else {
+		cfg.SinkCleanupInterval = d
+	}
+	positiveInt("SINK_CLEANUP_BATCH", "1000", &cfg.SinkCleanupBatch)
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {
 		fail("LOG_LEVEL must be one of: trace, debug, info, warn, error, fatal, panic (got %q)", cfg.LogLevel)

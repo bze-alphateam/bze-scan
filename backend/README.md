@@ -114,6 +114,9 @@ documented template with the defaults:
 | `HALT_WATCH_ENABLED` | `true` | with the indexer: run the halt watch (see State sync, Upgrade recovery) |
 | `HALT_WATCH_INTERVAL` | `5s` | how often the halt watch polls the local node during an upgrade's halt |
 | `UPGRADE_RECOVERY_WINDOW` | `10000` | heights after an upgrade whose commits the `upgrade_recovery` set reads (at `BACKFILL_RATE_LIMIT`) for the validators not back yet |
+| `SINK_RETENTION` | empty | how long the CometBFT psql sink keeps a block (a Go duration, e.g. `48h`); set, `serve` runs the sink cleanup (see Sink cleanup). Empty turns it off: keep it off while another reader of the sink (the aggregator's listener) still needs the rows |
+| `SINK_CLEANUP_INTERVAL` | `24h` | period of the sink cleanup inside `serve` |
+| `SINK_CLEANUP_BATCH` | `1000` | heights the sink cleanup deletes per transaction |
 | `DEBUG_ADDR` | empty | `host:port` on which `serve` exposes `net/http/pprof` under `/debug/pprof/`, on a server of its own; keep it on localhost (`127.0.0.1:6060`). Empty exposes nothing |
 
 Invalid values stop the process at startup with every problem listed.
@@ -131,6 +134,7 @@ Invalid values stop the process at startup with every problem listed.
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
 | `bze-scan sync-state [--job <set> [--id <key>]...] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--id` resyncs only those entries of the set (`--job proposal_non_voters --id 47` computes proposal 47's non-voters again, `--job upgrade_recovery --id 22551810` reads the commits after the upgrade planned at that height again). `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
 | `bze-scan snapshots [--kind proposals] [--id N]... [--workers N]` | reads past state from the archive and overwrites the database's (see Snapshots below); exit 0 when every target succeeded, 2 when some failed (listed on stderr), 1 on a configuration or database error |
+| `bze-scan sink-cleanup [--retention 48h] [--dry-run]` | one pass of the sink cleanup (see Sink cleanup below); `--dry-run` prints the cut-off and the rows per table and deletes nothing; refuses to run without `--retention` or `SINK_RETENTION`; exit 0 on success, 1 on a configuration or database error |
 | `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
@@ -205,6 +209,8 @@ internal/snapshots/
                    the snapshots command: the archive reader (paced), the
                    Kind interface and the runner; kinds in subpackages
                    (proposals)
+internal/sink/     the sink cleanup: cut-off, batched children-first
+                   deletes of the CometBFT psql sink tables
 internal/transform/
                    node answers of one height -> explorer rows (no I/O)
 internal/writer/   transactional, idempotent writes (the live writer, the
@@ -1509,6 +1515,42 @@ The API marks these values historical through `tally_source` and `source`.
 one transaction, overwriting and never deleting) in a package under
 `internal/snapshots/`, register it in `serve.NewSnapshots`, and record its
 archive answers with `make fixtures ABCI=…` (or a new set there).
+
+## Sink cleanup
+
+The CometBFT psql sink (`public.blocks`, `tx_results`, `events`,
+`attributes`) keeps every block the node writes; it has no retention of its
+own. The explorer reads nothing from it but the notification of its trigger
+on `public.blocks` (everything else comes from the node's RPC), so the sink
+only has to keep what the live indexer may still be working on.
+
+With `SINK_RETENTION` set, `serve` runs a cleanup at start and then every
+`SINK_CLEANUP_INTERVAL` (`internal/sink`). The cut-off is the lower of:
+
+- the newest height whose `blocks.created_at` is older than the retention;
+- the live indexer's cursor (`indexer_state.last_indexed_height`) minus 1000.
+
+Every height below the cut-off is deleted; the cut-off height itself is kept.
+Before the live indexer has written, on an empty sink, or with no block that
+old, nothing is deleted. Heights go in batches of `SINK_CLEANUP_BATCH` from
+the oldest stored one up (each batch starts at the oldest height left, so
+gaps cost nothing), one short transaction per batch so the node's inserts
+never wait long. Each transaction deletes children first: `attributes` (of
+the batch's events), `events`, `tx_results`, then `blocks`, which works with
+and without `ON DELETE CASCADE` on the sink's foreign keys. Each run logs one
+line with the cut-off and the rows deleted per table; an error is logged and
+the next run starts where this one stopped. `bze-scan sink-cleanup` runs one
+pass by hand.
+
+It is **off by default** and must stay off while another reader of the sink
+still needs its rows: the aggregator's listener reads its unprocessed swap
+events from there, and its own cleanup crons trim the sink meanwhile. The
+database role needs `SELECT` and `DELETE` on the four sink tables (the
+explorer otherwise holds `SELECT` and `TRIGGER` on `public.blocks` only).
+
+The stock schema has no index on `events.block_id`, so each batch's events
+delete scans `events`; with a daily run over a sink trimmed to a few days
+that stays short, and an index on `events(block_id)` removes it.
 
 ## Test fixtures and the fake node
 
