@@ -1,0 +1,82 @@
+package dexunits_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
+)
+
+func TestPrice(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		price       string
+		base, quote int
+		want        string
+	}{
+		{"same exponents", "0.000334", 6, 6, "0.000334"},
+		{"same exponents, trailing zeros trimmed", "0.500000000000000000", 6, 6, "0.5"},
+		{"integer price", "12", 6, 6, "12"},
+		{"base has more decimals", "0.5", 8, 6, "50"},
+		{"quote has more decimals", "0.5", 6, 8, "0.005"},
+		// BZE-133: the aggregator's %.2f multiplier is 0 from a gap of three.
+		{"quote has three more decimals", "1234.5", 6, 9, "1.2345"},
+		{"quote has twelve more decimals", "123456789012", 6, 18, "0.123456789012"},
+		{"no digit lost past 18 decimals", "0.000000000000000001", 6, 18, "0.000000000000000000000000000001"},
+		{"base has 18 decimals", "0.000000000002", 18, 6, "2"},
+		{"zero", "0", 6, 9, "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := dexunits.Price(tc.price, tc.base, tc.quote)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestPriceRejectsNonDecimals(t *testing.T) {
+	for _, s := range []string{"", ".", "abc", "1.2.3", "1e-5", "0x10", " 1"} {
+		_, err := dexunits.Price(s, 6, 6)
+		assert.Error(t, err, s)
+	}
+}
+
+func TestAmount(t *testing.T) {
+	for _, tc := range []struct {
+		amount string
+		exp    int
+		want   string
+	}{
+		{"4919636072", 6, "4919.636072"},
+		{"347000000", 6, "347"},
+		{"5", 6, "0.000005"},
+		{"0", 6, "0"},
+		{"12", 0, "12"},
+		// beyond int64: 18-decimal assets
+		{"123456789012345678901234567890", 18, "123456789012.34567890123456789"},
+	} {
+		got, err := dexunits.Amount(tc.amount, tc.exp)
+		require.NoError(t, err)
+		assert.Equal(t, tc.want, got, tc.amount)
+	}
+	_, err := dexunits.Amount("1.5", 6)
+	require.Error(t, err, "chain amounts are integers")
+	_, err = dexunits.Amount("abc", 6)
+	require.Error(t, err)
+}
+
+func TestCompare(t *testing.T) {
+	assert.Equal(t, -1, dexunits.Compare("0.00034", "0.0006"))
+	assert.Equal(t, 1, dexunits.Compare("10", "9.999"), "by value, not as text")
+	assert.Equal(t, 0, dexunits.Compare("0.5", "0.500"))
+	assert.Equal(t, -1, dexunits.Compare("x", "0"), "an unparsable string sorts first")
+	assert.Equal(t, 1, dexunits.Compare("0", "x"))
+}
+
+func TestTrimTrailingZeros(t *testing.T) {
+	assert.Equal(t, "1.5", dexunits.TrimTrailingZeros("1.500"))
+	assert.Equal(t, "2", dexunits.TrimTrailingZeros("2.000"))
+	assert.Equal(t, "100", dexunits.TrimTrailingZeros("100"), "an integer is left alone")
+}

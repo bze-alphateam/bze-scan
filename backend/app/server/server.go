@@ -16,6 +16,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 // ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
@@ -85,6 +86,12 @@ type Deps struct {
 	// CompatArticles serves the Medium articles; nil leaves the
 	// aggregator-compatible /api/articles/medium out.
 	CompatArticles controller.ArticleFeed
+	// CompatOrders serves the DEX's live order books; nil leaves the
+	// aggregator-compatible /api/dex/orders out.
+	CompatOrders controller.OrderBooks
+	// CoinGeckoMerges folds markets for the coingecko format
+	// (COINGECKO_MERGED_MARKETS); nil merges nothing.
+	CoinGeckoMerges marketmerge.Merges
 	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
 	// /api/supply routes out.
 	CompatSupply controller.SupplyReader
@@ -212,6 +219,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatArticles != nil {
 		compat.GET("/articles/medium", controller.NewCompatArticlesController(deps.CompatArticles).Medium)
+	}
+	if deps.CompatOrders != nil {
+		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
 	}
 	if deps.CompatSupply != nil {
 		sup := controller.NewCompatSupplyController(deps.CompatSupply)
