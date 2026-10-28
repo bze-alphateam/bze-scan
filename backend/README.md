@@ -445,6 +445,7 @@ result is `[]`, never `null`.
 | `GET /aggregator/api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
 | `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
+| `GET /aggregator/api/dex/swaps?address=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker":"","taker":"<address>","pool_id","base","quote"}]`, the address's last 100 pool swaps, newest first |
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
@@ -519,6 +520,24 @@ to 24 hours after it, then a 503 `supply is unavailable, try again later`
 chain has no supply of (the aggregator answers a 500), `<denom> has an
 unsupported display exponent` outside 0–18. Answers are `text/plain;
 charset=UTF-8`, like the aggregator's.
+**Swaps.** `internal/swaphistory` reads the address's last 100 rows of
+`explorer.swaps` (by height, then trade id, down the `(creator, height
+DESC)` index) and converts them as the aggregator does: base volume and
+quote volume are the two sides' amounts in display units, the price is
+quote / base as an 18-decimal `LegacyDec` division, shifted by the
+exponents (from `explorer.denoms`; when the quote has one or two decimals
+more, multiplied by 0.1 or 0.01 as a `LegacyDec` and rounded back to 18
+decimals, as the aggregator does). A swap whose denoms have no known
+exponent is left out (the aggregator never stores one). `order_id` is the
+stable trade id (see "Trades and trade ids"), `executed_at` the block time
+in milliseconds, `maker` always `""`. A store error is a 500 `{"message":
+"failed to get swap history"}`. Differences from the aggregator: an empty or
+missing `address` is a 400 `invalid request` (the aggregator never validates
+it and answers everyone's last 100 swaps), ids never change on a resync, a
+swap is never listed twice, prices are right when the quote has three or
+more decimals more than the base (BZE-133), and `base`/`quote` come from the
+swap's denoms (the aggregator splits the pool id on `_` and drops a swap
+whose denoms contain one).
 
 ## Migrations
 
@@ -542,7 +561,9 @@ bze-scan migrate version    # print the current version (0 when none)
   a transaction, an order's cancel), the IBC lookups (the transfers a
   transaction settled), the order attribution lookups (unattributed
   outcomes, open orders per owner) and the daily statistics lookups
-  (addresses active at a height range, accounts first seen in a window).
+  (addresses active at a height range, accounts first seen in a window),
+  and later the tables and lookups of their features (000023: the pool
+  swaps, `order_fills.trade_id` and `explorer.index_trades`).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -551,9 +572,9 @@ bze-scan migrate version    # print the current version (0 when none)
   which wakes the live indexer. No `down` touches the sink's tables or rows.
 - After `up`, the post-migration Go steps run in order (`postMigrate` in
   `migrations/steps.go`; each must be idempotent). The first creates the
-  height partitions of the seven history tables (`blocks`, `transactions`,
+  height partitions of the eight history tables (`blocks`, `transactions`,
   `messages`, `transfers`, `account_activity`, `block_events`,
-  `order_fills`): one per 1,000,000 heights, `_p000000` to `_p000049`
+  `order_fills`, `swaps`): one per 1,000,000 heights, `_p000000` to `_p000049`
   (`blocks_p000024` holds [24,000,000, 25,000,000)). The second mirrors the
   classification of `internal/classify` into `explorer.message_kinds` and
   `explorer.block_event_kinds` (upsert every entry, delete the rows without
@@ -570,6 +591,15 @@ bze-scan migrate version    # print the current version (0 when none)
   own transaction (a migration file runs in one), then deletes the row; an
   interrupted run resumes at the next `up`, and once the row is gone the
   step reads nothing.
+  The fifth, `swaps`, runs while migration 000023's `pending_rewrites` row
+  `swaps` exists: `explorer.index_trades(lo, hi)` once per partition from the
+  row's `resume_from` up, then once above the partitions, each its own
+  transaction. It builds the `explorer.swaps` rows from the stored
+  `SwapEvent`s (`messages.events` and `block_events`) and sets every
+  `order_fills.trade_id`, by the transformer's rules (see "Trades and trade
+  ids"), keeps rows already there, and moves `resume_from` in the same
+  transaction, so an interrupted run resumes at the first partition not
+  done; nothing is read from the node. Then the row goes.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -974,6 +1004,32 @@ the queue message id (24 zero-filled digits, unique within a block).
   12,940,553..15,950,999 fills the rows of a database written before.
 - Reconciliation: the chain removes a remainder below the market minimum
   without an event; the hourly `orders` set (see the state sync) closes it.
+
+### Trades and trade ids
+
+A trade is an order book fill (`explorer.order_fills`) or a liquidity-pool
+swap (`explorer.swaps`, one row per `bze.tradebin.SwapEvent`: a
+transaction's `MsgMultiSwap`, one row per hop, or the chain's own swaps at
+block level, such as the burner's and the fee conversions). A swap row holds
+the pool id, `base` (the byte-wise smaller denom, as in the pool id) and
+`quote`, `side` (`sell` when it paid in base, `buy` otherwise), the base and
+quote amounts of its two sides, the creator, the block time and either its
+transaction (`tx_hash`, `tx_index`, `msg_index`) or its `block_seq`. Indexes:
+`(pool_id, height DESC)` and `(creator, height DESC)`.
+
+Every trade has a `trade_id` that never changes, the id the
+aggregator-compatible routes answer: `height × 1,000,000 + n`, `n` the
+trade's 1-based ordinal among all the trades of its block, first the swaps of
+the transactions by `tx_index`, `msg_index`, then position among the
+message's swap events, then the block-level trades (fills and swaps) by
+`block_events` seq. Chain data does not change once indexed and doubled
+events are already gone, so the ordinal is fixed; ids stay below 2^53 up to
+height 9×10^9, exact as JavaScript numbers. The transformer fails a block
+with 1,000,000 trades or more before any work on it. The live writer, the
+backfill and the reindex share the transformer; `explorer.index_trades`
+(migration 000023) applies the same rules to stored rows. A swap's `time` is
+read from its stored `blocks` row (both writers write the swaps after the
+block), so every path stores exactly the same value.
 
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0 and later) has no attributed fill or order, or one of

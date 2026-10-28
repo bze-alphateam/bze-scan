@@ -72,3 +72,21 @@ func NewCompatCoinGeckoLevels(levels []orderbook.Level) [][]string {
 	}
 	return out
 }
+
+// CompatHistoryTrade is one trade of GET /aggregator/api/dex/swaps:
+// display units as strings, the id a JSON number, executed_at the trade's
+// time in unix milliseconds as a string. A swap names no maker ("") and
+// its pool id and denoms; pool_id, base and quote are left out when empty.
+type CompatHistoryTrade struct {
+	OrderID     int64  `json:"order_id"`
+	Price       string `json:"price"`
+	BaseVolume  string `json:"base_volume"`
+	QuoteVolume string `json:"quote_volume"`
+	ExecutedAt  string `json:"executed_at"`
+	OrderType   string `json:"order_type"`
+	Maker       string `json:"maker"`
+	Taker       string `json:"taker"`
+	PoolID      string `json:"pool_id,omitempty"`
+	Base        string `json:"base,omitempty"`
+	Quote       string `json:"quote,omitempty"`
+}

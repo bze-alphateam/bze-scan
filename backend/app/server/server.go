@@ -96,6 +96,9 @@ type Deps struct {
 	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
 	// /aggregator/api/supply routes out.
 	CompatSupply controller.SupplyReader
+	// CompatSwaps serves the addresses' pool swaps; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/swaps out.
+	CompatSwaps controller.SwapHistory
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -223,6 +226,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatOrders != nil {
 		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
+	}
+	if deps.CompatSwaps != nil {
+		compat.GET("/dex/swaps", controller.NewCompatSwapsController(deps.CompatSwaps, deps.Log).Swaps)
 	}
 	if deps.CompatSupply != nil {
 		sup := controller.NewCompatSupplyController(deps.CompatSupply)
