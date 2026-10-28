@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/coingecko"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 )
 
@@ -103,13 +104,21 @@ type Config struct {
 	// worker of the backfill and the catch-up.
 	BackfillRateLimit float64
 
-	// AggregatorURL is the BZE aggregator API's base URL, whose /api/prices
-	// the prices job reads every minute. Empty turns the prices job off.
+	// AggregatorURL is the BZE aggregator API's base URL, whose ticker of
+	// PriceChangeMarket gives the native denom's 24-hour change. Empty
+	// leaves the change alone.
 	AggregatorURL string
 	// PriceChangeMarket is the aggregator market id whose ticker gives the
 	// native denom's 24-hour change (the BZE/USDC liquidity pool); empty
 	// leaves the change null.
 	PriceChangeMarket string
+	// CoinGeckoHost is CoinGecko's API host, whose USD prices of
+	// CoinGeckoPriceIDs back /api/prices and the prices job. Load always
+	// sets it; a Config built in code without one serves neither.
+	CoinGeckoHost string
+	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
+	// /api/prices lists them (mainnet: bzedge, osmosis, cosmos).
+	CoinGeckoPriceIDs []string
 	// ChainRegistryAPIURL is the GitHub contents API of the Cosmos chain
 	// registry (the directory listings) and ChainRegistryRawURL the raw
 	// files' base; the chain_registry job runs only with both.
@@ -178,6 +187,7 @@ func Load() (*Config, error) {
 
 		AggregatorURL:       strings.TrimRight(envString("AGGREGATOR_URL", ""), "/"),
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
+		CoinGeckoHost:       strings.TrimRight(envString("COINGECKO_HOST", coingecko.DefaultHost), "/"),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
 		KeybaseURL:          envString("KEYBASE_URL", keybase.DefaultURL),
@@ -194,6 +204,12 @@ func Load() (*Config, error) {
 			continue
 		}
 		cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
+	}
+
+	for _, id := range strings.Split(envString("COINGECKO_PRICE_IDS", coingecko.DefaultID), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			cfg.CoinGeckoPriceIDs = append(cfg.CoinGeckoPriceIDs, id)
+		}
 	}
 
 	indexer := envString("INDEXER_ENABLED", "true")
@@ -227,6 +243,7 @@ func Load() (*Config, error) {
 		"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL,
 		"AGGREGATOR_URL": cfg.AggregatorURL, "CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
 		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL, "KEYBASE_URL": cfg.KeybaseURL,
+		"COINGECKO_HOST": cfg.CoinGeckoHost,
 	} {
 		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL" || key == "KEYBASE_URL") {
 			continue

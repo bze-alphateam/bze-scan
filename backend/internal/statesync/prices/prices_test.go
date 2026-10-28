@@ -27,7 +27,7 @@ type fakeSource struct {
 	tickers   int
 }
 
-func (s *fakeSource) Prices(context.Context) (map[string]string, error) { return s.prices, s.err }
+func (s *fakeSource) USD(context.Context) (map[string]string, error) { return s.prices, s.err }
 
 func (s *fakeSource) Ticker(_ context.Context, market string) (*aggregator.Ticker, error) {
 	s.tickers++
@@ -63,7 +63,7 @@ func poolTicker(open, last string) *aggregator.Ticker {
 }
 
 func newSet(src *fakeSource, store *fakeStore, c *clock, lg logrus.FieldLogger) *prices.Set {
-	return prices.New(prices.Deps{Source: src, Store: store, ChainID: "beezee-1", Denom: "ubze",
+	return prices.New(prices.Deps{Prices: src, Tickers: src, Store: store, ChainID: "beezee-1", Denom: "ubze",
 		ChangeMarket: pool, Log: lg, Clock: c}, 0)
 }
 
@@ -71,7 +71,7 @@ func TestPricesAreRefreshedAndKeptWhenTheSourceFails(t *testing.T) {
 	lg, hook := logtest.NewNullLogger()
 	src := &fakeSource{prices: map[string]string{"bzedge": "0.000168060000"}}
 	store := &fakeStore{}
-	s := prices.New(prices.Deps{Source: src, Store: store, ChainID: "beezee-1", Log: lg}, 0)
+	s := prices.New(prices.Deps{Prices: src, Tickers: src, Store: store, ChainID: "beezee-1", Log: lg}, 0)
 	assert.Equal(t, statesync.Prices, s.Name())
 	assert.Equal(t, prices.DefaultInterval, s.Interval())
 	ctx := context.Background()
@@ -82,7 +82,7 @@ func TestPricesAreRefreshedAndKeptWhenTheSourceFails(t *testing.T) {
 	assert.True(t, store.last.KeepChange, "no change market: the change is left alone")
 	assert.Zero(t, src.tickers)
 
-	// The aggregator fails for three minutes: nothing is written, one warning.
+	// CoinGecko fails for three minutes: nothing is written, one warning.
 	src.err = errors.New("HTTP 502")
 	for range 3 {
 		err := s.FullResync(ctx)
@@ -133,6 +133,20 @@ func TestTheChangeComesFromThePoolAndIsReadEveryFiveMinutes(t *testing.T) {
 	require.NoError(t, s.FullResync(ctx))
 	assert.Equal(t, 2, src.tickers)
 	assert.Equal(t, "2.1828", *store.change)
+}
+
+// Without an aggregator (testnet) the prices are still written and the
+// change is left alone.
+func TestWithoutTickersThePricesAreWrittenAndTheChangeLeftAlone(t *testing.T) {
+	lg, _ := logtest.NewNullLogger()
+	src := &fakeSource{prices: map[string]string{"bzedge": "0.00017"}, ticker: poolTicker("2", "1")}
+	store := &fakeStore{}
+	s := prices.New(prices.Deps{Prices: src, Store: store, ChainID: "beezee-1", Denom: "ubze",
+		ChangeMarket: pool, Log: lg, Clock: &clock{now: time.Unix(1000, 0)}}, 0)
+	require.NoError(t, s.FullResync(context.Background()))
+	assert.Equal(t, map[string]string{"bzedge": "0.00017"}, store.last.Prices)
+	assert.True(t, store.last.KeepChange)
+	assert.Zero(t, src.tickers)
 }
 
 func TestAFailingTickerKeepsTheChangeAndStillWritesThePrices(t *testing.T) {
@@ -198,7 +212,7 @@ func TestAFailingTickerAfterARestartLeavesTheStoredChange(t *testing.T) {
 
 func TestAFailureIsNotLoggedAgainByTheSyncer(t *testing.T) {
 	lg, hook := logtest.NewNullLogger()
-	s := prices.New(prices.Deps{Source: &fakeSource{err: errors.New("down")}, Store: &fakeStore{}, Log: lg}, 0)
+	s := prices.New(prices.Deps{Prices: &fakeSource{err: errors.New("down")}, Store: &fakeStore{}, Log: lg}, 0)
 	sync := statesync.New(statesync.Config{Log: lg}, noJobs{}, s)
 	require.Error(t, sync.RunOnce(context.Background()))
 	require.Error(t, sync.RunOnce(context.Background()))

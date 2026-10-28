@@ -74,6 +74,59 @@ func (a *fakeAggregator) setDown(down bool) {
 	a.down = down
 }
 
+// geckoIDs are mainnet's COINGECKO_PRICE_IDS.
+var geckoIDs = []string{"bzedge", "osmosis", "cosmos"}
+
+// recordedGecko is CoinGecko's simple price answer for geckoIDs, the prices
+// of recordedPrices, in an order of its own.
+const recordedGecko = `{"cosmos":{"usd":1.96},"bzedge":{"usd":0.00016806},"osmosis":{"usd":0.03403806}}`
+
+// fakeGecko answers CoinGecko's /api/v3/simple/price with recordedGecko
+// until it is told to fail, and counts the calls.
+type fakeGecko struct {
+	URL   string
+	mu    sync.Mutex
+	down  bool
+	calls int
+	query string
+}
+
+func newFakeGecko(t *testing.T) *fakeGecko {
+	t.Helper()
+	g := &fakeGecko{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		switch {
+		case r.URL.Path != "/api/v3/simple/price":
+			http.NotFound(w, r)
+		case g.down:
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+		default:
+			g.calls++
+			g.query = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(recordedGecko))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	g.URL = srv.URL
+	return g
+}
+
+func (g *fakeGecko) setDown(down bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.down = down
+}
+
+// answered is how many price reads succeeded, and the last one's query.
+func (g *fakeGecko) answered() (int, string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.calls, g.query
+}
+
 // Recorded denoms of the ticker jobs: GGE has five owners, recorded over
 // three DenomOwners pages; ATOM and OSMO are priced by BZE's own registry
 // asset list.
@@ -149,7 +202,11 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, []string{"0"}, queryStrings(t, e.db, `SELECT holders_count FROM explorer.denoms WHERE denom = 'ubze'`),
 		"nobody holds ubze in the fake node")
 
-	// Prices by CoinGecko id: ubze through BZE's own asset list.
+	// Prices by CoinGecko id, read from CoinGecko itself: ubze through
+	// BZE's own asset list.
+	calls, query := e.gecko.answered()
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, "ids=bzedge,osmosis,cosmos&vs_currencies=usd", query)
 	assert.Equal(t, []string{
 		atomDenom + " 1.960000000000",
 		osmoDenom + " 0.034038060000",
@@ -211,15 +268,24 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, state, e.tickerState(t))
 
-	// The aggregator down: the run fails, the prices stay.
+	// The aggregator down: the run fails on the change, the prices stay.
 	e.agg.setDown(true)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)
 	assert.Equal(t, state, e.tickerState(t))
 	assert.Equal(t, []string{"prices"}, queryStrings(t, e.db, `SELECT job FROM explorer.sync_jobs WHERE last_error IS NOT NULL`))
 
-	// The registry down: the cached rows stay.
+	// CoinGecko down (a new process: no backup to serve): the run fails, the
+	// prices stay.
 	e.agg.setDown(false)
+	e.gecko.setDown(true)
+	code, _ = e.syncState(t)
+	assert.NotEqual(t, 0, code)
+	assert.Equal(t, state, e.tickerState(t))
+	assert.Equal(t, []string{"prices"}, queryStrings(t, e.db, `SELECT job FROM explorer.sync_jobs WHERE last_error IS NOT NULL`))
+	e.gecko.setDown(false)
+
+	// The registry down: the cached rows stay.
 	e.reg.SetDown(true)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)

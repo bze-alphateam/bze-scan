@@ -104,7 +104,9 @@ documented template with the defaults:
 | `BACKFILL_BATCH` | `50` | heights per flush (M), one transaction each |
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
-| `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/prices` feeds the prices job every minute; empty turns the job off |
+| `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/api/prices` and the prices job |
+| `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
+| `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/dex/tickers` gives BZE's 24-hour change; empty leaves the change alone |
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
@@ -262,7 +264,9 @@ internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
 internal/aggregator/
-                   the BZE aggregator's /api/prices reader
+                   the BZE aggregator's /api/dex/tickers reader (BZE's 24-hour change)
+internal/coingecko/
+                   CoinGecko's USD prices and the cached feed behind /api/prices
 internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
@@ -333,7 +337,8 @@ every later route follows:
   answers by height join nothing and are `public, max-age=31536000, immutable`,
   except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
   asked at its tip), which is `public, max-age=60`.
-- **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
+- **CORS** only for the origins in `CORS_ALLOWED_ORIGINS` (the
+  aggregator-compatible routes below answer any origin).
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
 
@@ -412,6 +417,33 @@ The live indexer puts the three bodies of every height it writes, so recent
 heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
 for one height share one fetch, which outlives a request that gives up.
+
+## Aggregator-compatible endpoints
+
+The explorer also serves the BZE aggregator API's public endpoints, at the
+aggregator's exact paths and with its exact answers (fields, JSON types,
+order, status codes), so the dapps, getbze.com and CoinGecko can switch to
+it unchanged. They live in their own route group, `server.CompatPrefix`
+(`/api`), mounted next to `/api/v1`, not inside it: every endpoint ported
+from the aggregator is added to that group, with controllers of its own
+(`app/controller/compat_*.go`, shapes in `app/dto/compat.go`). None of the
+`/api/v1` conventions apply: no `{items,next_cursor}` envelope, no
+pagination, no cache headers the aggregator does not send. They always
+answer CORS with `Access-Control-Allow-Origin: *`, whatever
+`CORS_ALLOWED_ORIGINS` says, because browsers call them directly the way
+they call the aggregator; `/api/v1` keeps its configured origins. An empty
+result is `[]`, never `null`.
+
+| Route | Answers |
+| --- | --- |
+| `GET /api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+
+**Prices.** `internal/coingecko`: the client calls
+`{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
+feed keeps the answer for 180 s; when CoinGecko fails (or prices none of the
+ids) the last read is served for up to 24 hours after it, then `[]` (the
+aggregator answers `null`). The route is always 200. The prices job of the
+state sync reads the same feed. `serve` and `sync-state` each hold one.
 
 ## Migrations
 
@@ -1226,13 +1258,15 @@ owner (chain v7.0/v7.1, its message not matched) is read with tradebin
 maker of its fills, a not-found closes it like the others, a failed read
 keeps it and fails the run.
 
-**Prices.** With `AGGREGATOR_URL` set, every minute `GET /api/prices` of the
-BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A
+**Prices.** Every minute the CoinGecko feed behind `/api/prices` (see
+"Aggregator-compatible endpoints") gives USD prices by CoinGecko id
+(`bzedge`, `cosmos`, …), with or without an aggregator (testnet has none). A
 denom takes the price of its registry asset's CoinGecko id: BZE's own asset
 list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
 the origin chain's asset. A denom no longer priced is cleared; a failed fetch
-keeps every price. The explorer computes no DEX price. `ubze`'s
-`price_change_24h_pct` comes from the aggregator's `/api/dex/tickers`, read at
+keeps every price. The explorer computes no DEX price. With `AGGREGATOR_URL`
+set, `ubze`'s `price_change_24h_pct` comes from the aggregator's
+`/api/dex/tickers`, read at
 most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.inj
 liquidity pool, which prices USDC.inj in ubze), as last over open when `ubze`
 is the market's base and open over last when it is the quote, in percent
@@ -1759,7 +1793,10 @@ make registry-fixtures CHAINS="beezee cosmoshub noble mirage"
 (recorded 2026-10-09: BZE's own asset list maps `ubze` and its IBC denoms
 to CoinGecko ids; `mirage` is a chain without explorers). The e2e harness
 starts one with every sync environment, next to a fake aggregator answering
-`/api/prices` as getbze.com did on 2026-10-09, and points `sync-state` and
-`serve` at both, so no test reaches GitHub or getbze.com. A fake Keybase
+`/api/dex/tickers` as getbze.com did on 2026-10-09 and a fake CoinGecko
+answering `/api/v3/simple/price` with the same day's prices, and points
+`sync-state` and `serve` at them, so no test reaches GitHub, getbze.com or
+CoinGecko. A `Config` built in code without `CoinGeckoHost` runs no prices
+job and serves no `/api/prices`. A fake Keybase
 lookup (`e2e/logos_test.go`) gives ChainTools' identity a picture and every
 other identity none; `sync-state` and `serve` point `KEYBASE_URL` at it.
