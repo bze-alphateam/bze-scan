@@ -16,6 +16,10 @@ import (
 // Limit is how many swaps an address's history holds, the aggregator's.
 const Limit = 100
 
+// MaxPages bounds the store reads of one history: swaps left out are
+// replaced by older ones, from at most MaxPages × Limit rows.
+const MaxPages = 10
+
 // Swap is a stored swap in chain units.
 type Swap struct {
 	TradeID int64
@@ -32,9 +36,9 @@ type Swap struct {
 
 // Store reads the stored swaps; PGStore implements it.
 type Store interface {
-	// SwapsByCreator returns the last limit swaps creator made, newest
-	// first.
-	SwapsByCreator(ctx context.Context, creator string, limit int) ([]Swap, error)
+	// SwapsByCreator returns the last limit swaps creator made with a trade
+	// id below before (no bound when 0), newest first.
+	SwapsByCreator(ctx context.Context, creator string, before int64, limit int) ([]Swap, error)
 }
 
 // Trade is a swap in display units: Price is quote per base, the volumes
@@ -67,37 +71,52 @@ func New(deps Deps) *Service {
 }
 
 // ByAddress returns address's last Limit swaps, newest first, in display
-// units. A swap that cannot be converted (a denom without a known exponent)
-// is left out, as the aggregator never stores it.
+// units. A swap that cannot be converted (a denom without a known exponent,
+// no base amount) is left out, as the aggregator never stores it, and the
+// next older ones take its place: the store is read a page of Limit at a
+// time, at most MaxPages pages.
 func (s *Service) ByAddress(ctx context.Context, address string) ([]Trade, error) {
-	swaps, err := s.deps.Store.SwapsByCreator(ctx, address, Limit)
-	if err != nil {
-		return nil, err
-	}
-	var denoms []string
-	seen := map[string]bool{}
-	for _, sw := range swaps {
-		for _, d := range []string{sw.Base, sw.Quote} {
-			if !seen[d] {
-				seen[d] = true
-				denoms = append(denoms, d)
-			}
-		}
-	}
+	out := make([]Trade, 0, Limit)
 	exps := map[string]int{}
-	if len(denoms) > 0 {
-		if exps, err = s.deps.Exponents.Exponents(ctx, denoms); err != nil {
+	known := map[string]bool{}
+	before := int64(0)
+	for range MaxPages {
+		swaps, err := s.deps.Store.SwapsByCreator(ctx, address, before, Limit)
+		if err != nil {
 			return nil, err
 		}
-	}
-	out := make([]Trade, 0, len(swaps))
-	for _, sw := range swaps {
-		t, err := convert(sw, exps)
-		if err != nil {
-			s.deps.Log.WithError(err).WithField("trade_id", sw.TradeID).Warn("dex swaps: swap left out")
-			continue
+		var denoms []string
+		for _, sw := range swaps {
+			for _, d := range []string{sw.Base, sw.Quote} {
+				if !known[d] {
+					known[d] = true
+					denoms = append(denoms, d)
+				}
+			}
 		}
-		out = append(out, t)
+		if len(denoms) > 0 {
+			got, err := s.deps.Exponents.Exponents(ctx, denoms)
+			if err != nil {
+				return nil, err
+			}
+			for d, e := range got {
+				exps[d] = e
+			}
+		}
+		for _, sw := range swaps {
+			t, err := convert(sw, exps)
+			if err != nil {
+				s.deps.Log.WithError(err).WithField("trade_id", sw.TradeID).Warn("dex swaps: swap left out")
+				continue
+			}
+			if out = append(out, t); len(out) == Limit {
+				return out, nil
+			}
+		}
+		if len(swaps) < Limit {
+			break
+		}
+		before = swaps[len(swaps)-1].TradeID
 	}
 	return out, nil
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
 
 // DB is the part of a pgx pool the store needs; *pgxpool.Pool satisfies it.
@@ -24,12 +26,19 @@ func NewPGStore(db DB) *PGStore {
 
 // SwapsByCreator implements Store. Newest first is by height, then trade id:
 // block times only grow with the height, and this order walks the
-// (creator, height DESC) index.
-func (s *PGStore) SwapsByCreator(ctx context.Context, creator string, limit int) ([]Swap, error) {
+// (creator, height DESC) index. A trade id holds its height, so before
+// bounds the height too and prunes the partitions above it.
+func (s *PGStore) SwapsByCreator(ctx context.Context, creator string, before int64, limit int) ([]Swap, error) {
+	bound := ""
+	args := []any{creator, limit}
+	if before > 0 {
+		bound = ` AND height <= $3 AND trade_id < $4`
+		args = append(args, before/transform.TradeIDsPerBlock, before)
+	}
 	rows, err := s.db.Query(ctx, `SELECT trade_id, floor(extract(epoch FROM time) * 1000)::bigint, pool_id, base, quote,
 			side, base_amount::text, quote_amount::text, creator
-		  FROM explorer.swaps WHERE creator = $1
-		 ORDER BY height DESC, trade_id DESC LIMIT $2`, creator, limit)
+		  FROM explorer.swaps WHERE creator = $1`+bound+`
+		 ORDER BY height DESC, trade_id DESC LIMIT $2`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("swaps of %s: %w", creator, err)
 	}

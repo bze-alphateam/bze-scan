@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
@@ -21,20 +22,28 @@ const (
 	swapEth  = "ibc/EA1D43981D5C9A1C4AAEA9C23BB1D4FA126BA9BC7020A25E0AE4AA841EA25DC5"
 )
 
-// swapStore answers SwapsByCreator from swaps and records what it was asked.
+// swapStore answers SwapsByCreator from swaps (newest first) as the
+// database pages them and records what it was asked.
 type swapStore struct {
-	swaps []swaphistory.Swap
-	fail  bool
-	asked []string
-	limit int
+	swaps  []swaphistory.Swap
+	fail   bool
+	asked  []string
+	limit  int
+	before []int64
 }
 
-func (s *swapStore) SwapsByCreator(_ context.Context, creator string, limit int) ([]swaphistory.Swap, error) {
-	s.asked, s.limit = append(s.asked, creator), limit
+func (s *swapStore) SwapsByCreator(_ context.Context, creator string, before int64, limit int) ([]swaphistory.Swap, error) {
+	s.asked, s.limit, s.before = append(s.asked, creator), limit, append(s.before, before)
 	if s.fail {
 		return nil, errors.New("database is down")
 	}
-	return s.swaps, nil
+	var out []swaphistory.Swap
+	for _, sw := range s.swaps {
+		if (before == 0 || sw.TradeID < before) && len(out) < limit {
+			out = append(out, sw)
+		}
+	}
+	return out, nil
 }
 
 type swapExponents map[string]int
@@ -161,4 +170,41 @@ func TestCompatSwapsPriceInDisplayUnits(t *testing.T) {
 func TestCompatSwapsNeedAService(t *testing.T) {
 	rec := serve(t, server.New(server.Deps{}), http.MethodGet, "/aggregator/api/dex/swaps?address="+swapAddr)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// Swaps left out are replaced by older ones, as the aggregator, which never
+// stored them, still answers 100: the store is paged by trade id.
+func TestCompatSwapsAnswer100WhenSomeAreLeftOut(t *testing.T) {
+	var swaps []swaphistory.Swap
+	for id := int64(250); id > 0; id-- {
+		base := swapAtom
+		if id > 200 && id%2 == 0 {
+			base = "factory/bze1x/unknown" // 25 of the newest 50 cannot be converted
+		}
+		swaps = append(swaps, swapRow(id, base, "ubze", "buy", "1", "1"))
+	}
+	store := &swapStore{swaps: swaps}
+	e := swapServer(store, swapExponents{swapAtom: 6, "ubze": 6})
+	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/swaps?address="+swapAddr)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Len(t, got, 100)
+	assert.Equal(t, float64(249), got[0]["order_id"])
+	assert.Equal(t, float64(126), got[99]["order_id"], "25 dropped, so 25 older ones fill in")
+	assert.Equal(t, []int64{0, 151}, store.before, "the second page starts below the first")
+
+	// Pages stop at MaxPages, and when the store has no more.
+	store = &swapStore{swaps: swaps}
+	serve(t, swapServer(store, swapExponents{"ubze": 6}), http.MethodGet, "/aggregator/api/dex/swaps?address="+swapAddr)
+	assert.Equal(t, []int64{0, 151, 51}, store.before, "250 rows: the third page is short")
+
+	var many []swaphistory.Swap
+	for id := int64(5000); id > 0; id-- {
+		many = append(many, swapRow(id, swapAtom, "ubze", "buy", "1", "1"))
+	}
+	store = &swapStore{swaps: many}
+	rec = serve(t, swapServer(store, swapExponents{"ubze": 6}), http.MethodGet, "/aggregator/api/dex/swaps?address="+swapAddr)
+	assert.Equal(t, "[]\n", rec.Body.String())
+	assert.Len(t, store.before, swaphistory.MaxPages)
 }
