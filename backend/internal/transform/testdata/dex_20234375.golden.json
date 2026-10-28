@@ -14,7 +14,8 @@
       "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "taker_message_id": "",
       "taker_tx_hash": "4F9507835B08E0D0701A243270158F47DE2FCAC6F118935266C125A08FCD0D8C",
-      "time": "2025-11-27T08:03:29.577390244Z"
+      "time": "2025-11-27T08:03:29.577390244Z",
+      "trade_id": 20234375000001
     },
     {
       "height": 20234375,
@@ -28,7 +29,8 @@
       "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "taker_message_id": "",
       "taker_tx_hash": "4F9507835B08E0D0701A243270158F47DE2FCAC6F118935266C125A08FCD0D8C",
-      "time": "2025-11-27T08:03:29.577390244Z"
+      "time": "2025-11-27T08:03:29.577390244Z",
+      "trade_id": 20234375000002
     },
     {
       "height": 20234375,
@@ -42,7 +44,8 @@
       "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "taker_message_id": "",
       "taker_tx_hash": "4F9507835B08E0D0701A243270158F47DE2FCAC6F118935266C125A08FCD0D8C",
-      "time": "2025-11-27T08:03:29.577390244Z"
+      "time": "2025-11-27T08:03:29.577390244Z",
+      "trade_id": 20234375000003
     },
     {
       "height": 20234375,
@@ -56,7 +59,8 @@
       "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "taker_message_id": "",
       "taker_tx_hash": "4F9507835B08E0D0701A243270158F47DE2FCAC6F118935266C125A08FCD0D8C",
-      "time": "2025-11-27T08:03:29.577390244Z"
+      "time": "2025-11-27T08:03:29.577390244Z",
+      "trade_id": 20234375000004
     },
     {
       "height": 20234375,
@@ -70,8 +74,10 @@
       "taker": "bze1mjpllwcpca0t2dmnr3wez2ugkr5l07lf62a32y",
       "taker_message_id": "",
       "taker_tx_hash": "4F9507835B08E0D0701A243270158F47DE2FCAC6F118935266C125A08FCD0D8C",
-      "time": "2025-11-27T08:03:29.577390244Z"
+      "time": "2025-11-27T08:03:29.577390244Z",
+      "trade_id": 20234375000005
     }
   ],
-  "order_cancels": null
+  "order_cancels": null,
+  "swaps": null
 }

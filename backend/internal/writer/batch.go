@@ -155,6 +155,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Orders = append(all.Orders, e.Orders...)
 		all.OrderFills = append(all.OrderFills, e.OrderFills...)
 		all.OrderCancels = append(all.OrderCancels, e.OrderCancels...)
+		all.Swaps = append(all.Swaps, e.Swaps...)
 		all.IBCTransfers = append(all.IBCTransfers, e.IBCTransfers...)
 	}
 	if len(all.Blocks) == 0 {
@@ -198,6 +199,11 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	if mode == ModeUpdate {
 		stmts = append(stmts, statement{table: "failures", sql: resolveFailuresSQL, args: []any{heights}})
 	}
+	swaps, err := swapStatements(hi, &all, mode)
+	if err != nil {
+		return err
+	}
+	stmts = append(stmts, swaps...)
 
 	topUp, err := w.parts.needsTopUp(ctx, hi)
 	if err != nil {

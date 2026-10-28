@@ -14,8 +14,10 @@
       "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
       "taker_message_id": "",
       "taker_tx_hash": "4D0332D9797922060A45DFCF676DF006B9867862FB124C187F94B166FD45452F",
-      "time": "2025-12-04T13:27:10.923407958Z"
+      "time": "2025-12-04T13:27:10.923407958Z",
+      "trade_id": 20342600000001
     }
   ],
-  "order_cancels": null
+  "order_cancels": null,
+  "swaps": null
 }

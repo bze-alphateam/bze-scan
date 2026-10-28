@@ -27,7 +27,8 @@
       "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
       "taker_message_id": "",
       "taker_tx_hash": "39CC9EF3A661B2774B90D54611511D8BC51FE081C8FFFBA4049157150E9DC9B5",
-      "time": "2025-12-01T18:00:44.571100369Z"
+      "time": "2025-12-01T18:00:44.571100369Z",
+      "trade_id": 20300028000001
     },
     {
       "height": 20300028,
@@ -41,8 +42,10 @@
       "taker": "bze1kn68e9q7suana60lsrqa2qy267udqmgt4g77q9",
       "taker_message_id": "",
       "taker_tx_hash": "39CC9EF3A661B2774B90D54611511D8BC51FE081C8FFFBA4049157150E9DC9B5",
-      "time": "2025-12-01T18:00:44.571100369Z"
+      "time": "2025-12-01T18:00:44.571100369Z",
+      "trade_id": 20300028000002
     }
   ],
-  "order_cancels": null
+  "order_cancels": null,
+  "swaps": null
 }

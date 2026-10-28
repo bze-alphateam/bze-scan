@@ -75,6 +75,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"upgrade_recovery",
 		"validator_last_signed",
 		"order_outcome_events",
+		"pool_swaps",
 	}, idents)
 }
 
@@ -104,32 +105,41 @@ func createdTables(t *testing.T, name string) (all, partitioned []string) {
 }
 
 // TestPartitionedTablesMatchTheSQL keeps the Go table list in step with the
-// history tables migration and with ensure_partitions.
+// migrations creating partitioned tables and with the latest
+// ensure_partitions.
 func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 	all, partitioned := createdTables(t, "000003_history_tables.up.sql")
-	assert.Equal(t, migrations.PartitionedTables, all)
-	assert.Equal(t, migrations.PartitionedTables, partitioned)
+	assert.Equal(t, all, partitioned)
+	_, swaps := createdTables(t, "000023_pool_swaps.up.sql")
+	assert.Equal(t, []string{"swaps"}, swaps)
+	assert.Equal(t, migrations.PartitionedTables, append(partitioned, swaps...))
 	for _, name := range []string{"000004_state_tables.up.sql", "000005_operational.up.sql"} {
 		_, partitioned := createdTables(t, name)
 		assert.Empty(t, partitioned, name)
 	}
 
-	fn := readMigration(t, "000006_functions.up.sql")
-	m := regexp.MustCompile(`ARRAY\[([^\]]+)\]`).FindStringSubmatch(fn)
-	require.NotNil(t, m)
-	var listed []string
-	for _, q := range strings.Split(m[1], ",") {
-		listed = append(listed, strings.Trim(strings.TrimSpace(q), "'"))
+	for _, name := range []string{"000006_functions.up.sql", "000023_pool_swaps.down.sql", "000023_pool_swaps.up.sql"} {
+		fn := readMigration(t, name)
+		m := regexp.MustCompile(`ARRAY\[([^\]]+)\]`).FindStringSubmatch(fn)
+		require.NotNil(t, m, name)
+		var listed []string
+		for _, q := range strings.Split(m[1], ",") {
+			listed = append(listed, strings.Trim(strings.TrimSpace(q), "'"))
+		}
+		want := migrations.PartitionedTables
+		if name != "000023_pool_swaps.up.sql" {
+			want = want[:len(want)-1] // before the swaps table
+		}
+		assert.Equal(t, want, listed, name)
+		assert.Contains(t, fn, "generate_series((p_from / 1000000) * 1000000, p_to, 1000000)", name)
+		assert.Contains(t, fn, "lpad((lo / 1000000)::text, 6, '0')", name)
 	}
-	assert.Equal(t, migrations.PartitionedTables, listed)
-	assert.Contains(t, fn, "generate_series((p_from / 1000000) * 1000000, p_to, 1000000)")
-	assert.Contains(t, fn, "lpad((lo / 1000000)::text, 6, '0')")
 }
 
 // TestDownMigrationsDropWhatUpCreates checks that every table an up file
 // creates is dropped by its down file.
 func TestDownMigrationsDropWhatUpCreates(t *testing.T) {
-	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational"} {
+	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps"} {
 		all, _ := createdTables(t, base+".up.sql")
 		down := readMigration(t, base+".down.sql")
 		for _, table := range all {

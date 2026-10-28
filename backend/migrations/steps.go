@@ -3,6 +3,7 @@ package migrations
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -28,6 +29,7 @@ var postMigrate = []Step{
 	{Name: "classification", Run: mirrorClassification},
 	{Name: "labels", Run: seedLabels},
 	{Name: "message_events", Run: rewriteMessageEvents},
+	{Name: "swaps", Run: indexStoredTrades},
 }
 
 // ensurePartitions creates the history-table partitions for
@@ -73,5 +75,30 @@ func rewriteMessageEvents(ctx context.Context, db Execer) error {
 		return fmt.Errorf("above the partitions: %w", err)
 	}
 	_, err := db.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = 'message_events'`)
+	return err
+}
+
+// indexStoredTrades builds the swaps rows and the order_fills trade ids of
+// what is already stored (migration 000023) while its pending_rewrites row
+// exists: explorer.index_trades once per partition from the row's
+// resume_from up, then once for every height above PartitionsUpTo, each its
+// own transaction that also moves resume_from, then the row goes. An
+// interrupted run resumes at the first partition not done; once the row has
+// gone every statement selects nothing.
+func indexStoredTrades(ctx context.Context, db Execer) error {
+	run := func(lo, hi int64) error {
+		_, err := db.Exec(ctx, `SELECT explorer.index_trades($1, $2) FROM explorer.pending_rewrites
+			WHERE name = 'swaps' AND resume_from < $2`, lo, hi)
+		return err
+	}
+	for lo := int64(0); lo <= PartitionsUpTo; lo += PartitionSize {
+		if err := run(lo, lo+PartitionSize); err != nil {
+			return fmt.Errorf("partition %s: %w", PartitionName("swaps", lo), err)
+		}
+	}
+	if err := run(PartitionsUpTo+1, math.MaxInt64); err != nil {
+		return fmt.Errorf("above the partitions: %w", err)
+	}
+	_, err := db.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = 'swaps'`)
 	return err
 }
