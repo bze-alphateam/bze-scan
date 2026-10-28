@@ -32,6 +32,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/swaphistory"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -55,6 +56,9 @@ type Options struct {
 	// OrderCoverage overrides the open orders' coverage checker (DEX start
 	// heights, interval); ChainID is always CHAIN_ID.
 	OrderCoverage ordercoverage.Config
+	// TradesInterval overrides how often the stored trades are numbered
+	// again (trades.Interval).
+	TradesInterval time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -308,6 +312,12 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 				Dirty:       syncer,
 			})
 			components = append(components, component{name: "live indexer", run: ix.Run})
+			// The blocks a previous release's indexer writes while both run
+			// (a deploy's overlap) carry no trade ids: numbered from the
+			// stored rows at start and every minute.
+			components = append(components, component{name: "trades", run: func(ctx context.Context) error {
+				return trades.Run(ctx, pool, opts.TradesInterval, log.StandardLogger())
+			}})
 		}
 		if cfg.BackfillEnabled {
 			components = append(components, backfillComponent(hist, cfg, opts.BackfillLockRetry))

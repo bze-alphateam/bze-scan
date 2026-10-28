@@ -282,7 +282,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	}
 	attributeOrders(ents)
 	attributeByQueue(ents, queue, outcomes)
-	if err := assignTradeIDs(ents, h, poolSwaps); err != nil {
+	if ents.Swaps, err = NumberTrades(h, ents.Swaps, poolSwaps, ents.OrderFills); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
 	markSeenDenoms(ents)

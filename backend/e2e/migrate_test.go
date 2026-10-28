@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
 
@@ -48,7 +49,7 @@ var explorerTables = []string{
 }
 
 // explorerFunctions are the functions the migrations create.
-var explorerFunctions = []string{"ensure_partitions", "index_trades", "kept_events", "notify_block", "reclassify_unknown"}
+var explorerFunctions = []string{"ensure_partitions", "kept_events", "notify_block", "reclassify_unknown"}
 
 // freshDatabase creates an empty database on the compose PostgreSQL, with the
 // sink schema installed when withSink is set, drops it when the test ends and
@@ -90,7 +91,7 @@ func connect(t *testing.T, dbURL string) *sql.DB {
 
 func openMigrator(t *testing.T, dbURL string) *migrations.Migrator {
 	t.Helper()
-	mg, err := migrations.Open(context.Background(), dbURL)
+	mg, err := migrations.Open(context.Background(), dbURL, trades.MigrationStep())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = mg.Close() })
 	return mg

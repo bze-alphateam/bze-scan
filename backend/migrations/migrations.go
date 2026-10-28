@@ -15,6 +15,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
@@ -62,12 +63,14 @@ type engine interface {
 type Migrator struct {
 	url string
 	m   engine
+	// steps run after postMigrate.
+	steps []Step
 }
 
 // Open connects to databaseURL, checks that it holds the sink schema and
-// prepares golang-migrate. Nothing is created when the sink schema is
-// missing.
-func Open(ctx context.Context, databaseURL string) (*Migrator, error) {
+// prepares golang-migrate; steps run after the package's own post-migration
+// steps. Nothing is created when the sink schema is missing.
+func Open(ctx context.Context, databaseURL string, steps ...Step) (*Migrator, error) {
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -77,6 +80,7 @@ func Open(ctx context.Context, databaseURL string) (*Migrator, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	mg.steps = steps
 	return mg, nil
 }
 
@@ -156,7 +160,7 @@ func (mg *Migrator) Up(ctx context.Context) (UpResult, error) {
 		return UpResult{}, fmt.Errorf("open pool for post-migration steps: %w", err)
 	}
 	defer pool.Close()
-	for _, step := range postMigrate {
+	for _, step := range append(slices.Clone(postMigrate), mg.steps...) {
 		if err := step.Run(ctx, pool); err != nil {
 			return UpResult{}, fmt.Errorf("post-migration step %s: %w", step.Name, err)
 		}

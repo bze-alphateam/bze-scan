@@ -1,7 +1,7 @@
 -- Reverts 000023_pool_swaps.
 DELETE FROM explorer.pending_rewrites WHERE name = 'swaps';
 ALTER TABLE explorer.pending_rewrites DROP COLUMN IF EXISTS resume_from;
-DROP FUNCTION IF EXISTS explorer.index_trades(BIGINT, BIGINT);
+DROP INDEX IF EXISTS explorer.idx_order_fills_unnumbered;
 
 CREATE OR REPLACE FUNCTION explorer.ensure_partitions(p_from BIGINT, p_to BIGINT) RETURNS void
 LANGUAGE plpgsql AS $$

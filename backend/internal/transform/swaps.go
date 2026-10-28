@@ -16,8 +16,7 @@ import (
 // trade's 1-based ordinal among all the trades of its block, first the swaps
 // of the transactions (by tx_index, msg_index, then position among the
 // message's swap events), then the block-level trades, fills and the chain's
-// own swaps, by block_events seq. Migration 000023's explorer.index_trades
-// numbers the stored rows by the same rule.
+// own swaps, by block_events seq. NumberTrades applies it.
 
 // TradeIDsPerBlock is the multiplier of the height in a trade id; a block
 // holds at most TradeIDsPerBlock − 1 trades.
@@ -64,7 +63,14 @@ type swapCoin struct {
 
 // newSwap reads a SwapEvent of block b.
 func newSwap(b Block, ev node.Event) (Swap, error) {
-	attrs := storedEvent(ev).Attrs
+	return StoredSwap(b.Height, b.Time, storedEvent(ev).Attrs)
+}
+
+// StoredSwap reads a SwapEvent as the explorer stores its attributes
+// (messages.events, block_events: typed values decoded) at height, block
+// time at. The caller sets where it happened (TxHash, TxIndex and MsgIndex,
+// or BlockSeq).
+func StoredSwap(height int64, at time.Time, attrs map[string]any) (Swap, error) {
 	coin := func(key string) (swapCoin, error) {
 		raw, err := json.Marshal(attrs[key])
 		if err != nil {
@@ -87,7 +93,7 @@ func newSwap(b Block, ev node.Event) (Swap, error) {
 	if err != nil {
 		return Swap{}, err
 	}
-	s := Swap{Height: b.Height, Time: b.Time, PoolID: anyString(attrs["pool_id"]), Creator: anyString(attrs["creator"])}
+	s := Swap{Height: height, Time: at, PoolID: anyString(attrs["pool_id"]), Creator: anyString(attrs["creator"])}
 	if in.Denom < out.Denom {
 		s.Base, s.Quote, s.Side, s.BaseAmount, s.QuoteAmount = in.Denom, out.Denom, SwapSell, in.Amount, out.Amount
 	} else {
@@ -135,7 +141,8 @@ func txSwaps(ents *Entities, b Block, txIndex int, txHash string, msgCount int, 
 
 // checkTradeCount fails a block with TradeIDsPerBlock trades or more, before
 // any work on it: its fills, its block-level swaps and the swaps of its
-// successful transactions.
+// successful transactions (those of a message: the others are never
+// numbered).
 func checkTradeCount(r *node.BlockResults) error {
 	n := 0
 	for _, ev := range r.FinalizeBlockEvents {
@@ -148,7 +155,7 @@ func checkTradeCount(r *node.BlockResults) error {
 			continue
 		}
 		for _, ev := range tx.Events {
-			if ev.Type == evSwap {
+			if _, ok := ev.Get("msg_index"); ok && ev.Type == evSwap {
 				n++
 			}
 		}
@@ -159,10 +166,13 @@ func checkTradeCount(r *node.BlockResults) error {
 	return nil
 }
 
-// assignTradeIDs numbers the trades of block height: ents.Swaps holds the
-// block's transaction swaps in order, block its block-level swaps; the
-// block-level swaps are appended to ents.Swaps.
-func assignTradeIDs(ents *Entities, height int64, block []Swap) error {
+// NumberTrades sets the trade ids of block height's trades: txSwaps are the
+// transactions' swaps in order (tx_index, msg_index, then event order),
+// blockSwaps the block-level ones (BlockSeq set) and fills the order book
+// fills (Seq set), both in any order. It returns txSwaps then blockSwaps.
+// The transformer and the renumbering of stored rows (internal/trades) both
+// number through it.
+func NumberTrades(height int64, txSwaps, blockSwaps []Swap, fills []OrderFill) ([]Swap, error) {
 	n := int64(0)
 	next := func() (int64, error) {
 		n++
@@ -172,36 +182,38 @@ func assignTradeIDs(ents *Entities, height int64, block []Swap) error {
 		return height*TradeIDsPerBlock + n, nil
 	}
 	var err error
-	for i := range ents.Swaps {
-		if ents.Swaps[i].TradeID, err = next(); err != nil {
-			return err
+	for i := range txSwaps {
+		if txSwaps[i].TradeID, err = next(); err != nil {
+			return nil, err
 		}
 	}
 	// The fills and the block-level swaps, merged by seq.
 	type at struct {
 		seq  int
-		fill int // index in ents.OrderFills, −1 for a swap
+		fill int // index in fills, −1 for a swap
 		swap int
 	}
 	var level []at
-	for i, f := range ents.OrderFills {
+	for i, f := range fills {
 		level = append(level, at{seq: f.Seq, fill: i})
 	}
-	for i, s := range block {
+	for i, s := range blockSwaps {
+		if s.BlockSeq == nil {
+			return nil, fmt.Errorf("block-level swap %d has no seq", i)
+		}
 		level = append(level, at{seq: *s.BlockSeq, fill: -1, swap: i})
 	}
 	slices.SortFunc(level, func(a, b at) int { return a.seq - b.seq })
 	for _, t := range level {
 		id, err := next()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if t.fill >= 0 {
-			ents.OrderFills[t.fill].TradeID = id
+			fills[t.fill].TradeID = id
 		} else {
-			block[t.swap].TradeID = id
+			blockSwaps[t.swap].TradeID = id
 		}
 	}
-	ents.Swaps = append(ents.Swaps, block...)
-	return nil
+	return append(txSwaps, blockSwaps...), nil
 }

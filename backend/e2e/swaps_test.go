@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -134,11 +135,11 @@ func tradeIDs(t *testing.T, e *syncEnv) []string {
 }
 
 // asBeforeTheMigration puts the trades back as 000022 left them: no swaps
-// rows, no trade ids, the rewrite pending.
+// rows, no trade ids, the numbering cursor at 0 as the migration sets it.
 func asBeforeTheMigration(t *testing.T, e *syncEnv) {
 	t.Helper()
 	for _, q := range []string{`DELETE FROM explorer.swaps`, `UPDATE explorer.order_fills SET trade_id = NULL`,
-		`INSERT INTO explorer.pending_rewrites (name) VALUES ('swaps')`} {
+		`UPDATE explorer.pending_rewrites SET resume_from = 0 WHERE name = 'swaps'`} {
 		_, err := e.db.Exec(q)
 		require.NoError(t, err)
 	}
@@ -184,7 +185,9 @@ func TestSwapsOfTheIndexerAndTheMigrationStepAgree(t *testing.T) {
 			assert.Contains(t, res.Steps, "swaps")
 			assert.Equal(t, swaps, swapRows(t, e))
 			assert.Equal(t, fills, tradeIDs(t, e))
-			assert.Empty(t, queryStrings(t, e.db, `SELECT name FROM explorer.pending_rewrites`), "the rewrite is done")
+			assert.Equal(t, []string{fmt.Sprintf("swaps %d", swapH+1)}, queryStrings(t, e.db,
+				`SELECT concat_ws(' ', name, resume_from) FROM explorer.pending_rewrites WHERE name = 'swaps'`),
+				"the cursor above the highest block")
 
 			// Done, a later up rewrites nothing.
 			_, err := e.db.Exec(`DELETE FROM explorer.swaps WHERE height = $1`, swapH)
@@ -211,10 +214,16 @@ func TestSwapsMigrationStepResumes(t *testing.T) {
 
 	asBeforeTheMigration(t, e)
 	// The run stopped after partition 22: everything below 23,000,000 done.
-	_, err := e.db.Exec(`SELECT explorer.index_trades(0, 23000000)`)
+	pool, err := pgxpool.New(context.Background(), e.url)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"swaps 23000000"}, queryStrings(t, e.db,
-		`SELECT concat_ws(' ', name, resume_from) FROM explorer.pending_rewrites`))
+	defer pool.Close()
+	tx, err := pool.Begin(context.Background())
+	require.NoError(t, err)
+	_, err = trades.Range(context.Background(), tx, 0, 23_000_000)
+	require.NoError(t, err)
+	_, err = tx.Exec(context.Background(), `UPDATE explorer.pending_rewrites SET resume_from = 23000000 WHERE name = 'swaps'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(context.Background()))
 	// A row of a done partition taken away shows the resumed run skips it.
 	_, err = e.db.Exec(`DELETE FROM explorer.swaps WHERE height = 22551811 AND trade_id = 22551811000001`)
 	require.NoError(t, err)
@@ -222,7 +231,39 @@ func TestSwapsMigrationStepResumes(t *testing.T) {
 	migrateUp(t, e.url)
 	assert.Equal(t, swaps[1:], swapRows(t, e), "the partitions above are done, partition 22 is not redone")
 	assert.Equal(t, fills, tradeIDs(t, e))
-	assert.Empty(t, queryStrings(t, e.db, `SELECT name FROM explorer.pending_rewrites`))
+	assert.Equal(t, []string{fmt.Sprintf("%d", swapH+1)}, queryStrings(t, e.db,
+		`SELECT resume_from::text FROM explorer.pending_rewrites WHERE name = 'swaps'`))
+}
+
+// During a deploy both releases index: the previous one stores blocks
+// without swaps rows or trade ids, above the cursor the migration left and,
+// when it wins a height the new one writes too, below it. The new release's
+// serve numbers them from the stored rows.
+func TestTradesOfThePreviousReleaseAreNumberedOnStart(t *testing.T) {
+	e := newSyncEnv(t)
+	indexTrades(t, e, false)
+	swaps, fills := swapRows(t, e), tradeIDs(t, e)
+
+	// `migrate up` ran when 20230045 was the highest block; the previous
+	// release then wrote everything above it, and 20230045 again.
+	for _, q := range []string{
+		`UPDATE explorer.pending_rewrites SET resume_from = 20230046 WHERE name = 'swaps'`,
+		`DELETE FROM explorer.swaps`,
+		`UPDATE explorer.order_fills SET trade_id = NULL`,
+	} {
+		_, err := e.db.Exec(q)
+		require.NoError(t, err)
+	}
+	e.serve(t, 24999134)
+	waitFor(t, 20*time.Second, func() bool {
+		return len(swapRows(t, e)) == len(swaps) && !slices.ContainsFunc(tradeIDs(t, e), func(s string) bool {
+			return strings.HasSuffix(s, " -")
+		})
+	}, "the trades numbered")
+	assert.Equal(t, swaps, swapRows(t, e))
+	assert.Equal(t, fills, tradeIDs(t, e))
+	assert.Equal(t, []string{fmt.Sprintf("%d", swapH+1)}, queryStrings(t, e.db,
+		`SELECT resume_from::text FROM explorer.pending_rewrites WHERE name = 'swaps'`))
 }
 
 // GET /aggregator/api/dex/swaps over the stored swaps: newest first, the
@@ -257,11 +298,25 @@ func TestCompatSwapsFromTheStoredSwaps(t *testing.T) {
 		SELECT $1::bigint, $1::bigint * 1000000 + 100 + n, now(), $2::text || '_ubze', $2::text, 'ubze', 'sell', 1, 1, $3::text, 100 + n
 		  FROM generate_series(1, 150) n`, swapH, swapHoney, swapBurner)
 	require.NoError(t, err)
-	var trades []map[string]any
-	require.NoError(t, json.Unmarshal(get(swapBurner).body, &trades))
-	require.Len(t, trades, 100)
-	assert.Equal(t, float64(swapH*1_000_000+250), trades[0]["order_id"])
-	assert.Equal(t, float64(swapH*1_000_000+151), trades[99]["order_id"])
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(get(swapBurner).body, &listed))
+	require.Len(t, listed, 100)
+	assert.Equal(t, float64(swapH*1_000_000+250), listed[0]["order_id"])
+	assert.Equal(t, float64(swapH*1_000_000+151), listed[99]["order_id"])
+
+	// executed_at truncates to the millisecond, as the aggregator does (on
+	// mainnet, block 25294781 at 22:47:00.563878310 answers …563, not …564).
+	_, err = e.db.Exec(`INSERT INTO explorer.swaps (height, trade_id, time, pool_id, base, quote, side, base_amount,
+			quote_amount, creator, block_seq)
+		VALUES ($1::bigint, $1::bigint * 1000000 + 900, '2026-10-28 22:47:00.5635+00', $2::text || '_ubze', $2::text,
+		        'ubze', 'sell', 1, 1, 'bze1ms', 900),
+		       ($1::bigint, $1::bigint * 1000000 + 901, '2026-10-28 22:47:00.5634+00', $2::text || '_ubze', $2::text,
+		        'ubze', 'sell', 1, 1, 'bze1ms', 901)`, swapH, swapHoney)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(get("bze1ms").body, &listed))
+	require.Len(t, listed, 2)
+	assert.Equal(t, []any{"1793227620563", "1793227620563"}, []any{listed[0]["executed_at"], listed[1]["executed_at"]},
+		"the sub-millisecond digits 5 and 4 alike")
 
 	r := fetch(t, base+"/aggregator/api/dex/swaps")
 	assert.Equal(t, http.StatusBadRequest, r.status)

@@ -2,12 +2,14 @@ package writer
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
@@ -396,4 +398,41 @@ func scanFillKeys(rows pgx.Rows, into *Inserted) error {
 		into.OrderFills[k] = true
 	}
 	return rows.Err()
+}
+
+// fillTradeIDsSQL sets the trade ids of stored fills.
+const fillTradeIDsSQL = `UPDATE explorer.order_fills AS f SET trade_id = r.trade_id
+	  FROM jsonb_to_recordset($1::jsonb) AS r(height bigint, seq integer, trade_id bigint)
+	 WHERE f.height = r.height AND f.seq = r.seq AND f.trade_id IS DISTINCT FROM r.trade_id`
+
+// fillTradeIDRow is the JSON shape of fillTradeIDsSQL.
+type fillTradeIDRow struct {
+	Height  int64 `json:"height"`
+	Seq     int   `json:"seq"`
+	TradeID int64 `json:"trade_id"`
+}
+
+// Execer runs a statement; pgx.Tx and *pgxpool.Pool satisfy it.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// WriteTrades writes, in tx, the trades of stored blocks numbered again
+// (internal/trades): the swaps rows, kept when already there, and the trade
+// ids of the fills (only Height, Seq and TradeID are read). top names the
+// write in errors.
+func WriteTrades(ctx context.Context, tx Execer, top int64, swaps []transform.Swap, fills []transform.OrderFill) error {
+	stmts, err := swapStatements(top, &transform.Entities{Swaps: swaps}, ModeInsert)
+	if err != nil {
+		return err
+	}
+	rows := make([]fillTradeIDRow, len(fills))
+	for i, f := range fills {
+		rows[i] = fillTradeIDRow{Height: f.Height, Seq: f.Seq, TradeID: f.TradeID}
+	}
+	ids, err := plainStatements(top, "fill trade ids", fillTradeIDsSQL, rows)
+	if err != nil {
+		return err
+	}
+	return execAll(ctx, tx, top, append(stmts, ids...))
 }

@@ -563,7 +563,7 @@ bze-scan migrate version    # print the current version (0 when none)
   outcomes, open orders per owner) and the daily statistics lookups
   (addresses active at a height range, accounts first seen in a window),
   and later the tables and lookups of their features (000023: the pool
-  swaps, `order_fills.trade_id` and `explorer.index_trades`).
+  swaps, `order_fills.trade_id` and its numbering cursor).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -591,15 +591,17 @@ bze-scan migrate version    # print the current version (0 when none)
   own transaction (a migration file runs in one), then deletes the row; an
   interrupted run resumes at the next `up`, and once the row is gone the
   step reads nothing.
-  The fifth, `swaps`, runs while migration 000023's `pending_rewrites` row
-  `swaps` exists: `explorer.index_trades(lo, hi)` once per partition from the
-  row's `resume_from` up, then once above the partitions, each its own
-  transaction. It builds the `explorer.swaps` rows from the stored
-  `SwapEvent`s (`messages.events` and `block_events`) and sets every
-  `order_fills.trade_id`, by the transformer's rules (see "Trades and trade
-  ids"), keeps rows already there, and moves `resume_from` in the same
-  transaction, so an interrupted run resumes at the first partition not
-  done; nothing is read from the node. Then the row goes.
+  The fifth, `swaps`, is `trades.CatchUp` (`internal/trades`; given to
+  `migrations.Open` by its callers, since it writes through the writer,
+  which imports `migrations`): it numbers the stored trades from the cursor
+  row `swaps` of `pending_rewrites` (`resume_from`, the lowest height not
+  numbered yet) up to the highest stored block, one transaction per range of
+  at most a partition that also moves the cursor, so an interrupted run
+  resumes where it stopped. Each range reads the stored `SwapEvent`s
+  (`messages.events`, `block_events`) and the `order_fills` keys, numbers
+  them with `transform.NumberTrades` and writes the `swaps` rows (kept when
+  there) and the fills' `trade_id` through `writer.WriteTrades`; nothing is
+  read from the node. The cursor row stays: see "Trades and trade ids".
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -1026,10 +1028,22 @@ message's swap events, then the block-level trades (fills and swaps) by
 events are already gone, so the ordinal is fixed; ids stay below 2^53 up to
 height 9×10^9, exact as JavaScript numbers. The transformer fails a block
 with 1,000,000 trades or more before any work on it. The live writer, the
-backfill and the reindex share the transformer; `explorer.index_trades`
-(migration 000023) applies the same rules to stored rows. A swap's `time` is
-read from its stored `blocks` row (both writers write the swaps after the
-block), so every path stores exactly the same value.
+backfill and the reindex share the transformer; `internal/trades` numbers
+stored rows with the same `transform.NumberTrades`. A swap's `time` is read
+from its stored `blocks` row (both writers write the swaps after the block),
+so every path stores exactly the same value.
+
+During a deploy both releases index for a while, and the previous one
+stores blocks without `swaps` rows or trade ids (and wins some heights the
+new one writes too, whose fills then keep a NULL `trade_id`). So the
+`trades` component of `serve` (with the live indexer) runs `trades.CatchUp`
+at start and every minute: from the cursor to the highest block, and first
+every height below the cursor with a fill without a trade id (partial index
+`idx_order_fills_unnumbered`). Once the previous release is gone each pass
+re-reads only the blocks of the last minute and changes nothing. One case it
+cannot see: a block without fills that the previous release stores below the
+cursor after a pass (a hole its backfill fills late) gets no `swaps` rows;
+`bze-scan reindex` of that height writes them.
 
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0 and later) has no attributed fill or order, or one of

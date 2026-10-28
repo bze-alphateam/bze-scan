@@ -140,6 +140,12 @@ func TestTradeIDGuard(t *testing.T) {
 	_, err = tr.Transform(build(0, transform.TradeIDsPerBlock, 0))
 	require.ErrorContains(t, err, "1000000 trades in the block")
 
+	// A swap event of no message is never numbered, so it does not count.
+	in := build(transform.TradeIDsPerBlock-1, 0, 0)
+	in.Results.TxsResults[0].Events = []node.Event{swapEvent("", swapper, "3", uhoney, "1", "ubze")}
+	_, err = tr.Transform(in)
+	require.NoError(t, err)
+
 	// A failed transaction swapped nothing.
 	ents, err := tr.Transform(build(2, 3, 5))
 	require.NoError(t, err)
