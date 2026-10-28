@@ -18,14 +18,17 @@ import (
 
 // serveCompat runs the real serve wiring (no indexer) over the sync env's
 // database and fake CoinGecko, CORS configured for one origin, and returns
-// the server's base URL.
-func (e *syncEnv) serveCompat(t *testing.T, corsOrigin string) string {
+// the server's base URL. with adjusts the config before serving.
+func (e *syncEnv) serveCompat(t *testing.T, corsOrigin string, with ...func(*config.Config)) string {
 	t.Helper()
 	cfg := &config.Config{
 		HTTPAddr: "127.0.0.1:0", LogLevel: "warn", LogFormat: config.LogFormatText,
 		DatabaseURL: e.url, NodeRPCURL: e.node.URL, ChainID: "beezee-1",
 		CORSAllowedOrigins: []string{corsOrigin},
 		CoinGeckoHost:      e.gecko.URL, CoinGeckoPriceIDs: geckoIDs,
+	}
+	for _, w := range with {
+		w(cfg)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	listening := make(chan net.Addr, 1)

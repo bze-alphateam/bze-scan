@@ -106,6 +106,7 @@ documented template with the defaults:
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 | `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/api/prices` and the prices job |
 | `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
+| `COINGECKO_MERGED_MARKETS` | empty | markets folded into a market CoinGecko tracks, for `format=coingecko` only: `<new market id>=<tracked market id>,…` (see "Aggregator-compatible endpoints"); mainnet folds BZE/USDC.inj into BZE/USDC.n |
 | `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/dex/tickers` gives BZE's 24-hour change; empty leaves the change alone |
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
@@ -437,6 +438,7 @@ result is `[]`, never `null`.
 | Route | Answers |
 | --- | --- |
 | `GET /api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+| `GET /api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
 | `GET /api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
 | `GET /api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
 
@@ -447,6 +449,43 @@ ids) the last read is served for up to 24 hours after it, then `[]` (the
 aggregator answers `null`). The route is always 200. The prices job of the
 state sync reads the same feed. `serve` and `sync-state` each hold one.
 
+**Display units** (`internal/dexunits`, shared by every DEX route of the
+group: orders, and later history, intervals and tickers). A chain price is
+quote base units per base base unit; the display price is price ×
+10^(base exponent − quote exponent) and an amount is amount ×
+10^−exponent, both in exact decimals (`dexunits.Price`, `dexunits.Amount`),
+trailing zeros trimmed as the aggregator trims them. Exponents come from
+`explorer.denoms` (`dexunits.PGStore`: the chain registry's for IBC denoms,
+the bank metadata's otherwise); a wrong one is fixed in the registry, not in
+code. Unlike the aggregator's `%.2f` multiplier, a quote with three or more
+decimals more than the base keeps its price (the aggregator answers 0).
+
+**Merged markets** (`internal/marketmerge`, shared with history and
+tickers). `COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…` folds a
+market into one CoinGecko already tracks, for `format=coingecko` only, when
+a market's quote asset is replaced: the tracked ticker reports the new
+market's figures. A market is never folded into itself, nor into a market
+folded itself. Mainnet (USDC.n → USDC.inj):
+`ubze/ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838=ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4`.
+
+**Orders.** `internal/orderbook` reads a market's whole book from the
+node's tradebin `MarketAggregatedOrders` (aggregated price levels, every
+page of 10,000, bids reversed) and keeps it, in display units, for 10 s per
+market, so polling reaches the node at most once per market every 10 s;
+the market list (`AllMarkets`) is kept 60 s. `ticker_id` is a market id
+with `_` for `/` (so an LP ticker never resolves); `market_id` wins when
+both are given. `depth` gives depth/2 levels per side, nearest the spread
+(0, the default, and 1 give the whole book); both sides come out by
+ascending price. `format=coingecko` answers under `<base>_<quote>`, with the
+book of the first market folded into it (sorted by id) that has orders,
+else its own; books are never mixed. `timestamp` is the answer's time.
+Errors are 400 `{"message":…}` with the aggregator's texts: `invalid
+request` (a depth that is no integer), `depth must be a positive number`,
+`please provide market_id or ticker_id` (both shorter than two
+characters), and its "Unknown error!…" for an unknown market or a failed
+read. Differences from the aggregator: an empty side is `[]` (`null`
+there), an emptied book answers empty sides (the aggregator keeps its last
+rows), and prices of big exponent gaps are right.
 **Supply.** `internal/supply`, served only with `NODE_GRPC_ADDR`: bank
 `SupplyOf` for the one denom (the aggregator lists one page of 5000 supplies
 and misses the denoms beyond it), distribution `CommunityPool` for `ubze`'s
@@ -1765,6 +1804,11 @@ records the archive's `abci_query` answers of the same reads (`AllMarkets`,
 for the archive fallback; record both at one height. The market maker
 `bze10kw8…` is recorded at 25,159,888 (2026-10-19, 29 orders in one market:
 9 sells, 20 buys).
+`make grpc-fixtures SETS=orderbooks MARKETS="ubze/ibc/…"` records each
+market's `MarketAggregatedOrders` (buy and sell, one page of 10,000, at one
+height) for `/api/dex/orders`: BZE/USDC.n (asks only) and BZE/USDC.inj are
+recorded at 25,290,387 (2026-10-28), and `e2e/testdata/compat/` holds
+getbze.com's answers at that height (timestamps dropped).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
 gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47

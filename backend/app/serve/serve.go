@@ -186,6 +186,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		compatPrices = feed
 	}
 
+	// The aggregator-compatible /api/dex/orders reads the books live; left
+	// out without a gRPC address.
+	var compatOrders controller.OrderBooks
+	if cfg.NodeGRPCAddr != "" {
+		books, closeBooks, err := NewOrderBook(cfg, codec, apiPool)
+		if err != nil {
+			return err
+		}
+		defer closeBooks()
+		compatOrders = books
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
 
 	// The aggregator-compatible /api/supply routes read the local node.
@@ -218,6 +230,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Status:             checker,
 		Raw:                raw,
 		CompatPrices:       compatPrices,
+		CompatOrders:       compatOrders,
+		CoinGeckoMerges:    cfg.CoinGeckoMergedMarkets,
 		CompatSupply:       compatSupply,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),

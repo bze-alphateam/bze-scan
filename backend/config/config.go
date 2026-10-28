@@ -22,6 +22,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/coingecko"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 // Log formats accepted in LOG_FORMAT.
@@ -116,6 +117,10 @@ type Config struct {
 	// CoinGeckoPriceIDs back /api/prices and the prices job. Load always
 	// sets it; a Config built in code without one serves neither.
 	CoinGeckoHost string
+	// CoinGeckoMergedMarkets folds markets into the ones CoinGecko tracks,
+	// for the aggregator-compatible routes' coingecko format
+	// (COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…).
+	CoinGeckoMergedMarkets marketmerge.Merges
 	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
 	// /api/prices lists them (mainnet: bzedge, osmosis, cosmos).
 	CoinGeckoPriceIDs []string
@@ -210,6 +215,12 @@ func Load() (*Config, error) {
 		if id = strings.TrimSpace(id); id != "" {
 			cfg.CoinGeckoPriceIDs = append(cfg.CoinGeckoPriceIDs, id)
 		}
+	}
+
+	if merges, err := marketmerge.Parse(envString("COINGECKO_MERGED_MARKETS", "")); err != nil {
+		fail("COINGECKO_MERGED_MARKETS: %v", err)
+	} else {
+		cfg.CoinGeckoMergedMarkets = merges
 	}
 
 	indexer := envString("INDEXER_ENABLED", "true")
