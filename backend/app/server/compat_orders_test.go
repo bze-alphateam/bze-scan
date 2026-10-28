@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"sync"
 	"testing"
@@ -73,10 +74,13 @@ func levels(pairs ...string) []tradebintypes.AggregatedOrder {
 	return out
 }
 
-func (n *bookNode) MarketAggregatedOrders(_ context.Context, in *tradebintypes.QueryMarketAggregatedOrdersRequest,
+func (n *bookNode) MarketAggregatedOrders(ctx context.Context, in *tradebintypes.QueryMarketAggregatedOrdersRequest,
 	_ ...grpc.CallOption) (*tradebintypes.QueryMarketAggregatedOrdersResponse, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err // as a real gRPC client does
+	}
 	n.orderCalls[in.Market+" "+in.OrderType]++
 	n.reverse[in.OrderType] = in.Pagination.GetReverse()
 	if n.fail {
@@ -100,10 +104,13 @@ func (n *bookNode) MarketAggregatedOrders(_ context.Context, in *tradebintypes.Q
 	return res, nil
 }
 
-func (n *bookNode) AllMarkets(context.Context, *tradebintypes.QueryAllMarketsRequest,
-	...grpc.CallOption) (*tradebintypes.QueryAllMarketsResponse, error) {
+func (n *bookNode) AllMarkets(ctx context.Context, _ *tradebintypes.QueryAllMarketsRequest,
+	_ ...grpc.CallOption) (*tradebintypes.QueryAllMarketsResponse, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	n.marketCalls++
 	if n.fail {
 		return nil, errors.New("node down")
@@ -173,7 +180,7 @@ func TestCompatOrdersWholeBookByAscendingPrice(t *testing.T) {
 	node := newBookNode()
 	e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, nil)
 
-	code, body := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	code, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{
 		"market_id": usdcMarket,
@@ -195,40 +202,40 @@ func TestCompatOrdersDepth(t *testing.T) {
 	}
 
 	for _, depth := range []string{"4", "5"} {
-		code, body := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket+"&depth="+depth)
+		code, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&depth="+depth)
 		require.Equal(t, http.StatusOK, code)
 		assert.Equal(t, nearest, body, "depth/2 levels per side, nearest the spread (depth %s)", depth)
 	}
 
 	// depth 1 is 0 per side: the whole book, as depth 0.
-	_, whole := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	_, whole := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	for _, depth := range []string{"1", "0", ""} {
-		_, body := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket+"&depth="+depth)
+		_, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&depth="+depth)
 		assert.Equal(t, whole, body, "depth %q", depth)
 	}
 	assert.Len(t, whole["bids"], 4)
 
 	// A depth beyond the book is the whole book.
-	_, body := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket+"&depth=100")
+	_, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&depth=100")
 	assert.Equal(t, whole, body)
 }
 
 func TestCompatOrdersTickerID(t *testing.T) {
 	e := ordersServer(t, newBookNode(), &compatClock{now: time.Unix(1000, 0)}, nil)
 
-	code, byTicker := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&depth=2")
+	code, byTicker := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&depth=2")
 	require.Equal(t, http.StatusOK, code)
-	_, byID := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket+"&depth=2")
+	_, byID := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&depth=2")
 	assert.Equal(t, byID, byTicker)
 	assert.Equal(t, usdcMarket, byTicker["market_id"])
 
 	// "_" becomes "/" everywhere, so an LP ticker never resolves.
-	rec := serve(t, e, http.MethodGet, "/api/dex/orders?ticker_id=lp_ubze_uusdc")
+	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/orders?ticker_id=lp_ubze_uusdc")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, unknownMsg, rec.Body.String())
 
 	// market_id wins over ticker_id.
-	rec = serve(t, e, http.MethodGet, "/api/dex/orders?market_id=nope/x&ticker_id=ubze_uusdc")
+	rec = serve(t, e, http.MethodGet, "/aggregator/api/dex/orders?market_id=nope/x&ticker_id=ubze_uusdc")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -237,14 +244,14 @@ func TestCompatOrdersRejects(t *testing.T) {
 	e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, nil)
 
 	for path, want := range map[string]string{
-		"/api/dex/orders":                                      `{"message":"please provide market_id or ticker_id"}`,
-		"/api/dex/orders?market_id=u":                          `{"message":"please provide market_id or ticker_id"}`,
-		"/api/dex/orders?market_id=ubze/uusdc&depth=-2":        `{"message":"depth must be a positive number"}`,
-		"/api/dex/orders?market_id=ubze/uusdc&depth=abc":       `{"message":"invalid request"}`,
-		"/api/dex/orders?market_id=ubze/uusdc&depth=1.5":       `{"message":"invalid request"}`,
-		"/api/dex/orders?market_id=ubze/nope":                  unknownMsg[:len(unknownMsg)-1],
-		"/api/dex/orders?market_id=unoexp/ubze":                unknownMsg[:len(unknownMsg)-1],
-		"/api/dex/orders?ticker_id=ubze_nope&format=coingecko": unknownMsg[:len(unknownMsg)-1],
+		"/aggregator/api/dex/orders":                                      `{"message":"please provide market_id or ticker_id"}`,
+		"/aggregator/api/dex/orders?market_id=u":                          `{"message":"please provide market_id or ticker_id"}`,
+		"/aggregator/api/dex/orders?market_id=ubze/uusdc&depth=-2":        `{"message":"depth must be a positive number"}`,
+		"/aggregator/api/dex/orders?market_id=ubze/uusdc&depth=abc":       `{"message":"invalid request"}`,
+		"/aggregator/api/dex/orders?market_id=ubze/uusdc&depth=1.5":       `{"message":"invalid request"}`,
+		"/aggregator/api/dex/orders?market_id=ubze/nope":                  unknownMsg[:len(unknownMsg)-1],
+		"/aggregator/api/dex/orders?market_id=unoexp/ubze":                unknownMsg[:len(unknownMsg)-1],
+		"/aggregator/api/dex/orders?ticker_id=ubze_nope&format=coingecko": unknownMsg[:len(unknownMsg)-1],
 	} {
 		rec := serve(t, e, http.MethodGet, path)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, path)
@@ -254,7 +261,7 @@ func TestCompatOrdersRejects(t *testing.T) {
 
 	// A node failure is the aggregator's unknown error too.
 	node.fail = true
-	rec := serve(t, e, http.MethodGet, "/api/dex/orders?market_id="+weiMarket)
+	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/orders?market_id="+weiMarket)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, unknownMsg, rec.Body.String())
 }
@@ -262,7 +269,7 @@ func TestCompatOrdersRejects(t *testing.T) {
 func TestCompatOrdersCoinGeckoFormat(t *testing.T) {
 	e := ordersServer(t, newBookNode(), &compatClock{now: time.Unix(1000, 0)}, nil)
 
-	code, body := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&depth=4&format=coingecko")
+	code, body := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&depth=4&format=coingecko")
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{
 		"ticker_id": "ubze_uusdc",
@@ -271,7 +278,7 @@ func TestCompatOrdersCoinGeckoFormat(t *testing.T) {
 	}, body)
 
 	// Any other format is the default one.
-	_, body = getOrders(t, e, "/api/dex/orders?market_id=ubze/uusdc&depth=2&format=tv")
+	_, body = getOrders(t, e, "/aggregator/api/dex/orders?market_id=ubze/uusdc&depth=2&format=tv")
 	assert.Equal(t, usdcMarket, body["market_id"])
 }
 
@@ -279,7 +286,7 @@ func TestCompatOrdersMergedMarkets(t *testing.T) {
 	t.Run("the first folded market with orders", func(t *testing.T) {
 		node := newBookNode()
 		e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, mainnetLikeMerges)
-		_, body := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&format=coingecko")
+		_, body := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&format=coingecko")
 		assert.Equal(t, map[string]any{
 			"ticker_id": "ubze_uusdc",
 			"bids":      []any{[]any{"0.0004", "1"}},
@@ -288,7 +295,7 @@ func TestCompatOrdersMergedMarkets(t *testing.T) {
 		assert.Equal(t, 1, node.calls(emptyMarket, "buy"), "ubze/uempty sorts first and is tried first")
 
 		// The default format keeps every market separate.
-		_, body = getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket+"&depth=2")
+		_, body = getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&depth=2")
 		assert.Equal(t, pairs("0.000333", "20.818779"), body["bids"])
 	})
 
@@ -296,13 +303,13 @@ func TestCompatOrdersMergedMarkets(t *testing.T) {
 		node := newBookNode()
 		node.books[newMarket] = nil
 		e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, mainnetLikeMerges)
-		_, body := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
+		_, body := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
 		assert.Equal(t, []any{[]any{"0.000333", "20.818779"}}, body["bids"], "the market's own book")
 	})
 
 	t.Run("a folded market the chain does not have", func(t *testing.T) {
 		e := ordersServer(t, newBookNode(), &compatClock{now: time.Unix(1000, 0)}, marketmerge.Merges{"ubze/ugone": usdcMarket})
-		code, body := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
+		code, body := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
 		require.Equal(t, http.StatusOK, code)
 		assert.Equal(t, []any{[]any{"0.000333", "20.818779"}}, body["bids"])
 	})
@@ -310,7 +317,7 @@ func TestCompatOrdersMergedMarkets(t *testing.T) {
 	t.Run("no folds", func(t *testing.T) {
 		node := newBookNode()
 		e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, mainnetLikeMerges)
-		_, body := getOrders(t, e, "/api/dex/orders?ticker_id=ubze_unew&format=coingecko")
+		_, body := getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_unew&format=coingecko")
 		assert.Equal(t, "ubze_unew", body["ticker_id"], "a folded market still answers under its own ticker")
 		assert.Equal(t, []any{[]any{"0.0004", "1"}}, body["bids"])
 		assert.Zero(t, node.calls(usdcMarket, "buy"))
@@ -323,30 +330,30 @@ func TestCompatOrdersAreCachedTenSecondsPerMarket(t *testing.T) {
 	e := ordersServer(t, node, clock, nil)
 
 	for range 3 {
-		code, _ := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+		code, _ := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 		require.Equal(t, http.StatusOK, code)
-		code, _ = getOrders(t, e, "/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
+		code, _ = getOrders(t, e, "/aggregator/api/dex/orders?ticker_id=ubze_uusdc&depth=2&format=coingecko")
 		require.Equal(t, http.StatusOK, code)
 	}
 	assert.Equal(t, 2, node.calls(usdcMarket, "buy"), "one read of the book's two pages for every request")
 	assert.Equal(t, 2, node.calls(usdcMarket, "sell"), "and of the sell side")
 
 	// Another market is read on its own.
-	getOrders(t, e, "/api/dex/orders?market_id="+weiMarket)
+	getOrders(t, e, "/aggregator/api/dex/orders?market_id="+weiMarket)
 	assert.Equal(t, 1, node.calls(weiMarket, "sell"))
 
 	clock.now = clock.now.Add(9 * time.Second)
-	getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	assert.Equal(t, 2, node.calls(usdcMarket, "buy"))
 
 	clock.now = clock.now.Add(time.Second)
-	getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	assert.Equal(t, 4, node.calls(usdcMarket, "buy"), "read again after 10 s")
 
 	// The market list is kept 60 s.
 	assert.Equal(t, 1, node.marketCalls)
 	clock.now = clock.now.Add(50 * time.Second)
-	getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	assert.Equal(t, 2, node.marketCalls)
 }
 
@@ -356,16 +363,16 @@ func TestCompatOrdersAnEmptiedBookIsEmpty(t *testing.T) {
 	node := newBookNode()
 	clock := &compatClock{now: time.Unix(1000, 0)}
 	e := ordersServer(t, node, clock, nil)
-	_, body := getOrders(t, e, "/api/dex/orders?market_id="+usdcMarket)
+	_, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	require.Len(t, body["asks"], 3)
 
 	node.mu.Lock()
 	node.books[usdcMarket] = nil
 	node.mu.Unlock()
 	clock.now = clock.now.Add(10 * time.Second)
-	rec := serve(t, e, http.MethodGet, "/api/dex/orders?market_id="+usdcMarket)
+	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/orders?market_id="+usdcMarket)
 	assert.Contains(t, rec.Body.String(), `"bids":[],"asks":[]`)
-	rec = serve(t, e, http.MethodGet, "/api/dex/orders?market_id="+usdcMarket+"&format=coingecko")
+	rec = serve(t, e, http.MethodGet, "/aggregator/api/dex/orders?market_id="+usdcMarket+"&format=coingecko")
 	assert.Contains(t, rec.Body.String(), `"bids":[],"asks":[]`)
 }
 
@@ -373,7 +380,7 @@ func TestCompatOrdersAnEmptiedBookIsEmpty(t *testing.T) {
 // than the base keeps its price, where the aggregator's answers 0.
 func TestCompatOrdersBigExponentGap(t *testing.T) {
 	e := ordersServer(t, newBookNode(), &compatClock{now: time.Unix(1000, 0)}, nil)
-	_, body := getOrders(t, e, "/api/dex/orders?market_id="+weiMarket)
+	_, body := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+weiMarket)
 	assert.Equal(t, map[string]any{
 		"market_id": weiMarket,
 		"bids":      []any{},
@@ -383,6 +390,26 @@ func TestCompatOrdersBigExponentGap(t *testing.T) {
 
 func TestCompatOrdersAnswerAnyOrigin(t *testing.T) {
 	e := ordersServer(t, newBookNode(), &compatClock{now: time.Unix(1000, 0)}, nil)
-	rec := corsRequest(e, http.MethodGet, "/api/dex/orders?market_id="+usdcMarket, "https://dex.getbze.com")
+	rec := corsRequest(e, http.MethodGet, "/aggregator/api/dex/orders?market_id="+usdcMarket, "https://dex.getbze.com")
 	assert.Equal(t, "*", rec.Header().Get(echo.HeaderAccessControlAllowOrigin))
+}
+
+func TestCompatOrdersReadOutlivesTheCallerThatTriggeredIt(t *testing.T) {
+	node := newBookNode()
+	e := ordersServer(t, node, &compatClock{now: time.Unix(1000, 0)}, nil)
+
+	// A caller that already hung up still gets the book read and cached:
+	// the read is shared by every caller waiting on it.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/aggregator/api/dex/orders?market_id="+usdcMarket, nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	read := node.calls(usdcMarket, "buy")
+	require.Positive(t, read)
+
+	code, _ := getOrders(t, e, "/aggregator/api/dex/orders?market_id="+usdcMarket)
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, read, node.calls(usdcMarket, "buy"), "served from the cached read")
 }

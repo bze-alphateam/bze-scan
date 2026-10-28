@@ -16,7 +16,7 @@ type PriceFeed interface {
 	Prices(ctx context.Context) []coingecko.Price
 }
 
-// CompatPricesController serves the aggregator-compatible GET /api/prices.
+// CompatPricesController serves the aggregator-compatible GET /aggregator/api/prices.
 type CompatPricesController struct {
 	feed PriceFeed
 }
@@ -26,7 +26,7 @@ func NewCompatPricesController(feed PriceFeed) *CompatPricesController {
 	return &CompatPricesController{feed: feed}
 }
 
-// Prices serves GET /api/prices as the aggregator does: the configured
+// Prices serves GET /aggregator/api/prices as the aggregator does: the configured
 // CoinGecko ids' USD prices, always 200. With no price read in the last 24
 // hours the list is empty ([], where the aggregator answers null).
 func (h *CompatPricesController) Prices(c *echo.Context) error {

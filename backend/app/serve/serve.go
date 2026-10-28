@@ -179,7 +179,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		watch, liveHalt = w, w
 	}
 
-	// The aggregator-compatible /api/prices; a nil interface without a
+	// The aggregator-compatible /aggregator/api/prices; a nil interface without a
 	// CoinGecko host, never a typed nil.
 	var compatPrices controller.PriceFeed
 	if feed := NewPriceFeed(cfg); feed != nil {
@@ -190,7 +190,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		compatArticles = feed
 	}
 
-	// The aggregator-compatible /api/dex/orders reads the books live; left
+	// The aggregator-compatible /aggregator/api/dex/orders reads the books live; left
 	// out without a gRPC address.
 	var compatOrders controller.OrderBooks
 	if cfg.NodeGRPCAddr != "" {
@@ -204,7 +204,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	explorerRepo := repository.NewExplorer(apiPool)
 
-	// The aggregator-compatible /api/supply routes read the local node.
+	// The aggregator-compatible /aggregator/api/supply routes read the local node.
 	var compatSupply controller.SupplyReader
 	if cfg.NodeGRPCAddr != "" {
 		sup, closeSupply, err := NewSupply(cfg, codec, explorerRepo)

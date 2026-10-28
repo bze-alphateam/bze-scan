@@ -1,7 +1,7 @@
 // Package coingecko reads USD prices from CoinGecko's simple price API, the
 // way the BZE aggregator does: Client asks for a list of CoinGecko ids, Feed
 // keeps the answer for FreshFor and serves it for BackupFor more when
-// CoinGecko fails. Feed backs GET /api/prices of the aggregator-compatible
+// CoinGecko fails. Feed backs GET /aggregator/api/prices of the aggregator-compatible
 // routes and the prices set of the state sync.
 package coingecko
 

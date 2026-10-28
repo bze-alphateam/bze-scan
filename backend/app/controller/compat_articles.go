@@ -17,7 +17,7 @@ type ArticleFeed interface {
 }
 
 // CompatArticlesController serves the aggregator-compatible
-// GET /api/articles/medium.
+// GET /aggregator/api/articles/medium.
 type CompatArticlesController struct {
 	feed ArticleFeed
 }
@@ -27,7 +27,7 @@ func NewCompatArticlesController(feed ArticleFeed) *CompatArticlesController {
 	return &CompatArticlesController{feed: feed}
 }
 
-// Medium serves GET /api/articles/medium as the aggregator does: the feed's
+// Medium serves GET /aggregator/api/articles/medium as the aggregator does: the feed's
 // first six articles, always 200. With no read in the last 24 hours the
 // list is empty, as the aggregator answers a failing feed.
 func (h *CompatArticlesController) Medium(c *echo.Context) error {

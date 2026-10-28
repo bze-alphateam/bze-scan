@@ -2,7 +2,7 @@ package dto
 
 import "time"
 
-// CompatArticle is one entry of GET /api/articles/medium: a Medium article,
+// CompatArticle is one entry of GET /aggregator/api/articles/medium: a Medium article,
 // its date as RFC 3339 in UTC.
 type CompatArticle struct {
 	Title       string    `json:"title"`

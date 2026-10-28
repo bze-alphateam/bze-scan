@@ -55,7 +55,7 @@ func TestCompatPricesFromCoinGecko(t *testing.T) {
 	base := e.serveCompat(t, explorer)
 
 	// The aggregator's shape, in COINGECKO_PRICE_IDS' order, any origin.
-	r := fetch(t, base+"/api/prices", "Origin", dapp)
+	r := fetch(t, base+"/aggregator/api/prices", "Origin", dapp)
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
 	assert.Equal(t, recordedPrices+"\n", string(r.body), "getbze.com's answer")
 	assert.Equal(t, "*", r.header.Get("Access-Control-Allow-Origin"))
@@ -65,7 +65,7 @@ func TestCompatPricesFromCoinGecko(t *testing.T) {
 
 	// Read once per 180 s; a CoinGecko failure meanwhile changes nothing.
 	e.gecko.setDown(true)
-	assert.Equal(t, r.body, fetch(t, base+"/api/prices", "Origin", explorer).body)
+	assert.Equal(t, r.body, fetch(t, base+"/aggregator/api/prices", "Origin", explorer).body)
 	calls, _ = e.gecko.answered()
 	assert.Equal(t, 1, calls)
 

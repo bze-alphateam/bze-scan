@@ -1,6 +1,6 @@
 // Package prices is the prices set of the state sync: every minute it reads
 // CoinGecko's USD prices by id from the in-process feed that also serves
-// /api/prices, and writes them to the denoms whose chain-registry asset
+// /aggregator/api/prices, and writes them to the denoms whose chain-registry asset
 // carries that id (BZE's own asset list first, then the origin chain's for
 // an IBC denom). The native denom's 24-hour change comes from the
 // aggregator's ticker of one BZE/USDC market (the liquidity pool), read at

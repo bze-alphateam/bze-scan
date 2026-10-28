@@ -13,7 +13,7 @@ import (
 const coingeckoTimeout = 10 * time.Second
 
 // NewPriceFeed returns the CoinGecko feed of cfg's price ids, behind
-// /api/prices and the prices set; nil without a CoinGecko host.
+// /aggregator/api/prices and the prices set; nil without a CoinGecko host.
 func NewPriceFeed(cfg *config.Config) *coingecko.Feed {
 	if cfg.CoinGeckoHost == "" {
 		return nil

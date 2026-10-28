@@ -104,9 +104,9 @@ documented template with the defaults:
 | `BACKFILL_BATCH` | `50` | heights per flush (M), one transaction each |
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
-| `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/api/prices` and the prices job |
-| `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
-| `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/api/articles/medium` serves |
+| `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/aggregator/api/prices` and the prices job |
+| `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/aggregator/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
+| `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/aggregator/api/articles/medium` serves |
 | `COINGECKO_MERGED_MARKETS` | empty | markets folded into a market CoinGecko tracks, for `format=coingecko` only: `<new market id>=<tracked market id>,…` (see "Aggregator-compatible endpoints"); mainnet folds BZE/USDC.inj into BZE/USDC.n |
 | `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/dex/tickers` gives BZE's 24-hour change; empty leaves the change alone |
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
@@ -268,7 +268,7 @@ internal/chainregistry/
 internal/aggregator/
                    the BZE aggregator's /api/dex/tickers reader (BZE's 24-hour change)
 internal/coingecko/
-                   CoinGecko's USD prices and the cached feed behind /api/prices
+                   CoinGecko's USD prices and the cached feed behind /aggregator/api/prices
 internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
@@ -423,10 +423,12 @@ for one height share one fetch, which outlives a request that gives up.
 ## Aggregator-compatible endpoints
 
 The explorer also serves the BZE aggregator API's public endpoints, at the
-aggregator's exact paths and with its exact answers (fields, JSON types,
-order, status codes), so the dapps, getbze.com and CoinGecko can switch to
-it unchanged. They live in their own route group, `server.CompatPrefix`
-(`/api`), mounted next to `/api/v1`, not inside it: every endpoint ported
+aggregator's exact paths under `/aggregator` and with its exact answers
+(fields, JSON types, order, status codes), so a caller of the aggregator
+switches by swapping its host for the explorer's host plus `/aggregator`
+(`https://getbze.com/api/prices` → `https://explorer.getbze.com/aggregator/api/prices`).
+They live in their own route group, `server.CompatPrefix`
+(`/aggregator/api`), apart from `/api/v1`: every endpoint ported
 from the aggregator is added to that group, with controllers of its own
 (`app/controller/compat_*.go`, shapes in `app/dto/compat.go`). None of the
 `/api/v1` conventions apply: no `{items,next_cursor}` envelope, no
@@ -438,11 +440,11 @@ result is `[]`, never `null`.
 
 | Route | Answers |
 | --- | --- |
-| `GET /api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
-| `GET /api/articles/medium` | `[{"title","url","picture_url","description","publish_date","author_name"}]`, the first six articles of `MEDIUM_FEED_URL`, in the feed's order |
-| `GET /api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
-| `GET /api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
-| `GET /api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
+| `GET /aggregator/api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+| `GET /aggregator/api/articles/medium` | `[{"title","url","picture_url","description","publish_date","author_name"}]`, the first six articles of `MEDIUM_FEED_URL`, in the feed's order |
+| `GET /aggregator/api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
+| `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
+| `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
@@ -1331,7 +1333,7 @@ owner (chain v7.0/v7.1, its message not matched) is read with tradebin
 maker of its fills, a not-found closes it like the others, a failed read
 keeps it and fails the run.
 
-**Prices.** Every minute the CoinGecko feed behind `/api/prices` (see
+**Prices.** Every minute the CoinGecko feed behind `/aggregator/api/prices` (see
 "Aggregator-compatible endpoints") gives USD prices by CoinGecko id
 (`bzedge`, `cosmos`, …), with or without an aggregator (testnet has none). A
 denom takes the price of its registry asset's CoinGecko id: BZE's own asset
@@ -1821,7 +1823,7 @@ for the archive fallback; record both at one height. The market maker
 9 sells, 20 buys).
 `make grpc-fixtures SETS=orderbooks MARKETS="ubze/ibc/…"` records each
 market's `MarketAggregatedOrders` (buy and sell, one page of 10,000, at one
-height) for `/api/dex/orders`: BZE/USDC.n (asks only) and BZE/USDC.inj are
+height) for `/aggregator/api/dex/orders`: BZE/USDC.n (asks only) and BZE/USDC.inj are
 recorded at 25,290,387 (2026-10-28), and `e2e/testdata/compat/` holds
 getbze.com's answers at that height (timestamps dropped).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
@@ -1875,6 +1877,6 @@ starts one with every sync environment, next to a fake aggregator answering
 answering `/api/v3/simple/price` with the same day's prices, and points
 `sync-state` and `serve` at them, so no test reaches GitHub, getbze.com or
 CoinGecko. A `Config` built in code without `CoinGeckoHost` runs no prices
-job and serves no `/api/prices`. A fake Keybase
+job and serves no `/aggregator/api/prices`. A fake Keybase
 lookup (`e2e/logos_test.go`) gives ChainTools' identity a picture and every
 other identity none; `sync-state` and `serve` point `KEYBASE_URL` at it.

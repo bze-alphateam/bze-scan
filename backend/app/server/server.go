@@ -26,12 +26,13 @@ const ShutdownTimeout = 10 * time.Second
 const APIPrefix = "/api/v1"
 
 // CompatPrefix is the prefix of the aggregator-compatible routes: the BZE
-// aggregator API's paths and answers (/api/prices, …), mounted next to
-// /api/v1, not inside it. None of the /api/v1 conventions apply to them,
+// aggregator API's paths under /aggregator (/aggregator/api/prices, …) with
+// its exact answers, so a caller only swaps the aggregator's host for the
+// explorer's host plus /aggregator. None of the /api/v1 conventions apply to them,
 // and they answer CORS requests from any origin, whatever
 // CORSAllowedOrigins says, because browsers call them the way they call the
 // aggregator.
-const CompatPrefix = "/api"
+const CompatPrefix = "/aggregator/api"
 
 // Deps is what the routes read from, built by the composition root.
 type Deps struct {
@@ -81,19 +82,19 @@ type Deps struct {
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
 	// CompatPrices serves CoinGecko's prices; nil leaves the
-	// aggregator-compatible /api/prices out.
+	// aggregator-compatible /aggregator/api/prices out.
 	CompatPrices controller.PriceFeed
 	// CompatArticles serves the Medium articles; nil leaves the
-	// aggregator-compatible /api/articles/medium out.
+	// aggregator-compatible /aggregator/api/articles/medium out.
 	CompatArticles controller.ArticleFeed
 	// CompatOrders serves the DEX's live order books; nil leaves the
-	// aggregator-compatible /api/dex/orders out.
+	// aggregator-compatible /aggregator/api/dex/orders out.
 	CompatOrders controller.OrderBooks
 	// CoinGeckoMerges folds markets for the coingecko format
 	// (COINGECKO_MERGED_MARKETS); nil merges nothing.
 	CoinGeckoMerges marketmerge.Merges
 	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
-	// /api/supply routes out.
+	// /aggregator/api/supply routes out.
 	CompatSupply controller.SupplyReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
@@ -232,14 +233,11 @@ func New(deps Deps) *echo.Echo {
 	return e
 }
 
-// isCompat reports whether c's path is an aggregator-compatible one: under
-// CompatPrefix, outside APIPrefix.
+// isCompat reports whether c's path is an aggregator-compatible one, under
+// CompatPrefix.
 func isCompat(c *echo.Context) bool {
 	p := c.Request().URL.Path
-	if p != CompatPrefix && !strings.HasPrefix(p, CompatPrefix+"/") {
-		return false
-	}
-	return p != APIPrefix && !strings.HasPrefix(p, APIPrefix+"/")
+	return p == CompatPrefix || strings.HasPrefix(p, CompatPrefix+"/")
 }
 
 // Run serves e on addr until ctx is cancelled, then stops accepting

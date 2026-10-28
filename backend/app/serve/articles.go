@@ -11,7 +11,7 @@ import (
 // mediumTimeout bounds one read of the Medium feed.
 const mediumTimeout = 10 * time.Second
 
-// NewArticleFeed returns the Medium feed behind /api/articles/medium; nil
+// NewArticleFeed returns the Medium feed behind /aggregator/api/articles/medium; nil
 // without a feed URL.
 func NewArticleFeed(cfg *config.Config) *medium.Feed {
 	if cfg.MediumFeedURL == "" {

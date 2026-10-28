@@ -30,20 +30,20 @@ func TestCompatSupply(t *testing.T) {
 		assert.Equal(t, "*", r.header.Get("Access-Control-Allow-Origin"), path)
 	}
 
-	text("/api/supply/total", http.StatusOK, "281824500.44")
-	text("/api/supply/circulating", http.StatusOK, "246885353.87")
-	text("/api/supply/total?denom="+vdlDenom, http.StatusOK, "20983185.27")
-	text("/api/supply/circulating?denom="+vdlDenom, http.StatusOK, "20983185.27")
+	text("/aggregator/api/supply/total", http.StatusOK, "281824500.44")
+	text("/aggregator/api/supply/circulating", http.StatusOK, "246885353.87")
+	text("/aggregator/api/supply/total?denom="+vdlDenom, http.StatusOK, "20983185.27")
+	text("/aggregator/api/supply/circulating?denom="+vdlDenom, http.StatusOK, "20983185.27")
 	assert.Equal(t, 1, e.grpc.Requests("distribution", "CommunityPool"), "the pool counts only for BZE")
 
 	e.grpc.SetResponse("bank", "SupplyOf", "unope", []byte(`{"amount":{"denom":"unope","amount":"0"}}`))
-	text("/api/supply/total?denom=unope", http.StatusBadRequest, "denom unope not found in registry")
+	text("/aggregator/api/supply/total?denom=unope", http.StatusBadRequest, "denom unope not found in registry")
 
 	// The node goes down: the reads held are served, a new process has none.
 	e.grpc.Stop()
-	text("/api/supply/total", http.StatusOK, "281824500.44")
+	text("/aggregator/api/supply/total", http.StatusOK, "281824500.44")
 	down := strings.TrimSuffix(e.serveAPI(t), "/api/v1")
-	r := fetch(t, down+"/api/supply/circulating")
+	r := fetch(t, down+"/aggregator/api/supply/circulating")
 	assert.Equal(t, http.StatusServiceUnavailable, r.status)
 	assert.Equal(t, "supply is unavailable, try again later", string(r.body))
 }

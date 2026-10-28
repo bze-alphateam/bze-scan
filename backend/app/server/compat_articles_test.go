@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -41,6 +42,9 @@ func (d *feedDoer) Do(req *http.Request) (*http.Response, error) {
 	d.calls++
 	d.urls = append(d.urls, req.URL.String())
 	d.agents = append(d.agents, req.Header.Get("User-Agent"))
+	if err := req.Context().Err(); err != nil {
+		return nil, err // as a real client does
+	}
 	if d.fail {
 		return nil, errors.New("connection refused")
 	}
@@ -93,7 +97,7 @@ func TestCompatArticlesMatchTheAggregatorsAnswerToTheSameFeed(t *testing.T) {
 	// feed.xml was read from Medium (ten items) at the moment getbze.com's
 	// aggregator answered aggregator.json.
 	doer := &feedDoer{body: testdata(t, "feed.xml")}
-	rec := serve(t, articlesServer(t, doer, &compatClock{now: time.Unix(1000, 0)}), http.MethodGet, "/api/articles/medium")
+	rec := serve(t, articlesServer(t, doer, &compatClock{now: time.Unix(1000, 0)}), http.MethodGet, "/aggregator/api/articles/medium")
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, testdata(t, "aggregator.json"), rec.Body.String())
@@ -108,7 +112,7 @@ func TestCompatArticlesKeepTheFeedsFirstSix(t *testing.T) {
 		items = append(items, item(title, "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", "<p>"+title+"</p>"))
 	}
 	rec := serve(t, articlesServer(t, &feedDoer{body: rss(items...)}, &compatClock{now: time.Unix(1000, 0)}),
-		http.MethodGet, "/api/articles/medium")
+		http.MethodGet, "/aggregator/api/articles/medium")
 	var titles []string
 	for _, a := range articles(t, rec) {
 		titles = append(titles, a["title"].(string))
@@ -127,7 +131,7 @@ func TestCompatArticlesPictureDescriptionDateAndAuthor(t *testing.T) {
 		item("none", "beezee", "Thu, 22 Oct 2026 08:00:00 GMT", `<p>No picture at all.</p>`),
 	)
 	rec := serve(t, articlesServer(t, &feedDoer{body: body}, &compatClock{now: time.Unix(1000, 0)}),
-		http.MethodGet, "/api/articles/medium")
+		http.MethodGet, "/aggregator/api/articles/medium")
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	// The first <img> counts, and only when its src holds "https://cdn";
@@ -153,7 +157,7 @@ func TestCompatArticlesCutAtExactlyTheLimit(t *testing.T) {
 	body := rss(item("exact", "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", exact),
 		item("over", "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", over))
 	got := articles(t, serve(t, articlesServer(t, &feedDoer{body: body}, &compatClock{now: time.Unix(1000, 0)}),
-		http.MethodGet, "/api/articles/medium"))
+		http.MethodGet, "/aggregator/api/articles/medium"))
 	require.Len(t, got, 2)
 	assert.Equal(t, exact, got[0]["description"], "150 bytes are kept whole")
 	assert.Equal(t, exact+"...", got[1]["description"], "151 bytes are cut at 150")
@@ -163,7 +167,7 @@ func TestCompatArticlesFallBackToTheItemDescription(t *testing.T) {
 	body := rss(`<item><title>t</title><link>https://medium.com/x</link><pubDate>Fri, 23 Oct 2026 12:07:15 GMT</pubDate>` +
 		`<description><![CDATA[<img src="https://cdn-images-1.medium.com/z.png"><p>From the description.</p>]]></description></item>`)
 	got := articles(t, serve(t, articlesServer(t, &feedDoer{body: body}, &compatClock{now: time.Unix(1000, 0)}),
-		http.MethodGet, "/api/articles/medium"))
+		http.MethodGet, "/aggregator/api/articles/medium"))
 	require.Len(t, got, 1)
 	assert.Equal(t, "From the description.", got[0]["description"])
 	assert.Equal(t, "https://cdn-images-1.medium.com/z.png", got[0]["picture_url"])
@@ -171,7 +175,7 @@ func TestCompatArticlesFallBackToTheItemDescription(t *testing.T) {
 
 func TestCompatArticlesOfAnEmptyFeedAreAnEmptyList(t *testing.T) {
 	rec := serve(t, articlesServer(t, &feedDoer{body: rss()}, &compatClock{now: time.Unix(1000, 0)}),
-		http.MethodGet, "/api/articles/medium")
+		http.MethodGet, "/aggregator/api/articles/medium")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "[]\n", rec.Body.String(), "[] where the aggregator answers null")
 }
@@ -180,7 +184,7 @@ func TestCompatArticlesAreCachedThenBackedUp(t *testing.T) {
 	doer := &feedDoer{body: rss(item("first", "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", "one"))}
 	clock := &compatClock{now: time.Unix(1000, 0)}
 	e := articlesServer(t, doer, clock)
-	get := func() string { return serve(t, e, http.MethodGet, "/api/articles/medium").Body.String() }
+	get := func() string { return serve(t, e, http.MethodGet, "/aggregator/api/articles/medium").Body.String() }
 	first := get()
 	require.Contains(t, first, `"title":"first"`)
 
@@ -210,7 +214,7 @@ func TestCompatArticlesAreCachedThenBackedUp(t *testing.T) {
 
 	// 24 hours after the last read: nothing to serve, an empty list.
 	clock.now = clock.now.Add(time.Second)
-	rec := serve(t, e, http.MethodGet, "/api/articles/medium")
+	rec := serve(t, e, http.MethodGet, "/aggregator/api/articles/medium")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "[]\n", rec.Body.String())
 
@@ -226,14 +230,14 @@ func TestCompatArticlesTreatErrorAnswersAsFailures(t *testing.T) {
 		"HTTP 503":    {status: http.StatusServiceUnavailable, body: rss(item("x", "", "Fri, 23 Oct 2026 12:07:15 GMT", "x"))},
 		"not a feed":  {body: "<html>Too many requests</html>"},
 	} {
-		rec := serve(t, articlesServer(t, doer, &compatClock{now: time.Unix(1000, 0)}), http.MethodGet, "/api/articles/medium")
+		rec := serve(t, articlesServer(t, doer, &compatClock{now: time.Unix(1000, 0)}), http.MethodGet, "/aggregator/api/articles/medium")
 		assert.Equal(t, http.StatusOK, rec.Code, name)
 		assert.Equal(t, "[]\n", rec.Body.String(), name)
 	}
 }
 
 func TestCompatArticlesNeedAFeed(t *testing.T) {
-	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/api/articles/medium").Code)
+	assert.Equal(t, http.StatusNotFound, serve(t, server.New(server.Deps{}), http.MethodGet, "/aggregator/api/articles/medium").Code)
 }
 
 func TestCompatArticlesAllowAnyOrigin(t *testing.T) {
@@ -241,7 +245,23 @@ func TestCompatArticlesAllowAnyOrigin(t *testing.T) {
 	lg, _ := logtest.NewNullLogger()
 	feed := medium.NewFeed(medium.FeedDeps{Source: medium.New(doer, mediumURL), Log: lg, Clock: &compatClock{now: time.Unix(1000, 0)}})
 	e := server.New(server.Deps{CompatArticles: feed, CORSAllowedOrigins: []string{"https://explorer.getbze.com"}})
-	rec := corsRequest(e, http.MethodGet, "/api/articles/medium", "https://getbze.com")
+	rec := corsRequest(e, http.MethodGet, "/aggregator/api/articles/medium", "https://getbze.com")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "*", rec.Header().Get(echo.HeaderAccessControlAllowOrigin))
+}
+
+func TestCompatArticlesReadOutlivesTheCallerThatTriggeredIt(t *testing.T) {
+	doer := &feedDoer{body: rss(item("one", "BZE", "Mon, 06 Oct 2025 10:00:00 GMT", "<p>hello</p>"))}
+	e := articlesServer(t, doer, &compatClock{now: time.Unix(1000, 0)})
+
+	// The first caller hangs up before the read: the read still counts.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/aggregator/api/articles/medium", nil).WithContext(ctx)
+	e.ServeHTTP(httptest.NewRecorder(), req)
+
+	got := articles(t, serve(t, e, http.MethodGet, "/aggregator/api/articles/medium"))
+	require.Len(t, got, 1)
+	assert.Equal(t, "one", got[0]["title"])
+	assert.Equal(t, 1, doer.calls, "the second caller is served the first read, not a retry")
 }
