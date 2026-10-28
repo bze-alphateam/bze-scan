@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
@@ -18,7 +19,7 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
 	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
-	"COINGECKO_HOST", "COINGECKO_PRICE_IDS",
+	"COINGECKO_HOST", "COINGECKO_PRICE_IDS", "COINGECKO_MERGED_MARKETS",
 	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW",
 	"SINK_RETENTION", "SINK_CLEANUP_INTERVAL", "SINK_CLEANUP_BATCH"}
 
@@ -444,6 +445,25 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:9001/lookup.json", cfg.KeybaseURL)
 	assert.Equal(t, "http://127.0.0.1:9002", cfg.CoinGeckoHost)
 	assert.Equal(t, []string{"bzedge", "osmosis", "cosmos"}, cfg.CoinGeckoPriceIDs, "in order, blanks dropped")
+}
+
+func TestLoadCoinGeckoMergedMarkets(t *testing.T) {
+	isolate(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Nil(t, cfg.CoinGeckoMergedMarkets, "nothing merged by default")
+
+	t.Setenv("COINGECKO_MERGED_MARKETS", "ubze/ibc/81DA=ubze/ibc/6490,uvdl/ubze=uvdl/ibc/6490")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, marketmerge.Merges{"ubze/ibc/81DA": "ubze/ibc/6490", "uvdl/ubze": "uvdl/ibc/6490"}, cfg.CoinGeckoMergedMarkets)
+
+	for _, bad := range []string{"ubze/ibc/81DA", "a=b=c", "a=", "a=b,b=c", "a=a"} {
+		t.Setenv("COINGECKO_MERGED_MARKETS", bad)
+		_, err = config.Load()
+		require.Error(t, err, bad)
+		assert.Contains(t, err.Error(), "COINGECKO_MERGED_MARKETS")
+	}
 }
 
 func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {

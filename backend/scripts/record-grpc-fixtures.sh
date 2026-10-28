@@ -60,6 +60,11 @@
 #     tradebin/MarketOrder.<market>.<side>.<id>.json (the market path-escaped).
 #     Record the archive's answers at the same height with
 #     make fixtures ORDERS="<address>@<height>" (record-fixtures.sh).
+#   orderbooks (the aggregator-compatible /api/dex/orders), per market id in
+#     MARKETS, both sides pinned to one height (one page of 10000, buys
+#     reversed, as the order books read them):
+#     tradebin/MarketAggregatedOrders.<market>.buy.json and .sell.json (the
+#     market path-escaped)
 #   chain (the chain_state and params syncs):
 #     staking/Pool.json, staking/Params.json, bank/SupplyOf.ubze.json,
 #     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
@@ -70,7 +75,7 @@
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
 #         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"]
-#         [ORDERS_HEIGHT=25159796] [REST=…])
+#         [ORDERS_HEIGHT=25159796] [MARKETS="ubze/ibc/…"] [REST=…])
 set -euo pipefail
 
 REST="${REST:-https://rest.getbze.com}"
@@ -84,6 +89,7 @@ HOLDERS="${HOLDERS:-}"
 HOLDERS_PAGE_LIMIT="${HOLDERS_PAGE_LIMIT:-1000}"
 OWNERS="${OWNERS:-}"
 ORDERS_HEIGHT="${ORDERS_HEIGHT:-}"
+MARKETS="${MARKETS:-}"
 # PIN, when set, pins every fetch to that height (x-cosmos-block-height).
 PIN=""
 
@@ -230,6 +236,18 @@ if has orders; then
         fetch "bze/tradebin/market_order?market=$(esc "${market}")&order_type=${side}&order_id=${id}" \
           "tradebin/MarketOrder.$(esc "${market}").${side}.${id}.json"
       done
+  done
+  PIN=""
+fi
+
+if has orderbooks; then
+  PIN="$(curl -sS "${REST}/cosmos/base/tendermint/v1beta1/blocks/latest" | jq -r .block.header.height)"
+  echo "order books pinned to height ${PIN}"
+  for m in ${MARKETS}; do
+    fetch "bze/tradebin/market_aggregated_orders?market=$(esc "${m}")&order_type=buy&pagination.limit=10000&pagination.reverse=true" \
+      "tradebin/MarketAggregatedOrders.$(esc "${m}").buy.json"
+    fetch "bze/tradebin/market_aggregated_orders?market=$(esc "${m}")&order_type=sell&pagination.limit=10000" \
+      "tradebin/MarketAggregatedOrders.$(esc "${m}").sell.json"
   done
   PIN=""
 fi

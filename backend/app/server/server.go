@@ -16,6 +16,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 // ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
@@ -82,6 +83,12 @@ type Deps struct {
 	// CompatPrices serves CoinGecko's prices; nil leaves the
 	// aggregator-compatible /api/prices out.
 	CompatPrices controller.PriceFeed
+	// CompatOrders serves the DEX's live order books; nil leaves the
+	// aggregator-compatible /api/dex/orders out.
+	CompatOrders controller.OrderBooks
+	// CoinGeckoMerges folds markets for the coingecko format
+	// (COINGECKO_MERGED_MARKETS); nil merges nothing.
+	CoinGeckoMerges marketmerge.Merges
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -203,6 +210,9 @@ func New(deps Deps) *echo.Echo {
 	compat := e.Group(CompatPrefix)
 	if deps.CompatPrices != nil {
 		compat.GET("/prices", controller.NewCompatPricesController(deps.CompatPrices).Prices)
+	}
+	if deps.CompatOrders != nil {
+		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
 	}
 
 	return e
