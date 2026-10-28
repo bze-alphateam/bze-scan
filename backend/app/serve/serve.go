@@ -74,6 +74,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		"backfill_enabled": cfg.BackfillEnabled,
 		"halt_watch":       cfg.IndexerEnabled && cfg.HaltWatchEnabled,
 		"debug_addr":       cfg.DebugAddr,
+		"sink_retention":   cfg.SinkRetention,
 	}).Info("starting bze-scan")
 
 	if err := cfg.RequireDatabase(); err != nil {
@@ -209,6 +210,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 	if coverage.run != nil {
 		components = append(components, coverage)
+	}
+	// The sink cleanup runs only with SINK_RETENTION set (off by default).
+	if cfg.SinkRetention > 0 {
+		components = append(components, component{name: "sink cleanup", run: newSinkCleaner(cfg, 0, apiPool).Run})
 	}
 	if cfg.DebugAddr != "" {
 		components = append(components, component{name: "debug server", run: func(ctx context.Context) error {
