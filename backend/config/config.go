@@ -23,6 +23,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/coingecko"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
+	"github.com/bze-alphateam/bze-scan/backend/internal/medium"
 )
 
 // Log formats accepted in LOG_FORMAT.
@@ -124,6 +125,10 @@ type Config struct {
 	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
 	// /api/prices lists them (mainnet: bzedge, osmosis, cosmos).
 	CoinGeckoPriceIDs []string
+	// MediumFeedURL is the Medium RSS feed whose first articles back
+	// /api/articles/medium. Load always sets it; a Config built in code
+	// without one leaves the route out.
+	MediumFeedURL string
 	// ChainRegistryAPIURL is the GitHub contents API of the Cosmos chain
 	// registry (the directory listings) and ChainRegistryRawURL the raw
 	// files' base; the chain_registry job runs only with both.
@@ -193,6 +198,7 @@ func Load() (*Config, error) {
 		AggregatorURL:       strings.TrimRight(envString("AGGREGATOR_URL", ""), "/"),
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
 		CoinGeckoHost:       strings.TrimRight(envString("COINGECKO_HOST", coingecko.DefaultHost), "/"),
+		MediumFeedURL:       envString("MEDIUM_FEED_URL", medium.DefaultFeedURL),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
 		KeybaseURL:          envString("KEYBASE_URL", keybase.DefaultURL),
@@ -254,7 +260,7 @@ func Load() (*Config, error) {
 		"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL,
 		"AGGREGATOR_URL": cfg.AggregatorURL, "CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
 		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL, "KEYBASE_URL": cfg.KeybaseURL,
-		"COINGECKO_HOST": cfg.CoinGeckoHost,
+		"COINGECKO_HOST": cfg.CoinGeckoHost, "MEDIUM_FEED_URL": cfg.MediumFeedURL,
 	} {
 		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL" || key == "KEYBASE_URL") {
 			continue

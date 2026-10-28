@@ -83,6 +83,9 @@ type Deps struct {
 	// CompatPrices serves CoinGecko's prices; nil leaves the
 	// aggregator-compatible /api/prices out.
 	CompatPrices controller.PriceFeed
+	// CompatArticles serves the Medium articles; nil leaves the
+	// aggregator-compatible /api/articles/medium out.
+	CompatArticles controller.ArticleFeed
 	// CompatOrders serves the DEX's live order books; nil leaves the
 	// aggregator-compatible /api/dex/orders out.
 	CompatOrders controller.OrderBooks
@@ -213,6 +216,9 @@ func New(deps Deps) *echo.Echo {
 	compat := e.Group(CompatPrefix)
 	if deps.CompatPrices != nil {
 		compat.GET("/prices", controller.NewCompatPricesController(deps.CompatPrices).Prices)
+	}
+	if deps.CompatArticles != nil {
+		compat.GET("/articles/medium", controller.NewCompatArticlesController(deps.CompatArticles).Medium)
 	}
 	if deps.CompatOrders != nil {
 		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
