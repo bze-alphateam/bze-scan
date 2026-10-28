@@ -19,7 +19,7 @@ type SupplyReader interface {
 }
 
 // CompatSupplyController serves the aggregator-compatible
-// GET /api/supply/total and /api/supply/circulating.
+// GET /aggregator/api/supply/total and /aggregator/api/supply/circulating.
 type CompatSupplyController struct {
 	supply SupplyReader
 }
@@ -29,12 +29,12 @@ func NewCompatSupplyController(r SupplyReader) *CompatSupplyController {
 	return &CompatSupplyController{supply: r}
 }
 
-// Total serves GET /api/supply/total?denom= (default ubze) as plain text.
+// Total serves GET /aggregator/api/supply/total?denom= (default ubze) as plain text.
 func (h *CompatSupplyController) Total(c *echo.Context) error {
 	return h.answer(c, h.supply.Total)
 }
 
-// Circulating serves GET /api/supply/circulating?denom= (default ubze) as
+// Circulating serves GET /aggregator/api/supply/circulating?denom= (default ubze) as
 // plain text.
 func (h *CompatSupplyController) Circulating(c *echo.Context) error {
 	return h.answer(c, h.supply.Circulating)

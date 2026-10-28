@@ -115,7 +115,7 @@ type Config struct {
 	// leaves the change null.
 	PriceChangeMarket string
 	// CoinGeckoHost is CoinGecko's API host, whose USD prices of
-	// CoinGeckoPriceIDs back /api/prices and the prices job. Load always
+	// CoinGeckoPriceIDs back /aggregator/api/prices and the prices job. Load always
 	// sets it; a Config built in code without one serves neither.
 	CoinGeckoHost string
 	// CoinGeckoMergedMarkets folds markets into the ones CoinGecko tracks,
@@ -123,10 +123,10 @@ type Config struct {
 	// (COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…).
 	CoinGeckoMergedMarkets marketmerge.Merges
 	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
-	// /api/prices lists them (mainnet: bzedge, osmosis, cosmos).
+	// /aggregator/api/prices lists them (mainnet: bzedge, osmosis, cosmos).
 	CoinGeckoPriceIDs []string
 	// MediumFeedURL is the Medium RSS feed whose first articles back
-	// /api/articles/medium. Load always sets it; a Config built in code
+	// /aggregator/api/articles/medium. Load always sets it; a Config built in code
 	// without one leaves the route out.
 	MediumFeedURL string
 	// ChainRegistryAPIURL is the GitHub contents API of the Cosmos chain

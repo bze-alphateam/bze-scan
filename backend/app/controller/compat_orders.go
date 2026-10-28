@@ -24,7 +24,7 @@ type OrderBooks interface {
 }
 
 // CompatOrdersController serves the aggregator-compatible GET
-// /api/dex/orders.
+// /aggregator/api/dex/orders.
 type CompatOrdersController struct {
 	books  OrderBooks
 	merges marketmerge.Merges
@@ -40,7 +40,7 @@ func NewCompatOrdersController(books OrderBooks, merges marketmerge.Merges, lg l
 	return &CompatOrdersController{books: books, merges: merges, log: lg}
 }
 
-// Orders serves GET /api/dex/orders?market_id=|ticker_id=&depth=&format= as
+// Orders serves GET /aggregator/api/dex/orders?market_id=|ticker_id=&depth=&format= as
 // the aggregator does: depth/2 price levels per side (the whole book for 0,
 // the default), both sides by ascending price, in display units. ticker_id
 // is a market id with "_" for "/". format=coingecko answers under the

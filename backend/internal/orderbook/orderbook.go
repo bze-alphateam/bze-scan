@@ -1,5 +1,5 @@
 // Package orderbook reads the DEX's live order books from the node, in
-// display units, for the aggregator-compatible routes (GET /api/dex/orders,
+// display units, for the aggregator-compatible routes (GET /aggregator/api/dex/orders,
 // later the tickers' bid and ask). A book is the node's aggregated price
 // levels (MarketAggregatedOrders), not single orders, read whole and kept
 // for TTL per market, so polling never reaches the node more than once per
@@ -170,6 +170,9 @@ func (s *Service) Book(ctx context.Context, id string) (*Book, error) {
 	}
 	s.mu.Unlock()
 
+	// The read is shared by every caller of the flight, so it must not end
+	// when the first one hangs up; the node client bounds each query.
+	ctx = context.WithoutCancel(ctx)
 	v, err, _ := s.group.Do("book:"+id, func() (any, error) {
 		m, err := s.Market(ctx, id)
 		if err != nil {
@@ -215,6 +218,7 @@ func (s *Service) allMarkets(ctx context.Context) (map[string]Market, error) {
 	}
 	s.mu.Unlock()
 
+	ctx = context.WithoutCancel(ctx)
 	v, err, _ := s.group.Do("markets", func() (any, error) {
 		markets := map[string]Market{}
 		var key []byte

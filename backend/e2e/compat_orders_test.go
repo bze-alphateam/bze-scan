@@ -87,7 +87,7 @@ func TestCompatOrdersFromTheNode(t *testing.T) {
 		cfg.CoinGeckoMergedMarkets = merges
 	})
 	orders := func(query string) response {
-		return fetch(t, base+"/api/dex/orders?"+query, "Origin", "https://dex.getbze.com")
+		return fetch(t, base+"/aggregator/api/dex/orders?"+query, "Origin", "https://dex.getbze.com")
 	}
 
 	// The whole book, as getbze.com answered it.

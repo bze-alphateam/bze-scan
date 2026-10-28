@@ -1,7 +1,7 @@
 // Package medium reads the latest articles of a Medium publication's RSS
 // feed the way the BZE aggregator does: Client fetches and parses the feed,
 // Feed keeps the answer for FreshFor and serves it for BackupFor more when
-// the feed fails. Feed backs GET /api/articles/medium of the
+// the feed fails. Feed backs GET /aggregator/api/articles/medium of the
 // aggregator-compatible routes.
 package medium
 
@@ -207,7 +207,9 @@ func (f *Feed) Articles(ctx context.Context) []Article {
 		return f.held
 	}
 	if !f.failing || now.Sub(f.failedAt) >= RetryAfter {
-		got, err := f.deps.Source.Articles(ctx)
+		// The read outlives the request that triggered it: a caller that
+		// hangs up must not count as a feed failure. Source bounds it.
+		got, err := f.deps.Source.Articles(context.WithoutCancel(ctx))
 		f.note(err, now)
 		if err == nil {
 			if got == nil {

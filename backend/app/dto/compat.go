@@ -6,7 +6,7 @@ import "github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
 // field for field and type for type what the BZE aggregator API answers, so
 // its callers can switch to the explorer unchanged.
 
-// CompatPrice is one entry of GET /api/prices: a USD price by CoinGecko id,
+// CompatPrice is one entry of GET /aggregator/api/prices: a USD price by CoinGecko id,
 // as a JSON number.
 type CompatPrice struct {
 	Denom      string  `json:"denom"`
@@ -29,14 +29,14 @@ type CompatError struct {
 	Message string `json:"message"`
 }
 
-// CompatLevel is one price level of GET /api/dex/orders, display units as
+// CompatLevel is one price level of GET /aggregator/api/dex/orders, display units as
 // strings.
 type CompatLevel struct {
 	Price  string `json:"price"`
 	Volume string `json:"volume"`
 }
 
-// CompatOrders is GET /api/dex/orders' default format; timestamp is the
+// CompatOrders is GET /aggregator/api/dex/orders' default format; timestamp is the
 // answer's time in unix seconds, as a string.
 type CompatOrders struct {
 	MarketID  string        `json:"market_id"`
@@ -45,7 +45,7 @@ type CompatOrders struct {
 	Asks      []CompatLevel `json:"asks"`
 }
 
-// CompatCoinGeckoOrders is GET /api/dex/orders?format=coingecko: levels as
+// CompatCoinGeckoOrders is GET /aggregator/api/dex/orders?format=coingecko: levels as
 // [price, volume] pairs under the ticker id <base>_<quote>.
 type CompatCoinGeckoOrders struct {
 	TickerID  string     `json:"ticker_id"`

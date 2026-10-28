@@ -24,7 +24,7 @@ type DenomDisplay interface {
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 }
 
-// NewSupply builds the /api/supply reader over the local node's gRPC
+// NewSupply builds the /aggregator/api/supply reader over the local node's gRPC
 // (NODE_GRPC_ADDR) and the explorer's denoms. The connection is lazy. Call
 // closeFn when done.
 func NewSupply(cfg *config.Config, codec *chain.Codec, denoms DenomDisplay) (svc *supply.Service, closeFn func(), err error) {

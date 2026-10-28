@@ -103,7 +103,7 @@ func TestCompatArticlesFromTheMediumFeed(t *testing.T) {
 	feed := newFakeFeed(t, feedXML)
 	base := serveArticles(t, feed.URL+"/feed/bzedge-community")
 
-	r := fetch(t, base+"/api/articles/medium", "Origin", "https://getbze.com")
+	r := fetch(t, base+"/aggregator/api/articles/medium", "Origin", "https://getbze.com")
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
 	assert.Equal(t, string(want), string(r.body), "the aggregator's answer")
 	assert.Equal(t, "*", r.header.Get("Access-Control-Allow-Origin"))
@@ -113,7 +113,7 @@ func TestCompatArticlesFromTheMediumFeed(t *testing.T) {
 
 	// Read once per 600 s; the feed going down meanwhile changes nothing.
 	feed.setDown(true)
-	assert.Equal(t, r.body, fetch(t, base+"/api/articles/medium").body)
+	assert.Equal(t, r.body, fetch(t, base+"/aggregator/api/articles/medium").body)
 	reads, _ = feed.answered()
 	assert.Equal(t, 1, reads)
 }
@@ -123,7 +123,7 @@ func TestCompatArticlesWithTheFeedDownAreAnEmptyList(t *testing.T) {
 	feed.setDown(true)
 	base := serveArticles(t, feed.URL+"/feed/bzedge-community")
 
-	r := fetch(t, base+"/api/articles/medium")
+	r := fetch(t, base+"/aggregator/api/articles/medium")
 	assert.Equal(t, http.StatusOK, r.status)
 	assert.Equal(t, "[]\n", string(r.body))
 }

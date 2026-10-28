@@ -17,7 +17,7 @@ import (
 const OrderBookTimeout = 5 * time.Second
 
 // NewOrderBook builds the DEX order books of the aggregator-compatible
-// /api/dex/orders: the local node's tradebin queries (NODE_GRPC_ADDR) over a
+// /aggregator/api/dex/orders: the local node's tradebin queries (NODE_GRPC_ADDR) over a
 // lazy connection of their own, exponents from explorer.denoms through pool.
 // Call closeFn when done.
 func NewOrderBook(cfg *config.Config, codec *chain.Codec, pool *pgxpool.Pool) (*orderbook.Service, func(), error) {
