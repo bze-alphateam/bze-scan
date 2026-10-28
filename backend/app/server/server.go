@@ -85,6 +85,9 @@ type Deps struct {
 	// CompatArticles serves the Medium articles; nil leaves the
 	// aggregator-compatible /api/articles/medium out.
 	CompatArticles controller.ArticleFeed
+	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
+	// /api/supply routes out.
+	CompatSupply controller.SupplyReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -209,6 +212,11 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatArticles != nil {
 		compat.GET("/articles/medium", controller.NewCompatArticlesController(deps.CompatArticles).Medium)
+	}
+	if deps.CompatSupply != nil {
+		sup := controller.NewCompatSupplyController(deps.CompatSupply)
+		compat.GET("/supply/total", sup.Total)
+		compat.GET("/supply/circulating", sup.Circulating)
 	}
 
 	return e
