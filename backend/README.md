@@ -439,6 +439,8 @@ result is `[]`, never `null`.
 | --- | --- |
 | `GET /api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
 | `GET /api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
+| `GET /api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
+| `GET /api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
@@ -484,6 +486,22 @@ characters), and its "Unknown error!…" for an unknown market or a failed
 read. Differences from the aggregator: an empty side is `[]` (`null`
 there), an emptied book answers empty sides (the aggregator keeps its last
 rows), and prices of big exponent gaps are right.
+**Supply.** `internal/supply`, served only with `NODE_GRPC_ADDR`: bank
+`SupplyOf` for the one denom (the aggregator lists one page of 5000 supplies
+and misses the denoms beyond it), distribution `CommunityPool` for `ubze`'s
+circulating supply, the display exponent from `explorer.denoms` (`ubze` is 6
+even before the first sync; a denom the chain minted but the sync has not
+written yet is 0). The amount is formatted with exactly 2 decimals rounded
+half up with integer arithmetic, and the circulating supply is the exact
+difference rounded once (the aggregator subtracts a float from the rounded
+total, so the two can differ by 0.01). Each answer is kept 600 s per denom
+and route; when the node or the database fails the last read is served for up
+to 24 hours after it, then a 503 `supply is unavailable, try again later`
+(the aggregator answers `0`). A 400 carries the aggregator's message: `denom
+<denom> not found in registry` for a denom the explorer does not know and the
+chain has no supply of (the aggregator answers a 500), `<denom> has an
+unsupported display exponent` outside 0–18. Answers are `text/plain;
+charset=UTF-8`, like the aggregator's.
 
 ## Migrations
 

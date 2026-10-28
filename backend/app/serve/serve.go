@@ -199,6 +199,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
+
+	// The aggregator-compatible /api/supply routes read the local node.
+	var compatSupply controller.SupplyReader
+	if cfg.NodeGRPCAddr != "" {
+		sup, closeSupply, err := NewSupply(cfg, codec, explorerRepo)
+		if err != nil {
+			return err
+		}
+		defer closeSupply()
+		compatSupply = sup
+	}
+
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
 		Accounts:           explorerRepo,
@@ -220,6 +232,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		CompatPrices:       compatPrices,
 		CompatOrders:       compatOrders,
 		CoinGeckoMerges:    cfg.CoinGeckoMergedMarkets,
+		CompatSupply:       compatSupply,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})

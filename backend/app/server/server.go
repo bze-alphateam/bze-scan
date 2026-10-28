@@ -89,6 +89,9 @@ type Deps struct {
 	// CoinGeckoMerges folds markets for the coingecko format
 	// (COINGECKO_MERGED_MARKETS); nil merges nothing.
 	CoinGeckoMerges marketmerge.Merges
+	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
+	// /api/supply routes out.
+	CompatSupply controller.SupplyReader
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -213,6 +216,11 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatOrders != nil {
 		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
+	}
+	if deps.CompatSupply != nil {
+		sup := controller.NewCompatSupplyController(deps.CompatSupply)
+		compat.GET("/supply/total", sup.Total)
+		compat.GET("/supply/circulating", sup.Circulating)
 	}
 
 	return e
