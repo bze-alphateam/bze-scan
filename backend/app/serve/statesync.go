@@ -68,7 +68,8 @@ const keybaseTimeout = 10 * time.Second
 // reads nothing the others write), the chain state after them (it counts
 // the validators and copies the native price), the daily statistics last
 // (they read only the indexed tables). The chain registry runs only
-// with both its URLs, the prices only with AGGREGATOR_URL, the validator
+// with both its URLs, the prices only with a CoinGecko host (Load always
+// sets one; BZE's 24-hour change also needs AGGREGATOR_URL), the validator
 // logos only with a KeybaseURL (Load always sets one). The non-voters read
 // the validator sets of the heights the local node pruned from the archive
 // (ARCHIVE_RPC_URL), and the upgrade recovery the commits after an upgrade
@@ -165,9 +166,15 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
-	if cfg.AggregatorURL != "" {
+	if feed := NewPriceFeed(cfg); feed != nil {
+		// The change needs the aggregator; a nil interface without it.
+		var tickers prices.Tickers
+		if cfg.AggregatorURL != "" {
+			tickers = aggregator.New(outbound, cfg.AggregatorURL)
+		}
 		sets = append(sets, prices.New(prices.Deps{
-			Source:       aggregator.New(outbound, cfg.AggregatorURL),
+			Prices:       feed,
+			Tickers:      tickers,
 			Store:        prices.NewPGStore(pool),
 			ChainID:      cfg.ChainID,
 			Denom:        chain.BondDenom,

@@ -7,6 +7,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -20,8 +21,16 @@ import (
 // ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
 const ShutdownTimeout = 10 * time.Second
 
-// APIPrefix is the prefix of every route but /health.
+// APIPrefix is the prefix of the explorer's own routes.
 const APIPrefix = "/api/v1"
+
+// CompatPrefix is the prefix of the aggregator-compatible routes: the BZE
+// aggregator API's paths and answers (/api/prices, …), mounted next to
+// /api/v1, not inside it. None of the /api/v1 conventions apply to them,
+// and they answer CORS requests from any origin, whatever
+// CORSAllowedOrigins says, because browsers call them the way they call the
+// aggregator.
+const CompatPrefix = "/api"
 
 // Deps is what the routes read from, built by the composition root.
 type Deps struct {
@@ -70,8 +79,11 @@ type Deps struct {
 	ValidatorNames controller.ValidatorNames
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
+	// CompatPrices serves CoinGecko's prices; nil leaves the
+	// aggregator-compatible /api/prices out.
+	CompatPrices controller.PriceFeed
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
-	// sends no CORS headers.
+	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
 	// Log receives the request log; nil is the standard logger.
 	Log log.FieldLogger
@@ -90,11 +102,18 @@ func New(deps Deps) *echo.Echo {
 	e.Use(appmw.RequestLog(deps.Log))
 	if len(deps.CORSAllowedOrigins) > 0 {
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+			Skipper:       isCompat,
 			AllowOrigins:  deps.CORSAllowedOrigins,
 			AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
 			ExposeHeaders: []string{appmw.RequestIDHeader},
 		}))
 	}
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		Skipper:       func(c *echo.Context) bool { return !isCompat(c) },
+		AllowOrigins:  []string{"*"},
+		AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
+		ExposeHeaders: []string{appmw.RequestIDHeader},
+	}))
 	e.Use(appmw.Recover())
 
 	health := controller.NewHealthController()
@@ -179,7 +198,24 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/raw/tx/:hash", raw.Tx)
 	}
 
+	// The aggregator-compatible routes: every endpoint ported from the BZE
+	// aggregator API is added here.
+	compat := e.Group(CompatPrefix)
+	if deps.CompatPrices != nil {
+		compat.GET("/prices", controller.NewCompatPricesController(deps.CompatPrices).Prices)
+	}
+
 	return e
+}
+
+// isCompat reports whether c's path is an aggregator-compatible one: under
+// CompatPrefix, outside APIPrefix.
+func isCompat(c *echo.Context) bool {
+	p := c.Request().URL.Path
+	if p != CompatPrefix && !strings.HasPrefix(p, CompatPrefix+"/") {
+		return false
+	}
+	return p != APIPrefix && !strings.HasPrefix(p, APIPrefix+"/")
 }
 
 // Run serves e on addr until ctx is cancelled, then stops accepting

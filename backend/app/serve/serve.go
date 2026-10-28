@@ -178,6 +178,13 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		watch, liveHalt = w, w
 	}
 
+	// The aggregator-compatible /api/prices; a nil interface without a
+	// CoinGecko host, never a typed nil.
+	var compatPrices controller.PriceFeed
+	if feed := NewPriceFeed(cfg); feed != nil {
+		compatPrices = feed
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
 	e := server.New(server.Deps{
 		Explorer:           explorerRepo,
@@ -197,6 +204,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		LiveHalt:           liveHalt,
 		Status:             checker,
 		Raw:                raw,
+		CompatPrices:       compatPrices,
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})

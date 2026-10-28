@@ -1,9 +1,10 @@
 // Package prices is the prices set of the state sync: every minute it reads
-// the aggregator's USD prices, published by CoinGecko id, and writes them to
-// the denoms whose chain-registry asset carries that id (BZE's own asset
-// list first, then the origin chain's for an IBC denom). The native denom's
-// 24-hour change comes from the aggregator's ticker of one BZE/USDC market
-// (the liquidity pool), read at most every ChangeTTL. The explorer computes
+// CoinGecko's USD prices by id from the in-process feed that also serves
+// /api/prices, and writes them to the denoms whose chain-registry asset
+// carries that id (BZE's own asset list first, then the origin chain's for
+// an IBC denom). The native denom's 24-hour change comes from the
+// aggregator's ticker of one BZE/USDC market (the liquidity pool), read at
+// most every ChangeTTL, when there is an aggregator. The explorer computes
 // no DEX price; a failed fetch keeps the previous values and is logged once
 // per change of state, not every minute.
 package prices
@@ -27,10 +28,14 @@ const DefaultInterval = time.Minute
 // read again.
 const ChangeTTL = 5 * time.Minute
 
-// Source is the aggregator; *aggregator.Client satisfies it.
-type Source interface {
-	// Prices returns USD prices by CoinGecko id.
-	Prices(ctx context.Context) (map[string]string, error)
+// Prices reads USD prices; *coingecko.Feed satisfies it.
+type Prices interface {
+	// USD returns USD prices by CoinGecko id, as decimal strings.
+	USD(ctx context.Context) (map[string]string, error)
+}
+
+// Tickers reads the DEX tickers; *aggregator.Client satisfies it.
+type Tickers interface {
 	// Ticker returns a market's ticker, nil when the market is not listed.
 	Ticker(ctx context.Context, marketID string) (*aggregator.Ticker, error)
 }
@@ -65,15 +70,18 @@ func (realClock) Now() time.Time { return time.Now() }
 
 // Deps of the set.
 type Deps struct {
-	Source Source
-	Store  Store
+	Prices Prices
+	// Tickers gives the 24-hour change; nil reads none and leaves the
+	// change alone.
+	Tickers Tickers
+	Store   Store
 	// ChainID is BZE's chain id.
 	ChainID string
 	// Denom is the native denom, whose 24-hour change is read.
 	Denom string
 	// ChangeMarket is the aggregator market id of the ticker the change is
-	// read from (the BZE/USDC liquidity pool); empty reads none and leaves
-	// the change alone.
+	// read from (the BZE/USDC liquidity pool); empty (or no Tickers) reads
+	// none and leaves the change alone.
 	ChangeMarket string
 	// Log defaults to the standard logger, Clock to the wall clock.
 	Log   log.FieldLogger
@@ -121,8 +129,8 @@ func (s *Set) Interval() time.Duration { return s.interval }
 func (s *Set) FullResync(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	prices, err := s.deps.Source.Prices(ctx)
-	if s.note(&s.pricesFailing, err, "prices") != nil {
+	prices, err := s.deps.Prices.USD(ctx)
+	if s.note(&s.pricesFailing, err, "CoinGecko prices") != nil {
 		return statesync.Logged(err)
 	}
 	snap := Snapshot{ChainID: s.deps.ChainID, Prices: prices, ChangeDenom: s.deps.Denom, KeepChange: true}
@@ -145,14 +153,14 @@ func (s *Set) ResyncOne(ctx context.Context, _ string) error {
 // than ChangeTTL. A market the aggregator does not list, or a ticker without
 // prices, is no change (null); a failed read keeps the one held.
 func (s *Set) readChange(ctx context.Context) error {
-	if s.deps.ChangeMarket == "" || (s.changed && s.deps.Clock.Now().Sub(s.changeAt) < ChangeTTL) {
+	if s.deps.Tickers == nil || s.deps.ChangeMarket == "" || (s.changed && s.deps.Clock.Now().Sub(s.changeAt) < ChangeTTL) {
 		return nil
 	}
-	t, err := s.deps.Source.Ticker(ctx, s.deps.ChangeMarket)
+	t, err := s.deps.Tickers.Ticker(ctx, s.deps.ChangeMarket)
 	if err == nil && t != nil && t.Base != s.deps.Denom && t.Quote != s.deps.Denom {
 		err = fmt.Errorf("market %s does not trade %s", s.deps.ChangeMarket, s.deps.Denom)
 	}
-	if s.note(&s.changeFailing, err, "24-hour change") != nil {
+	if s.note(&s.changeFailing, err, "aggregator's 24-hour change") != nil {
 		return err
 	}
 	s.change, s.changeAt, s.changed = nil, s.deps.Clock.Now(), true
@@ -168,10 +176,10 @@ func (s *Set) note(failing *bool, err error, what string) error {
 	switch {
 	case err != nil && !*failing:
 		*failing = true
-		s.deps.Log.WithError(err).Warnf("prices: the aggregator's %s fails, kept until it answers again", what)
+		s.deps.Log.WithError(err).Warnf("prices: the %s fails, kept until it answers again", what)
 	case err == nil && *failing:
 		*failing = false
-		s.deps.Log.Infof("prices: the aggregator's %s answers again", what)
+		s.deps.Log.Infof("prices: the %s answers again", what)
 	}
 	return err
 }

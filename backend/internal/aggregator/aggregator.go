@@ -1,7 +1,7 @@
 // Package aggregator reads the BZE aggregator API (the DEX aggregator behind
 // the dapps, getbze.com and CoinGecko). The explorer computes no price of
-// its own: GET /api/prices is the source of the USD prices, GET
-// /api/dex/tickers of the 24-hour change.
+// its own: GET /api/dex/tickers is the source of BZE's 24-hour change (the
+// USD prices come from CoinGecko, see package coingecko).
 package aggregator
 
 import (
@@ -13,9 +13,6 @@ import (
 	"net/http"
 	"strings"
 )
-
-// USD is the price_denom of a US dollar price.
-const USD = "usd"
 
 // maxBody bounds a response: the tickers of every market are well under it.
 const maxBody = 4 << 20
@@ -34,32 +31,6 @@ type Client struct {
 // New returns a client over http for the aggregator at baseURL.
 func New(http Doer, baseURL string) *Client {
 	return &Client{http: http, base: strings.TrimRight(baseURL, "/")}
-}
-
-// Prices returns the USD prices the aggregator publishes, by CoinGecko id
-// (bzedge, cosmos, osmosis…), as decimal strings. Other currencies and
-// entries that are not a non-negative number are left out.
-func (c *Client) Prices(ctx context.Context) (map[string]string, error) {
-	var list []struct {
-		Denom      string      `json:"denom"`
-		Price      json.Number `json:"price"`
-		PriceDenom string      `json:"price_denom"`
-	}
-	if err := c.get(ctx, "/api/prices", &list); err != nil {
-		return nil, fmt.Errorf("aggregator prices: %w", err)
-	}
-	out := map[string]string{}
-	for _, p := range list {
-		if p.Denom == "" || !strings.EqualFold(p.PriceDenom, USD) {
-			continue
-		}
-		r, ok := new(big.Rat).SetString(p.Price.String())
-		if !ok || r.Sign() < 0 {
-			continue
-		}
-		out[p.Denom] = r.FloatString(12)
-	}
-	return out, nil
 }
 
 // Ticker is a DEX market's last 24 hours, prices in quote units per base
