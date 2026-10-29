@@ -45,7 +45,7 @@ func seedTickerBlocks(t *testing.T, e *syncEnv, from int64, ages ...string) {
 func seedSwap(t *testing.T, e *syncEnv, height int64, n int, pool, base, quote, baseAmount, quoteAmount string) {
 	t.Helper()
 	_, err := e.db.Exec(`INSERT INTO explorer.swaps (height, trade_id, time, pool_id, base, quote, side, base_amount,
-			quote_amount, creator) SELECT height, height * 1000000 + $2, time, $3, $4, $5, 'buy', $6, $7, 'bze1swapper'
+			quote_amount, creator) SELECT height, height * 1000000 + $2::int, time, $3, $4, $5, 'buy', $6, $7, 'bze1swapper'
 		  FROM explorer.blocks WHERE height = $1`, height, n, pool, base, quote, baseAmount, quoteAmount)
 	require.NoError(t, err)
 }
@@ -55,8 +55,8 @@ func seedSwap(t *testing.T, e *syncEnv, height int64, n int, pool, base, quote, 
 func seedFill(t *testing.T, e *syncEnv, height int64, n int, market, price, amount string) {
 	t.Helper()
 	_, err := e.db.Exec(`INSERT INTO explorer.order_fills (height, seq, order_id, market_id, side, price, amount, maker,
-			taker, time, trade_id) SELECT height, $2, $2::text, $3, 'buy', $4, $5, 'bze1maker', 'bze1taker', time,
-			height * 1000000 + $2 FROM explorer.blocks WHERE height = $1`, height, n, market, price, amount)
+			taker, time, trade_id) SELECT height, $2::int, $2::int::text, $3, 'buy', $4, $5, 'bze1maker', 'bze1taker', time,
+			height * 1000000 + $2::int FROM explorer.blocks WHERE height = $1`, height, n, market, price, amount)
 	require.NoError(t, err)
 }
 
