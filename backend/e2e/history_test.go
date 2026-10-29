@@ -105,6 +105,19 @@ func TestCompatHistoryFromTheStoredTrades(t *testing.T) {
 		`"trade_timestamp":"1800000000123","type":"sell"}]}`+"\n",
 		string(get("?format=coingecko&limit=3&ticker_id="+strings.ReplaceAll(swapMarket, "/", "_"))))
 
+	// The second page over real SQL: the address's newest fill is of a
+	// market with no known exponent, so with limit=1 the store is read again
+	// below it and the older, convertible fill answers.
+	_, err = e.db.Exec(`INSERT INTO explorer.order_fills (height, seq, order_id, market_id, side, price, amount, maker, taker, time, trade_id)
+		SELECT height, 95, '95', 'factory/bze1x/unknown/ubze', 'buy', 1, 1, 'bze1page', 'bze1other', time, height * 1000000 + 95
+		  FROM explorer.blocks WHERE height = $1
+		UNION ALL
+		SELECT height, 900, '96', $2, 'sell', 2, 3000000, 'bze1page', 'bze1other', time, height * 1000000 + 900
+		  FROM explorer.blocks WHERE height = 22551811`, swapH, swapMarket)
+	require.NoError(t, err)
+	assert.Equal(t, `[{"order_id":22551811000900,"price":"2","base_volume":"3","quote_volume":"6","executed_at":"1777391551683",`+
+		`"order_type":"sell","maker":"bze1page","taker":"bze1other"}]`+"\n", string(get("?address=bze1page&limit=1")))
+
 	r := fetch(t, base+"/aggregator/api/dex/history")
 	assert.Equal(t, http.StatusBadRequest, r.status)
 	assert.Equal(t, `{"message":"please provide market_id or ticker_id"}`+"\n", string(r.body))

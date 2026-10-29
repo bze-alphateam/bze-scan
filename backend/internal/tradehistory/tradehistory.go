@@ -42,6 +42,10 @@ type Filter struct {
 	// FromMs and ToMs bound the block time in unix milliseconds, both ends
 	// inclusive. They apply only when both are above 0.
 	FromMs, ToMs int64
+	// FromHeight and ToHeight are the window's blocks, both inclusive:
+	// Service.Trades looks them up once per request (Store.Heights) and the
+	// store bounds its reads by them when both are above 0.
+	FromHeight, ToHeight int64
 }
 
 // Window reports whether the time bounds apply, the aggregator's rule.
@@ -65,10 +69,13 @@ type Fill struct {
 	Taker  string
 }
 
-// Store reads the stored trades; PGStore implements it. Both methods return
-// at most limit rows matching f with a trade id below before (no bound when
-// 0), newest first.
+// Store reads the stored trades; PGStore implements it. Fills and Swaps
+// return at most limit rows matching f with a trade id below before (no
+// bound when 0), newest first.
 type Store interface {
+	// Heights returns the lowest and highest height of the blocks whose
+	// time, to the millisecond, is in [fromMs, toMs]; false when none is.
+	Heights(ctx context.Context, fromMs, toMs int64) (lo, hi int64, ok bool, err error)
 	Fills(ctx context.Context, f Filter, before int64, limit int) ([]Fill, error)
 	Swaps(ctx context.Context, f Filter, before int64, limit int) ([]swaphistory.Swap, error)
 }
@@ -107,23 +114,43 @@ func New(deps Deps) *Service {
 }
 
 // Trades returns the last limit trades matching f, newest first, in display
-// units: the fills and the swaps, merged. A trade that cannot be converted (a denom without a known
+// units: the fills and the swaps of f.MarketID and of every market of
+// folded, merged. A trade that cannot be converted (a denom without a known
 // exponent) is left out, as the aggregator never stores it, and older ones
-// take its place.
-func (s *Service) Trades(ctx context.Context, f Filter, limit int) ([]Trade, error) {
-	fills, err := collect(ctx, limit, func(before int64) ([]Fill, error) {
-		return s.deps.Store.Fills(ctx, f, before, limit)
-	}, func(fl Fill) int64 { return fl.TradeID }, s.convertFills)
-	if err != nil {
-		return nil, err
+// take its place. The time window is turned into heights once.
+func (s *Service) Trades(ctx context.Context, f Filter, limit int, folded ...string) ([]Trade, error) {
+	if f.Window() {
+		if f.FromMs > f.ToMs {
+			return []Trade{}, nil
+		}
+		lo, hi, ok, err := s.deps.Store.Heights(ctx, f.FromMs, f.ToMs)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return []Trade{}, nil
+		}
+		f.FromHeight, f.ToHeight = lo, hi
 	}
-	swaps, err := collect(ctx, limit, func(before int64) ([]swaphistory.Swap, error) {
-		return s.deps.Store.Swaps(ctx, f, before, limit)
-	}, func(sw swaphistory.Swap) int64 { return sw.TradeID }, s.convertSwaps)
-	if err != nil {
-		return nil, err
+	var lists [][]Trade
+	for _, m := range append([]string{f.MarketID}, folded...) {
+		fm := f
+		fm.MarketID = m
+		fills, err := collect(ctx, limit, func(before int64) ([]Fill, error) {
+			return s.deps.Store.Fills(ctx, fm, before, limit)
+		}, func(fl Fill) int64 { return fl.TradeID }, s.convertFills)
+		if err != nil {
+			return nil, err
+		}
+		swaps, err := collect(ctx, limit, func(before int64) ([]swaphistory.Swap, error) {
+			return s.deps.Store.Swaps(ctx, fm, before, limit)
+		}, func(sw swaphistory.Swap) int64 { return sw.TradeID }, s.convertSwaps)
+		if err != nil {
+			return nil, err
+		}
+		lists = append(lists, fills, swaps)
 	}
-	return Merge(limit, fills, swaps), nil
+	return Merge(limit, lists...), nil
 }
 
 // Merge merges lists of trades into one, newest first (by trade id, which

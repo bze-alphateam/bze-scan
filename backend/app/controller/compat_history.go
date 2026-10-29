@@ -18,7 +18,7 @@ import (
 // TradeHistory serves the DEX's trades in display units; implemented by
 // tradehistory.Service.
 type TradeHistory interface {
-	Trades(ctx context.Context, f tradehistory.Filter, limit int) ([]tradehistory.Trade, error)
+	Trades(ctx context.Context, f tradehistory.Filter, limit int, folded ...string) ([]tradehistory.Trade, error)
 }
 
 // CompatHistoryController serves the aggregator-compatible GET
@@ -87,18 +87,12 @@ func (h *CompatHistoryController) History(c *echo.Context) error {
 		return c.JSON(http.StatusOK, out)
 	}
 
-	lists := [][]tradehistory.Trade{}
-	for _, m := range append([]string{marketID}, h.merges.FoldedInto(marketID)...) {
-		fm := f
-		fm.MarketID = m
-		trades, err := h.history.Trades(ctx, fm, limit)
-		if err != nil {
-			return h.fail(c, err, fm)
-		}
-		lists = append(lists, trades)
+	trades, err := h.history.Trades(ctx, f, limit, h.merges.FoldedInto(marketID)...)
+	if err != nil {
+		return h.fail(c, err, f)
 	}
 	out := dto.CompatCoinGeckoHistory{}
-	for _, t := range tradehistory.Merge(limit, lists...) {
+	for _, t := range trades {
 		tr := dto.CompatCoinGeckoTrade{TradeID: t.TradeID, Price: t.Price, BaseVolume: t.BaseVolume,
 			TargetVolume: t.QuoteVolume, TradeTimestamp: strconv.FormatInt(t.TimeMs, 10), Type: t.Side}
 		if t.Side == "buy" {

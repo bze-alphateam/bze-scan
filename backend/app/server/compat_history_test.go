@@ -39,6 +39,17 @@ type historyStore struct {
 	filters []tradehistory.Filter
 	kinds   []string
 	limits  []int
+	// heights counts the window lookups; a block's height is its time in
+	// ms here, so the window's heights are its bounds.
+	heights int
+}
+
+func (s *historyStore) Heights(_ context.Context, fromMs, toMs int64) (lo, hi int64, ok bool, err error) {
+	s.heights++
+	if s.fail {
+		return 0, 0, false, errors.New("database is down")
+	}
+	return fromMs, toMs, fromMs <= toMs, nil
 }
 
 func (s *historyStore) ask(kind string, f tradehistory.Filter, limit int) error {
@@ -51,7 +62,7 @@ func (s *historyStore) ask(kind string, f tradehistory.Filter, limit int) error 
 
 func keep(f tradehistory.Filter, before, id, timeMs int64, side string) bool {
 	return (before == 0 || id < before) && (!f.Sided() || side == f.Side) &&
-		(!f.Window() || timeMs >= f.FromMs && timeMs <= f.ToMs)
+		(f.FromHeight == 0 || timeMs >= f.FromHeight && timeMs <= f.ToHeight)
 }
 
 func (s *historyStore) Fills(_ context.Context, f tradehistory.Filter, before int64, limit int) ([]tradehistory.Fill, error) {
@@ -270,10 +281,51 @@ func TestCompatHistoryTimeWindow(t *testing.T) {
 		code, body := historyGet(t, e, "?market_id="+histMarket+tc.window)
 		require.Equal(t, http.StatusOK, code, tc.window)
 		assert.Equal(t, tc.want, orderIDs(t, body), tc.window)
+		if tc.filter[0] > tc.filter[1] && tc.filter[1] > 0 {
+			assert.Empty(t, store.filters, "a reversed window reads nothing")
+			continue
+		}
 		f := store.filters[0]
 		assert.Equal(t, tc.filter, [2]int64{f.FromMs, f.ToMs}, tc.window)
 		assert.Equal(t, tc.filter[0] > 0 && tc.filter[1] > 0, f.Window(), tc.window)
+		if f.Window() {
+			assert.Equal(t, tc.filter, [2]int64{f.FromHeight, f.ToHeight}, "the store reads by the window's heights")
+		}
 	}
+}
+
+// The window is turned into heights once per request, however many pages,
+// sources and folded markets it reads.
+func TestCompatHistoryLooksTheWindowUpOnce(t *testing.T) {
+	tracked, folded := "ubze/"+histUSDC, "ubze/"+histInj
+	var fills []tradehistory.Fill
+	for id := int64(30); id > 0; id-- {
+		price := "1"
+		if id > 20 {
+			price = "not a price" // a page left out first
+		}
+		fl := fillRow(id, tracked, "buy", price, "1")
+		fl.TimeMs = 2000
+		fills = append(fills, fl)
+	}
+	store := &historyStore{fills: fills}
+	merges, err := marketmerge.New(map[string]string{folded: tracked})
+	require.NoError(t, err)
+	e := historyServer(store, histExps, merges)
+
+	_, body := historyGet(t, e, "?format=coingecko&market_id="+tracked+"&limit=10&start_time=1000&end_time=3000")
+	assert.Contains(t, body, `"trade_id":20,`)
+	assert.Equal(t, 1, store.heights)
+	assert.Greater(t, len(store.kinds), 4, "pages × sources × markets")
+
+	store.heights = 0
+	historyGet(t, e, "?market_id="+tracked)
+	historyGet(t, e, "?market_id="+tracked+"&start_time=1000")
+	assert.Zero(t, store.heights, "no window, no lookup")
+
+	store.fail = true
+	code, _ := historyGet(t, e, "?market_id="+tracked+"&start_time=1000&end_time=3000")
+	assert.Equal(t, http.StatusBadRequest, code)
 }
 
 func TestCompatHistoryType(t *testing.T) {

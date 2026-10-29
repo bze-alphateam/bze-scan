@@ -19,8 +19,8 @@ type DB interface {
 
 // PGStore reads explorer.order_fills and explorer.swaps. Every query is
 // ordered by height, then trade id, so it walks the (…, height DESC)
-// indexes; a time window is first turned into the heights of its blocks
-// (block times never decrease), which prunes the partitions outside it.
+// indexes; a time window is bounded by the heights of its blocks
+// (Heights), which prunes the partitions outside it.
 type PGStore struct {
 	db DB
 }
@@ -42,10 +42,7 @@ const swapColumns = `trade_id, floor(extract(epoch FROM time) * 1000)::bigint, p
 // leaving out its own orders' fills so a self-trade counts once.
 func (s *PGStore) Fills(ctx context.Context, f Filter, before int64, limit int) ([]Fill, error) {
 	q := query{args: []any{limit}}
-	ok, err := s.bound(ctx, &q, f, before)
-	if err != nil || !ok {
-		return []Fill{}, err
-	}
+	bound(&q, f, before)
 	q.where("trade_id IS NOT NULL")
 	if f.MarketID != "" {
 		q.where("market_id = " + q.arg(f.MarketID))
@@ -89,10 +86,7 @@ func (s *PGStore) Fills(ctx context.Context, f Filter, before int64, limit int) 
 // Swaps implements Store: a pool's swaps, an address's as their creator.
 func (s *PGStore) Swaps(ctx context.Context, f Filter, before int64, limit int) ([]swaphistory.Swap, error) {
 	q := query{args: []any{limit}}
-	ok, err := s.bound(ctx, &q, f, before)
-	if err != nil || !ok {
-		return []swaphistory.Swap{}, err
-	}
+	bound(&q, f, before)
 	if f.MarketID != "" {
 		q.where("pool_id = " + q.arg(f.MarketID))
 	}
@@ -116,35 +110,35 @@ func (s *PGStore) Swaps(ctx context.Context, f Filter, before int64, limit int) 
 	return out, nil
 }
 
-// bound adds the side, the time window as heights and the before cursor;
-// false when the window holds no block.
-func (s *PGStore) bound(ctx context.Context, q *query, f Filter, before int64) (bool, error) {
+// Heights implements Store: block times never decrease, so the window's
+// blocks are the heights between its first and its last block.
+func (s *PGStore) Heights(ctx context.Context, fromMs, toMs int64) (lo, hi int64, ok bool, err error) {
+	var l, h *int64
+	err = s.db.QueryRow(ctx, `SELECT
+		(SELECT height FROM explorer.blocks WHERE time >= to_timestamp($1::bigint / 1000.0) ORDER BY time ASC LIMIT 1),
+		(SELECT height FROM explorer.blocks WHERE time < to_timestamp(($2::bigint + 1) / 1000.0) ORDER BY time DESC LIMIT 1)`,
+		fromMs, toMs).Scan(&l, &h)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("heights of %d..%d: %w", fromMs, toMs, err)
+	}
+	if l == nil || h == nil || *l > *h {
+		return 0, 0, false, nil
+	}
+	return *l, *h, true, nil
+}
+
+// bound adds the side, the window's heights and the before cursor.
+func bound(q *query, f Filter, before int64) {
 	if f.Sided() {
 		q.where("side = " + q.arg(f.Side))
 	}
-	if f.Window() {
-		if f.FromMs > f.ToMs {
-			return false, nil
-		}
-		// The blocks whose time, to the millisecond, is in [from, to].
-		var lo, hi *int64
-		err := s.db.QueryRow(ctx, `SELECT
-			(SELECT height FROM explorer.blocks WHERE time >= to_timestamp($1::bigint / 1000.0) ORDER BY time ASC LIMIT 1),
-			(SELECT height FROM explorer.blocks WHERE time < to_timestamp(($2::bigint + 1) / 1000.0) ORDER BY time DESC LIMIT 1)`,
-			f.FromMs, f.ToMs).Scan(&lo, &hi)
-		if err != nil {
-			return false, fmt.Errorf("heights of %d..%d: %w", f.FromMs, f.ToMs, err)
-		}
-		if lo == nil || hi == nil || *lo > *hi {
-			return false, nil
-		}
-		q.where("height BETWEEN " + q.arg(*lo) + " AND " + q.arg(*hi))
+	if f.FromHeight > 0 && f.ToHeight > 0 {
+		q.where("height BETWEEN " + q.arg(f.FromHeight) + " AND " + q.arg(f.ToHeight))
 	}
 	if before > 0 {
 		q.where("height <= " + q.arg(before/transform.TradeIDsPerBlock))
 		q.where("trade_id < " + q.arg(before))
 	}
-	return true, nil
 }
 
 // query collects the conditions and arguments of a statement.
