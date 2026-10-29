@@ -1,6 +1,6 @@
 // Package orderbook reads the DEX's live order books from the node, in
 // display units, for the aggregator-compatible routes (GET /aggregator/api/dex/orders,
-// later the tickers' bid and ask). A book is the node's aggregated price
+// and the tickers' bid and ask). A book is the node's aggregated price
 // levels (MarketAggregatedOrders), not single orders, read whole and kept
 // for TTL per market, so polling never reaches the node more than once per
 // market per TTL. The market list (AllMarkets) is kept for MarketsTTL.
@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,6 +158,20 @@ func (s *Service) Market(ctx context.Context, id string) (Market, error) {
 		return Market{}, fmt.Errorf("%w: %s", ErrUnknownMarket, id)
 	}
 	return m, nil
+}
+
+// Markets returns every market of the chain, by id.
+func (s *Service) Markets(ctx context.Context) ([]Market, error) {
+	markets, err := s.allMarkets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Market, 0, len(markets))
+	for _, m := range markets {
+		out = append(out, m)
+	}
+	slices.SortFunc(out, func(a, b Market) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
 }
 
 // Book returns market id's whole book, or ErrUnknownMarket. The caller must

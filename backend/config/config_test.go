@@ -18,7 +18,7 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
-	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
+	"PRICE_CHANGE_MARKET", "USDC_DENOM", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
 	"COINGECKO_HOST", "COINGECKO_PRICE_IDS", "COINGECKO_MERGED_MARKETS", "MEDIUM_FEED_URL",
 	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW",
 	"SINK_RETENTION", "SINK_CLEANUP_INTERVAL", "SINK_CLEANUP_BATCH"}
@@ -424,7 +424,7 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	isolate(t)
 	cfg, err := config.Load()
 	require.NoError(t, err)
-	assert.Empty(t, cfg.AggregatorURL, "no 24-hour change by default")
+	assert.Empty(t, cfg.USDCDenom, "no USD anchor by default")
 	assert.Equal(t, "https://api.coingecko.com", cfg.CoinGeckoHost)
 	assert.Equal(t, []string{"bzedge"}, cfg.CoinGeckoPriceIDs)
 	assert.Equal(t, "https://medium.com/feed/bzedge-community", cfg.MediumFeedURL)
@@ -433,7 +433,7 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	assert.Equal(t, "https://api.github.com/repos/cosmos/chain-registry/contents", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "https://raw.githubusercontent.com/cosmos/chain-registry/master", cfg.ChainRegistryRawURL)
 
-	t.Setenv("AGGREGATOR_URL", "https://getbze.com/")
+	t.Setenv("USDC_DENOM", "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838")
 	t.Setenv("CHAIN_REGISTRY_API_URL", "http://127.0.0.1:9000/api/")
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", "http://127.0.0.1:9000/raw")
 	t.Setenv("PRICE_CHANGE_MARKET", "ulp/0A1B")
@@ -443,7 +443,7 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	t.Setenv("MEDIUM_FEED_URL", "http://127.0.0.1:9003/feed/bzedge-community")
 	cfg, err = config.Load()
 	require.NoError(t, err)
-	assert.Equal(t, "https://getbze.com", cfg.AggregatorURL)
+	assert.Equal(t, "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838", cfg.USDCDenom)
 	assert.Equal(t, "http://127.0.0.1:9000/api", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "http://127.0.0.1:9000/raw", cfg.ChainRegistryRawURL)
 	assert.Equal(t, "ulp/0A1B", cfg.PriceChangeMarket)
@@ -473,7 +473,7 @@ func TestLoadCoinGeckoMergedMarkets(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {
-	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL", "COINGECKO_HOST", "MEDIUM_FEED_URL"} {
+	for _, key := range []string{"CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL", "COINGECKO_HOST", "MEDIUM_FEED_URL"} {
 		t.Run(key, func(t *testing.T) {
 			isolate(t)
 			t.Setenv(key, "getbze.com")

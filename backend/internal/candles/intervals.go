@@ -129,7 +129,7 @@ func (s *Service) Intervals(ctx context.Context, market string, minutes, limit i
 	}
 	byStart := make(map[int64]Interval, len(stored))
 	for _, c := range stored {
-		iv, err := display(c, baseExp, quoteExp)
+		iv, err := Display(c, baseExp, quoteExp)
 		if err != nil {
 			return nil, fmt.Errorf("market %s: candle %d/%s: %w", market, minutes, c.Start.Format(time.RFC3339), err)
 		}
@@ -187,11 +187,11 @@ func (s *Service) floor(ctx context.Context, market string) (floor, bool, error)
 	return f, true, nil
 }
 
-// display converts a stored candle to the aggregator's strings: prices per
+// Display converts a stored candle to the aggregator's strings: prices per
 // dexunits.TradePrice, volumes exact. The average is the close when high
 // and low are equal, else quote volume / base volume as an 18-decimal
 // LegacyDec of the display volumes, the aggregator's VWAP.
-func display(c Candle, baseExp, quoteExp int) (iv Interval, err error) {
+func Display(c Candle, baseExp, quoteExp int) (iv Interval, err error) {
 	iv = Interval{Start: c.Start, End: c.Start.Add(time.Duration(c.Minutes) * time.Minute)}
 	for _, p := range []struct {
 		to *string
