@@ -193,7 +193,7 @@ func (s *Set) FullResync(ctx context.Context) error {
 			pricerErr = fmt.Errorf("DEX price chain: %d of %d denoms unanswered (%s)", len(snap.Kept), len(denoms),
 				strings.Join(snap.Kept, ", "))
 		}
-		s.note(&s.pricerFailing, pricerErr, "DEX price chain")
+		pricerErr = s.note(&s.pricerFailing, pricerErr, "DEX price chain")
 	}
 	changeErr := s.readChange(ctx)
 	if s.changed {

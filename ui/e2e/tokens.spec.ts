@@ -15,7 +15,7 @@ const rows = (page: Page) => page.getByTestId("token-list-row");
 const tokenPath = (denom: string) => `/tokens/${encodeURIComponent(denom)}`;
 
 test.describe("tokens list", () => {
-  test("renders the tiles, filters by chip and name, and links to a token", async ({ page }) => {
+  test("renders the tiles, filters by chip and name, and links to a token", async ({ page, isMobile }) => {
     await page.goto("/tokens");
     await expect(page).toHaveTitle("Tokens · BZE Explorer");
     await expect(page.getByText("Every token on BZE. Prices come from the BZE DEX, else CoinGecko.")).toBeVisible();
@@ -23,9 +23,9 @@ test.describe("tokens list", () => {
     await expect(page.getByTestId("tile").first()).toContainText("1 native · 2 Factory · 2 cross-chain");
     await expect(page.getByTestId("tile").nth(1)).toContainText("3");
     await expect(rows(page)).toHaveCount(6);
-    // A priced token shows its price and, for a DEX price, its DEX link; an unpriced one says so.
+    // A priced token shows its price and, for a DEX price, its DEX link (a desktop column); an unpriced one says so.
     await expect(rows(page).nth(1)).toContainText("$0.002");
-    await expect(rows(page).nth(1).getByRole("link", { name: "DEX" })).toBeVisible();
+    await expect(rows(page).nth(1).getByRole("link", { name: "DEX" })).toBeVisible({ visible: !isMobile });
     await expect(rows(page).nth(2)).toContainText("— no price");
     await expect(rows(page).nth(3)).toContainText("Halted on the DEX");
     await expect(rows(page).nth(3).getByRole("link", { name: "DEX" })).toHaveCount(0);
