@@ -118,7 +118,7 @@ func withMigrator(fn func(ctx context.Context, mg *migrations.Migrator) error) e
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	mg, err := migrations.Open(ctx, cfg.DatabaseURL, trades.MigrationStep(), candles.MigrationStep())
+	mg, err := migrations.Open(ctx, cfg.DatabaseURL, trades.MigrationStep(candles.Default), candles.MigrationStep())
 	if err != nil {
 		return err
 	}

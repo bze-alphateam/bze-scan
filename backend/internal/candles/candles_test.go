@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 )
 
 // at is a UTC time on 2026-10-28.
@@ -248,4 +249,24 @@ func (s *memStore) stored(market string) map[string]string {
 		}
 	}
 	return out
+}
+
+// Allowed difference: a fill's quote volume is amount × chain price
+// truncated, exact. For a base one or two decimals short of the quote the
+// aggregator multiplies display amount × its display price, which it has
+// rounded to 18 decimals (dexunits.TradePrice), so its quote can be off.
+func TestFillQuoteIsExactWhereTheAggregatorRoundsThePrice(t *testing.T) {
+	// A 6/7-decimal market: chain price 1.5e-17, 10^18 base units.
+	fill, err := candles.FillTrade(1, at(1, 0, 0), "0.000000000000000015", "1000000000000000000")
+	require.NoError(t, err)
+	assert.Equal(t, sdkmath.NewInt(15), fill.Quote, "quote base units, exact")
+
+	// The aggregator: display price 1.5e-18 rounds (half to even) to 2e-18,
+	// display amount 10^12, quote 2e-6 at 7 decimals = 20 base units.
+	display, err := dexunits.TradePrice("0.000000000000000015", 6, 7)
+	require.NoError(t, err)
+	assert.Equal(t, "0.000000000000000002", display)
+	aggregator := sdkmath.LegacyMustNewDecFromStr("1000000000000").Mul(sdkmath.LegacyMustNewDecFromStr(display)).
+		MulInt64(10_000_000).TruncateInt()
+	assert.Equal(t, sdkmath.NewInt(20), aggregator)
 }

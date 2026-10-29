@@ -1127,13 +1127,22 @@ per-market advisory lock, so replays, out-of-order backfill flushes and
 concurrent writers give the same rows. Who recomputes: the PostFlush hook
 `candles.Default.PostFlush` of the live writer and of the batch writer
 (backfill, catch-up, reindex), for the days of a flush's fills and swaps;
-`trades.Range`, for the days of the trades it has just numbered (the
+`trades.Range` (given `candles.Default` as its `trades.Hook` by the
+composition root), for the days of the trades it has just numbered (the
 previous release's during a deploy, which its writer did not candle; every
 minute it re-reads the last minute's blocks, so those days are recomputed
 once more), except while the post-migration build is still to list the
 markets; `bze-scan candles rebuild` and the post-migration step `candles`
-(`candles.Rebuilder`), whole markets, 30 days of trades at a time in one
-transaction per market. All of it is Go: no SQL function or trigger.
+(`candles.Rebuilder`), whole markets, one chunk of 30 days per
+transaction (the writers wait for one chunk at most). All of it is Go: no
+SQL function or trigger.
+
+Known gap: during a deploy the previous release can store fills already
+numbered (it numbers in its transformer) at heights `trades.CatchUp`'s
+cursor has passed; nothing renumbers them, so nothing recomputes their days
+until another trade of the same market and day comes, or `bze-scan candles
+rebuild` runs. The catch-up of heights the cursor passed without a block
+(BFE-301's follow-up) routes them through `trades.Range` and closes it.
 
 ### Open orders
 

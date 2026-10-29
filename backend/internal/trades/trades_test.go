@@ -3,6 +3,7 @@ package trades_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -126,17 +127,15 @@ func cursorMoves(t *testing.T, d *db) []any {
 // range, each moving the cursor.
 func TestCatchUpWalksPartitionByPartition(t *testing.T) {
 	d := &db{cursor: int64(22_500_000), top: int64p(24_000_010)}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 3, res.Ranges)
 	assert.Equal(t, []any{int64(23_000_000), int64(24_000_000), int64(24_000_011)}, cursorMoves(t, d))
 	for i, want := range [][]any{{int64(22_500_000), int64(23_000_000)}, {int64(23_000_000), int64(24_000_000)},
 		{int64(24_000_000), int64(24_000_011)}} {
-		require.Len(t, d.txs[i].queries, 5, "transaction swaps, block swaps, fills, the candles' pending build and trades")
+		require.Len(t, d.txs[i].queries, 3, "transaction swaps, block swaps, fills")
 		for _, q := range d.txs[i].queries {
-			if !strings.Contains(q.sql, "pending_rewrites") {
-				assert.Equal(t, want, q.args, "range %d", i)
-			}
+			assert.Equal(t, want, q.args, "range %d", i)
 		}
 	}
 	assert.Equal(t, int64(migrations.PartitionSize), trades.RangeSize)
@@ -146,18 +145,18 @@ func TestCatchUpWalksPartitionByPartition(t *testing.T) {
 // before 000023): nothing done at all.
 func TestCatchUpWithNothingToDo(t *testing.T) {
 	d := &db{cursor: int64(101), top: int64p(100)}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Zero(t, res.Ranges)
 
 	d = &db{}
-	res, err = trades.CatchUp(context.Background(), d)
+	res, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Zero(t, res.Ranges)
 	assert.Empty(t, d.txs)
 
 	d = &db{cursor: int64(0), top: (*int64)(nil)}
-	_, err = trades.CatchUp(context.Background(), d)
+	_, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Empty(t, d.txs, "no block stored yet")
 }
@@ -173,15 +172,13 @@ func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 		"FROM explorer.block_events":                   {{int64(70), 3, at, []byte(swap)}},
 		"SELECT height, seq FROM explorer.order_fills": {{int64(70), 1}, {int64(70), 5}},
 	}}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, trades.Result{Ranges: 1, Heights: 1}, res)
 	assert.Empty(t, cursorMoves(t, d))
 	require.Len(t, d.txs, 1)
 	for _, q := range d.txs[0].queries {
-		if !strings.Contains(q.sql, "pending_rewrites") {
-			assert.Equal(t, []any{int64(70), int64(71)}, q.args)
-		}
+		assert.Equal(t, []any{int64(70), int64(71)}, q.args)
 	}
 
 	var swaps, fills []map[string]any
@@ -211,37 +208,44 @@ func TestCatchUpFailsOnABadStoredSwap(t *testing.T) {
 	d := &db{cursor: int64(0), top: int64p(10), results: map[string][][]any{
 		"FROM explorer.block_events": {{int64(7), 0, time.Unix(1, 0), []byte(`{"in":{"denom":"ubze","amount":"x"}}`)}},
 	}}
-	_, err := trades.CatchUp(context.Background(), d)
+	_, err := trades.CatchUp(context.Background(), d, nil)
 	require.ErrorContains(t, err, "height 7 block event 0")
 	assert.False(t, d.txs[0].committed)
 }
 
-// The trades numbered count in their candles from then on: their days are
-// recomputed in the range's transaction, unless the post-migration build of
-// the whole history is still to come.
-func TestRangeRecomputesTheCandlesOfTheNumberedTrades(t *testing.T) {
-	at := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
-	for _, pending := range []bool{false, true} {
-		d := &db{cursor: int64(70), top: int64p(70), results: map[string][][]any{
-			"SELECT EXISTS": {{pending}},
-			"date_bin":      {{"uatom_ubze", at}},
-			"NULL::text":    {{int64(70_000_001), at, (*string)(nil), "2", func() *string { s := "5"; return &s }()}},
-		}}
-		_, err := trades.CatchUp(context.Background(), d)
-		require.NoError(t, err)
-		require.Len(t, d.txs, 1)
-		var candles []map[string]any
-		for _, e := range d.txs[0].execs {
-			if strings.Contains(e.sql, "INSERT INTO explorer.candles") {
-				require.NoError(t, json.Unmarshal(e.args[1].([]byte), &candles))
-			}
-		}
-		if pending {
-			assert.Empty(t, candles, "the build covers them")
-			continue
-		}
-		require.Len(t, candles, 5, "one candle per length")
-		assert.Equal(t, "2.500000000000000000", candles[0]["close"])
-		assert.Equal(t, float64(70_000_001), candles[0]["last_trade_id"])
+// hook records the ranges it ran in and the transaction it got.
+type hook struct {
+	ranges [][2]int64
+	txs    []trades.Tx
+	fail   error
+}
+
+func (h *hook) AfterNumbering(_ context.Context, tx trades.Tx, lo, hi int64) error {
+	h.ranges, h.txs = append(h.ranges, [2]int64{lo, hi}), append(h.txs, tx)
+	return h.fail
+}
+
+// The hook runs in every range's transaction, after the numbering, the
+// heights below the cursor one at a time first; its failure rolls the
+// range back.
+func TestCatchUpRunsTheHookInEveryRange(t *testing.T) {
+	d := &db{cursor: int64(23_500_000), top: int64p(24_000_010), results: map[string][][]any{
+		"trade_id IS NULL": {{int64(70)}},
+	}}
+	h := &hook{}
+	_, err := trades.CatchUp(context.Background(), d, h)
+	require.NoError(t, err)
+	assert.Equal(t, [][2]int64{{70, 71}, {23_500_000, 24_000_000}, {24_000_000, 24_000_011}}, h.ranges)
+	require.Len(t, d.txs, 3)
+	for i, x := range d.txs {
+		assert.Same(t, x, h.txs[i], "the range's own transaction")
+		assert.True(t, x.committed)
 	}
+
+	d = &db{cursor: int64(100), top: int64p(100)}
+	h = &hook{fail: errors.New("candles are down")}
+	_, err = trades.CatchUp(context.Background(), d, h)
+	assert.ErrorIs(t, err, h.fail)
+	require.Len(t, d.txs, 1)
+	assert.False(t, d.txs[0].committed)
 }

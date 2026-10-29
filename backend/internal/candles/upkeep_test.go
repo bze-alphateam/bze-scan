@@ -122,16 +122,32 @@ func TestRebuild(t *testing.T) {
 	far := at(1, 0, 0).Add(100 * candles.Day)
 	s.trades["m"] = []candles.Trade{trade(1, at(1, 0, 0), "1", 1), trade(2, far, "2", 1)}
 
-	n, err := candles.Rebuild(context.Background(), s, "m")
+	n, err := candles.Rebuild(context.Background(), within(s), "m")
 	require.NoError(t, err)
 	assert.Equal(t, 2, n)
 	assert.Len(t, s.stored("m"), 10)
 	assert.NotContains(t, s.stored("m"), key("m", 5, stale.Start))
-	assert.Equal(t, [][]string{{"m"}}, s.locks)
+	// The span, then the first trade's 30 days and the far one's chunk.
+	assert.Equal(t, [][]string{{"m"}, {"m"}, {"m"}, {"m"}, {"m"}}, s.locks[:5])
+	assert.Equal(t, 4, s.reads, "four 30-day chunks to cover 101 days")
 
 	// A market without trades keeps no candle.
 	s.trades["m"] = nil
-	_, err = candles.Rebuild(context.Background(), s, "m")
+	_, err = candles.Rebuild(context.Background(), within(s), "m")
 	require.NoError(t, err)
 	assert.Empty(t, s.stored("m"))
+}
+
+// within runs fn over s, as one transaction would.
+func within(s *memStore) candles.Within {
+	return func(_ context.Context, fn func(candles.Store) error) error { return fn(s) }
+}
+
+// A failing chunk stops the rebuild with its error.
+func TestRebuildFails(t *testing.T) {
+	s := newMemStore()
+	s.trades["m"] = []candles.Trade{trade(1, at(1, 0, 0), "1", 1)}
+	s.fail = errors.New("database is down")
+	_, err := candles.Rebuild(context.Background(), within(s), "m")
+	assert.ErrorIs(t, err, s.fail)
 }

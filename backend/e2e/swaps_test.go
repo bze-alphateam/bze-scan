@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
@@ -219,7 +220,7 @@ func TestSwapsMigrationStepResumes(t *testing.T) {
 	defer pool.Close()
 	tx, err := pool.Begin(context.Background())
 	require.NoError(t, err)
-	_, err = trades.Range(context.Background(), tx, 0, 23_000_000)
+	_, err = trades.Range(context.Background(), tx, 0, 23_000_000, candles.Default)
 	require.NoError(t, err)
 	_, err = tx.Exec(context.Background(), `UPDATE explorer.pending_rewrites SET resume_from = 23000000 WHERE name = 'swaps'`)
 	require.NoError(t, err)

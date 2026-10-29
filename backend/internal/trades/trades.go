@@ -30,7 +30,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
@@ -46,10 +45,18 @@ type DB interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
-// Tx is the part of a transaction one range uses; pgx.Tx satisfies it.
-type Tx interface {
+// Tx is the part of a transaction one range uses; pgx.Tx satisfies it. An
+// alias of the interface literal, so a Hook implemented elsewhere against
+// the same method set (candles.Tx) matches.
+type Tx = interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// Hook runs in a range's transaction once its trades are numbered;
+// candles.Upkeep implements it (their candles count them from then on).
+type Hook interface {
+	AfterNumbering(ctx context.Context, tx Tx, lo, hi int64) error
 }
 
 // Result counts what a CatchUp wrote.
@@ -59,9 +66,10 @@ type Result struct {
 }
 
 // CatchUp numbers the stored trades from the cursor up to the highest stored
-// block, and first the heights of fills without a trade id below it. Without
-// the cursor row (a schema before 000023's) it does nothing.
-func CatchUp(ctx context.Context, db DB) (Result, error) {
+// block, and first the heights of fills without a trade id below it, running
+// hook (when not nil) in every range's transaction. Without the cursor row
+// (a schema before 000023's) it does nothing.
+func CatchUp(ctx context.Context, db DB, hook Hook) (Result, error) {
 	var res Result
 	var from int64
 	err := db.QueryRow(ctx, `SELECT resume_from FROM explorer.pending_rewrites WHERE name = 'swaps'`).Scan(&from)
@@ -87,7 +95,7 @@ func CatchUp(ctx context.Context, db DB) (Result, error) {
 		return res, fmt.Errorf("fills without a trade id: %w", err)
 	}
 	for _, h := range missed {
-		if err := inTx(ctx, db, h, h+1, false, &res); err != nil {
+		if err := inTx(ctx, db, h, h+1, false, hook, &res); err != nil {
 			return res, err
 		}
 	}
@@ -97,7 +105,7 @@ func CatchUp(ctx context.Context, db DB) (Result, error) {
 	}
 	for lo := from; lo <= *top; {
 		hi := min(migrations.PartitionLower(lo)+RangeSize, *top+1)
-		if err := inTx(ctx, db, lo, hi, true, &res); err != nil {
+		if err := inTx(ctx, db, lo, hi, true, hook, &res); err != nil {
 			return res, err
 		}
 		lo = hi
@@ -107,13 +115,13 @@ func CatchUp(ctx context.Context, db DB) (Result, error) {
 
 // inTx numbers [lo, hi) in a transaction of its own, moving the cursor to hi
 // when advance is set.
-func inTx(ctx context.Context, db DB, lo, hi int64, advance bool, res *Result) error {
+func inTx(ctx context.Context, db DB, lo, hi int64, advance bool, hook Hook, res *Result) error {
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("trades %d..%d: begin: %w", lo, hi-1, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	n, err := Range(ctx, tx, lo, hi)
+	n, err := Range(ctx, tx, lo, hi, hook)
 	if err != nil {
 		return err
 	}
@@ -137,10 +145,9 @@ type height struct {
 	fills               []transform.OrderFill
 }
 
-// Range numbers the stored trades of [lo, hi) in tx, recomputes their
-// candles (candles.Upkeep.AfterNumbering) and returns how many heights have
-// trades.
-func Range(ctx context.Context, tx Tx, lo, hi int64) (int, error) {
+// Range numbers the stored trades of [lo, hi) in tx, then runs hook (when not
+// nil) in tx, and returns how many heights have trades.
+func Range(ctx context.Context, tx Tx, lo, hi int64, hook Hook) (int, error) {
 	fail := func(what string, err error) (int, error) {
 		return 0, fmt.Errorf("trades %d..%d: %s: %w", lo, hi-1, what, err)
 	}
@@ -240,9 +247,10 @@ func Range(ctx context.Context, tx Tx, lo, hi int64) (int, error) {
 	if err := writer.WriteTrades(ctx, tx, hi-1, swaps, fills); err != nil {
 		return 0, err
 	}
-	// The candles of the fills numbered here count them only now.
-	if err := candles.Default.AfterNumbering(ctx, tx, lo, hi); err != nil {
-		return 0, fmt.Errorf("trades %d..%d: %w", lo, hi-1, err)
+	if hook != nil {
+		if err := hook.AfterNumbering(ctx, tx, lo, hi); err != nil {
+			return 0, fmt.Errorf("trades %d..%d: %w", lo, hi-1, err)
+		}
 	}
 	return len(byHeight), nil
 }
@@ -256,11 +264,11 @@ func swapOf(h int64, blockTime time.Time, raw []byte) (transform.Swap, error) {
 	return transform.StoredSwap(h, blockTime, attrs)
 }
 
-// MigrationStep is the post-migration step "swaps": CatchUp at every
-// `migrate up`, so a release starts with every stored trade numbered.
-func MigrationStep() migrations.Step {
+// MigrationStep is the post-migration step "swaps": CatchUp with hook at
+// every `migrate up`, so a release starts with every stored trade numbered.
+func MigrationStep(hook Hook) migrations.Step {
 	return migrations.Step{Name: "swaps", Run: func(ctx context.Context, db migrations.DB) error {
-		_, err := CatchUp(ctx, db)
+		_, err := CatchUp(ctx, db, hook)
 		return err
 	}}
 }
@@ -268,16 +276,16 @@ func MigrationStep() migrations.Step {
 // Interval is how often Run catches up.
 const Interval = time.Minute
 
-// Run catches up at start and every interval (Interval when zero) until ctx
-// ends; a failed pass is logged and retried at the next tick.
-func Run(ctx context.Context, db DB, interval time.Duration, lg log.FieldLogger) error {
+// Run catches up with hook at start and every interval (Interval when zero)
+// until ctx ends; a failed pass is logged and retried at the next tick.
+func Run(ctx context.Context, db DB, hook Hook, interval time.Duration, lg log.FieldLogger) error {
 	if interval <= 0 {
 		interval = Interval
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
-		res, err := CatchUp(ctx, db)
+		res, err := CatchUp(ctx, db, hook)
 		switch {
 		case ctx.Err() != nil:
 			return nil

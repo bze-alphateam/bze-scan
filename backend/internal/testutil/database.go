@@ -29,7 +29,7 @@ func Migrate(t testing.TB) string {
 	t.Helper()
 	url := DatabaseURL()
 	ctx := context.Background()
-	mg, err := migrations.Open(ctx, url, trades.MigrationStep(), candles.MigrationStep())
+	mg, err := migrations.Open(ctx, url, trades.MigrationStep(candles.Default), candles.MigrationStep())
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}

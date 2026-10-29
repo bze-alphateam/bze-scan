@@ -40,8 +40,8 @@ var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
 // explorerTables are the tables of the database schema design, partition
 // parents included, partitions excluded.
 var explorerTables = []string{
-	"account_activity", "accounts", "backfill_checkpoints", "block_event_kinds", "candles",
-	"block_events", "blocks", "chain_state", "chains", "daily_stats", "denoms",
+	"account_activity", "accounts", "backfill_checkpoints", "block_event_kinds",
+	"block_events", "blocks", "candles", "chain_state", "chains", "daily_stats", "denoms",
 	"ibc_channels", "ibc_transfers", "index_failures", "indexer_state", "labels",
 	"message_kinds", "messages", "order_fills", "order_messages", "orders",
 	"param_snapshots", "pending_rewrites", "proposal_deposits", "proposal_non_voters", "proposal_votes", "proposals",
@@ -92,7 +92,7 @@ func connect(t *testing.T, dbURL string) *sql.DB {
 
 func openMigrator(t *testing.T, dbURL string) *migrations.Migrator {
 	t.Helper()
-	mg, err := migrations.Open(context.Background(), dbURL, trades.MigrationStep(), candles.MigrationStep())
+	mg, err := migrations.Open(context.Background(), dbURL, trades.MigrationStep(candles.Default), candles.MigrationStep())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = mg.Close() })
 	return mg

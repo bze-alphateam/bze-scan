@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
@@ -24,9 +25,10 @@ const (
 type DB interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// Rebuilder recomputes whole markets, one transaction per market.
+// Rebuilder recomputes whole markets, one transaction per chunk.
 type Rebuilder struct {
 	db     DB
 	upkeep *Upkeep
@@ -59,31 +61,37 @@ func (r *Rebuilder) Markets(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// Market rebuilds market's candles in a transaction of its own and returns
-// the number of trades read.
+// Market rebuilds market's candles (Rebuild, one transaction per chunk)
+// and returns the number of trades read.
 func (r *Rebuilder) Market(ctx context.Context, market string) (int, error) {
-	return r.rebuild(ctx, market, "")
+	return Rebuild(ctx, r.within, market)
 }
 
-// rebuild is Market that also deletes the pending row named done when not
-// empty, in the same transaction.
-func (r *Rebuilder) rebuild(ctx context.Context, market, done string) (int, error) {
+// within implements Within over the pool.
+func (r *Rebuilder) within(ctx context.Context, fn func(s Store) error) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("candles of %s: begin: %w", market, err)
+		return fmt.Errorf("candles: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	n, err := Rebuild(ctx, r.upkeep.open(tx), market)
+	if err := fn(r.upkeep.open(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("candles: commit: %w", err)
+	}
+	return nil
+}
+
+// rebuild is Market, then the deletion of the pending row named done: an
+// interruption rebuilds the whole market again.
+func (r *Rebuilder) rebuild(ctx context.Context, market, done string) (int, error) {
+	n, err := r.Market(ctx, market)
 	if err != nil {
 		return n, err
 	}
-	if done != "" {
-		if _, err := tx.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = $1`, done); err != nil {
-			return n, fmt.Errorf("candles of %s: pending row: %w", market, err)
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return n, fmt.Errorf("candles of %s: commit: %w", market, err)
+	if _, err := r.db.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = $1`, done); err != nil {
+		return n, fmt.Errorf("candles of %s: pending row: %w", market, err)
 	}
 	return n, nil
 }
@@ -111,8 +119,8 @@ func (r *Rebuilder) All(ctx context.Context, market string) (markets, trades int
 // Backfill builds the candles of the whole history once, per market and
 // resumable: while the row 'candles' exists it is replaced, in one
 // transaction, by a row 'candles:<market>' per market with a stored trade;
-// then every such row's market is rebuilt and its row deleted in one
-// transaction. An interrupted run resumes at the markets left.
+// then every such row's market is rebuilt (Rebuild) and its row deleted. An
+// interrupted run resumes at the markets left.
 func (r *Rebuilder) Backfill(ctx context.Context) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

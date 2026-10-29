@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -156,7 +157,7 @@ func TestCandlesOfTradesNumberedLate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Less(t, len(candleRows(t, e)), len(rows))
 
-	_, err = trades.CatchUp(context.Background(), pool)
+	_, err = trades.CatchUp(context.Background(), pool, candles.Default)
 	require.NoError(t, err)
 	assert.Equal(t, rows, candleRows(t, e))
 }
@@ -208,12 +209,13 @@ func TestCandlesIntervalsOverTheStore(t *testing.T) {
 	assert.Equal(t, "0", ivs[0].Close)
 	assert.Equal(t, "0", ivs[2].Close)
 
-	// swapH's two fills of 10 at 2.
+	// swapH's two fills of 10 at 2, the market's first trades: its floor
+	// (07:59) leaves 07:55 out.
 	ivs, err = svc.Intervals(ctx, swapMarket, 5, 3)
 	require.NoError(t, err)
-	require.Len(t, ivs, 3)
+	require.Len(t, ivs, 2)
 	assert.Equal(t, candles.Interval{Start: start, End: start.Add(5 * time.Minute), Low: "2", Open: "2", Average: "2",
-		High: "2", Close: "2", BaseVolume: "0.00002", QuoteVolume: "0.00004"}, ivs[1])
+		High: "2", Close: "2", BaseVolume: "0.00002", QuoteVolume: "0.00004"}, ivs[0])
 
 	_, err = svc.Intervals(ctx, "uatom/unknown", 5, 10)
 	assert.ErrorIs(t, err, candles.ErrUnknownMarket)
@@ -255,7 +257,9 @@ func TestCandlesPerBlockCost(t *testing.T) {
 	require.NoError(t, err)
 	elapsed := time.Since(start)
 	t.Logf("rebuild: %d trades in %s, %.0f trades/s", n, elapsed, float64(n)/elapsed.Seconds())
-	assert.Equal(t, 288+96+24+6+1+5, len(queryStrings(t, e.db, `SELECT 1 FROM explorer.candles WHERE market_id = $1`, swapMarket)),
+	// The busy trades span 17 s to 23.6 h: 284 five-minute buckets, 95, 24,
+	// 6 and the day; and the synthetic block's five.
+	assert.Equal(t, 284+95+24+6+1+5, len(queryStrings(t, e.db, `SELECT 1 FROM explorer.candles WHERE market_id = $1`, swapMarket)),
 		"the busy day's every bucket, and the synthetic block's")
 	assert.True(t, strings.HasPrefix(queryStrings(t, e.db, `SELECT base_volume::text FROM explorer.candles
 		WHERE market_id = $1 AND minutes = 1440 AND start_at = $2`, swapMarket, day)[0], fmt.Sprint(busy*1000+busy*(busy+1)/2)))
@@ -264,4 +268,68 @@ func TestCandlesPerBlockCost(t *testing.T) {
 // fillFlush is a writer flush with one fill of market at t.
 func fillFlush(market string, t time.Time) *writer.Flush {
 	return &writer.Flush{Entities: &transform.Entities{OrderFills: []transform.OrderFill{{MarketID: market, Time: t}}}}
+}
+
+// pausingStore stops before its third lock (the second chunk's) until
+// released: the rebuild is then between two transactions.
+type pausingStore struct {
+	*candles.PGStore
+	locks            *atomic.Int32
+	paused, released chan struct{}
+}
+
+func (p pausingStore) Lock(ctx context.Context, markets []string) error {
+	if p.locks.Add(1) == 3 {
+		close(p.paused)
+		<-p.released
+	}
+	return p.PGStore.Lock(ctx, markets)
+}
+
+// A rebuild holds the market's lock for one chunk at a time: a live write
+// for that market completes while the rebuild is running.
+func TestCandlesRebuildLetsTheWritersThrough(t *testing.T) {
+	ctx := context.Background()
+	e := newSyncEnv(t)
+	indexCandles(t, e, false)
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	// Two more fills of swapMarket 40 days apart: the rebuild has chunks.
+	early := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	_, err = e.db.Exec(`INSERT INTO explorer.order_fills (height, seq, order_id, market_id, side, price, amount, maker, taker, time, trade_id)
+		VALUES (25900001, 0, $2, $1, 'sell', 3, 7, 'bze1m', 'bze1t', $3, 25900001000001),
+		       (25900002, 0, $4, $1, 'sell', 4, 7, 'bze1m', 'bze1t', $5, 25900002000001)`,
+		swapMarket, oid(990), early, oid(991), early.Add(40*candles.Day))
+	require.NoError(t, err)
+
+	p := pausingStore{locks: &atomic.Int32{}, paused: make(chan struct{}), released: make(chan struct{})}
+	r := candles.NewRebuilder(pool, candles.NewUpkeep(func(tx candles.Tx) candles.Store {
+		return pausingStore{PGStore: candles.NewPGStore(tx), locks: p.locks, paused: p.paused, released: p.released}
+	}), nil)
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.Market(ctx, swapMarket)
+		done <- err
+	}()
+	select {
+	case <-p.paused:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the rebuild never reached its second chunk")
+	}
+
+	// The live writer's hook for the same market, while the rebuild runs.
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	tx, err := pool.Begin(wctx)
+	require.NoError(t, err)
+	require.NoError(t, candles.Default.PostFlush(wctx, tx, fillFlush(swapMarket, early)), "not blocked by the rebuild")
+	require.NoError(t, tx.Commit(wctx))
+
+	close(p.released)
+	require.NoError(t, <-done)
+	rows := candleRows(t, e)
+	_, _, err = rebuilder(t, e).All(ctx, swapMarket)
+	require.NoError(t, err)
+	assert.Equal(t, rows, candleRows(t, e), "the chunked rebuild's rows are a whole rebuild's")
 }

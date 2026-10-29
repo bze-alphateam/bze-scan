@@ -321,7 +321,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			// (a deploy's overlap) carry no trade ids: numbered from the
 			// stored rows at start and every minute.
 			components = append(components, component{name: "trades", run: func(ctx context.Context) error {
-				return trades.Run(ctx, pool, opts.TradesInterval, log.StandardLogger())
+				return trades.Run(ctx, pool, candles.Default, opts.TradesInterval, log.StandardLogger())
 			}})
 		}
 		if cfg.BackfillEnabled {
