@@ -18,6 +18,9 @@ import (
 type fakeReader struct {
 	candles []candles.Candle
 	firsts  map[string]candles.First
+	// created are the markets' creation times, asked with which denom.
+	created map[string]time.Time
+	denoms  []string
 	asked   []time.Time
 	fail    error
 }
@@ -36,6 +39,11 @@ func (r *fakeReader) Candles(_ context.Context, market string, minutes int, from
 func (r *fakeReader) First(_ context.Context, market string) (candles.First, bool, error) {
 	f, ok := r.firsts[market]
 	return f, ok, r.fail
+}
+
+func (r *fakeReader) Created(_ context.Context, market, base string) (time.Time, error) {
+	r.denoms = append(r.denoms, base)
+	return r.created[market], r.fail
 }
 
 type fakeMarkets map[string]orderbook.Market
@@ -134,33 +142,64 @@ func TestIntervalsFillTheGapsDownToTheWindow(t *testing.T) {
 	assert.Equal(t, at(9, 50, 0), ivs[0].Start)
 }
 
-// The floor is the first trade minus a minute: no zero candle below it.
+// Without a stored creation the floor is the start of the first trade's
+// bucket: no zero candle below it.
 func TestIntervalsStopAtTheFloor(t *testing.T) {
 	r := &fakeReader{firsts: map[string]candles.First{market: {Time: at(9, 56, 0)}},
 		candles: built(market, trade(1, at(9, 56, 0), "2", 1))}
 	ivs, err := service(r).Intervals(context.Background(), market, 5, 500)
 	require.NoError(t, err)
 	assert.Equal(t, []time.Time{at(9, 55, 0)}, r.asked)
+	assert.Equal(t, []string{"ubze"}, r.denoms, "the creation is looked up by the market's base")
 	require.Len(t, ivs, 3, "09:55, 10:00, 10:05")
 	assert.Equal(t, at(9, 55, 0), ivs[0].Start)
 }
 
-// Allowed difference: a pool's floor is its first swap minus a minute, not
-// the start of that day minus a minute (the aggregator's back-fill). As in
-// the aggregator the window starts at the floor, so the bucket holding it is
-// left out unless the floor is a bucket start.
-func TestIntervalsPoolFloorIsItsFirstSwap(t *testing.T) {
+// The bucket holding the first trade is always answered, wherever in it the
+// trade falls (the floor used to be the trade minus a minute, which dropped
+// a pool's first candle); a pool's denoms come from its swaps.
+func TestIntervalsKeepTheFirstTradesBucket(t *testing.T) {
 	pool := "ubze_utoken"
 	r := &fakeReader{firsts: map[string]candles.First{pool: {Time: at(9, 58, 20), Base: "ubze", Quote: "utoken"}},
 		candles: built(pool, trade(1, at(9, 58, 20), "1000", 1), trade(2, at(10, 1, 0), "2000", 1))}
 	ivs, err := service(r).Intervals(context.Background(), pool, 5, 500)
 	require.NoError(t, err)
-	assert.Equal(t, []time.Time{at(9, 57, 20)}, r.asked)
-	require.Len(t, ivs, 2, "10:00 and 10:05; 09:55 starts below the floor")
-	assert.Equal(t, at(10, 0, 0), ivs[0].Start)
+	assert.Equal(t, []time.Time{at(9, 55, 0)}, r.asked)
+	require.Len(t, ivs, 3, "09:55, 10:00 and 10:05")
+	assert.Equal(t, at(9, 55, 0), ivs[0].Start)
 	// Allowed difference: the quote has three decimals more than the base,
 	// where the aggregator's prices are 0 (BZE-133).
-	assert.Equal(t, "2", ivs[0].Close)
+	assert.Equal(t, "1", ivs[0].Close)
+	assert.Equal(t, "2", ivs[1].Close)
+}
+
+// A market created before its first trade's bucket starts at its creation,
+// as the aggregator dates a pool it syncs live: zero candles from there.
+func TestIntervalsFloorAtTheCreation(t *testing.T) {
+	pool := "ubze_utoken"
+	r := &fakeReader{firsts: map[string]candles.First{pool: {Time: at(9, 58, 20), Base: "ubze", Quote: "utoken"}},
+		created: map[string]time.Time{pool: at(9, 42, 10)},
+		candles: built(pool, trade(1, at(9, 58, 20), "1000", 1))}
+	ivs, err := service(r).Intervals(context.Background(), pool, 5, 500)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{at(9, 42, 10)}, r.asked)
+	var starts []time.Time
+	for _, iv := range ivs {
+		starts = append(starts, iv.Start)
+	}
+	assert.Equal(t, []time.Time{at(9, 45, 0), at(9, 50, 0), at(9, 55, 0), at(10, 0, 0), at(10, 5, 0)}, starts)
+	assert.Equal(t, "0", ivs[0].Close)
+	assert.Equal(t, "1", ivs[2].Close)
+
+	// A creation inside the first trade's bucket does not move the floor
+	// above the bucket's start.
+	r = &fakeReader{firsts: map[string]candles.First{pool: {Time: at(9, 58, 20), Base: "ubze", Quote: "utoken"}},
+		created: map[string]time.Time{pool: at(9, 57, 0)},
+		candles: built(pool, trade(1, at(9, 58, 20), "1000", 1))}
+	ivs, err = service(r).Intervals(context.Background(), pool, 5, 500)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{at(9, 55, 0)}, r.asked)
+	assert.Equal(t, at(9, 55, 0), ivs[0].Start)
 }
 
 // When the store holds limit candles from the window's start they are the
@@ -182,8 +221,8 @@ func TestIntervalsDailyWithoutLimit(t *testing.T) {
 		candles: built(market, trade(1, first, "1", 1))}
 	ivs, err := service(r).Intervals(context.Background(), market, 1440, 100_000)
 	require.NoError(t, err)
-	assert.Len(t, ivs, 3, "the three days above the floor's")
-	assert.Equal(t, first.Add(-time.Minute), r.asked[0])
+	assert.Len(t, ivs, 4, "the first trade's day and the three after it")
+	assert.Equal(t, candles.BucketStart(first, 1440), r.asked[0])
 }
 
 func TestIntervalsOfMarketsWithoutCandles(t *testing.T) {
@@ -215,5 +254,5 @@ func TestIntervalsCacheTheFloor(t *testing.T) {
 	r.firsts[market] = candles.First{Time: at(1, 0, 0)}
 	_, err = s.Intervals(context.Background(), market, 5, 10)
 	require.NoError(t, err)
-	assert.Equal(t, at(9, 59, 0), r.asked[1], "the cached floor")
+	assert.Equal(t, at(10, 0, 0), r.asked[1], "the cached floor")
 }

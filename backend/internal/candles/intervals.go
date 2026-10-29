@@ -34,6 +34,10 @@ type Reader interface {
 	// First returns market's first numbered trade, and false when it has
 	// none.
 	First(ctx context.Context, market string) (First, bool, error)
+	// Created returns the time of the block that created market (a pool or
+	// an order book market), one of whose denoms is base; zero when no
+	// stored event created it.
+	Created(ctx context.Context, market, base string) (time.Time, error)
 }
 
 // Markets finds the chain's order book markets; orderbook.Service
@@ -78,11 +82,25 @@ type Service struct {
 	floors map[string]floor
 }
 
-// floor is a market's cached first trade, with its denoms.
+// floor is a market's cached first trade and creation, with its denoms.
 type floor struct {
-	first       time.Time
-	base, quote string
-	expires     time.Time
+	first, created time.Time
+	base, quote    string
+	expires        time.Time
+}
+
+// lower is the floor of the candles of minutes: the market's creation, as
+// the aggregator dates a pool it syncs live, but never above the bucket of
+// the first trade. The aggregator's other dates (an order book market's
+// first trade minus a minute, a back-filled pool's day) can start the window
+// inside that bucket and so drop the first candle; that is its bug, not
+// copied.
+func (f floor) lower(minutes int) time.Time {
+	lower := BucketStart(f.first, minutes)
+	if !f.created.IsZero() && f.created.Before(lower) {
+		return f.created
+	}
+	return lower
 }
 
 // NewService returns a service over deps.
@@ -94,8 +112,9 @@ func NewService(deps ServiceDeps) *Service {
 }
 
 // Intervals answers market's candles of minutes as the aggregator does.
-// The floor is the market's first trade minus a minute; the window starts
-// at the later of it and now − limit × minutes. When the store holds limit
+// The floor is the earlier of the market's creation and the start of the
+// bucket holding its first trade; the window starts at the later of it and
+// now − limit × minutes. When the store holds limit
 // candles from there they are the answer; otherwise the buckets from the
 // current one down to the window's start are answered, a zero candle for
 // each bucket without one (so limit + 1 of them at most). Ascending by
@@ -111,8 +130,8 @@ func (s *Service) Intervals(ctx context.Context, market string, minutes, limit i
 	// The aggregator's expression, overflow included (a daily limit has no
 	// maximum).
 	startAt := now.Add(-time.Duration(limit) * length)
-	if startAt.Before(f.first) {
-		startAt = f.first
+	if lower := f.lower(minutes); startAt.Before(lower) {
+		startAt = lower
 	}
 	stored, err := s.deps.Reader.Candles(ctx, market, minutes, startAt, limit)
 	if err != nil {
@@ -180,7 +199,11 @@ func (s *Service) floor(ctx context.Context, market string) (floor, bool, error)
 		}
 		first.Base, first.Quote = m.Base, m.Quote
 	}
-	f = floor{first: first.Time.Add(-time.Minute), base: first.Base, quote: first.Quote, expires: now.Add(FloorTTL)}
+	created, err := s.deps.Reader.Created(ctx, market, first.Base)
+	if err != nil {
+		return floor{}, false, err
+	}
+	f = floor{first: first.Time, created: created, base: first.Base, quote: first.Quote, expires: now.Add(FloorTTL)}
 	s.mu.Lock()
 	s.floors[market] = f
 	s.mu.Unlock()

@@ -234,6 +234,32 @@ func TestQueueOrderAttribution(t *testing.T) {
 		assert.Equal(t, maker1, ents.OrderFills[0].Maker, "an event's own maker is kept")
 	})
 
+	// Regression: before chain v8.1.0 a price level was the price as a
+	// float64 with ten decimals, so a buy at 209999.999999999979 took the
+	// sell resting at 210000; the fill was left without a taker.
+	t.Run("chain v7.0: a message price the engine rounded to the resting price", func(t *testing.T) {
+		ents, err := realTransformer(t).Transform(queueInput(t,
+			[]func(*testing.T) (string, node.TxResult){
+				create(trader, market, "buy", "10", "209999.999999999979"),
+				create(trader, otherMarket, "buy", "10", "99999.99999999999"),
+			},
+			executed(msgID(9), market, "sell", "10", "210000", ""),
+			executed(msgID(8), otherMarket, "sell", "10", "100000", "")))
+		require.NoError(t, err)
+		require.Len(t, ents.OrderFills, 2)
+		assert.Equal(t, trader, ents.OrderFills[0].Taker)
+		assert.Equal(t, trader, ents.OrderFills[1].Taker)
+		assert.Equal(t, ents.Transactions[0].Hash, ents.OrderFills[0].TakerTxHash)
+		assert.Equal(t, ents.Transactions[1].Hash, ents.OrderFills[1].TakerTxHash)
+	})
+
+	t.Run("prices of different levels stay apart", func(t *testing.T) {
+		_, fills := attribution(t, queueInput(t,
+			[]func(*testing.T) (string, node.TxResult){create(trader, market, "buy", "10", "2.0000000001")},
+			executed(msgID(9), market, "sell", "10", "2", "")))
+		assert.Equal(t, []int{-1}, fills)
+	})
+
 	t.Run("an event's own owner and taker win over the message's creator", func(t *testing.T) {
 		ents, err := realTransformer(t).Transform(queueInput(t,
 			[]func(*testing.T) (string, node.TxResult){create(trader, market, "buy", "100", "2")},

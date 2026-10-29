@@ -2,6 +2,8 @@ package transform
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -288,6 +290,25 @@ func hasMessageID(events []node.Event) bool {
 	return false
 }
 
+// samePrice reports whether the engine put prices a and b at one price
+// level. Since chain v8.1.0 a level is the price as a LegacyDec; before, it
+// was the price parsed as a float64 and printed with ten decimals, so a
+// message at 209999.999999999979 took the orders resting at 210000. The
+// heuristic runs only on blocks before v8.2.0, so it accepts either.
+func samePrice(a, b string) bool {
+	if a == b {
+		return true
+	}
+	if x, err := sdkmath.LegacyNewDecFromStr(a); err == nil {
+		if y, err := sdkmath.LegacyNewDecFromStr(b); err == nil && x.Equal(y) {
+			return true
+		}
+	}
+	x, errA := strconv.ParseFloat(a, 64)
+	y, errB := strconv.ParseFloat(b, 64)
+	return errA == nil && errB == nil && fmt.Sprintf("%024.10f", x) == fmt.Sprintf("%024.10f", y)
+}
+
 func otherSide(side string) string {
 	if side == "buy" {
 		return "sell"
@@ -346,7 +367,7 @@ func claim(ents *Entities, q queued, outs []outcome) (int, bool) {
 	for ; n < len(outs) && outs[n].fill; n++ {
 		f := ents.OrderFills[outs[n].i]
 		amount, ok := sdkmath.NewIntFromString(f.Amount)
-		if !ok || f.Side != otherSide(q.side) || f.Price != q.price || !same(f.Taker) || filled.Add(amount).GT(q.amount) {
+		if !ok || f.Side != otherSide(q.side) || !samePrice(f.Price, q.price) || !same(f.Taker) || filled.Add(amount).GT(q.amount) {
 			break
 		}
 		filled = filled.Add(amount)
@@ -355,7 +376,7 @@ func claim(ents *Entities, q queued, outs []outcome) (int, bool) {
 	if q.create && n < len(outs) && !outs[n].fill {
 		o := ents.Orders[outs[n].i]
 		amount, ok := sdkmath.NewIntFromString(o.Amount)
-		saved = ok && o.Side == q.side && o.Price == q.price && same(o.Owner) && amount.Equal(q.amount.Sub(filled))
+		saved = ok && o.Side == q.side && samePrice(o.Price, q.price) && same(o.Owner) && amount.Equal(q.amount.Sub(filled))
 	}
 	if n == 0 && !saved {
 		return 0, false
