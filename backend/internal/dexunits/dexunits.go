@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	sdkmath "cosmossdk.io/math"
 )
 
 // Price converts a chain price to the display price of a market whose base
@@ -24,6 +26,24 @@ func Price(price string, baseExp, quoteExp int) (string, error) {
 		return "", fmt.Errorf("price %q: %w", price, err)
 	}
 	return d.shift(baseExp - quoteExp).String(), nil
+}
+
+// TradePrice converts a trade's chain price, an 18-decimal LegacyDec, to
+// the display price the aggregator stores for the trade. For a base one or
+// two decimals short of the quote the aggregator multiplies by 0.1 or 0.01
+// as a LegacyDec, which rounds back to 18 decimals, and so does TradePrice;
+// otherwise it is Price's exact shift (from three decimals short the
+// aggregator's factor is 0, BZE-133).
+func TradePrice(price string, baseExp, quoteExp int) (string, error) {
+	gap := baseExp - quoteExp
+	if gap != -1 && gap != -2 {
+		return Price(price, baseExp, quoteExp)
+	}
+	d, err := sdkmath.LegacyNewDecFromStr(price)
+	if err != nil {
+		return "", fmt.Errorf("price %q: %w", price, err)
+	}
+	return TrimTrailingZeros(d.Mul(sdkmath.LegacyNewDecWithPrec(1, int64(-gap))).String()), nil
 }
 
 // Amount converts a chain amount (base units, an integer) of a denom with exp

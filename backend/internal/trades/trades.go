@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
@@ -136,8 +137,9 @@ type height struct {
 	fills               []transform.OrderFill
 }
 
-// Range numbers the stored trades of [lo, hi) in tx and returns how many
-// heights have trades.
+// Range numbers the stored trades of [lo, hi) in tx, recomputes their
+// candles (candles.Upkeep.AfterNumbering) and returns how many heights have
+// trades.
 func Range(ctx context.Context, tx Tx, lo, hi int64) (int, error) {
 	fail := func(what string, err error) (int, error) {
 		return 0, fmt.Errorf("trades %d..%d: %s: %w", lo, hi-1, what, err)
@@ -237,6 +239,10 @@ func Range(ctx context.Context, tx Tx, lo, hi int64) (int, error) {
 	slices.SortFunc(fills, func(a, b transform.OrderFill) int { return cmp.Compare(a.TradeID, b.TradeID) })
 	if err := writer.WriteTrades(ctx, tx, hi-1, swaps, fills); err != nil {
 		return 0, err
+	}
+	// The candles of the fills numbered here count them only now.
+	if err := candles.Default.AfterNumbering(ctx, tx, lo, hi); err != nil {
+		return 0, fmt.Errorf("trades %d..%d: %w", lo, hi-1, err)
 	}
 	return len(byHeight), nil
 }

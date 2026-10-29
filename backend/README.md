@@ -137,6 +137,7 @@ Invalid values stop the process at startup with every problem listed.
 | `bze-scan sync-state [--job <set> [--id <key>]...] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--id` resyncs only those entries of the set (`--job proposal_non_voters --id 47` computes proposal 47's non-voters again, `--job upgrade_recovery --id 22551810` reads the commits after the upgrade planned at that height again). `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
 | `bze-scan snapshots [--kind proposals] [--id N]... [--workers N]` | reads past state from the archive and overwrites the database's (see Snapshots below); exit 0 when every target succeeded, 2 when some failed (listed on stderr), 1 on a configuration or database error |
 | `bze-scan sink-cleanup [--retention 48h] [--dry-run]` | one pass of the sink cleanup (see Sink cleanup below); `--dry-run` prints the cut-off and the rows per table and deletes nothing; refuses to run without `--retention` or `SINK_RETENTION`; exit 0 on success, 1 on a configuration or database error |
+| `bze-scan candles rebuild [--market <id>]` | recomputes the DEX candles of every market and pool with a stored trade, or of `--market` only, from `order_fills` and `swaps` (see "Candles"); nothing is read from the node; exit 0 on success, 1 on a configuration or database error |
 | `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
@@ -179,7 +180,8 @@ locally except the image.
 ```
 cmd/bze-scan/      main: runs app/cli
 app/cli/           cobra root and subcommands (serve, migrate, backfill,
-                   reindex, sync-state, snapshots) and their exit codes
+                   reindex, sync-state, snapshots, sink-cleanup, candles) and
+                   their exit codes
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
@@ -269,6 +271,8 @@ internal/aggregator/
                    the BZE aggregator's /api/dex/tickers reader (BZE's 24-hour change)
 internal/coingecko/
                    CoinGecko's USD prices and the cached feed behind /aggregator/api/prices
+internal/candles/  the DEX candles (explorer.candles): the writers' hook, the
+                   rebuild and the intervals served on /aggregator/api
 internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
@@ -445,6 +449,7 @@ result is `[]`, never `null`.
 | `GET /aggregator/api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
 | `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
+| `GET /aggregator/api/dex/intervals?market_id=\|ticker_id=&minutes=&limit=&format=` | `[{"market_id","minutes","start_at","end_at","lowest_price","open_price","average_price","highest_price","close_price","base_volume","quote_volume"}]`, display units as strings, RFC3339 UTC times, ascending; `format=tv`: `[{"time":<unix s>,"low","open","high","close","value":<base volume>}]` as numbers (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/dex/swaps?address=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker":"","taker":"<address>","pool_id","base","quote"}]`, the address's last 100 pool swaps, newest first |
 
 **Prices.** `internal/coingecko`: the client calls
@@ -539,6 +544,34 @@ more decimals more than the base (BZE-133), and `base`/`quote` come from the
 swap's denoms (the aggregator splits the pool id on `_` and drops a swap
 whose denoms contain one).
 
+**Intervals.** `internal/candles` reads `explorer.candles` (see "Candles")
+and answers as the aggregator: `minutes` one of 5, 15, 60, 240, 1440;
+`limit` 500 when absent or not positive, at most 5000 except for daily
+candles; `ticker_id` is a market id with `_` for `/` (a pool is asked by its
+pool id as `market_id`). The floor is the market's or pool's first trade
+minus a minute (cached ten minutes); the window starts at the later of the
+floor and now − limit × minutes. When the store holds `limit` candles from
+there they are the answer; otherwise every bucket from the current one down
+to the window's start is answered, a zero candle (every value `"0"`) where
+none is stored, so `limit + 1` at most, and the bucket holding the floor is
+left out unless the floor is a bucket start (the aggregator's arithmetic).
+Display units on read: prices as the swaps' (`dexunits.TradePrice`), the
+volumes exact, the average the close when high and low are equal, else
+quote / base volume as an 18-decimal `LegacyDec` of the display volumes.
+`format=tv` parses those strings as float64. A pool's denoms come with its
+first swap, a market's from the chain (`orderbook`, hence `NODE_GRPC_ADDR`);
+a market of the chain without a trade answers `[]`, an id that is neither a
+market nor a pool with a swap the aggregator's 400 "unknown error".
+Parameters bind as echo v4's binder does (a name in another case, an empty
+number as 0, a non-number as `invalid request`). Differences from the
+aggregator: no 50,000-trade cap on a candle's day, doubled v8.0.x events
+counted once, open and close by trade id (the aggregator's ties within a
+second keep an arbitrary row, BZE-135), a pool's floor its first swap (not
+the start of that day), prices right when the quote has three or more
+decimals more than the base (BZE-133), times in UTC, and a pool without a
+swap is unknown (the aggregator answers `[]` or one zero candle, from its
+own sync time).
+
 ## Migrations
 
 `bze-scan migrate` manages the schema. The database must already hold the
@@ -602,6 +635,12 @@ bze-scan migrate version    # print the current version (0 when none)
   them with `transform.NumberTrades` and writes the `swaps` rows (kept when
   there) and the fills' `trade_id` through `writer.WriteTrades`; nothing is
   read from the node. The cursor row stays: see "Trades and trade ids".
+  The sixth, `candles` (`internal/candles`, given to `migrations.Open` the
+  same way, after `swaps`), builds the candles of the whole history once:
+  migration 000024's row `candles` is replaced, in one transaction, by a row
+  `candles:<market>` per market and pool with a stored trade; each market is
+  then rebuilt and its row deleted in one transaction, so an interrupted
+  run resumes at the markets left. Without such rows it reads nothing.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -1060,6 +1099,41 @@ it is read: an event belongs to the transaction's order message with its
 message id at or below the event's height when no later order message took
 the id in between. A refund or a skip settles its message; a failure does
 not.
+
+### Candles
+
+`explorer.candles` (migration 000024) holds the OHLC candles of every order
+book market (`market_id` = `base/quote`, from `order_fills`) and pool
+(`pool_id` = `base_quote`, from `swaps`): one row per market, length
+(`minutes`: 5, 15, 60, 240, 1440) and bucket `start_at`, buckets aligned to
+the Unix epoch (UTC). Values are in chain units (prices quote base units per
+base base unit, volumes base units), converted on read, so a corrected
+exponent needs no rebuild; `first_trade_id`/`last_trade_id` name the
+bucket's first and last trade. A fill's quote volume is amount × price
+truncated to quote base units, a swap's its exact amount; a swap's price is
+quote / base rounded to 18 decimals. A trade counts once it has its
+`trade_id`; open and close are the lowest and highest trade id. Each bucket
+folds its trades in trade id order as the aggregator's `Interval.AddOrder`
+does, zero prices included (BZE-136, won't fix): while a candle's trades so
+far were priced 0 the next one replaces its volumes and its zero low. A
+zero price never comes from the order book and from a swap only for a quote
+side below 10^-18 of the base.
+
+Nothing increments a candle: `candles.Recompute` rewrites every candle of a
+market's UTC day (which holds every bucket of every length) from that day's
+trades (indexes `(market_id, time)` on `order_fills`, `(pool_id, time)` on
+`swaps`) and deletes the day's candles left without trades, under a
+per-market advisory lock, so replays, out-of-order backfill flushes and
+concurrent writers give the same rows. Who recomputes: the PostFlush hook
+`candles.Default.PostFlush` of the live writer and of the batch writer
+(backfill, catch-up, reindex), for the days of a flush's fills and swaps;
+`trades.Range`, for the days of the trades it has just numbered (the
+previous release's during a deploy, which its writer did not candle; every
+minute it re-reads the last minute's blocks, so those days are recomputed
+once more), except while the post-migration build is still to list the
+markets; `bze-scan candles rebuild` and the post-migration step `candles`
+(`candles.Rebuilder`), whole markets, 30 days of trades at a time in one
+transaction per market. All of it is Go: no SQL function or trigger.
 
 ### Open orders
 

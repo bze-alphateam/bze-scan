@@ -132,9 +132,11 @@ func TestCatchUpWalksPartitionByPartition(t *testing.T) {
 	assert.Equal(t, []any{int64(23_000_000), int64(24_000_000), int64(24_000_011)}, cursorMoves(t, d))
 	for i, want := range [][]any{{int64(22_500_000), int64(23_000_000)}, {int64(23_000_000), int64(24_000_000)},
 		{int64(24_000_000), int64(24_000_011)}} {
-		require.Len(t, d.txs[i].queries, 3, "transaction swaps, block swaps, fills")
+		require.Len(t, d.txs[i].queries, 5, "transaction swaps, block swaps, fills, the candles' pending build and trades")
 		for _, q := range d.txs[i].queries {
-			assert.Equal(t, want, q.args, "range %d", i)
+			if !strings.Contains(q.sql, "pending_rewrites") {
+				assert.Equal(t, want, q.args, "range %d", i)
+			}
 		}
 	}
 	assert.Equal(t, int64(migrations.PartitionSize), trades.RangeSize)
@@ -177,7 +179,9 @@ func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 	assert.Empty(t, cursorMoves(t, d))
 	require.Len(t, d.txs, 1)
 	for _, q := range d.txs[0].queries {
-		assert.Equal(t, []any{int64(70), int64(71)}, q.args)
+		if !strings.Contains(q.sql, "pending_rewrites") {
+			assert.Equal(t, []any{int64(70), int64(71)}, q.args)
+		}
 	}
 
 	var swaps, fills []map[string]any
@@ -210,4 +214,34 @@ func TestCatchUpFailsOnABadStoredSwap(t *testing.T) {
 	_, err := trades.CatchUp(context.Background(), d)
 	require.ErrorContains(t, err, "height 7 block event 0")
 	assert.False(t, d.txs[0].committed)
+}
+
+// The trades numbered count in their candles from then on: their days are
+// recomputed in the range's transaction, unless the post-migration build of
+// the whole history is still to come.
+func TestRangeRecomputesTheCandlesOfTheNumberedTrades(t *testing.T) {
+	at := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
+	for _, pending := range []bool{false, true} {
+		d := &db{cursor: int64(70), top: int64p(70), results: map[string][][]any{
+			"SELECT EXISTS": {{pending}},
+			"date_bin":      {{"uatom_ubze", at}},
+			"NULL::text":    {{int64(70_000_001), at, (*string)(nil), "2", func() *string { s := "5"; return &s }()}},
+		}}
+		_, err := trades.CatchUp(context.Background(), d)
+		require.NoError(t, err)
+		require.Len(t, d.txs, 1)
+		var candles []map[string]any
+		for _, e := range d.txs[0].execs {
+			if strings.Contains(e.sql, "INSERT INTO explorer.candles") {
+				require.NoError(t, json.Unmarshal(e.args[1].([]byte), &candles))
+			}
+		}
+		if pending {
+			assert.Empty(t, candles, "the build covers them")
+			continue
+		}
+		require.Len(t, candles, 5, "one candle per length")
+		assert.Equal(t, "2.500000000000000000", candles[0]["close"])
+		assert.Equal(t, float64(70_000_001), candles[0]["last_trade_id"])
+	}
 }

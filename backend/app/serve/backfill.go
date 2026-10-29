@@ -12,6 +12,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -31,7 +32,7 @@ type history struct {
 }
 
 // newHistory builds the backfill side; its writer runs hooks after the
-// order attribution. Close its pool when done.
+// order attribution and the candles. Close its pool when done.
 func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *chain.Codec, hooks ...writer.PostFlush) (*history, error) {
 	// The archive's release history is per chain: the same height is a
 	// different release on mainnet and on testnet.
@@ -48,7 +49,7 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 	if cfg.ArchiveRPCRetryURL != "" {
 		retry = node.New(cfg.ArchiveRPCRetryURL)
 	}
-	w := writer.NewBatchWriter(pool, append([]writer.PostFlush{writer.AttributeOrders}, hooks...)...)
+	w := writer.NewBatchWriter(pool, append([]writer.PostFlush{writer.AttributeOrders, candles.Default.PostFlush}, hooks...)...)
 	limit := rate.Limit(cfg.BackfillRateLimit)
 	if limit <= 0 {
 		limit = rate.Inf // config.Load never yields 0; a hand-built config means no limit

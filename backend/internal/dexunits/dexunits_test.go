@@ -80,3 +80,30 @@ func TestTrimTrailingZeros(t *testing.T) {
 	assert.Equal(t, "2", dexunits.TrimTrailingZeros("2.000"))
 	assert.Equal(t, "100", dexunits.TrimTrailingZeros("100"), "an integer is left alone")
 }
+
+func TestTradePrice(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		price       string
+		base, quote int
+		want        string
+	}{
+		{"same exponents", "0.500000000000000000", 6, 6, "0.5"},
+		{"base has more decimals", "0.000000000002000000", 18, 6, "2"},
+		// One or two decimals short: the aggregator's LegacyDec Mul rounds
+		// back to 18 decimals (half to even).
+		{"one decimal short", "0.000000000000000015", 6, 7, "0.000000000000000002"},
+		{"two decimals short", "0.000000000000000125", 6, 8, "0.000000000000000001"},
+		{"one decimal short, exact", "1.5", 6, 7, "0.15"},
+		// Three or more: Price's exact shift (BZE-133).
+		{"three decimals short", "1234.5", 6, 9, "1.2345"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := dexunits.TradePrice(tc.price, tc.base, tc.quote)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+	_, err := dexunits.TradePrice("x", 6, 7)
+	assert.Error(t, err)
+}
