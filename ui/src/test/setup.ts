@@ -30,6 +30,10 @@ if (typeof window.ResizeObserver === "undefined") {
     disconnect() {}
   };
 }
+// Chakra's checkbox (zag's press handling) builds PointerEvents on blur.
+if (typeof window.PointerEvent === "undefined") {
+  window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
+}
 if (!Element.prototype.scrollTo) {
   Element.prototype.scrollTo = () => {};
 }
