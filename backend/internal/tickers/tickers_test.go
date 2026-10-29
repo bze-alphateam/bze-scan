@@ -120,11 +120,23 @@ type tradebinNode struct {
 	pools []tradebintypes.LiquidityPool
 	calls int
 	fail  bool
+	// started and release, when set, hold each read until released.
+	started, release chan struct{}
 }
 
-func (n *tradebinNode) AllLiquidityPools(_ context.Context, in *tradebintypes.QueryAllLiquidityPoolsRequest,
+func (n *tradebinNode) AllLiquidityPools(ctx context.Context, in *tradebintypes.QueryAllLiquidityPoolsRequest,
 	_ ...grpc.CallOption) (*tradebintypes.QueryAllLiquidityPoolsResponse, error) {
 	n.calls++
+	if n.release != nil {
+		n.started <- struct{}{}
+		select {
+		case <-n.release:
+		case <-ctx.Done():
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if n.fail {
 		return nil, errors.New("node down")
 	}
@@ -195,4 +207,32 @@ func TestNodePools(t *testing.T) {
 	require.Error(t, err, "nothing read yet")
 	_, err = tickers.NewNodePools(tb, bank, 0, c).Supply(ctx, "ulp_a_b")
 	require.Error(t, err)
+}
+
+// The pools read is shared by every caller of the flight: the first caller
+// hanging up fails none of them. Regression: the read ran on the first
+// caller's context, so a cancelled first caller on a cold start failed
+// every caller with nothing to fall back on.
+func TestNodePoolsReadOutlivesTheFirstCaller(t *testing.T) {
+	tb := &tradebinNode{pools: []tradebintypes.LiquidityPool{lp("a_b")},
+		started: make(chan struct{}, 1), release: make(chan struct{})}
+	n := tickers.NewNodePools(tb, &bankNode{}, 0, &clock{now: now})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan error, 1)
+	go func() {
+		_, err := n.Pools(ctx)
+		first <- err
+	}()
+	<-tb.started
+	cancel()
+	second := make(chan []tickers.Pool, 1)
+	go func() {
+		pools, _ := n.Pools(context.Background())
+		second <- pools
+	}()
+	close(tb.release)
+	require.NoError(t, <-first)
+	assert.Len(t, <-second, 1)
+	assert.Equal(t, 1, tb.calls, "one read for both callers")
 }

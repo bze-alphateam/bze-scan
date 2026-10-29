@@ -54,6 +54,9 @@ const (
 	DefaultPriceTTL = 60 * time.Second
 	// DefaultWorkers bounds the markets built at once.
 	DefaultWorkers = 8
+	// DefaultBuildTimeout bounds one build, which runs whatever happens to
+	// the request that started it.
+	DefaultBuildTimeout = 30 * time.Second
 	// DefaultNativeCoinGeckoID is the native denom's CoinGecko id, the
 	// last fallback of its USD price.
 	DefaultNativeCoinGeckoID = "bzedge"
@@ -129,6 +132,8 @@ type Config struct {
 	PriceTTL time.Duration
 	// Workers bounds the markets built at once; zero is DefaultWorkers.
 	Workers int
+	// BuildTimeout bounds one build; zero is DefaultBuildTimeout.
+	BuildTimeout time.Duration
 	// NativeDenom is the chain's own denom (ubze).
 	NativeDenom string
 	// USDCDenom is priced at $1 and anchors the other USD prices; empty
@@ -205,6 +210,9 @@ func New(cfg Config, deps Deps) *Service {
 	if cfg.Workers <= 0 {
 		cfg.Workers = DefaultWorkers
 	}
+	if cfg.BuildTimeout <= 0 {
+		cfg.BuildTimeout = DefaultBuildTimeout
+	}
 	if cfg.NativeCoinGeckoID == "" {
 		cfg.NativeCoinGeckoID = DefaultNativeCoinGeckoID
 	}
@@ -219,7 +227,10 @@ func New(cfg Config, deps Deps) *Service {
 
 // Tickers returns every market's and pool's ticker, by market id, built at
 // most TTL ago. The caller must not modify them. It fails only when neither
-// the market list nor the pools can be read and none was read before.
+// the market list nor the pools can be read and none was read before. The
+// build is shared by every caller waiting for it and cached, so it does not
+// end with the request that started it: it runs on its own context,
+// bounded by BuildTimeout.
 func (s *Service) Tickers(ctx context.Context) ([]Ticker, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -227,6 +238,8 @@ func (s *Service) Tickers(ctx context.Context) ([]Ticker, error) {
 	if s.built != nil && now.Sub(s.builtAt) < s.cfg.TTL {
 		return s.built, nil
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.cfg.BuildTimeout)
+	defer cancel()
 	list, err := s.list(ctx)
 	if err != nil {
 		return nil, err
@@ -251,6 +264,9 @@ func (s *Service) Tickers(ctx context.Context) ([]Ticker, error) {
 // market or pool has that id. Unlike Tickers, any part that fails to read
 // is an error.
 func (s *Service) Ticker(ctx context.Context, marketID string) (*Ticker, error) {
+	// The USD prices and the market list it reads are shared and cached.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.cfg.BuildTimeout)
+	defer cancel()
 	s.mu.Lock()
 	list, err := s.list(ctx)
 	s.mu.Unlock()

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -49,6 +50,7 @@ type tkEnv struct {
 	poolsErr   error
 	supplies   map[string]sdkmath.Int
 	gecko      map[string]string
+	tradesErr  error
 	exps       swapExponents
 
 	marketCalls, geckoCalls int
@@ -72,14 +74,20 @@ func (e *tkEnv) advance(d time.Duration) {
 	e.clock = e.clock.Add(d)
 }
 
-func (e *tkEnv) Markets(context.Context) ([]orderbook.Market, error) {
+func (e *tkEnv) Markets(ctx context.Context) ([]orderbook.Market, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.marketCalls++
 	return e.markets, e.marketsErr
 }
 
-func (e *tkEnv) Book(_ context.Context, id string) (*orderbook.Book, error) {
+func (e *tkEnv) Book(ctx context.Context, id string) (*orderbook.Book, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := e.bookErr[id]; err != nil {
 		return nil, err
 	}
@@ -90,7 +98,10 @@ func (e *tkEnv) Book(_ context.Context, id string) (*orderbook.Book, error) {
 }
 
 // Candles builds the candles of the market's trades, as the writers do.
-func (e *tkEnv) Candles(_ context.Context, market string, minutes int, from time.Time, limit int) ([]candles.Candle, error) {
+func (e *tkEnv) Candles(ctx context.Context, market string, minutes int, from time.Time, limit int) ([]candles.Candle, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var trades []candles.Trade
 	for _, t := range e.trades[market] {
 		tr, err := candles.FillTrade(t.id, t.at, t.price, fmt.Sprint(t.amount))
@@ -112,13 +123,22 @@ func (e *tkEnv) Candles(_ context.Context, market string, minutes int, from time
 
 // Heights makes a block of every millisecond: its height is its unix
 // milliseconds.
-func (e *tkEnv) Heights(_ context.Context, fromMs, toMs int64) (lo, hi int64, ok bool, err error) {
+func (e *tkEnv) Heights(ctx context.Context, fromMs, toMs int64) (lo, hi int64, ok bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return 0, 0, false, err
+	}
 	return fromMs, toMs, true, nil
 }
 
 // Trades answers the newest trade of the market, in the heights' window
 // when one is set.
-func (e *tkEnv) Trades(_ context.Context, f tradehistory.Filter, limit int, _ ...string) ([]tradehistory.Trade, error) {
+func (e *tkEnv) Trades(ctx context.Context, f tradehistory.Filter, limit int, _ ...string) ([]tradehistory.Trade, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if e.tradesErr != nil {
+		return nil, e.tradesErr
+	}
 	var best *tkTrade
 	for _, t := range e.trades[f.MarketID] {
 		ms := t.at.UnixMilli()
@@ -135,11 +155,17 @@ func (e *tkEnv) Trades(_ context.Context, f tradehistory.Filter, limit int, _ ..
 	return []tradehistory.Trade{{TradeID: best.id, TimeMs: best.at.UnixMilli(), Price: best.price}}, nil
 }
 
-func (e *tkEnv) Pools(context.Context) ([]tickers.Pool, error) {
+func (e *tkEnv) Pools(ctx context.Context) ([]tickers.Pool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return e.pools, e.poolsErr
 }
 
-func (e *tkEnv) Supply(_ context.Context, denom string) (sdkmath.Int, error) {
+func (e *tkEnv) Supply(ctx context.Context, denom string) (sdkmath.Int, error) {
+	if err := ctx.Err(); err != nil {
+		return sdkmath.Int{}, err
+	}
 	s, ok := e.supplies[denom]
 	if !ok {
 		return sdkmath.Int{}, errors.New("no supply")
@@ -147,7 +173,10 @@ func (e *tkEnv) Supply(_ context.Context, denom string) (sdkmath.Int, error) {
 	return s, nil
 }
 
-func (e *tkEnv) USD(context.Context) (map[string]string, error) {
+func (e *tkEnv) USD(ctx context.Context) (map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.geckoCalls++
@@ -445,4 +474,58 @@ func TestCompatTickersEmptyAndFailing(t *testing.T) {
 	rec := serve(t, e.server(nil), http.MethodGet, "/aggregator/api/dex/tickers")
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.JSONEq(t, `{"message":"Unknown error! Please report this issue to the administrators at alphateam@getbze.com"}`, rec.Body.String())
+}
+
+// A build started by a request that hangs up (a closed tab, a client
+// timeout) still reads everything: it is cached and shared, so it must not
+// end with that request. Regression: the build ran on the request's
+// context and cached all-zero tickers for 5 s.
+func TestCompatTickersBuildOutlivesTheRequest(t *testing.T) {
+	e := newTkEnv()
+	m := e.market("ubze", "uusdc")
+	e.pool("ubze", "uusdc", 1_000_000_000, 50_000_000)
+	e.books[m] = &orderbook.Book{Asks: []orderbook.Level{{Price: "0.051"}}}
+	e.trades[m] = []tkTrade{{1, tkNow.Add(-time.Hour), "0.05", 2_000_000}}
+	srv := e.server(nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/aggregator/api/dex/tickers?format=coingecko", nil).WithContext(ctx)
+	srv.ServeHTTP(httptest.NewRecorder(), req)
+
+	want := `"last_price":0.05,"base_volume":2,"target_volume":0.1,"bid":0,"ask":0.051,"high":0.05,"low":0.05}`
+	body := tickersBody(t, srv, "?format=coingecko")
+	assert.Contains(t, body, want, "the cached build has the real figures")
+	assert.Contains(t, body, `"liquidity_in_usd":100}`)
+	assert.Equal(t, 1, e.marketCalls, "the next request is served from that build")
+}
+
+// A USD price computed after a failed read (a cancelled request, a store
+// down) is answered but not kept, so the next read prices it. Regression:
+// the zero was kept 60 s and liquidity_in_usd disappeared for a minute.
+func TestCompatTickersUSDPriceAfterAFailedReadIsNotKept(t *testing.T) {
+	e := newTkEnv()
+	e.trades["ubze/uusdc"] = []tkTrade{{1, tkNow.Add(-time.Hour), "0.04", 1}}
+	svc := e.service()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.Equal(t, "0", svc.USD(ctx, "ubze").RatString(), "nothing read")
+	assert.Equal(t, "1/25", svc.USD(context.Background(), "ubze").RatString())
+
+	e = newTkEnv()
+	e.trades["ubze/uusdc"] = []tkTrade{{1, tkNow.Add(-time.Hour), "0.04", 1}}
+	e.tradesErr = errors.New("db down")
+	svc = e.service()
+	assert.Equal(t, "0", svc.USD(context.Background(), "ubze").RatString(), "the store down")
+	e.tradesErr = nil
+	assert.Equal(t, "1/25", svc.USD(context.Background(), "ubze").RatString())
+
+	// A price that read everything is kept, zero included.
+	e = newTkEnv()
+	e.gecko = map[string]string{}
+	svc = e.service()
+	assert.Equal(t, "0", svc.USD(context.Background(), "ubze").RatString())
+	e.trades["ubze/uusdc"] = []tkTrade{{1, tkNow.Add(-time.Hour), "0.04", 1}}
+	assert.Equal(t, "0", svc.USD(context.Background(), "ubze").RatString(), "kept for 60 s")
 }

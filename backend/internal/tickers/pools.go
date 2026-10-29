@@ -19,6 +19,10 @@ import (
 // DefaultPoolsTTL is how long NodePools serves a read.
 const DefaultPoolsTTL = 10 * time.Second
 
+// PoolsTimeout bounds one read of every pool, which the callers of the
+// flight share.
+const PoolsTimeout = 30 * time.Second
+
 // PoolNode is the part of the tradebin query client NodePools reads;
 // tradebintypes.QueryClient satisfies it.
 type PoolNode interface {
@@ -74,6 +78,10 @@ func (n *NodePools) Pools(ctx context.Context) ([]Pool, error) {
 		return held, nil
 	}
 	v, err, _ := n.group.Do("pools", func() (any, error) {
+		// The read is shared by every caller of the flight, so it must not
+		// end when the first one hangs up.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), PoolsTimeout)
+		defer cancel()
 		var (
 			out []Pool
 			key []byte
