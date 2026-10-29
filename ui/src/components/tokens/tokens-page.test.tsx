@@ -101,11 +101,11 @@ describe("TokensPage", () => {
 
   it("renders the tiles and every token with its origin, supply, holders and price", async () => {
     renderWithProviders(<TokensPage />, { api: api() });
-    expect(screen.getByText("Every token on BZE. Prices come from the BZE DEX.")).toBeInTheDocument();
+    expect(screen.getByText("Every token on BZE. Prices come from the BZE DEX, else CoinGecko.")).toBeInTheDocument();
     await screen.findAllByTestId("tile");
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Tokens on BZE61 native · 2 Factory · 2 cross-chain · 1 pool share",
-      "On the DEX4with a price on DEX",
+      "On the DEX3with a price on DEX",
       "Created this month1on Factory",
       "Cross-chain2 chainsCosmos Hub, Noble",
     ]);
@@ -123,11 +123,13 @@ describe("TokensPage", () => {
       "href",
       expect.stringContaining("denom=factory%2Fbze13gzq"),
     );
-    expect(vdl).toHaveTextContent("— no market");
+    expect(vdl).toHaveTextContent("— no price");
     expect(within(vdl).queryByRole("link", { name: "DEX" })).not.toBeInTheDocument();
     expect(within(atom).getByTestId("token-badges")).toHaveTextContent("Cross-chainCosmos Hub");
     expect(atom).toHaveTextContent("— Halted on the DEX");
+    expect(within(atom).queryByRole("link", { name: "DEX" })).not.toBeInTheDocument();
     expect(usdc).toHaveTextContent("$1.00");
+    expect(within(usdc).getByRole("link", { name: "DEX" })).toBeInTheDocument();
     // The raw denom stays in each token's More details.
     expect(screen.queryByText(/factory\/bze1/)).not.toBeInTheDocument();
   });

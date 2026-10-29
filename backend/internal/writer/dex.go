@@ -2,12 +2,14 @@ package writer
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
@@ -54,6 +56,27 @@ var (
 			{name: "taker_message_id", typ: "text"},
 			{name: "taker_tx_hash", typ: "text", expr: fillTakerTxHash},
 			{name: "time", typ: "timestamptz"},
+			{name: "trade_id", typ: "bigint"},
+		},
+	}
+	swapsTable = table{
+		name: "explorer.swaps",
+		keys: []string{"height", "trade_id"},
+		cols: []column{
+			{name: "height", typ: "bigint"},
+			{name: "trade_id", typ: "bigint"},
+			{name: "time", typ: "timestamptz", expr: swapTime},
+			{name: "pool_id", typ: "text"},
+			{name: "base", typ: "text"},
+			{name: "quote", typ: "text"},
+			{name: "side", typ: "text"},
+			{name: "base_amount", typ: "numeric"},
+			{name: "quote_amount", typ: "numeric"},
+			{name: "creator", typ: "text"},
+			{name: "tx_hash", typ: "text"},
+			{name: "tx_index", typ: "integer"},
+			{name: "msg_index", typ: "integer"},
+			{name: "block_seq", typ: "integer"},
 		},
 	}
 )
@@ -64,6 +87,12 @@ var (
 const fillTakerTxHash = `COALESCE(r.taker_tx_hash,
 		(SELECT f.taker_tx_hash FROM explorer.order_fills f WHERE f.height = r.height AND f.seq = r.seq))`
 
+// swapTime is the swap's block time exactly as the blocks row holds it, so
+// every writer and migration 000023's index_trades store the same value (the
+// live writer's blocks insert truncates to the microsecond, the batch
+// writer's JSON is rounded); the transformer's when the row is missing.
+const swapTime = `COALESCE((SELECT b.time FROM explorer.blocks b WHERE b.height = r.height), r.time)`
+
 // fillMaker names the maker of a fill whose event names none (chain v7.0
 // and v7.1): the owner of the filled order when its row has one, else the
 // maker the row already holds.
@@ -71,8 +100,8 @@ const fillMaker = `COALESCE(NULLIF(r.maker, ''),
 		(SELECT o.owner FROM explorer.orders o WHERE o.order_id = r.order_id AND o.owner <> ''),
 		(SELECT f.maker FROM explorer.order_fills f WHERE f.height = r.height AND f.seq = r.seq), '')`
 
-// orderMessageRow, orderRow, orderFillRow, fillDeltaRow and orderCancelRow
-// are the JSON shapes of the order book writes.
+// orderMessageRow, orderRow, orderFillRow, fillDeltaRow, swapRow and
+// orderCancelRow are the JSON shapes of the order book and swap writes.
 type (
 	orderMessageRow struct {
 		Height    int64  `json:"height"`
@@ -109,6 +138,7 @@ type (
 		TakerMessageID *string   `json:"taker_message_id"`
 		TakerTxHash    *string   `json:"taker_tx_hash"`
 		Time           time.Time `json:"time"`
+		TradeID        int64     `json:"trade_id"`
 	}
 	// fillDeltaRow is what the fills a flush inserted add to one order: the
 	// amount, and the last of them, which closes the order once it is
@@ -118,6 +148,22 @@ type (
 		Amount  string    `json:"amount"`
 		Height  int64     `json:"height"`
 		Time    time.Time `json:"time"`
+	}
+	swapRow struct {
+		Height      int64     `json:"height"`
+		TradeID     int64     `json:"trade_id"`
+		Time        time.Time `json:"time"`
+		PoolID      string    `json:"pool_id"`
+		Base        string    `json:"base"`
+		Quote       string    `json:"quote"`
+		Side        string    `json:"side"`
+		BaseAmount  string    `json:"base_amount"`
+		QuoteAmount string    `json:"quote_amount"`
+		Creator     string    `json:"creator"`
+		TxHash      *string   `json:"tx_hash"`
+		TxIndex     *int      `json:"tx_index"`
+		MsgIndex    *int      `json:"msg_index"`
+		BlockSeq    *int      `json:"block_seq"`
 	}
 	orderCancelRow struct {
 		OrderID string    `json:"order_id"`
@@ -234,7 +280,7 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		fills = append(fills, orderFillRow{
 			Height: f.Height, Seq: f.Seq, OrderID: f.OrderID, MarketID: f.MarketID, Side: f.Side, Price: f.Price,
 			Amount: f.Amount, Maker: f.Maker, Taker: f.Taker, TakerMessageID: nullIfEmpty(f.TakerMessageID),
-			TakerTxHash: nullIfEmpty(f.TakerTxHash), Time: f.Time,
+			TakerTxHash: nullIfEmpty(f.TakerTxHash), Time: f.Time, TradeID: f.TradeID,
 		})
 	}
 	// One cancel per order: the chain cancels an order once.
@@ -283,6 +329,20 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		return nil, err
 	}
 	return slices.Concat(msgs, ords, inserts, makers, fillStmts, cancelStmts), nil
+}
+
+// swapStatements returns the pool swap writes of ents. The writers run them
+// after the blocks insert, which their time reads (swapTime).
+func swapStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
+	swaps := make([]swapRow, 0, len(ents.Swaps))
+	for _, s := range ents.Swaps {
+		swaps = append(swaps, swapRow{
+			Height: s.Height, TradeID: s.TradeID, Time: s.Time, PoolID: s.PoolID, Base: s.Base, Quote: s.Quote,
+			Side: s.Side, BaseAmount: s.BaseAmount, QuoteAmount: s.QuoteAmount, Creator: s.Creator,
+			TxHash: nullIfEmpty(s.TxHash), TxIndex: s.TxIndex, MsgIndex: s.MsgIndex, BlockSeq: s.BlockSeq,
+		})
+	}
+	return chunked(top, "swaps", swapsTable, mode, swaps, nil)
 }
 
 // fillDeltas merges the fills of ents that were inserted per order, in
@@ -338,4 +398,41 @@ func scanFillKeys(rows pgx.Rows, into *Inserted) error {
 		into.OrderFills[k] = true
 	}
 	return rows.Err()
+}
+
+// fillTradeIDsSQL sets the trade ids of stored fills.
+const fillTradeIDsSQL = `UPDATE explorer.order_fills AS f SET trade_id = r.trade_id
+	  FROM jsonb_to_recordset($1::jsonb) AS r(height bigint, seq integer, trade_id bigint)
+	 WHERE f.height = r.height AND f.seq = r.seq AND f.trade_id IS DISTINCT FROM r.trade_id`
+
+// fillTradeIDRow is the JSON shape of fillTradeIDsSQL.
+type fillTradeIDRow struct {
+	Height  int64 `json:"height"`
+	Seq     int   `json:"seq"`
+	TradeID int64 `json:"trade_id"`
+}
+
+// Execer runs a statement; pgx.Tx and *pgxpool.Pool satisfy it.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// WriteTrades writes, in tx, the trades of stored blocks numbered again
+// (internal/trades): the swaps rows, kept when already there, and the trade
+// ids of the fills (only Height, Seq and TradeID are read). top names the
+// write in errors.
+func WriteTrades(ctx context.Context, tx Execer, top int64, swaps []transform.Swap, fills []transform.OrderFill) error {
+	stmts, err := swapStatements(top, &transform.Entities{Swaps: swaps}, ModeInsert)
+	if err != nil {
+		return err
+	}
+	rows := make([]fillTradeIDRow, len(fills))
+	for i, f := range fills {
+		rows[i] = fillTradeIDRow{Height: f.Height, Seq: f.Seq, TradeID: f.TradeID}
+	}
+	ids, err := plainStatements(top, "fill trade ids", fillTradeIDsSQL, rows)
+	if err != nil {
+		return err
+	}
+	return execAll(ctx, tx, top, append(stmts, ids...))
 }

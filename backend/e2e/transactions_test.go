@@ -203,7 +203,8 @@ func TestMigrateMirrorsTheClassification(t *testing.T) {
 
 	res := migrateUp(t, url)
 	assert.False(t, res.Applied, "no SQL migration pending")
-	assert.Equal(t, []string{"partitions", "classification", "labels", "message_events"}, res.Steps, "the steps run on every up")
+	assert.Equal(t, []string{"partitions", "classification", "labels", "message_events", "swaps", "candles"}, res.Steps,
+		"the steps run on every up")
 	assert.Equal(t, len(classify.Messages()), countRows(t, db, "explorer.message_kinds"))
 	assert.Equal(t, []string{"send"}, queryStrings(t, db,
 		`SELECT kind FROM explorer.message_kinds WHERE type_url = '/cosmos.bank.v1beta1.MsgSend'`))

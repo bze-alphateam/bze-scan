@@ -20,8 +20,10 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/debugserver"
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -30,6 +32,9 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/stakeflow"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
+	"github.com/bze-alphateam/bze-scan/backend/internal/swaphistory"
+	"github.com/bze-alphateam/bze-scan/backend/internal/tradehistory"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -53,6 +58,9 @@ type Options struct {
 	// OrderCoverage overrides the open orders' coverage checker (DEX start
 	// heights, interval); ChainID is always CHAIN_ID.
 	OrderCoverage ordercoverage.Config
+	// TradesInterval overrides how often the stored trades are numbered
+	// again (trades.Interval).
+	TradesInterval time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -74,6 +82,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		"backfill_enabled": cfg.BackfillEnabled,
 		"halt_watch":       cfg.IndexerEnabled && cfg.HaltWatchEnabled,
 		"debug_addr":       cfg.DebugAddr,
+		"sink_retention":   cfg.SinkRetention,
 	}).Info("starting bze-scan")
 
 	if err := cfg.RequireDatabase(); err != nil {
@@ -178,25 +187,85 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		watch, liveHalt = w, w
 	}
 
+	// The aggregator-compatible /aggregator/api/prices; a nil interface without a
+	// CoinGecko host, never a typed nil.
+	var compatPrices controller.PriceFeed
+	priceFeed := NewPriceFeed(cfg)
+	if priceFeed != nil {
+		compatPrices = priceFeed
+	}
+	var compatArticles controller.ArticleFeed
+	if feed := NewArticleFeed(cfg); feed != nil {
+		compatArticles = feed
+	}
+
+	// The aggregator-compatible /aggregator/api/dex/orders reads the books live,
+	// /aggregator/api/dex/intervals the markets' denoms and
+	// /aggregator/api/dex/tickers both, with the pools; left out without a gRPC
+	// address.
+	var compatOrders controller.OrderBooks
+	var compatIntervals controller.Intervals
+	var compatTickers controller.Tickers
+	if cfg.NodeGRPCAddr != "" {
+		books, closeBooks, err := NewOrderBook(cfg, codec, apiPool)
+		if err != nil {
+			return err
+		}
+		defer closeBooks()
+		compatOrders = books
+		compatIntervals = candles.NewService(candles.ServiceDeps{Reader: candles.NewPGReader(apiPool), Markets: books,
+			Exponents: dexunits.NewPGStore(apiPool)})
+		tk, closeTickers, err := NewTickers(cfg, codec, books, apiPool, priceFeed)
+		if err != nil {
+			return err
+		}
+		defer closeTickers()
+		compatTickers = tk
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
+
+	// The aggregator-compatible /aggregator/api/supply routes read the local node.
+	var compatSupply controller.SupplyReader
+	if cfg.NodeGRPCAddr != "" {
+		sup, closeSupply, err := NewSupply(cfg, codec, explorerRepo)
+		if err != nil {
+			return err
+		}
+		defer closeSupply()
+		compatSupply = sup
+	}
+
 	e := server.New(server.Deps{
-		Explorer:           explorerRepo,
-		Accounts:           explorerRepo,
-		Tokens:             explorerRepo,
-		Proposals:          explorerRepo,
-		Upgrades:           explorerRepo,
-		Stats:              explorerRepo,
-		Daily:              explorerRepo,
-		Params:             liveParams,
-		ParamChanges:       explorerRepo,
-		HaltedDenoms:       haltedDenoms,
-		AccountState:       accountState,
-		OpenOrders:         openOrders,
-		StakeFlows:         flows,
-		ValidatorNames:     explorerRepo,
-		LiveHalt:           liveHalt,
-		Status:             checker,
-		Raw:                raw,
+		Explorer:        explorerRepo,
+		Accounts:        explorerRepo,
+		Tokens:          explorerRepo,
+		Prices:          explorerRepo,
+		Proposals:       explorerRepo,
+		Upgrades:        explorerRepo,
+		Stats:           explorerRepo,
+		Daily:           explorerRepo,
+		Params:          liveParams,
+		ParamChanges:    explorerRepo,
+		HaltedDenoms:    haltedDenoms,
+		AccountState:    accountState,
+		OpenOrders:      openOrders,
+		StakeFlows:      flows,
+		ValidatorNames:  explorerRepo,
+		LiveHalt:        liveHalt,
+		Status:          checker,
+		Raw:             raw,
+		CompatPrices:    compatPrices,
+		CompatArticles:  compatArticles,
+		CompatOrders:    compatOrders,
+		CoinGeckoMerges: cfg.CoinGeckoMergedMarkets,
+		CompatSupply:    compatSupply,
+		CompatIntervals: compatIntervals,
+		CompatTickers:   compatTickers,
+		CompatSwaps: swaphistory.New(swaphistory.Deps{Store: swaphistory.NewPGStore(apiPool),
+			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
+		CompatHistory: tradehistory.New(tradehistory.Deps{Store: tradehistory.NewPGStore(apiPool),
+			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})
@@ -209,6 +278,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 	if coverage.run != nil {
 		components = append(components, coverage)
+	}
+	// The sink cleanup runs only with SINK_RETENTION set (off by default).
+	if cfg.SinkRetention > 0 {
+		components = append(components, component{name: "sink cleanup", run: newSinkCleaner(cfg, 0, apiPool).Run})
 	}
 	if cfg.DebugAddr != "" {
 		components = append(components, component{name: "debug server", run: func(ctx context.Context) error {
@@ -252,13 +325,19 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
 				Node:        nodeClient,
-				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, flows.PostFlush),
+				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, candles.Default.PostFlush, flows.PostFlush),
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),
 				Dirty:       syncer,
 			})
 			components = append(components, component{name: "live indexer", run: ix.Run})
+			// The blocks a previous release's indexer writes while both run
+			// (a deploy's overlap) carry no trade ids: numbered from the
+			// stored rows at start and every minute.
+			components = append(components, component{name: "trades", run: func(ctx context.Context) error {
+				return trades.Run(ctx, pool, candles.Default, opts.TradesInterval, log.StandardLogger())
+			}})
 		}
 		if cfg.BackfillEnabled {
 			components = append(components, backfillComponent(hist, cfg, opts.BackfillLockRetry))

@@ -84,7 +84,6 @@ PostgreSQL rather than touching the soak's).
    BACKFILL_ENABLED=true
    BACKFILL_FLOOR=<the date seven days back, YYYY-MM-DD>
    DEBUG_ADDR=127.0.0.1:6060
-   AGGREGATOR_URL=https://getbze.com
    ```
 
    then, in another terminal:

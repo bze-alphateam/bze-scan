@@ -25,6 +25,7 @@ type goldenDex struct {
 	Orders        []transform.Order        `json:"orders"`
 	OrderFills    []transform.OrderFill    `json:"order_fills"`
 	OrderCancels  []transform.OrderCancel  `json:"order_cancels"`
+	Swaps         []transform.Swap         `json:"swaps"`
 }
 
 // The recorded heights predate chain v8.2.0, so their order book rows carry
@@ -39,8 +40,8 @@ func TestDexGolden(t *testing.T) {
 			ents, err := tr.Transform(fetchInput(t, n, h))
 			require.NoError(t, err)
 			file := filepath.Join("testdata", fmt.Sprintf("dex_%d.golden.json", h))
-			g := goldenDex{ents.OrderMessages, ents.Orders, ents.OrderFills, ents.OrderCancels}
-			if len(g.OrderMessages)+len(g.Orders)+len(g.OrderFills)+len(g.OrderCancels) == 0 {
+			g := goldenDex{ents.OrderMessages, ents.Orders, ents.OrderFills, ents.OrderCancels, ents.Swaps}
+			if len(g.OrderMessages)+len(g.Orders)+len(g.OrderFills)+len(g.OrderCancels)+len(g.Swaps) == 0 {
 				_, err := os.Stat(file)
 				assert.True(t, os.IsNotExist(err), "no rows, no golden file")
 				return
@@ -179,16 +180,17 @@ func TestOrdersAttributedInTheirBlock(t *testing.T) {
 		OrderID: msgID(950), MarketID: market, Owner: trader, Side: "buy", Price: "2", Amount: "250",
 		Height: 10, Time: at, MessageID: msgID(1), CreatedTxHash: create,
 	}}, ents.Orders, "the remainder rests on the book, placed by the create")
-	fill := func(seq int, order, amount, price, id, tx string) transform.OrderFill {
+	fill := func(seq int, order, amount, price, id, tx string, n int64) transform.OrderFill {
 		return transform.OrderFill{Height: 10, Seq: seq, OrderID: order, MarketID: market, Side: "sell", Price: price,
-			Amount: amount, Maker: maker1, Taker: trader, TakerMessageID: id, TakerTxHash: tx, Time: at}
+			Amount: amount, Maker: maker1, Taker: trader, TakerMessageID: id, TakerTxHash: tx, Time: at,
+			TradeID: 10*transform.TradeIDsPerBlock + n}
 	}
 	assert.Equal(t, []transform.OrderFill{
-		fill(0, msgID(900), "100", "1.5", msgID(1), create),
-		fill(1, msgID(901), "150", "2", msgID(1), create),
-		fill(4, msgID(902), "10", "3", msgID(3), fills),
-		fill(5, msgID(903), "20", "4", msgID(4), fills),
-		fill(6, msgID(904), "5", "5", msgID(77), ""),
+		fill(0, msgID(900), "100", "1.5", msgID(1), create, 1),
+		fill(1, msgID(901), "150", "2", msgID(1), create, 2),
+		fill(4, msgID(902), "10", "3", msgID(3), fills, 3),
+		fill(5, msgID(903), "20", "4", msgID(4), fills, 4),
+		fill(6, msgID(904), "5", "5", msgID(77), "", 5),
 	}, ents.OrderFills, "a message queued in an earlier block stays unattributed here")
 	assert.Equal(t, []transform.OrderCancel{{OrderID: msgID(800), Height: 10, Time: at}}, ents.OrderCancels)
 }

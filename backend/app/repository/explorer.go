@@ -548,7 +548,7 @@ type HallOfFame struct {
 	// validator's signing info is synced.
 	SignedBlocksWindow *int64
 	// Upgrade is the upgrade whose halt its members came back from in
-	// time, nil while no upgrade's recovery is computed.
+	// time, nil while no upgrade is decided.
 	Upgrade *HallOfFameUpgrade
 }
 
@@ -563,14 +563,20 @@ type HallOfFameUpgrade struct {
 // whose voting ended (all of them while there are fewer; nobody while
 // none ended), that missed at most HallOfFameMaxMissedBlocks blocks of the
 // signing window and that came back at most HallOfFameMaxSecondsBack after
-// the halt of the last upgrade whose recovery is computed (a validator
-// outside the set at that upgrade does not qualify; no condition while no
-// upgrade is computed), by voting power ascending.
+// the halt of the last decided upgrade (a validator outside the set at that
+// upgrade does not qualify; no condition while no upgrade is decided), by
+// voting power ascending.
 func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 	h := &HallOfFame{}
 	var up HallOfFameUpgrade
-	err := r.db.QueryRow(ctx, `SELECT height, name FROM explorer.upgrades
-		WHERE computed_at IS NOT NULL ORDER BY height DESC LIMIT 1`).Scan(&up.Height, &up.Name)
+	// An upgrade is decided once its recovery is computed, or once the
+	// commits read reach a block HallOfFameMaxSecondsBack after the halt:
+	// whoever comes back later is too late anyway.
+	err := r.db.QueryRow(ctx, `SELECT u.height, u.name FROM explorer.upgrades u
+		WHERE u.computed_at IS NOT NULL
+		   OR (u.halt_time IS NOT NULL AND EXISTS (SELECT 1 FROM explorer.blocks b
+		       WHERE b.height = u.window_end_height AND b.time >= u.halt_time + make_interval(secs => $1)))
+		ORDER BY u.height DESC LIMIT 1`, HallOfFameMaxSecondsBack).Scan(&up.Height, &up.Name)
 	switch {
 	case err == nil:
 		h.Upgrade = &up

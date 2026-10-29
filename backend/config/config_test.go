@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL", "NODE_RPC_URL", "CHAIN_ID", "INDEXER_ENABLED", "CORS_ALLOWED_ORIGINS",
@@ -17,8 +18,10 @@ var configVars = []string{"HTTP_ADDR", "LOG_LEVEL", "LOG_FORMAT", "DATABASE_URL"
 	"ARCHIVE_RPC_URL", "ARCHIVE_RPC_RETRY_URL", "STATUS_INTERVAL", "STATUS_HEIGHT_TOLERANCE",
 	"RAW_CACHE_MAX_ENTRIES", "RAW_CACHE_TTL",
 	"BACKFILL_ENABLED", "BACKFILL_FLOOR", "BACKFILL_WORKERS", "BACKFILL_BATCH", "BACKFILL_QUIET", "BACKFILL_RATE_LIMIT",
-	"AGGREGATOR_URL", "PRICE_CHANGE_MARKET", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
-	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW"}
+	"PRICE_CHANGE_MARKET", "USDC_DENOM", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL",
+	"COINGECKO_HOST", "COINGECKO_PRICE_IDS", "COINGECKO_MERGED_MARKETS", "MEDIUM_FEED_URL",
+	"HALT_WATCH_ENABLED", "HALT_WATCH_INTERVAL", "UPGRADE_RECOVERY_WINDOW",
+	"SINK_RETENTION", "SINK_CLEANUP_INTERVAL", "SINK_CLEANUP_BATCH"}
 
 // isolate runs the test in an empty working directory (so no stray .env is
 // picked up) with every config variable unset; both are restored afterwards.
@@ -46,8 +49,11 @@ func TestLoadDefaults(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
+		MediumFeedURL:    "https://medium.com/feed/bzedge-community",
+		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
 }
 
 func TestLoadFromEnvironment(t *testing.T) {
@@ -68,8 +74,38 @@ func TestLoadFromEnvironment(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
+		MediumFeedURL:    "https://medium.com/feed/bzedge-community",
+		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
+}
+
+func TestLoadSinkCleanup(t *testing.T) {
+	isolate(t)
+	t.Setenv("SINK_RETENTION", "48h")
+	t.Setenv("SINK_CLEANUP_INTERVAL", "6h")
+	t.Setenv("SINK_CLEANUP_BATCH", "250")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 48*time.Hour, cfg.SinkRetention)
+	assert.Equal(t, 6*time.Hour, cfg.SinkCleanupInterval)
+	assert.Equal(t, 250, cfg.SinkCleanupBatch)
+}
+
+func TestLoadRejectsInvalidSinkCleanup(t *testing.T) {
+	for key, v := range map[string]string{
+		"SINK_RETENTION": "2d", "SINK_CLEANUP_INTERVAL": "0s", "SINK_CLEANUP_BATCH": "-1",
+	} {
+		t.Run(key, func(t *testing.T) {
+			isolate(t)
+			t.Setenv(key, v)
+			_, err := config.Load()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), key)
+		})
+	}
 }
 
 func TestLoadDatabaseURL(t *testing.T) {
@@ -160,8 +196,11 @@ func TestLoadHonoursDotEnv(t *testing.T) {
 		ChainRegistryAPIURL: "https://api.github.com/repos/cosmos/chain-registry/contents",
 		ChainRegistryRawURL: "https://raw.githubusercontent.com/cosmos/chain-registry/master",
 		PriceChangeMarket:   config.DefaultPriceChangeMarket,
-		KeybaseURL:          "https://keybase.io/_/api/1.0/user/lookup.json",
-		HaltWatchEnabled:    true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000}, cfg)
+		CoinGeckoHost:       "https://api.coingecko.com", CoinGeckoPriceIDs: []string{"bzedge"},
+		MediumFeedURL:    "https://medium.com/feed/bzedge-community",
+		KeybaseURL:       "https://keybase.io/_/api/1.0/user/lookup.json",
+		HaltWatchEnabled: true, HaltWatchInterval: 5 * time.Second, UpgradeRecoveryWindow: 10_000,
+		SinkCleanupInterval: 24 * time.Hour, SinkCleanupBatch: 1000}, cfg)
 }
 
 func TestLoadEnvironmentWinsOverDotEnv(t *testing.T) {
@@ -385,28 +424,56 @@ func TestLoadTickerJobSettings(t *testing.T) {
 	isolate(t)
 	cfg, err := config.Load()
 	require.NoError(t, err)
-	assert.Empty(t, cfg.AggregatorURL, "no prices job by default")
-	assert.Equal(t, "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze", cfg.PriceChangeMarket,
-		"mainnet's BZE/USDC.n pool")
+	assert.Empty(t, cfg.USDCDenom, "no USD anchor by default")
+	assert.Equal(t, "https://api.coingecko.com", cfg.CoinGeckoHost)
+	assert.Equal(t, []string{"bzedge"}, cfg.CoinGeckoPriceIDs)
+	assert.Equal(t, "https://medium.com/feed/bzedge-community", cfg.MediumFeedURL)
+	assert.Equal(t, "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838_ubze", cfg.PriceChangeMarket,
+		"mainnet's BZE/USDC.inj pool")
 	assert.Equal(t, "https://api.github.com/repos/cosmos/chain-registry/contents", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "https://raw.githubusercontent.com/cosmos/chain-registry/master", cfg.ChainRegistryRawURL)
 
-	t.Setenv("AGGREGATOR_URL", "https://getbze.com/")
+	t.Setenv("USDC_DENOM", "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838")
 	t.Setenv("CHAIN_REGISTRY_API_URL", "http://127.0.0.1:9000/api/")
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", "http://127.0.0.1:9000/raw")
 	t.Setenv("PRICE_CHANGE_MARKET", "ulp/0A1B")
 	t.Setenv("KEYBASE_URL", "http://127.0.0.1:9001/lookup.json")
+	t.Setenv("COINGECKO_HOST", "http://127.0.0.1:9002/")
+	t.Setenv("COINGECKO_PRICE_IDS", " bzedge, osmosis,,cosmos ")
+	t.Setenv("MEDIUM_FEED_URL", "http://127.0.0.1:9003/feed/bzedge-community")
 	cfg, err = config.Load()
 	require.NoError(t, err)
-	assert.Equal(t, "https://getbze.com", cfg.AggregatorURL)
+	assert.Equal(t, "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838", cfg.USDCDenom)
 	assert.Equal(t, "http://127.0.0.1:9000/api", cfg.ChainRegistryAPIURL)
 	assert.Equal(t, "http://127.0.0.1:9000/raw", cfg.ChainRegistryRawURL)
 	assert.Equal(t, "ulp/0A1B", cfg.PriceChangeMarket)
 	assert.Equal(t, "http://127.0.0.1:9001/lookup.json", cfg.KeybaseURL)
+	assert.Equal(t, "http://127.0.0.1:9002", cfg.CoinGeckoHost)
+	assert.Equal(t, []string{"bzedge", "osmosis", "cosmos"}, cfg.CoinGeckoPriceIDs, "in order, blanks dropped")
+	assert.Equal(t, "http://127.0.0.1:9003/feed/bzedge-community", cfg.MediumFeedURL)
+}
+
+func TestLoadCoinGeckoMergedMarkets(t *testing.T) {
+	isolate(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Nil(t, cfg.CoinGeckoMergedMarkets, "nothing merged by default")
+
+	t.Setenv("COINGECKO_MERGED_MARKETS", "ubze/ibc/81DA=ubze/ibc/6490,uvdl/ubze=uvdl/ibc/6490")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, marketmerge.Merges{"ubze/ibc/81DA": "ubze/ibc/6490", "uvdl/ubze": "uvdl/ibc/6490"}, cfg.CoinGeckoMergedMarkets)
+
+	for _, bad := range []string{"ubze/ibc/81DA", "a=b=c", "a=", "a=b,b=c", "a=a"} {
+		t.Setenv("COINGECKO_MERGED_MARKETS", bad)
+		_, err = config.Load()
+		require.Error(t, err, bad)
+		assert.Contains(t, err.Error(), "COINGECKO_MERGED_MARKETS")
+	}
 }
 
 func TestLoadRejectsInvalidTickerJobSettings(t *testing.T) {
-	for _, key := range []string{"AGGREGATOR_URL", "CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL"} {
+	for _, key := range []string{"CHAIN_REGISTRY_API_URL", "CHAIN_REGISTRY_RAW_URL", "DEBUG_ADDR", "KEYBASE_URL", "COINGECKO_HOST", "MEDIUM_FEED_URL"} {
 		t.Run(key, func(t *testing.T) {
 			isolate(t)
 			t.Setenv(key, "getbze.com")

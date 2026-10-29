@@ -7,6 +7,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -15,13 +16,23 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	appmw "github.com/bze-alphateam/bze-scan/backend/app/middleware"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
 )
 
 // ShutdownTimeout bounds how long a shutdown waits for in-flight requests.
 const ShutdownTimeout = 10 * time.Second
 
-// APIPrefix is the prefix of every route but /health.
+// APIPrefix is the prefix of the explorer's own routes.
 const APIPrefix = "/api/v1"
+
+// CompatPrefix is the prefix of the aggregator-compatible routes: the BZE
+// aggregator API's paths under /aggregator (/aggregator/api/prices, …) with
+// its exact answers, so a caller only swaps the aggregator's host for the
+// explorer's host plus /aggregator. None of the /api/v1 conventions apply to them,
+// and they answer CORS requests from any origin, whatever
+// CORSAllowedOrigins says, because browsers call them the way they call the
+// aggregator.
+const CompatPrefix = "/aggregator/api"
 
 // Deps is what the routes read from, built by the composition root.
 type Deps struct {
@@ -39,6 +50,8 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
+	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
 	// /api/v1/proposals out.
 	Proposals controller.ProposalReader
@@ -70,8 +83,35 @@ type Deps struct {
 	ValidatorNames controller.ValidatorNames
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
+	// CompatPrices serves CoinGecko's prices; nil leaves the
+	// aggregator-compatible /aggregator/api/prices out.
+	CompatPrices controller.PriceFeed
+	// CompatArticles serves the Medium articles; nil leaves the
+	// aggregator-compatible /aggregator/api/articles/medium out.
+	CompatArticles controller.ArticleFeed
+	// CompatOrders serves the DEX's live order books; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/orders out.
+	CompatOrders controller.OrderBooks
+	// CoinGeckoMerges folds markets for the coingecko format
+	// (COINGECKO_MERGED_MARKETS); nil merges nothing.
+	CoinGeckoMerges marketmerge.Merges
+	// CompatSupply serves the supplies; nil leaves the aggregator-compatible
+	// /aggregator/api/supply routes out.
+	CompatSupply controller.SupplyReader
+	// CompatSwaps serves the addresses' pool swaps; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/swaps out.
+	CompatSwaps controller.SwapHistory
+	// CompatIntervals serves the candles; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/intervals out.
+	CompatIntervals controller.Intervals
+	// CompatHistory serves the DEX's trades; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/history out.
+	CompatHistory controller.TradeHistory
+	// CompatTickers serves the DEX's 24-hour tickers; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/tickers out.
+	CompatTickers controller.Tickers
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
-	// sends no CORS headers.
+	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
 	// Log receives the request log; nil is the standard logger.
 	Log log.FieldLogger
@@ -90,11 +130,18 @@ func New(deps Deps) *echo.Echo {
 	e.Use(appmw.RequestLog(deps.Log))
 	if len(deps.CORSAllowedOrigins) > 0 {
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+			Skipper:       isCompat,
 			AllowOrigins:  deps.CORSAllowedOrigins,
 			AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
 			ExposeHeaders: []string{appmw.RequestIDHeader},
 		}))
 	}
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		Skipper:       func(c *echo.Context) bool { return !isCompat(c) },
+		AllowOrigins:  []string{"*"},
+		AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
+		ExposeHeaders: []string{appmw.RequestIDHeader},
+	}))
 	e.Use(appmw.Recover())
 
 	health := controller.NewHealthController()
@@ -147,6 +194,9 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/token/transfers", tokens.TokenTransfers)
 		api.GET("/token/holders", tokens.TokenHolders)
 	}
+	if deps.Prices != nil {
+		api.GET("/prices", controller.NewPriceController(deps.Prices).Prices)
+	}
 	if deps.Proposals != nil {
 		proposals := controller.NewProposalController(deps.Proposals)
 		api.GET("/proposals", proposals.Proposals)
@@ -179,7 +229,44 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/raw/tx/:hash", raw.Tx)
 	}
 
+	// The aggregator-compatible routes: every endpoint ported from the BZE
+	// aggregator API is added here.
+	compat := e.Group(CompatPrefix)
+	if deps.CompatPrices != nil {
+		compat.GET("/prices", controller.NewCompatPricesController(deps.CompatPrices).Prices)
+	}
+	if deps.CompatArticles != nil {
+		compat.GET("/articles/medium", controller.NewCompatArticlesController(deps.CompatArticles).Medium)
+	}
+	if deps.CompatOrders != nil {
+		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
+	}
+	if deps.CompatIntervals != nil {
+		compat.GET("/dex/intervals", controller.NewCompatIntervalsController(deps.CompatIntervals, deps.Log).Intervals)
+	}
+	if deps.CompatSwaps != nil {
+		compat.GET("/dex/swaps", controller.NewCompatSwapsController(deps.CompatSwaps, deps.Log).Swaps)
+	}
+	if deps.CompatHistory != nil {
+		compat.GET("/dex/history", controller.NewCompatHistoryController(deps.CompatHistory, deps.CoinGeckoMerges, deps.Log).History)
+	}
+	if deps.CompatTickers != nil {
+		compat.GET("/dex/tickers", controller.NewCompatTickersController(deps.CompatTickers, deps.CoinGeckoMerges, deps.Log).Tickers)
+	}
+	if deps.CompatSupply != nil {
+		sup := controller.NewCompatSupplyController(deps.CompatSupply)
+		compat.GET("/supply/total", sup.Total)
+		compat.GET("/supply/circulating", sup.Circulating)
+	}
+
 	return e
+}
+
+// isCompat reports whether c's path is an aggregator-compatible one, under
+// CompatPrefix.
+func isCompat(c *echo.Context) bool {
+	p := c.Request().URL.Path
+	return p == CompatPrefix || strings.HasPrefix(p, CompatPrefix+"/")
 }
 
 // Run serves e on addr until ctx is cancelled, then stops accepting

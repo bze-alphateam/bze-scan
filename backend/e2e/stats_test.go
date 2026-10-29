@@ -61,6 +61,11 @@ func TestChainStateParamsAndStats(t *testing.T) {
 	price := queryStrings(t, e.db, `SELECT concat_ws(' ', price_usd, price_change_24h_pct) FROM explorer.denoms WHERE denom = 'ubze'`)
 	require.Len(t, price, 1)
 	priceUSD, change, _ := strings.Cut(price[0], " ")
+	// No trade of the change market is seeded here: the change is null.
+	wantChange := "null"
+	if change != "" {
+		wantChange = `"` + change + `"`
+	}
 
 	txs := queryStrings(t, e.db, `SELECT count(*) FROM explorer.transactions`)
 
@@ -71,7 +76,7 @@ func TestChainStateParamsAndStats(t *testing.T) {
 		"latest_height": "24998316", "txs_24h": txs[0], "bonded_tokens": `"` + recordedBondedTokens + `"`,
 		"staked_share": `"` + recordedStakedShare + `"`, "inflation": `"5.00000"`, "reward_rate": `"` + recordedRewardRate + `"`,
 		"validators": `{"active":22,"total":57}`, "max_validators": "40", "unbonding_period": "1814400",
-		"price_usd": `"` + priceUSD + `"`, "price_change_24h_pct": `"` + change + `"`,
+		"price_usd": `"` + priceUSD + `"`, "price_change_24h_pct": wantChange,
 		"community_pool": `"34939146569152"`, "supply": `"281824500438386"`, "daily": "[]",
 		"block_time_windows": `[
 			{"blocks":10000,"from_height":24988316,"avg_block_time_ms":null},

@@ -68,6 +68,9 @@ type Entities struct {
 	Orders        []Order
 	OrderFills    []OrderFill
 	OrderCancels  []OrderCancel
+	// Swaps are the swaps rows of the heights' liquidity-pool swaps; they
+	// and OrderFills carry the trades' ids.
+	Swaps []Swap
 	// IBCTransfers are the ibc_transfers rows of the heights' cross-chain
 	// transfers: sent, received, acknowledged or timed out.
 	IBCTransfers []IBCTransfer
@@ -207,6 +210,9 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	if len(in.Results.TxsResults) != len(in.Block.Txs) {
 		return nil, fmt.Errorf("transform %d: %d transactions but %d results", h, len(in.Block.Txs), len(in.Results.TxsResults))
 	}
+	if err := checkTradeCount(in.Results); err != nil {
+		return nil, fmt.Errorf("transform %d: %w", h, err)
+	}
 
 	b := Block{
 		Height:              h,
@@ -259,6 +265,10 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	}
 	t.blockEvents(ents, h, in.Results.FinalizeBlockEvents)
 	outcomes := blockOrders(ents, b, in.Results.FinalizeBlockEvents)
+	poolSwaps, err := blockSwaps(b, in.Results.FinalizeBlockEvents)
+	if err != nil {
+		return nil, fmt.Errorf("transform %d: %w", h, err)
+	}
 	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
@@ -272,6 +282,9 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	}
 	attributeOrders(ents)
 	attributeByQueue(ents, queue, outcomes)
+	if ents.Swaps, err = NumberTrades(h, ents.Swaps, poolSwaps, ents.OrderFills); err != nil {
+		return nil, fmt.Errorf("transform %d: %w", h, err)
+	}
 	markSeenDenoms(ents)
 	return ents, nil
 }
@@ -364,6 +377,9 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i in
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		if err := txSwaps(ents, b, i, tx.Hash, len(decoded.Msgs), byIndex); err != nil {
+			return err
+		}
 		*queue = txQueued(*queue, tx.Hash, decoded.Msgs, byIndex)
 		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
 	}

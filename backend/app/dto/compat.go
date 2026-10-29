@@ -1,0 +1,204 @@
+package dto
+
+import (
+	"time"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
+)
+
+// The shapes of the aggregator-compatible routes (/api/…, outside /api/v1):
+// field for field and type for type what the BZE aggregator API answers, so
+// its callers can switch to the explorer unchanged.
+
+// CompatPrice is one entry of GET /aggregator/api/prices: a USD price by CoinGecko id,
+// as a JSON number.
+type CompatPrice struct {
+	Denom      string  `json:"denom"`
+	Price      float64 `json:"price"`
+	PriceDenom string  `json:"price_denom"`
+}
+
+// The aggregator's error body and messages.
+const (
+	CompatInvalidRequest = "invalid request"
+	CompatUnknownError   = "Unknown error! Please report this issue to the administrators at alphateam@getbze.com"
+)
+
+// CompatFormatCoinGecko is the format parameter's coingecko value; any other
+// value is the default format.
+const CompatFormatCoinGecko = "coingecko"
+
+// CompatError is an aggregator error answer.
+type CompatError struct {
+	Message string `json:"message"`
+}
+
+// CompatLevel is one price level of GET /aggregator/api/dex/orders, display units as
+// strings.
+type CompatLevel struct {
+	Price  string `json:"price"`
+	Volume string `json:"volume"`
+}
+
+// CompatOrders is GET /aggregator/api/dex/orders' default format; timestamp is the
+// answer's time in unix seconds, as a string.
+type CompatOrders struct {
+	MarketID  string        `json:"market_id"`
+	Timestamp string        `json:"timestamp"`
+	Bids      []CompatLevel `json:"bids"`
+	Asks      []CompatLevel `json:"asks"`
+}
+
+// CompatCoinGeckoOrders is GET /aggregator/api/dex/orders?format=coingecko: levels as
+// [price, volume] pairs under the ticker id <base>_<quote>.
+type CompatCoinGeckoOrders struct {
+	TickerID  string     `json:"ticker_id"`
+	Timestamp string     `json:"timestamp"`
+	Bids      [][]string `json:"bids"`
+	Asks      [][]string `json:"asks"`
+}
+
+// NewCompatLevels converts levels; empty is [], never null.
+func NewCompatLevels(levels []orderbook.Level) []CompatLevel {
+	out := make([]CompatLevel, len(levels))
+	for i, l := range levels {
+		out[i] = CompatLevel{Price: l.Price, Volume: l.Volume}
+	}
+	return out
+}
+
+// NewCompatCoinGeckoLevels converts levels to pairs; empty is [], never
+// null.
+func NewCompatCoinGeckoLevels(levels []orderbook.Level) [][]string {
+	out := make([][]string, len(levels))
+	for i, l := range levels {
+		out[i] = []string{l.Price, l.Volume}
+	}
+	return out
+}
+
+// CompatHistoryTrade is one trade of GET /aggregator/api/dex/swaps and
+// /aggregator/api/dex/history: display units as strings, the id a JSON
+// number, executed_at the trade's time in unix milliseconds as a string. A
+// swap names no maker (""); /dex/swaps names its pool id and denoms too,
+// which are left out when empty.
+type CompatHistoryTrade struct {
+	OrderID     int64  `json:"order_id"`
+	Price       string `json:"price"`
+	BaseVolume  string `json:"base_volume"`
+	QuoteVolume string `json:"quote_volume"`
+	ExecutedAt  string `json:"executed_at"`
+	OrderType   string `json:"order_type"`
+	Maker       string `json:"maker"`
+	Taker       string `json:"taker"`
+	PoolID      string `json:"pool_id,omitempty"`
+	Base        string `json:"base,omitempty"`
+	Quote       string `json:"quote,omitempty"`
+}
+
+// CompatInterval is one candle of GET /aggregator/api/dex/intervals' default
+// format, display units as strings.
+type CompatInterval struct {
+	MarketID     string    `json:"market_id"`
+	Minutes      int       `json:"minutes"`
+	StartAt      time.Time `json:"start_at"`
+	EndAt        time.Time `json:"end_at"`
+	LowestPrice  string    `json:"lowest_price"`
+	OpenPrice    string    `json:"open_price"`
+	AveragePrice string    `json:"average_price"`
+	HighestPrice string    `json:"highest_price"`
+	ClosePrice   string    `json:"close_price"`
+	BaseVolume   string    `json:"base_volume"`
+	QuoteVolume  string    `json:"quote_volume"`
+}
+
+// CompatTVInterval is one candle of GET
+// /aggregator/api/dex/intervals?format=tv (TradingView): the start in unix
+// seconds, the prices and the base volume as numbers.
+type CompatTVInterval struct {
+	Time  int64   `json:"time"`
+	Low   float64 `json:"low"`
+	Open  float64 `json:"open"`
+	High  float64 `json:"high"`
+	Close float64 `json:"close"`
+	Value float64 `json:"value"`
+}
+
+// CompatCoinGeckoTrade is one trade of GET
+// /aggregator/api/dex/history?format=coingecko: the trade id a JSON number,
+// trade_timestamp the trade's time in unix milliseconds as a string.
+type CompatCoinGeckoTrade struct {
+	TradeID        int64  `json:"trade_id"`
+	Price          string `json:"price"`
+	BaseVolume     string `json:"base_volume"`
+	TargetVolume   string `json:"target_volume"`
+	TradeTimestamp string `json:"trade_timestamp"`
+	Type           string `json:"type"`
+}
+
+// CompatCoinGeckoHistory is GET /aggregator/api/dex/history?format=coingecko:
+// the trades split by side. As the aggregator answers, a side without
+// trades is left out ({} when there are none at all).
+type CompatCoinGeckoHistory struct {
+	Buy  []CompatCoinGeckoTrade `json:"buy,omitempty"`
+	Sell []CompatCoinGeckoTrade `json:"sell,omitempty"`
+}
+
+// CompatTicker is one market of GET /aggregator/api/dex/tickers' default
+// format: display units as JSON numbers, the change a float32.
+type CompatTicker struct {
+	Base        string  `json:"base"`
+	Quote       string  `json:"quote"`
+	MarketID    string  `json:"market_id"`
+	LastPrice   float64 `json:"last_price"`
+	BaseVolume  float64 `json:"base_volume"`
+	QuoteVolume float64 `json:"quote_volume"`
+	Bid         float64 `json:"bid"`
+	Ask         float64 `json:"ask"`
+	High        float64 `json:"high"`
+	Low         float64 `json:"low"`
+	OpenPrice   float64 `json:"open_price"`
+	Change      float32 `json:"change"`
+}
+
+// CompatCoinGeckoTicker is one market of GET
+// /aggregator/api/dex/tickers?format=coingecko: ticker_id <base>_<quote>
+// (lp_<base>_<quote> for a pool, which is its pool_id too), the liquidity in
+// USD for a pool with a price only.
+type CompatCoinGeckoTicker struct {
+	TickerID       string  `json:"ticker_id"`
+	Base           string  `json:"base_currency"`
+	Quote          string  `json:"target_currency"`
+	PoolID         string  `json:"pool_id"`
+	LastPrice      float64 `json:"last_price"`
+	BaseVolume     float64 `json:"base_volume"`
+	TargetVolume   float64 `json:"target_volume"`
+	Bid            float64 `json:"bid"`
+	Ask            float64 `json:"ask"`
+	High           float64 `json:"high"`
+	Low            float64 `json:"low"`
+	LiquidityInUSD float64 `json:"liquidity_in_usd,omitempty"`
+}
+
+// Fold adds another market's figures to this ticker, which keeps its own
+// ids, as the aggregator folds a market CoinGecko does not track into one it
+// does: volumes and liquidity summed, high and low spanning both, the last
+// price the other's when it traded, bid and ask the other's (as a pair, so
+// the book cannot cross) when it has orders.
+func (c *CompatCoinGeckoTicker) Fold(other CompatCoinGeckoTicker) {
+	c.BaseVolume += other.BaseVolume
+	c.TargetVolume += other.TargetVolume
+	c.LiquidityInUSD += other.LiquidityInUSD
+	if other.High > c.High {
+		c.High = other.High
+	}
+	if other.Low > 0 && (c.Low == 0 || other.Low < c.Low) {
+		c.Low = other.Low
+	}
+	if other.LastPrice > 0 {
+		c.LastPrice = other.LastPrice
+	}
+	if other.Bid > 0 || other.Ask > 0 {
+		c.Bid, c.Ask = other.Bid, other.Ask
+	}
+}

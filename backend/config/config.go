@@ -20,7 +20,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/coingecko"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
+	"github.com/bze-alphateam/bze-scan/backend/internal/marketmerge"
+	"github.com/bze-alphateam/bze-scan/backend/internal/medium"
 )
 
 // Log formats accepted in LOG_FORMAT.
@@ -103,13 +106,29 @@ type Config struct {
 	// worker of the backfill and the catch-up.
 	BackfillRateLimit float64
 
-	// AggregatorURL is the BZE aggregator API's base URL, whose /api/prices
-	// the prices job reads every minute. Empty turns the prices job off.
-	AggregatorURL string
-	// PriceChangeMarket is the aggregator market id whose ticker gives the
-	// native denom's 24-hour change (the BZE/USDC liquidity pool); empty
-	// leaves the change null.
+	// PriceChangeMarket is the DEX market id (an order book's base/quote, a
+	// pool's base_quote) whose ticker gives the native denom's 24-hour
+	// change (the BZE/USDC liquidity pool); empty leaves the change null.
 	PriceChangeMarket string
+	// USDCDenom is the USDC denom the tickers price at $1, the anchor of the
+	// pools' liquidity in USD (/aggregator/api/dex/tickers?format=coingecko);
+	// empty anchors none.
+	USDCDenom string
+	// CoinGeckoHost is CoinGecko's API host, whose USD prices of
+	// CoinGeckoPriceIDs back /aggregator/api/prices and the prices job. Load always
+	// sets it; a Config built in code without one serves neither.
+	CoinGeckoHost string
+	// CoinGeckoMergedMarkets folds markets into the ones CoinGecko tracks,
+	// for the aggregator-compatible routes' coingecko format
+	// (COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…).
+	CoinGeckoMergedMarkets marketmerge.Merges
+	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
+	// /aggregator/api/prices lists them (mainnet: bzedge, osmosis, cosmos).
+	CoinGeckoPriceIDs []string
+	// MediumFeedURL is the Medium RSS feed whose first articles back
+	// /aggregator/api/articles/medium. Load always sets it; a Config built in code
+	// without one leaves the route out.
+	MediumFeedURL string
 	// ChainRegistryAPIURL is the GitHub contents API of the Cosmos chain
 	// registry (the directory listings) and ChainRegistryRawURL the raw
 	// files' base; the chain_registry job runs only with both.
@@ -130,14 +149,26 @@ type Config struct {
 	// upgrade_recovery set reads commits for the validators not back yet.
 	UpgradeRecoveryWindow int64
 
+	// SinkRetention is how long the CometBFT psql sink keeps a block; serve
+	// deletes older heights every SinkCleanupInterval. Zero (the default)
+	// turns the cleanup off; it must stay off while another reader of the
+	// sink (the aggregator's listener) still needs its rows.
+	SinkRetention time.Duration
+	// SinkCleanupInterval is the period of the sink cleanup.
+	SinkCleanupInterval time.Duration
+	// SinkCleanupBatch is the heights the sink cleanup deletes per
+	// transaction.
+	SinkCleanupBatch int
+
 	// DebugAddr, when set, makes serve expose net/http/pprof on this
 	// host:port. Empty (the default) exposes nothing.
 	DebugAddr string
 }
 
-// DefaultPriceChangeMarket is mainnet's BZE/USDC.n liquidity pool as the
-// aggregator names it (USDC.n priced in ubze).
-const DefaultPriceChangeMarket = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
+// DefaultPriceChangeMarket is mainnet's BZE/USDC.inj liquidity pool (USDC.inj
+// priced in ubze). It replaced the USDC.n pool, which stops trading when
+// USDC.n is halted.
+const DefaultPriceChangeMarket = "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838_ubze"
 
 // Load reads the environment (and a .env file when present), applies
 // defaults and validates. It returns an error describing every invalid
@@ -164,8 +195,10 @@ func Load() (*Config, error) {
 		ArchiveRPCURL:      strings.TrimRight(envString("ARCHIVE_RPC_URL", "https://rpc.getbze.com"), "/"),
 		ArchiveRPCRetryURL: strings.TrimRight(envString("ARCHIVE_RPC_RETRY_URL", ""), "/"),
 
-		AggregatorURL:       strings.TrimRight(envString("AGGREGATOR_URL", ""), "/"),
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
+		USDCDenom:           envString("USDC_DENOM", ""),
+		CoinGeckoHost:       strings.TrimRight(envString("COINGECKO_HOST", coingecko.DefaultHost), "/"),
+		MediumFeedURL:       envString("MEDIUM_FEED_URL", medium.DefaultFeedURL),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
 		ChainRegistryRawURL: strings.TrimRight(envString("CHAIN_REGISTRY_RAW_URL", chainregistry.DefaultRawURL), "/"),
 		KeybaseURL:          envString("KEYBASE_URL", keybase.DefaultURL),
@@ -182,6 +215,18 @@ func Load() (*Config, error) {
 			continue
 		}
 		cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
+	}
+
+	for _, id := range strings.Split(envString("COINGECKO_PRICE_IDS", coingecko.DefaultID), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			cfg.CoinGeckoPriceIDs = append(cfg.CoinGeckoPriceIDs, id)
+		}
+	}
+
+	if merges, err := marketmerge.Parse(envString("COINGECKO_MERGED_MARKETS", "")); err != nil {
+		fail("COINGECKO_MERGED_MARKETS: %v", err)
+	} else {
+		cfg.CoinGeckoMergedMarkets = merges
 	}
 
 	indexer := envString("INDEXER_ENABLED", "true")
@@ -213,10 +258,11 @@ func Load() (*Config, error) {
 
 	for key, v := range map[string]string{
 		"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL,
-		"AGGREGATOR_URL": cfg.AggregatorURL, "CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
+		"CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
 		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL, "KEYBASE_URL": cfg.KeybaseURL,
+		"COINGECKO_HOST": cfg.CoinGeckoHost, "MEDIUM_FEED_URL": cfg.MediumFeedURL,
 	} {
-		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL" || key == "KEYBASE_URL") {
+		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "KEYBASE_URL") {
 			continue
 		}
 		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -313,6 +359,21 @@ func Load() (*Config, error) {
 	} else {
 		cfg.UpgradeRecoveryWindow = n
 	}
+
+	if retention := envString("SINK_RETENTION", ""); retention != "" {
+		if d, err := time.ParseDuration(retention); err != nil || d <= 0 {
+			fail("SINK_RETENTION must be empty (off) or a positive duration like 48h (got %q)", retention)
+		} else {
+			cfg.SinkRetention = d
+		}
+	}
+	sinkInterval := envString("SINK_CLEANUP_INTERVAL", "24h")
+	if d, err := time.ParseDuration(sinkInterval); err != nil || d <= 0 {
+		fail("SINK_CLEANUP_INTERVAL must be a positive duration like 24h (got %q)", sinkInterval)
+	} else {
+		cfg.SinkCleanupInterval = d
+	}
+	positiveInt("SINK_CLEANUP_BATCH", "1000", &cfg.SinkCleanupBatch)
 
 	if _, err := log.ParseLevel(cfg.LogLevel); err != nil {
 		fail("LOG_LEVEL must be one of: trace, debug, info, warn, error, fatal, panic (got %q)", cfg.LogLevel)

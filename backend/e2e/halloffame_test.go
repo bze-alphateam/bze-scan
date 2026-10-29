@@ -35,7 +35,7 @@ func monikersOf(items []dto.Validator) []string {
 
 // The Hall of Fame: bonded, unjailed validators whose account voted on
 // each of the last four proposals whose voting ended, that missed at most
-// ten blocks and that came back within ten minutes of the last computed
+// ten blocks and that came back within ten minutes of the last decided
 // upgrade's halt, by voting power ascending. Older proposals and upgrades
 // don't count.
 func TestHallOfFameAppliesTheRule(t *testing.T) {
@@ -142,6 +142,26 @@ func TestHallOfFameAppliesTheRule(t *testing.T) {
 	fame = getHallOfFame(t, base)
 	assert.Equal(t, []string{large.moniker}, monikersOf(fame.Items))
 	assert.Equal(t, "v-last", fame.Rules.Upgrade.Name)
+
+	// It is decided before it is computed once the commits read reach a
+	// block ten minutes after its halt: small came back in time from it.
+	_, err = e.db.Exec(`SELECT explorer.ensure_partitions(0, 1000)`)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.blocks (height, time, hash) VALUES (310, '2026-10-26T17:12:00Z', 'H310')`)
+	require.NoError(t, err)
+	back(300, small.op, 30)
+	decided := func(halt string) {
+		t.Helper()
+		_, err := e.db.Exec(`UPDATE explorer.upgrades SET halt_time = $1, window_end_height = 310 WHERE height = 300`, halt)
+		require.NoError(t, err)
+	}
+	decided("2026-10-26T17:02:01Z") // the last block read is 599 s after the halt
+	fame = getHallOfFame(t, base)
+	assert.Equal(t, "v-last", fame.Rules.Upgrade.Name, "not decided yet")
+	decided("2026-10-26T17:02:00Z") // exactly 600 s
+	fame = getHallOfFame(t, base)
+	assert.Equal(t, &dto.HallOfFameUpgrade{Height: 300, Name: "v-pending"}, fame.Rules.Upgrade)
+	assert.Equal(t, []string{small.moniker}, monikersOf(fame.Items), "large was not back from v-pending")
 
 	// Back to no computed upgrade for the cases below.
 	_, err = e.db.Exec(`DELETE FROM explorer.upgrade_recovery`)

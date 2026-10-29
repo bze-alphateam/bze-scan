@@ -158,6 +158,13 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 			return err
 		}
 	}
+	swaps, err := swapStatements(top, ents, ModeInsert)
+	if err != nil {
+		return err
+	}
+	if err := execAll(ctx, tx, top, swaps); err != nil {
+		return err
+	}
 	flushed := &Flush{Entities: ents, Mode: ModeInsert, Inserted: inserted}
 	for _, hook := range w.hooks {
 		if err := hook(ctx, tx, flushed); err != nil {

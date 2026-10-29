@@ -135,5 +135,6 @@
     }
   ],
   "order_fills": null,
-  "order_cancels": null
+  "order_cancels": null,
+  "swaps": null
 }

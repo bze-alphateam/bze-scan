@@ -21,8 +21,11 @@ type TokenSummary struct {
 	HoldersCount      *int64
 	PriceUSD          *string
 	PriceChange24hPct *string
-	Halted            bool
-	LogoURL           *string
+	// PriceSource is where PriceUSD comes from (dex, coingecko), nil
+	// while unpriced.
+	PriceSource *string
+	Halted      bool
+	LogoURL     *string
 	// OriginChainID is an IBC denom's origin; OriginChainName and
 	// OriginChainLogo are its chain-registry pretty name and logo, nil until
 	// the registry cache has the chain.
@@ -141,7 +144,7 @@ const kindRank = `CASE d.kind WHEN 'native' THEN 0 WHEN 'factory' THEN 1 WHEN 'i
 const sortKey = `lower(coalesce(d.symbol, d.denom))`
 
 const tokenSummaryCols = `d.denom, d.symbol, d.name, d.kind, d.exponent, d.supply::text, d.holders_count,
-		d.price_usd::text, d.price_change_24h_pct::text, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
+		d.price_usd::text, d.price_change_24h_pct::text, d.price_source, d.halted, d.logo_url, d.origin_chain_id, oc.pretty_name,
 		oc.logo_url, d.ibc_path, d.via_chain_id, vc.pretty_name, vc.logo_url, d.lp_base, d.lp_quote,
 		d.created_time, oc.status, vc.status, ic.channel_id, ic.state, ic.client_status, ` + sortKey + `, ` + kindRank
 
@@ -153,7 +156,7 @@ const originJoin = ` LEFT JOIN explorer.chains oc ON oc.chain_id = d.origin_chai
 
 func tokenSummaryDest(t *TokenSummary) []any {
 	return []any{&t.Denom, &t.Symbol, &t.Name, &t.Kind, &t.Exponent, &t.Supply, &t.HoldersCount,
-		&t.PriceUSD, &t.PriceChange24hPct, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
+		&t.PriceUSD, &t.PriceChange24hPct, &t.PriceSource, &t.Halted, &t.LogoURL, &t.OriginChainID, &t.OriginChainName,
 		&t.OriginChainLogo, &t.IBCPath, &t.ViaChainID, &t.ViaChainName, &t.ViaChainLogo, &t.LPBase, &t.LPQuote,
 		&t.CreatedTime, &t.OriginChainStatus, &t.ViaChainStatus, &t.ChannelID, &t.ChannelState, &t.ClientStatus,
 		&t.SortKey, &t.KindRank}

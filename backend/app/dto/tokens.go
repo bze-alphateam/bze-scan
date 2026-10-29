@@ -14,7 +14,9 @@ import (
 
 // TokenSummary is one row of the tokens list. The holders count and the
 // price fields are null until the holders and prices jobs fill them; the
-// 24-hour change is the native denom's only (from the BZE/USDC pool). The
+// 24-hour change is the native denom's only (from the BZE/USDC pool).
+// PriceSource tells where the price comes from: dex (the DEX price chain)
+// or coingecko (by chain-registry id), null while unpriced. The
 // origin chain is an IBC denom's, null for the others and until the IBC
 // channel is known. CreatedTime is the denom's first sight (its `created`
 // token event), null when the explorer did not index one. IBCHops is an
@@ -37,6 +39,7 @@ type TokenSummary struct {
 	HoldersCount      *int64       `json:"holders_count"`
 	PriceUSD          *string      `json:"price_usd"`
 	PriceChange24hPct *string      `json:"price_change_24h_pct"`
+	PriceSource       *string      `json:"price_source"`
 	Halted            bool         `json:"halted"`
 	LogoURL           *string      `json:"logo_url"`
 	OriginChain       *OriginChain `json:"origin_chain"`
@@ -147,7 +150,7 @@ func NewTokenSummary(t repository.TokenSummary) TokenSummary {
 	out := TokenSummary{
 		Denom: t.Denom, Symbol: t.Symbol, Name: t.Name, Kind: t.Kind, Exponent: t.Exponent, Supply: t.Supply,
 		HoldersCount: t.HoldersCount, PriceUSD: t.PriceUSD, PriceChange24hPct: t.PriceChange24hPct,
-		Halted: t.Halted, LogoURL: t.LogoURL, CreatedTime: utc(t.CreatedTime),
+		PriceSource: t.PriceSource, Halted: t.Halted, LogoURL: t.LogoURL, CreatedTime: utc(t.CreatedTime),
 	}
 	if t.OriginChainID != nil {
 		out.OriginChain = &OriginChain{ChainID: *t.OriginChainID, Name: t.OriginChainName, LogoURL: t.OriginChainLogo,

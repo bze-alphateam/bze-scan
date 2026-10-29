@@ -58,7 +58,7 @@ func TestMigrateUpRewritesTheStoredMessageEvents(t *testing.T) {
 		}
 	}
 	assertEvents()
-	assert.Empty(t, queryStrings(t, db, `SELECT name FROM explorer.pending_rewrites`), "the rewrite is done")
+	assert.Empty(t, queryStrings(t, db, `SELECT name FROM explorer.pending_rewrites WHERE name = 'message_events'`), "the rewrite is done")
 
 	// Once done, a later up leaves new rows alone, whatever they hold.
 	_, err = db.Exec(`UPDATE explorer.messages SET events = $1 WHERE height = $2 AND msg_index = 1`, storedBefore, heights[0])

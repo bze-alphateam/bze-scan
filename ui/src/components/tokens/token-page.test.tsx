@@ -136,7 +136,7 @@ describe("TokenPage", () => {
     expect(screen.getAllByTestId("tile").map((t) => t.textContent)).toEqual([
       "Total supply500K HONEYcan change · see below",
       "Holders310accounts with at least 1 HONEY",
-      "Price$0.002on the DEX",
+      "Price$0.002via DEX",
       "Moved in 24h125K HONEY14 transfers",
     ]);
 
@@ -233,14 +233,33 @@ describe("TokenPage", () => {
     expect(tokenEvents).toHaveBeenCalledWith(honey.denom, { limit: 100, cursor: "e1" }, expect.anything());
   });
 
-  it("says a renounced Factory token's supply is fixed", async () => {
+  it("says nobody can mint a renounced Factory token but holders can still burn it", async () => {
     renderWithProviders(<TokenPage denom={honey.denom} />, { api: api({ ...honey, admin: null }) });
     const box = await screen.findByTestId("supply-box");
     expect(box).toHaveAttribute("data-state", "fixed");
-    expect(box).toHaveTextContent("The supply of HONEY is fixed");
-    expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("Total supply500K HONEYfixed");
-    expect(screen.getByTestId("token-about")).toHaveTextContent("AdminRenouncednobody can mint or burn");
+    expect(box).toHaveTextContent("Nobody can create more HONEY");
+    expect(box).toHaveTextContent("holders can still burn theirs, so the supply can only go down");
+    expect(screen.getAllByTestId("tile")[0]).toHaveTextContent("Total supply500K HONEYcan only go down");
+    expect(screen.getByTestId("token-about")).toHaveTextContent("AdminRenouncednobody can mint, holders can still burn");
     expect(box).toHaveAttribute("data-tone", "ok");
+  });
+
+  it("says where the price comes from and shows no DEX link for a CoinGecko price", async () => {
+    const atom: Token = { ...atone, symbol: "ATOM", price_usd: "1.96", price_source: "coingecko" };
+    renderWithProviders(<TokenPage denom={atom.denom} />, { api: api(atom) });
+    expect(await screen.findByRole("heading", { level: 1, name: "ATOM" })).toBeInTheDocument();
+    const tag = screen.getByTestId("price-source");
+    expect(tag).toHaveTextContent("via CoinGecko");
+    expect(tag).toHaveAttribute("title", "CoinGecko market price");
+    expect(screen.getAllByTestId("tile")[2]).toHaveTextContent("Price$1.96via CoinGecko");
+    expect(screen.queryByTestId("token-trade")).not.toBeInTheDocument();
+  });
+
+  it("shows no source without a price", async () => {
+    renderWithProviders(<TokenPage denom={atone.denom} />, { api: api(atone) });
+    expect(await screen.findByRole("heading", { level: 1, name: "ATONE" })).toBeInTheDocument();
+    expect(screen.queryByTestId("price-source")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("tile")[2]).toHaveTextContent("Priceno priceno DEX price or CoinGecko listing");
   });
 
   it("renders a cross-chain token with its origin chain", async () => {

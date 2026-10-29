@@ -24,6 +24,7 @@ import { MoreDetails } from "@/components/ui/more-details";
 import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle, PanelHead } from "@/components/ui/page-head";
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
+import { Tag } from "@/components/ui/status-pill";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
@@ -44,6 +45,7 @@ import {
   mintBurnText,
   multiHopCallout,
   onDex,
+  priceSourceTag,
   priceText,
   routeNote,
   shortDenom,
@@ -203,6 +205,7 @@ function Warnings({ t }: { t: Token }) {
 
 function Tiles({ t }: { t: Token }) {
   const change = changeText(t.price_change_24h_pct);
+  const source = priceSourceTag(t);
   const symbol = tokenSymbol(t);
   const tone = change ? { green: "pos.fg", red: "neg.fg", gray: "fg.muted" }[change.tone] : undefined;
   return (
@@ -225,17 +228,19 @@ function Tiles({ t }: { t: Token }) {
             <Text as="span" color="neg.fg">
               halted on the DEX
             </Text>
-          ) : t.price_usd != null ? (
+          ) : source ? (
             <>
               {change && (
                 <Text as="span" fontFamily="mono" color={tone}>
                   {change.text}{" "}
                 </Text>
               )}
-              on the DEX
+              <Tag tone="muted" title={source.title} textTransform="none" letterSpacing="0" data-testid="price-source">
+                {source.text}
+              </Tag>
             </>
           ) : (
-            "no market on the DEX"
+            "no DEX price or CoinGecko listing"
           )
         }
       />
@@ -272,10 +277,11 @@ function SupplyCallout({ t, events, complete }: { t: Token; events: TokenEvent[]
       ),
     },
     fixed: {
-      title: `The supply of ${symbol} is fixed`,
+      title: `Nobody can create more ${symbol}`,
       text: (
         <>
-          The admin renounced: nobody can create more {symbol} or destroy any. {complete && mintBurnText(events, t)}
+          The admin renounced: nobody can create more {symbol}, but holders can still burn theirs, so the supply can only go down.{" "}
+          {complete && mintBurnText(events, t)}
         </>
       ),
     },
@@ -502,7 +508,7 @@ function About({ t, route }: { t: Token; route: IbcRoute | null }) {
       "Admin",
       <>
         {t.admin ? <AccountChip address={t.admin} label={t.admin_label} /> : <Chip variant="ok">Renounced</Chip>}
-        <Muted>{t.admin ? adminNote(t) : "nobody can mint or burn"}</Muted>
+        <Muted>{t.admin ? adminNote(t) : "nobody can mint, holders can still burn"}</Muted>
       </>,
     ]);
   }

@@ -104,14 +104,21 @@ documented template with the defaults:
 | `BACKFILL_BATCH` | `50` | heights per flush (M), one transaction each |
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
-| `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/prices` feeds the prices job every minute; empty turns the job off |
-| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.n pool, `ibc/6490…8AF4_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves (the USDC.n → USDC.inj migration); empty leaves the change null |
+| `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/aggregator/api/prices` and the prices job |
+| `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/aggregator/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
+| `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/aggregator/api/articles/medium` serves |
+| `COINGECKO_MERGED_MARKETS` | empty | markets folded into a market CoinGecko tracks, for `format=coingecko` only: `<new market id>=<tracked market id>,…` (see "Aggregator-compatible endpoints"); mainnet folds BZE/USDC.inj into BZE/USDC.n |
+| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the DEX market (an order book's `base/quote`, a pool's `base_quote`) whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
+| `USDC_DENOM` | empty | the USDC denom the tickers price at $1, the anchor of the pools' `liquidity_in_usd` on `/aggregator/api/dex/tickers?format=coingecko` (see "Tickers"); use the aggregator's value (mainnet moves from USDC.n to USDC.inj); empty anchors none |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
 | `KEYBASE_URL` | `https://keybase.io/_/api/1.0/user/lookup.json` | the Keybase user lookup the validators set reads validator logos from (`?key_suffix=<identity>&fields=pictures`), at most once a day per validator, 10 s per call |
 | `HALT_WATCH_ENABLED` | `true` | with the indexer: run the halt watch (see State sync, Upgrade recovery) |
 | `HALT_WATCH_INTERVAL` | `5s` | how often the halt watch polls the local node during an upgrade's halt |
 | `UPGRADE_RECOVERY_WINDOW` | `10000` | heights after an upgrade whose commits the `upgrade_recovery` set reads (at `BACKFILL_RATE_LIMIT`) for the validators not back yet |
+| `SINK_RETENTION` | empty | how long the CometBFT psql sink keeps a block (a Go duration, e.g. `48h`); set, `serve` runs the sink cleanup (see Sink cleanup). Empty turns it off: keep it off while another reader of the sink (the aggregator's listener) still needs the rows |
+| `SINK_CLEANUP_INTERVAL` | `24h` | period of the sink cleanup inside `serve` |
+| `SINK_CLEANUP_BATCH` | `1000` | heights the sink cleanup deletes per transaction |
 | `DEBUG_ADDR` | empty | `host:port` on which `serve` exposes `net/http/pprof` under `/debug/pprof/`, on a server of its own; keep it on localhost (`127.0.0.1:6060`). Empty exposes nothing |
 
 Invalid values stop the process at startup with every problem listed.
@@ -129,6 +136,8 @@ Invalid values stop the process at startup with every problem listed.
 | `bze-scan reindex` | re-indexes heights and overwrites their rows (see Reindex below); exit 0 when every height succeeded, 2 when some failed, 1 on a configuration or database error |
 | `bze-scan sync-state [--job <set> [--id <key>]...] [--from YYYY-MM-DD --to YYYY-MM-DD]` | one full resync of every state-sync set, or of `--job` alone (see State sync below); exit 0 when every set succeeded, 1 when any failed. `--id` resyncs only those entries of the set (`--job proposal_non_voters --id 47` computes proposal 47's non-voters again, `--job upgrade_recovery --id 22551810` reads the commits after the upgrade planned at that height again). `--job daily_stats --from --to` recomputes those closed UTC days of `daily_stats` (after a reindex, for example) |
 | `bze-scan snapshots [--kind proposals] [--id N]... [--workers N]` | reads past state from the archive and overwrites the database's (see Snapshots below); exit 0 when every target succeeded, 2 when some failed (listed on stderr), 1 on a configuration or database error |
+| `bze-scan sink-cleanup [--retention 48h] [--dry-run]` | one pass of the sink cleanup (see Sink cleanup below); `--dry-run` prints the cut-off and the rows per table and deletes nothing; refuses to run without `--retention` or `SINK_RETENTION`; exit 0 on success, 1 on a configuration or database error |
+| `bze-scan candles rebuild [--market <id>]` | recomputes the DEX candles of every market and pool with a stored trade, or of `--market` only, from `order_fills` and `swaps` (see "Candles"); nothing is read from the node; exit 0 on success, 1 on a configuration or database error |
 | `bze-scan version` | prints the build commit |
 | `make check` | everything CI runs, in CI's order |
 | `make test` | unit tests, `go test ./... -race` (no network, no docker) |
@@ -171,7 +180,8 @@ locally except the image.
 ```
 cmd/bze-scan/      main: runs app/cli
 app/cli/           cobra root and subcommands (serve, migrate, backfill,
-                   reindex, sync-state, snapshots) and their exit codes
+                   reindex, sync-state, snapshots, sink-cleanup, candles) and
+                   their exit codes
 config/            environment parsing and validation
 migrations/        SQL migrations (embedded, up and down), the Migrator,
                    post-migration steps, partition math
@@ -203,6 +213,8 @@ internal/snapshots/
                    the snapshots command: the archive reader (paced), the
                    Kind interface and the runner; kinds in subpackages
                    (proposals)
+internal/sink/     the sink cleanup: cut-off, batched children-first
+                   deletes of the CometBFT psql sink tables
 internal/transform/
                    node answers of one height -> explorer rows (no I/O)
 internal/writer/   transactional, idempotent writes (the live writer, the
@@ -248,15 +260,20 @@ internal/statesync/orders/
                    the orders set (open orders closed when the node's
                    order book no longer lists them)
 internal/statesync/prices/
-                   the prices set (denoms.price_usd)
+                   the prices set (denoms.price_usd, price_source: the DEX
+                   price chain, else CoinGecko)
 internal/statesync/dailystats/
                    the daily_stats set (the home charts' days, nightly)
                    and the aggregation the stats' live "today" shares
 internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
-internal/aggregator/
-                   the BZE aggregator's /api/prices reader
+internal/coingecko/
+                   CoinGecko's USD prices and the cached feed behind /aggregator/api/prices
+internal/candles/  the DEX candles (explorer.candles): the writers' hook, the
+                   rebuild and the intervals served on /aggregator/api
+internal/tickers/  the DEX's 24-hour tickers (/aggregator/api/dex/tickers and
+                   BZE's 24-hour change) and their internal USD prices
 internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
@@ -327,7 +344,8 @@ every later route follows:
   answers by height join nothing and are `public, max-age=31536000, immutable`,
   except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
   asked at its tip), which is `public, max-age=60`.
-- **CORS** only for the origins in `CORS_ALLOWED_ORIGINS`.
+- **CORS** only for the origins in `CORS_ALLOWED_ORIGINS` (the
+  aggregator-compatible routes below answer any origin).
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
 
@@ -343,7 +361,7 @@ every later route follows:
 | `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_status` (its light client: `active`, `expired`, `frozen`; null until asked — an expired or frozen client carries nothing until governance revives it), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
 | `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status, `logo_url` (the Keybase picture of its identity, null without an identity or a picture), `missed_blocks` and `signed_blocks_window` (the slashing signing info, null until synced), `recent_votes` (`{voted, of}`: how many of the last ten proposals whose voting ended — fewer while the chain has fewer — its account voted on, whatever the option; also on `/validators/{op}`), `offline` / `missed_in_a_row` / `last_signed_height` (also on `/validators/{op}` and the Hall of Fame: an active — bonded, unjailed — validator's blocks not signed in a row up to the live cursor, counted from the latest of its last signed block, its last `bonded`/`unjailed` event and the start of the watch, `offline` from ten; all three null outside the active set, `last_signed_height` also null when it signed nothing since the watch began — the live writer records each block's signers in `validators.last_signed_height`, migration 000021, without history). `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
-| `GET /api/v1/validators/hall-of-fame` | the Hall of Fame, in one page (`next_cursor` null): the bonded, unjailed validators whose account voted, whatever the option, on every one of the last four proposals whose voting ended (all of them while the chain has fewer; nobody while none ended) that missed at most ten blocks of the slashing signing window and that came back at most ten minutes after the halt of the last upgrade whose recovery is computed (`upgrade_recovery.seconds_back`; a validator outside the set at that upgrade does not qualify; no such condition while no upgrade is computed, and a newer upgrade still being computed doesn't count yet), by voting power ascending; items as in `/validators`, except that `recent_votes` counts on those four proposals. `rules` states the rule for clients to word it: `{proposals: 4, max_missed_blocks: 10, signed_blocks_window, max_seconds_back: 600, upgrade: {height, name}}` (the window null until synced, `upgrade` null while no upgrade is computed) |
+| `GET /api/v1/validators/hall-of-fame` | the Hall of Fame, in one page (`next_cursor` null): the bonded, unjailed validators whose account voted, whatever the option, on every one of the last four proposals whose voting ended (all of them while the chain has fewer; nobody while none ended) that missed at most ten blocks of the slashing signing window and that came back at most ten minutes after the halt of the last decided upgrade (`upgrade_recovery.seconds_back`; an upgrade is decided once its recovery is computed or once the commits read reach a block ten minutes after its halt, since a later return is too late anyway; a validator outside the set at that upgrade does not qualify; no such condition while no upgrade is decided, and a newer upgrade not decided yet doesn't count), by voting power ascending; items as in `/validators`, except that `recent_votes` counts on those four proposals. `rules` states the rule for clients to word it: `{proposals: 4, max_missed_blocks: 10, signed_blocks_window, max_seconds_back: 600, upgrade: {height, name}}` (the window null until synced, `upgrade` null while no upgrade is decided) |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/validators/stake-changes` | every validator's net stake change over the last 24 hours and the last 7 days: `{complete, as_of_height, items: {"<operator>": {"24h", "7d"}}}`, signed ubze strings (`"0"` for a window without net change); a validator without movements in the last 7 days is left out. Served from memory (see [Stake movements](#stake-movements)); `complete` is false while some height of the window is not indexed (the figures are then partial), and before the set is loaded (`as_of_height` 0, no items) |
@@ -355,10 +373,11 @@ every later route follows:
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
 | `GET /api/v1/accounts/{address}/open-orders` | what the address has locked in open DEX orders: `source` (`index` or `node`, for debugging), `height` (the height the answer describes), `orders_count`, `markets_count` and `assets`, one per locked denom sorted by denom: `denom`, `amount` (base units, a string), `orders_count` and `markets` (largest amount first: `market_id`, `base`, `quote`, `amount`, `orders_count`). A sell locks its remaining amount of the base denom, a buy trunc(remaining × price) of the quote denom, truncated per order as the chain does, so a market's `orders_count` under an asset counts only the orders locking that asset. Read from the orders table when its history is complete, from the node otherwise (see Open orders below); cached 15 s per address; no-store. An account without open orders has empty `assets` and zero counts. 400 unless a `bze1…` address; 502 when neither node answers |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the prices job's USD price: the DEX price chain, else CoinGecko by chain-registry id, see "Prices" under State sync; null until the prices job and for a denom neither prices), `price_source` (`dex` or `coingecko`, null while unpriced), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
+| `GET /api/v1/prices` | `{"prices": [{denom, price_usd, price_source, price_change_24h_pct, updated_at}]}`: every denom with a price, by denom, as the prices job last wrote it (no computation at request time): `price_usd` and `price_change_24h_pct` decimal strings as on the tokens routes (the change is `ubze`'s only, null for the rest), `price_source` `dex` (the DEX price chain: the USDC pool's spot price, else the last trade, averaged over the USDC and BZE routes) or `coingecko` (by chain-registry id), `updated_at` the job's last write. The dapps' own price math can move to this route. `public, max-age=60` |
 | `GET /api/v1/tokens/{denom}/holders?cursor&limit` | the last holders snapshot, largest balance first: rank, address, `label`, balance (base units) and `share_pct` (of the supply, five decimals, null without a supply); every non-zero balance, refreshed hourly |
 | `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=`, `/api/v1/token/holders?denom=` | the same four with the denom as a query value, the chain's own convention for denoms with `/` |
 | `GET /api/v1/proposals?status=deposit_period\|voting_period\|passed\|rejected\|failed\|canceled\|dropped&cursor&limit` | every proposal, id descending: id, title, kind (`software_upgrade`, `community_pool_spend`, `parameter_change`, `cointrunk_publisher`, `ibc_client_update`, `text`, `other`), status, expedited, submit/deposit-end/voting-start/voting-end times, `tally` (`{yes, no, abstain, no_with_veto}` in base units, null until synced), `turnout_pct` (the tally's sum over the bonded tokens it was measured against, five decimals, null without them) and `tally_source` (where those bonded tokens come from: `sync` while the proposal voted, `archive` from the snapshots command, historical; null without them); another status is a 400 |
@@ -407,6 +426,236 @@ heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
 for one height share one fetch, which outlives a request that gives up.
 
+## Aggregator-compatible endpoints
+
+The explorer also serves the BZE aggregator API's public endpoints, at the
+aggregator's exact paths under `/aggregator` and with its exact answers
+(fields, JSON types, order, status codes), so a caller of the aggregator
+switches by swapping its host for the explorer's host plus `/aggregator`
+(`https://getbze.com/api/prices` → `https://explorer.getbze.com/aggregator/api/prices`).
+They live in their own route group, `server.CompatPrefix`
+(`/aggregator/api`), apart from `/api/v1`: every endpoint ported
+from the aggregator is added to that group, with controllers of its own
+(`app/controller/compat_*.go`, shapes in `app/dto/compat.go`). None of the
+`/api/v1` conventions apply: no `{items,next_cursor}` envelope, no
+pagination, no cache headers the aggregator does not send. They always
+answer CORS with `Access-Control-Allow-Origin: *`, whatever
+`CORS_ALLOWED_ORIGINS` says, because browsers call them directly the way
+they call the aggregator; `/api/v1` keeps its configured origins. An empty
+result is `[]`, never `null`.
+
+| Route | Answers |
+| --- | --- |
+| `GET /aggregator/api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+| `GET /aggregator/api/articles/medium` | `[{"title","url","picture_url","description","publish_date","author_name"}]`, the first six articles of `MEDIUM_FEED_URL`, in the feed's order |
+| `GET /aggregator/api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
+| `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
+| `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
+| `GET /aggregator/api/dex/intervals?market_id=\|ticker_id=&minutes=&limit=&format=` | `[{"market_id","minutes","start_at","end_at","lowest_price","open_price","average_price","highest_price","close_price","base_volume","quote_volume"}]`, display units as strings, RFC3339 UTC times, ascending; `format=tv`: `[{"time":<unix s>,"low","open","high","close","value":<base volume>}]` as numbers (needs `NODE_GRPC_ADDR`) |
+| `GET /aggregator/api/dex/swaps?address=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker":"","taker":"<address>","pool_id","base","quote"}]`, the address's last 100 pool swaps, newest first |
+| `GET /aggregator/api/dex/tickers?format=` | `[{"base","quote","market_id","last_price","base_volume","quote_volume","bid","ask","high","low","open_price","change"}]` as numbers, by market id; `format=coingecko`: `[{"ticker_id","base_currency","target_currency","pool_id","last_price","base_volume","target_volume","bid","ask","high","low","liquidity_in_usd"}]` (needs `NODE_GRPC_ADDR`) |
+| `GET /aggregator/api/dex/history?market_id=\|ticker_id=\|address=&limit=&start_time=&end_time=&type=&format=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker","taker"}]`, the last `limit` order book fills and pool swaps, newest first; `format=coingecko`: `{"buy":[{"trade_id","price","base_volume","target_volume","trade_timestamp","type"}],"sell":[…]}` |
+
+**Prices.** `internal/coingecko`: the client calls
+`{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
+feed keeps the answer for 180 s; when CoinGecko fails (or prices none of the
+ids) the last read is served for up to 24 hours after it, then `[]` (the
+aggregator answers `null`). The route is always 200. The prices job of the
+state sync reads the same feed. `serve` and `sync-state` each hold one.
+
+**Medium articles.** `internal/medium`: the client reads the RSS feed at
+`MEDIUM_FEED_URL` (default `https://medium.com/feed/bzedge-community`) with
+gofeed, as the aggregator does, and keeps its first six items: `picture_url`
+is the first `<img>` src of the content (the item description when there is
+no content) when it holds `https://cdn`, else `""`; `description` is the
+content without HTML (bluemonday's strict policy, which escapes entities
+again) cut at 150 **bytes**, as the aggregator cuts, then `...`, so a
+multi-byte character across the cut becomes U+FFFD; `publish_date` is the
+item's date in RFC 3339, UTC. The feed keeps the answer for 600 s. When the
+feed fails (asked again at most every minute) the last read is served for up
+to 24 hours after it, then `[]`; the aggregator answers `[]` for 600 s. An
+empty feed is `[]` (the aggregator answers `null`). The route is always 200.
+
+**Display units** (`internal/dexunits`, shared by every DEX route of the
+group: orders, swaps, history, and later intervals and tickers). A chain price is
+quote base units per base base unit; the display price is price ×
+10^(base exponent − quote exponent) and an amount is amount ×
+10^−exponent, both in exact decimals (`dexunits.Price`, `dexunits.Amount`),
+trailing zeros trimmed as the aggregator trims them. Exponents come from
+`explorer.denoms` (`dexunits.PGStore`: the chain registry's for IBC denoms,
+the bank metadata's otherwise); a wrong one is fixed in the registry, not in
+code. Unlike the aggregator's `%.2f` multiplier, a quote with three or more
+decimals more than the base keeps its price (the aggregator answers 0).
+
+**Merged markets** (`internal/marketmerge`, shared with history and
+tickers). `COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…` folds a
+market into one CoinGecko already tracks, for `format=coingecko` only, when
+a market's quote asset is replaced: the tracked ticker reports the new
+market's figures. A market is never folded into itself, nor into a market
+folded itself. Mainnet (USDC.n → USDC.inj):
+`ubze/ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838=ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4`.
+
+**Orders.** `internal/orderbook` reads a market's whole book from the
+node's tradebin `MarketAggregatedOrders` (aggregated price levels, every
+page of 10,000, bids reversed) and keeps it, in display units, for 10 s per
+market, so polling reaches the node at most once per market every 10 s;
+the market list (`AllMarkets`) is kept 60 s. `ticker_id` is a market id
+with `_` for `/` (so an LP ticker never resolves); `market_id` wins when
+both are given. `depth` gives depth/2 levels per side, nearest the spread
+(0, the default, and 1 give the whole book); both sides come out by
+ascending price. `format=coingecko` answers under `<base>_<quote>`, with the
+book of the first market folded into it (sorted by id) that has orders,
+else its own; books are never mixed. `timestamp` is the answer's time.
+Errors are 400 `{"message":…}` with the aggregator's texts: `invalid
+request` (a depth that is no integer), `depth must be a positive number`,
+`please provide market_id or ticker_id` (both shorter than two
+characters), and its "Unknown error!…" for an unknown market or a failed
+read. Differences from the aggregator: an empty side is `[]` (`null`
+there), an emptied book answers empty sides (the aggregator keeps its last
+rows), and prices of big exponent gaps are right.
+**Supply.** `internal/supply`, served only with `NODE_GRPC_ADDR`: bank
+`SupplyOf` for the one denom (the aggregator lists one page of 5000 supplies
+and misses the denoms beyond it), distribution `CommunityPool` for `ubze`'s
+circulating supply, the display exponent from `explorer.denoms` (`ubze` is 6
+even before the first sync; a denom the chain minted but the sync has not
+written yet is 0). The amount is formatted with exactly 2 decimals rounded
+half up with integer arithmetic, and the circulating supply is the exact
+difference rounded once (the aggregator subtracts a float from the rounded
+total, so the two can differ by 0.01). Each answer is kept 600 s per denom
+and route; when the node or the database fails the last read is served for up
+to 24 hours after it, then a 503 `supply is unavailable, try again later`
+(the aggregator answers `0`). A 400 carries the aggregator's message: `denom
+<denom> not found in registry` for a denom the explorer does not know and the
+chain has no supply of (the aggregator answers a 500), `<denom> has an
+unsupported display exponent` outside 0–18. Answers are `text/plain;
+charset=UTF-8`, like the aggregator's.
+**Swaps.** `internal/swaphistory` reads the address's last 100 rows of
+`explorer.swaps` (by height, then trade id, down the `(creator, height
+DESC)` index) and converts them as the aggregator does: base volume and
+quote volume are the two sides' amounts in display units, the price is
+quote / base as an 18-decimal `LegacyDec` division, shifted by the
+exponents (from `explorer.denoms`; when the quote has one or two decimals
+more, multiplied by 0.1 or 0.01 as a `LegacyDec` and rounded back to 18
+decimals, as the aggregator does). A swap whose denoms have no known
+exponent is left out (the aggregator never stores one). `order_id` is the
+stable trade id (see "Trades and trade ids"), `executed_at` the block time
+in milliseconds, `maker` always `""`. A store error is a 500 `{"message":
+"failed to get swap history"}`. Differences from the aggregator: an empty or
+missing `address` is a 400 `invalid request` (the aggregator never validates
+it and answers everyone's last 100 swaps), ids never change on a resync, a
+swap is never listed twice, prices are right when the quote has three or
+more decimals more than the base (BZE-133), and `base`/`quote` come from the
+swap's denoms (the aggregator splits the pool id on `_` and drops a swap
+whose denoms contain one).
+
+**Intervals.** `internal/candles` reads `explorer.candles` (see "Candles")
+and answers as the aggregator: `minutes` one of 5, 15, 60, 240, 1440;
+`limit` 500 when absent or not positive, at most 5000 except for daily
+candles; `ticker_id` is a market id with `_` for `/` (a pool is asked by its
+pool id as `market_id`). The floor is the market's or pool's first trade
+minus a minute (cached ten minutes); the window starts at the later of the
+floor and now − limit × minutes. When the store holds `limit` candles from
+there they are the answer; otherwise every bucket from the current one down
+to the window's start is answered, a zero candle (every value `"0"`) where
+none is stored, so `limit + 1` at most, and the bucket holding the floor is
+left out unless the floor is a bucket start (the aggregator's arithmetic).
+Display units on read: prices as the swaps' (`dexunits.TradePrice`), the
+volumes exact, the average the close when high and low are equal, else
+quote / base volume as an 18-decimal `LegacyDec` of the display volumes.
+`format=tv` parses those strings as float64. A pool's denoms come with its
+first swap, a market's from the chain (`orderbook`, hence `NODE_GRPC_ADDR`);
+a market of the chain without a trade answers `[]`, an id that is neither a
+market nor a pool with a swap the aggregator's 400 "unknown error".
+Parameters bind as echo v4's binder does (a name in another case, an empty
+number as 0, a non-number as `invalid request`). Differences from the
+aggregator: no 50,000-trade cap on a candle's day, doubled v8.0.x events
+counted once, open and close by trade id (the aggregator's ties within a
+second keep an arbitrary row, BZE-135), a pool's floor its first swap (not
+the start of that day), prices right when the quote has three or more
+decimals more than the base (BZE-133), times in UTC, and a pool without a
+swap is unknown (the aggregator answers `[]` or one zero candle, from its
+own sync time).
+
+**History.** `internal/tradehistory` serves the trades the aggregator's
+`market_history` table holds: order book fills from `explorer.order_fills`
+and pool swaps from `explorer.swaps`. A `market_id` is matched exactly
+against both (a fill's market id, a swap's pool id; IBC denoms put a `/` in
+pool ids too), so a pool's history is its swaps; `ticker_id` is a market id
+with `_` for `/`, `market_id` wins. `address` alone is enough: a fill's maker
+or taker (a self-trade once), a swap's creator; with a market, both filters
+apply. `limit` is 500 by default (also for 0 or less), 1000 at most;
+`type=buy|sell` filters the side (anything else is ignored); `start_time`
+and `end_time` are unix milliseconds, inclusive, and apply only when both
+are above 0. The window is first turned into the heights of its blocks
+(`explorer.blocks (time)` index, block times never decrease), so the
+queries prune the partitions outside it. Each query walks a `(…, height
+DESC)` index: `order_fills (market_id|maker|taker, height DESC)`, `swaps
+(pool_id|creator, height DESC)`; an address reads its maker and taker fills
+as two index walks merged. Trades are newest first by trade id (height, then
+the chain's order within the block). A fill's `order_type` is its `side`,
+the resting order's (the chain's `HistoryOrder.order_type`); the price is
+converted like a swap's (`dexunits.TradePrice`), `base_volume` is the amount
+in display units and `quote_volume` = base volume × price as a `LegacyDec`
+truncated to the quote's decimals (`dexunits.QuoteAmount`, the aggregator's
+`GetQuoteAmount`). A swap's maker is `""`, its taker the creator, without the
+`pool_id`/`base`/`quote` of `/dex/swaps`. A trade whose denoms have no known
+exponent (a market id is cut at the `/` where both sides are known denoms)
+is left out and older ones take its place, at most 10 pages of `limit`.
+A fill not yet numbered (`trade_id` NULL, only while a release rolls out) is
+left out until it is. `format=coingecko` splits the trades by side; for a
+market others are folded into (`COINGECKO_MERGED_MARKETS`) their trades are
+merged in, newest first, cut to `limit`. A side without trades is left out
+(`{}` without any), as the aggregator answers. Errors are 400 with the
+aggregator's messages: `invalid request` (a `limit`, `start_time` or
+`end_time` that is no integer), `please provide market_id or ticker_id`
+(no address and both ids shorter than two characters), its "Unknown
+error!…" for a failed read. Differences from the aggregator: ids are stable
+trade ids, `executed_at` is the block time in milliseconds (whole seconds
+there), trades of one second are never lost (the aggregator drops some at
+its sync page boundaries), no trade is listed twice (v8.0.x's doubled events
+count once) and prices are right for big exponent gaps (BZE-133).
+
+**Tickers.** `internal/tickers` builds one ticker per order book market
+(`base/quote`, the node's `AllMarkets`) and per liquidity pool (`base_quote`,
+`AllLiquidityPools`), as the aggregator does: `bid` and `ask` are the best
+levels of the live book (the order book service; a pool has none), the
+volumes the sums of the market's 5-minute candles starting at now − 24 h or
+later (`explorer.candles`, in display units), `high` the highest, `low` the
+lowest (a zero low replaced by the next one), `open_price` the first
+candle's open, `last_price` the newest trade after now − 24 h (fills and
+swaps through `internal/tradehistory`, the window turned into heights once
+per build), else 0, and `change` (last − open) / open × 100 rounded to two
+decimals (0 without a last price or a positive open). Both formats list the
+markets by market id (the aggregator's default format comes in random
+order) and are built together, at most every 5 s. `format=coingecko` names a
+market `<base>_<quote>` and a pool `lp_<base>_<quote>` (its `pool_id` too),
+and gives a pool `liquidity_in_usd`: its LP token's USD price × its LP supply
+in whole tokens (12 decimals), left out without a price. Markets folded for
+CoinGecko (`COINGECKO_MERGED_MARKETS`) are added to the market they report
+as: volumes and liquidity summed, high and low spanning both, the folded
+market's last price when it traded and its bid/ask pair when it has orders;
+the folded market is not listed (unless the market it reports as is not).
+
+The internal USD price, kept 60 s per denom: `USDC_DENOM` is $1; an LP token
+is its pool's reserves at their USD prices per whole LP token; `ubze` is its
+spot price in the BZE/USDC pool, else its last trade on the `ubze/<USDC>`
+order book (the aggregator's "last 24 hours" and "last trade ever" steps,
+which the newest trade answers both), else CoinGecko's `bzedge` price; any
+other denom the average of its USDC price and its BZE price × BZE's USD
+price, or whichever exists (a pair's price is its pool's spot price, else the
+last trade of the `<denom>/<quote>` order book). Pools and LP supplies are
+read from the node at most every 10 s, the last good read served while it
+fails. Differences from the aggregator: the default format is by market id;
+a market whose book, candles or trades fail keeps its ticker with the parts
+that answered (the aggregator answers a 500), and only a market list and
+pools never read are a 500 "unknown error"; no price is cut to six decimals
+(the aggregator formats every USD price with `%f`), so `liquidity_in_usd`
+differs in its last digits; a newer pool's `ulp/<hash>` LP token is priced
+too (the aggregator recognises only `ulp_<pool id>` and lists no liquidity
+for those pools); BZE's CoinGecko fallback works (the aggregator
+looks for the denom instead of its CoinGecko id); prices are right for big
+exponent gaps (BZE-133); doubled events count once; an empty list is `[]`.
+
 ## Migrations
 
 `bze-scan migrate` manages the schema. The database must already hold the
@@ -429,7 +678,9 @@ bze-scan migrate version    # print the current version (0 when none)
   a transaction, an order's cancel), the IBC lookups (the transfers a
   transaction settled), the order attribution lookups (unattributed
   outcomes, open orders per owner) and the daily statistics lookups
-  (addresses active at a height range, accounts first seen in a window).
+  (addresses active at a height range, accounts first seen in a window),
+  and later the tables and lookups of their features (000023: the pool
+  swaps, `order_fills.trade_id` and its numbering cursor).
 - Everything the explorer owns lives in the `explorer` schema. The version
   table is `explorer_migrations.schema_migrations`, in a schema of its own so
   that `down` to version 0 can drop `explorer` entirely.
@@ -438,9 +689,9 @@ bze-scan migrate version    # print the current version (0 when none)
   which wakes the live indexer. No `down` touches the sink's tables or rows.
 - After `up`, the post-migration Go steps run in order (`postMigrate` in
   `migrations/steps.go`; each must be idempotent). The first creates the
-  height partitions of the seven history tables (`blocks`, `transactions`,
+  height partitions of the eight history tables (`blocks`, `transactions`,
   `messages`, `transfers`, `account_activity`, `block_events`,
-  `order_fills`): one per 1,000,000 heights, `_p000000` to `_p000049`
+  `order_fills`, `swaps`): one per 1,000,000 heights, `_p000000` to `_p000049`
   (`blocks_p000024` holds [24,000,000, 25,000,000)). The second mirrors the
   classification of `internal/classify` into `explorer.message_kinds` and
   `explorer.block_event_kinds` (upsert every entry, delete the rows without
@@ -457,6 +708,23 @@ bze-scan migrate version    # print the current version (0 when none)
   own transaction (a migration file runs in one), then deletes the row; an
   interrupted run resumes at the next `up`, and once the row is gone the
   step reads nothing.
+  The fifth, `swaps`, is `trades.CatchUp` (`internal/trades`; given to
+  `migrations.Open` by its callers, since it writes through the writer,
+  which imports `migrations`): it numbers the stored trades from the cursor
+  row `swaps` of `pending_rewrites` (`resume_from`, the lowest height not
+  numbered yet) up to the highest stored block, one transaction per range of
+  at most a partition that also moves the cursor, so an interrupted run
+  resumes where it stopped. Each range reads the stored `SwapEvent`s
+  (`messages.events`, `block_events`) and the `order_fills` keys, numbers
+  them with `transform.NumberTrades` and writes the `swaps` rows (kept when
+  there) and the fills' `trade_id` through `writer.WriteTrades`; nothing is
+  read from the node. The cursor row stays: see "Trades and trade ids".
+  The sixth, `candles` (`internal/candles`, given to `migrations.Open` the
+  same way, after `swaps`), builds the candles of the whole history once:
+  migration 000024's row `candles` is replaced, in one transaction, by a row
+  `candles:<market>` per market and pool with a stored trade; each market is
+  then rebuilt and its row deleted in one transaction, so an interrupted
+  run resumes at the markets left. Without such rows it reads nothing.
 - Running `up` again changes nothing, so it can run on every deploy.
 
 Acceptance tests call `testutil.Migrate(t)` to bring the compose database up
@@ -862,6 +1130,57 @@ the queue message id (24 zero-filled digits, unique within a block).
 - Reconciliation: the chain removes a remainder below the market minimum
   without an event; the hourly `orders` set (see the state sync) closes it.
 
+### Trades and trade ids
+
+A trade is an order book fill (`explorer.order_fills`) or a liquidity-pool
+swap (`explorer.swaps`, one row per `bze.tradebin.SwapEvent`: a
+transaction's `MsgMultiSwap`, one row per hop, or the chain's own swaps at
+block level, such as the burner's and the fee conversions). A swap row holds
+the pool id, `base` (the byte-wise smaller denom, as in the pool id) and
+`quote`, `side` (`sell` when it paid in base, `buy` otherwise), the base and
+quote amounts of its two sides, the creator, the block time and either its
+transaction (`tx_hash`, `tx_index`, `msg_index`) or its `block_seq`. Indexes:
+`(pool_id, height DESC)` and `(creator, height DESC)`.
+
+Every trade has a `trade_id` that never changes, the id the
+aggregator-compatible routes answer: `height × 1,000,000 + n`, `n` the
+trade's 1-based ordinal among all the trades of its block, first the swaps of
+the transactions by `tx_index`, `msg_index`, then position among the
+message's swap events, then the block-level trades (fills and swaps) by
+`block_events` seq. Chain data does not change once indexed and doubled
+events are already gone, so the ordinal is fixed; ids stay below 2^53 up to
+height 9×10^9, exact as JavaScript numbers. The transformer fails a block
+with 1,000,000 trades or more before any work on it. The live writer, the
+backfill and the reindex share the transformer; `internal/trades` numbers
+stored rows with the same `transform.NumberTrades`. A swap's `time` is read
+from its stored `blocks` row (both writers write the swaps after the block),
+so every path stores exactly the same value.
+
+During a deploy both releases index for a while, and the previous one
+stores blocks without `swaps` rows or trade ids (and wins some heights the
+new one writes too, whose fills then keep a NULL `trade_id`). So the
+`trades` component of `serve` (with the live indexer) runs `trades.CatchUp`
+at start and every minute: from the cursor to the highest block, and first
+every height below the cursor with a fill without a trade id (partial index
+`idx_order_fills_unnumbered`). Once the previous release is gone each pass
+re-reads only the blocks of the last minute and changes nothing. The
+heights the cursor passes without a block (a hole the backfill fills later,
+possibly the previous release's) are kept as holes, inclusive ranges in
+`indexer_state` under `trades_holes`; each pass numbers the heights stored
+in them since (a primary-key range scan of `blocks` over the holes only, at
+most 100,000 heights per transaction) and cuts them out, so a block with
+only pool swaps, which no fill gives away, is numbered too. Every
+transaction of a pass runs in one snapshot (REPEATABLE READ), so a block a
+concurrent writer commits meanwhile is either read whole or kept as a hole;
+a serialization failure runs the transaction again. The holes row is
+created before anything locks it. What stays a hole for good (the heights
+below the live floor of a database never backfilled down to genesis) costs
+an empty index range per pass. The first run of a release that tracks holes
+finds no holes row although the cursor already passed heights: it starts
+the row as `[0, cursor − 1]`, so that one pass checks every stored height
+below the cursor once (rows already there are kept, the ids do not change);
+a cursor still at 0 starts with no hole.
+
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0 and later) has no attributed fill or order, or one of
 its cancels names an order still open. It resolves when the cross-block
@@ -877,6 +1196,49 @@ it is read: an event belongs to the transaction's order message with its
 message id at or below the event's height when no later order message took
 the id in between. A refund or a skip settles its message; a failure does
 not.
+
+### Candles
+
+`explorer.candles` (migration 000024) holds the OHLC candles of every order
+book market (`market_id` = `base/quote`, from `order_fills`) and pool
+(`pool_id` = `base_quote`, from `swaps`): one row per market, length
+(`minutes`: 5, 15, 60, 240, 1440) and bucket `start_at`, buckets aligned to
+the Unix epoch (UTC). Values are in chain units (prices quote base units per
+base base unit, volumes base units), converted on read, so a corrected
+exponent needs no rebuild; `first_trade_id`/`last_trade_id` name the
+bucket's first and last trade. A fill's quote volume is amount × price
+truncated to quote base units, a swap's its exact amount; a swap's price is
+quote / base rounded to 18 decimals. A trade counts once it has its
+`trade_id`; open and close are the lowest and highest trade id. Each bucket
+folds its trades in trade id order as the aggregator's `Interval.AddOrder`
+does, zero prices included (BZE-136, won't fix): while a candle's trades so
+far were priced 0 the next one replaces its volumes and its zero low. A
+zero price never comes from the order book and from a swap only for a quote
+side below 10^-18 of the base.
+
+Nothing increments a candle: `candles.Recompute` rewrites every candle of a
+market's UTC day (which holds every bucket of every length) from that day's
+trades (indexes `(market_id, time)` on `order_fills`, `(pool_id, time)` on
+`swaps`) and deletes the day's candles left without trades, under a
+per-market advisory lock, so replays, out-of-order backfill flushes and
+concurrent writers give the same rows. Who recomputes: the PostFlush hook
+`candles.Default.PostFlush` of the live writer and of the batch writer
+(backfill, catch-up, reindex), for the days of a flush's fills and swaps;
+`trades.Range` (given `candles.Default` as its `trades.Hook` by the
+composition root), for the days of the trades it has just numbered (the
+previous release's during a deploy, which its writer did not candle; every
+minute it re-reads the last minute's blocks, so those days are recomputed
+once more), except while the post-migration build is still to list the
+markets; `bze-scan candles rebuild` and the post-migration step `candles`
+(`candles.Rebuilder`), whole markets, one chunk of 30 days per
+transaction (the writers wait for one chunk at most). All of it is Go: no
+SQL function or trigger.
+
+During a deploy the previous release can store a block (its fills numbered
+by its transformer or not, its pool swaps without swaps rows) at a height
+`trades.CatchUp`'s cursor has passed. The cursor kept that height as a hole,
+and the next pass runs it through `trades.Range`, so the hook recomputes its
+days like any other range's.
 
 ### Open orders
 
@@ -1056,7 +1418,7 @@ indexer) the state sync:
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
 `last_success_at`, `last_error`, `cursor`). A node that is down fails the
-run: it is logged and recorded (the prices set logs a failing aggregator once
+run: it is logged and recorded (the prices set logs a failing price source once
 per change of state, not every minute), the rows stay as they were, and the next
 trigger retries. Nothing here is on the user's critical path. `bze-scan
 sync-state` runs the full resync of every set once and exits 1 when any
@@ -1220,19 +1582,40 @@ owner (chain v7.0/v7.1, its message not matched) is read with tradebin
 maker of its fills, a not-found closes it like the others, a failed read
 keeps it and fails the run.
 
-**Prices.** With `AGGREGATOR_URL` set, every minute `GET /api/prices` of the
-BZE aggregator gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …). A
-denom takes the price of its registry asset's CoinGecko id: BZE's own asset
-list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
-the origin chain's asset. A denom no longer priced is cleared; a failed fetch
-keeps every price. The explorer computes no DEX price. `ubze`'s
-`price_change_24h_pct` comes from the aggregator's `/api/dex/tickers`, read at
-most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.n
-liquidity pool, which prices USDC.n in ubze), as last over open when `ubze`
-is the market's base and open over last when it is the quote, in percent
-with four decimals. A market the aggregator no longer lists clears it, a
-failed read keeps it, a market that does not trade `ubze` is an error. Every
-other denom's change stays null.
+**Prices.** Every minute the set prices every row of `denoms` in two steps
+and records which one answered in `price_source`. First the DEX price
+chain (`internal/tickers`' internal USD price, the dapps' rule, see
+"Tickers"): the USDC denom (`USDC_DENOM`) is $1, an LP token is its pool's
+reserves at their USD prices, `ubze` is its USDC price, any other denom the
+average of its USDC price and its BZE price times BZE's USD price, or
+whichever exists; each price is the pool's spot price from its reserves,
+else the newest order-book trade of `base/quote`. No staleness or liquidity
+rule: a pool with reserves or any past trade counts, as the dapps count it.
+A positive price is written with source `dex` (twelve decimals, the
+column's). Then, for the denoms the chain cannot price, the CoinGecko feed
+behind `/aggregator/api/prices` (see "Aggregator-compatible endpoints")
+gives USD prices by CoinGecko id (`bzedge`, `cosmos`, …): a denom takes the
+price of its registry asset's CoinGecko id, BZE's own asset list first
+(`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else the origin
+chain's asset, with source `coingecko`. The set's tickers get no CoinGecko
+feed, so `ubze` without a USDC market is priced by this step, not recorded as
+the DEX's. A denom neither step prices is cleared. A failed CoinGecko fetch
+or denoms read writes nothing; a denom the chain could not answer at all
+keeps its columns (the service answers a price computed after a failed pool,
+trade or exponent read without caching it, so a zero price falls through to
+CoinGecko); each failure is logged once per change of state. The native
+denom is priced first (the others' BZE route reads its cached price), the
+rest eight at a time; with the pools cached 10 s and two indexed last-trade
+lookups per route, a run over mainnet's few hundred denoms takes well under
+a second. `ubze`'s `price_change_24h_pct` comes from the DEX
+ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.inj liquidity pool, which
+prices USDC.inj in ubze), computed in process by `internal/tickers` (see
+"Tickers") at most every 5 minutes: last over open when `ubze` is the
+market's base and open over last when it is the quote, in percent with four
+decimals. A market no longer listed, or without a trade in the last 24
+hours, clears it; a failed read (books, candles or trades) keeps it; a
+market that does not trade `ubze` is an error. Every other denom's change
+stays null.
 
 A dirty denom (a token event, a tokenfactory change event) is resynced alone
 (bank `DenomMetadataByQueryString` and `SupplyOf`, the factory admin, the
@@ -1476,6 +1859,42 @@ one transaction, overwriting and never deleting) in a package under
 `internal/snapshots/`, register it in `serve.NewSnapshots`, and record its
 archive answers with `make fixtures ABCI=…` (or a new set there).
 
+## Sink cleanup
+
+The CometBFT psql sink (`public.blocks`, `tx_results`, `events`,
+`attributes`) keeps every block the node writes; it has no retention of its
+own. The explorer reads nothing from it but the notification of its trigger
+on `public.blocks` (everything else comes from the node's RPC), so the sink
+only has to keep what the live indexer may still be working on.
+
+With `SINK_RETENTION` set, `serve` runs a cleanup at start and then every
+`SINK_CLEANUP_INTERVAL` (`internal/sink`). The cut-off is the lower of:
+
+- the newest height whose `blocks.created_at` is older than the retention;
+- the live indexer's cursor (`indexer_state.last_indexed_height`) minus 1000.
+
+Every height below the cut-off is deleted; the cut-off height itself is kept.
+Before the live indexer has written, on an empty sink, or with no block that
+old, nothing is deleted. Heights go in batches of `SINK_CLEANUP_BATCH` from
+the oldest stored one up (each batch starts at the oldest height left, so
+gaps cost nothing), one short transaction per batch so the node's inserts
+never wait long. Each transaction deletes children first: `attributes` (of
+the batch's events), `events`, `tx_results`, then `blocks`, which works with
+and without `ON DELETE CASCADE` on the sink's foreign keys. Each run logs one
+line with the cut-off and the rows deleted per table; an error is logged and
+the next run starts where this one stopped. `bze-scan sink-cleanup` runs one
+pass by hand.
+
+It is **off by default** and must stay off while another reader of the sink
+still needs its rows: the aggregator's listener reads its unprocessed swap
+events from there, and its own cleanup crons trim the sink meanwhile. The
+database role needs `SELECT` and `DELETE` on the four sink tables (the
+explorer otherwise holds `SELECT` and `TRIGGER` on `public.blocks` only).
+
+The stock schema has no index on `events.block_id`, so each batch's events
+delete scans `events`; with a daily run over a sink trimmed to a few days
+that stays short, and an index on `events(block_id)` removes it.
+
 ## Test fixtures and the fake node
 
 `internal/testutil/fakenode` serves the URI form of the by-height RPC routes
@@ -1670,6 +2089,11 @@ records the archive's `abci_query` answers of the same reads (`AllMarkets`,
 for the archive fallback; record both at one height. The market maker
 `bze10kw8…` is recorded at 25,159,888 (2026-10-19, 29 orders in one market:
 9 sells, 20 buys).
+`make grpc-fixtures SETS=orderbooks MARKETS="ubze/ibc/…"` records each
+market's `MarketAggregatedOrders` (buy and sell, one page of 10,000, at one
+height) for `/aggregator/api/dex/orders`: BZE/USDC.n (asks only) and BZE/USDC.inj are
+recorded at 25,290,387 (2026-10-28), and `e2e/testdata/compat/` holds
+getbze.com's answers at that height (timestamps dropped).
 `make grpc-fixtures SETS=gov PROPOSALS="46 47"` records the proposals set:
 gov `Proposals` (all, and the voting-period list), staking `Pool`, and each
 listed proposal's `Proposal` and `TallyResult` (recorded 2026-10-09: 47
@@ -1700,7 +2124,7 @@ to). Recorded on 2026-10-09: 57 validators, 22 bonded. For each address in
 signs at height 25000439 (recorded on 2026-10-09: three balances, one
 delegation, no unbonding).
 
-### The fake chain registry and aggregator
+### The fake chain registry and CoinGecko
 
 `fakeregistry.New` starts an `httptest` server standing in for the Cosmos
 chain registry: its `APIURL` answers the contents API listings (the root
@@ -1716,8 +2140,11 @@ make registry-fixtures CHAINS="beezee cosmoshub noble mirage"
 
 (recorded 2026-10-09: BZE's own asset list maps `ubze` and its IBC denoms
 to CoinGecko ids; `mirage` is a chain without explorers). The e2e harness
-starts one with every sync environment, next to a fake aggregator answering
-`/api/prices` as getbze.com did on 2026-10-09, and points `sync-state` and
-`serve` at both, so no test reaches GitHub or getbze.com. A fake Keybase
+starts one with every sync environment, next to a fake CoinGecko answering
+`/api/v3/simple/price` with that day's prices, and points `sync-state` and
+`serve` at them, so no test reaches GitHub or CoinGecko. BZE's 24-hour
+change comes from swaps the tests seed in the BZE/USDC.n pool at the open
+and last price getbze.com's ticker had that day. A `Config` built in code without `CoinGeckoHost` runs no prices
+job and serves no `/aggregator/api/prices`. A fake Keybase
 lookup (`e2e/logos_test.go`) gives ChainTools' identity a picture and every
 other identity none; `sync-state` and `serve` point `KEYBASE_URL` at it.

@@ -180,7 +180,7 @@ function TokenRow({ t, denoms }: { t: TokenSummary; denoms: Map<string, TokenSum
       </Text>
       <PriceCell t={t} />
       <Box hideBelow="c3" textAlign="right">
-        {t.price_usd != null && (
+        {t.price_source === "dex" && (
           <AppLink app="dex" href={dexAssetUrl(t.denom)}>
             DEX
           </AppLink>
@@ -258,7 +258,7 @@ export function TokensPage() {
   const { data, error, refetch } = useAllTokens();
   return (
     <Box>
-      <PageTitle title="Tokens" intro="Every token on BZE. Prices come from the BZE DEX." />
+      <PageTitle title="Tokens" intro="Every token on BZE. Prices come from the BZE DEX, else CoinGecko." />
       {data ? (
         <TokensView tokens={data} />
       ) : error ? (

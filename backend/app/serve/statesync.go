@@ -24,13 +24,14 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
-	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
 	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
 	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
@@ -49,7 +50,7 @@ import (
 )
 
 // outboundTimeout bounds one HTTPS call of the ticker jobs (the chain
-// registry, the aggregator).
+// registry).
 const outboundTimeout = 30 * time.Second
 
 // keybaseTimeout bounds one validator logo lookup: the validators set looks
@@ -68,7 +69,8 @@ const keybaseTimeout = 10 * time.Second
 // reads nothing the others write), the chain state after them (it counts
 // the validators and copies the native price), the daily statistics last
 // (they read only the indexed tables). The chain registry runs only
-// with both its URLs, the prices only with AGGREGATOR_URL, the validator
+// with both its URLs, the prices only with a CoinGecko host (Load always
+// sets one; BZE's 24-hour change comes from the DEX tickers), the validator
 // logos only with a KeybaseURL (Load always sets one). The non-voters read
 // the validator sets of the heights the local node pruned from the archive
 // (ARCHIVE_RPC_URL), and the upgrade recovery the commits after an upgrade
@@ -165,9 +167,18 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
-	if cfg.AggregatorURL != "" {
+	if feed := NewPriceFeed(cfg); feed != nil {
+		// The prices come from the DEX price chain and the change from the
+		// DEX tickers, both computed here from the indexed trades and the
+		// node's books and pools. The tickers get no CoinGecko feed: the
+		// native denom's CoinGecko fallback is the set's own last step, so
+		// that a price it gives is recorded as CoinGecko's, not the DEX's.
+		books := orderbook.New(orderbook.Config{}, orderbook.Deps{Node: tradebin, Exponents: dexunits.NewPGStore(pool)})
+		dex := newTickers(cfg, books, tradebin, bank, pool, nil)
 		sets = append(sets, prices.New(prices.Deps{
-			Source:       aggregator.New(outbound, cfg.AggregatorURL),
+			Prices:       feed,
+			USDPricer:    dex,
+			Tickers:      dex,
 			Store:        prices.NewPGStore(pool),
 			ChainID:      cfg.ChainID,
 			Denom:        chain.BondDenom,

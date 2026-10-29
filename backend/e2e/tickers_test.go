@@ -3,12 +3,14 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,52 +24,87 @@ import (
 const recordedPrices = `[{"denom":"bzedge","price":0.00016806,"price_denom":"usd"},` +
 	`{"denom":"osmosis","price":0.03403806,"price_denom":"usd"},{"denom":"cosmos","price":1.96,"price_denom":"usd"}]`
 
-// recordedTickers are the two BZE/USDC.n markets of /api/dex/tickers on
-// getbze.com on 2026-10-09: the order book and the liquidity pool, whose
-// ticker gives BZE's 24-hour change (USDC.n +2.18 % in ubze: BZE -2.1362 %).
-const recordedTickers = `[{"base":"ubze","quote":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
-	`"market_id":"ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4","last_price":0.00018,` +
-	`"base_volume":544336.988678,"quote_volume":103.836199,"bid":0.00017,"ask":0.00022,"high":0.00021,"low":0.00018,` +
-	`"open_price":0.00018,"change":0},{"base":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
-	`"quote":"ubze","market_id":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",` +
-	`"last_price":5747.1387947581325,"base_volume":144.033022,"quote_volume":828644.939685,"bid":0,"ask":0,` +
-	`"high":6040.911873237037,"low":5604.113494443305,"open_price":5624.368717574341,"change":2.18}]`
+// recordedPool is mainnet's BZE/USDC.n liquidity pool (USDC.n priced in
+// ubze). The tests point PRICE_CHANGE_MARKET at it, since the default moved
+// to the USDC.inj pool.
+const recordedPool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
 
-// fakeAggregator answers /api/prices with recordedPrices and
-// /api/dex/tickers with recordedTickers until it is told to fail.
-type fakeAggregator struct {
-	URL  string
-	mu   sync.Mutex
-	down bool
+// geckoIDs are mainnet's COINGECKO_PRICE_IDS.
+var geckoIDs = []string{"bzedge", "osmosis", "cosmos"}
+
+// recordedGecko is CoinGecko's simple price answer for geckoIDs, the prices
+// of recordedPrices, in an order of its own.
+const recordedGecko = `{"cosmos":{"usd":1.96},"bzedge":{"usd":0.00016806},"osmosis":{"usd":0.03403806}}`
+
+// fakeGecko answers CoinGecko's /api/v3/simple/price with recordedGecko
+// until it is told to fail, and counts the calls.
+type fakeGecko struct {
+	URL   string
+	mu    sync.Mutex
+	down  bool
+	calls int
+	query string
 }
 
-func newFakeAggregator(t *testing.T) *fakeAggregator {
+func newFakeGecko(t *testing.T) *fakeGecko {
 	t.Helper()
-	a := &fakeAggregator{}
+	g := &fakeGecko{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a.mu.Lock()
-		down := a.down
-		a.mu.Unlock()
-		body := map[string]string{"/api/prices": recordedPrices, "/api/dex/tickers": recordedTickers}[r.URL.Path]
+		g.mu.Lock()
+		defer g.mu.Unlock()
 		switch {
-		case body == "":
+		case r.URL.Path != "/api/v3/simple/price":
 			http.NotFound(w, r)
-		case down:
-			http.Error(w, "bad gateway", http.StatusBadGateway)
+		case g.down:
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
 		default:
+			g.calls++
+			g.query = r.URL.RawQuery
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(body))
+			_, _ = w.Write([]byte(recordedGecko))
 		}
 	}))
 	t.Cleanup(srv.Close)
-	a.URL = srv.URL
-	return a
+	g.URL = srv.URL
+	return g
 }
 
-func (a *fakeAggregator) setDown(down bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.down = down
+func (g *fakeGecko) setDown(down bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.down = down
+}
+
+// answered is how many price reads succeeded, and the last one's query.
+func (g *fakeGecko) answered() (int, string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.calls, g.query
+}
+
+// pricedDenomsSQL lists the priced denoms with their price and source.
+const pricedDenomsSQL = `SELECT concat_ws(' ', denom, price_usd, price_source) FROM explorer.denoms
+	WHERE price_usd IS NOT NULL ORDER BY denom`
+
+// recordedPriceRows is what the prices set writes over the fake node's
+// pools and CoinGecko: the DEX price chain prices the denoms with a pool
+// (BZE at 5000 USDC.n / 900000 BZE = 1/180 USD, VDL at 2 BZE, COREY at 1
+// BZE, USDC.n at $1), CoinGecko the rest with a registry id.
+var recordedPriceRows = []string{
+	tickerVDL + " 0.011111111111 dex",
+	tickerCorey + " 0.005555555556 dex",
+	atomDenom + " 1.960000000000 coingecko",
+	usdcDenom + " 1.000000000000 dex",
+	osmoDenom + " 0.034038060000 coingecko",
+	"ubze 0.005555555556 dex",
+}
+
+// str is a nullable string for an assertion line.
+func str(s *string) string {
+	if s == nil {
+		return "null"
+	}
+	return *s
 }
 
 // Recorded denoms of the ticker jobs: GGE has five owners, recorded over
@@ -92,7 +129,7 @@ func (e *syncEnv) tickerState(t *testing.T) []string {
 			FROM explorer.registry_assets ORDER BY chain_id, base`,
 		`SELECT concat_ws(' ', denom, address, balance) FROM explorer.token_holders ORDER BY denom, address`,
 		`SELECT concat_ws(' ', denom, symbol, name, exponent, logo_url, origin_chain_id, ibc_base_denom, ibc_path,
-			holders_count, price_usd, price_change_24h_pct) FROM explorer.denoms ORDER BY denom`,
+			holders_count, price_usd, price_source, price_change_24h_pct) FROM explorer.denoms ORDER BY denom`,
 	} {
 		out = append(out, queryStrings(t, e.db, q)...)
 	}
@@ -101,6 +138,9 @@ func (e *syncEnv) tickerState(t *testing.T) []string {
 
 func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	e := newSyncEnv(t)
+	// The BZE/USDC.n pool's ticker gives BZE's change: the pool's recorded
+	// open and last price of 2026-10-09 (USDC.n +2.18 % in ubze).
+	seedChangeSwaps(t, e)
 	// The channels set runs first and fills mainnet's fourteen channels:
 	// Noble's (channel-3) and the Hub's (channel-11) are in the registry
 	// fixtures, OmniFlix's (channel-5) and the others are not.
@@ -145,14 +185,17 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, []string{"0"}, queryStrings(t, e.db, `SELECT holders_count FROM explorer.denoms WHERE denom = 'ubze'`),
 		"nobody holds ubze in the fake node")
 
-	// Prices by CoinGecko id: ubze through BZE's own asset list.
-	assert.Equal(t, []string{
-		atomDenom + " 1.960000000000",
-		osmoDenom + " 0.034038060000",
-		"ubze 0.000168060000",
-	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_usd) FROM explorer.denoms WHERE price_usd IS NOT NULL ORDER BY denom`))
+	// Prices by the DEX price chain first (the recorded pools' spot prices:
+	// BZE at 5000 USDC.n / 900000 BZE, VDL and COREY through their BZE
+	// pools), then by CoinGecko id for the denoms without a DEX route,
+	// read from CoinGecko itself: ATOM and OSMO through BZE's own asset
+	// list. The LP tokens and the rest get nothing.
+	calls, query := e.gecko.answered()
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, "ids=bzedge,osmosis,cosmos&vs_currencies=usd", query)
+	assert.Equal(t, recordedPriceRows, queryStrings(t, e.db, pricedDenomsSQL))
 	assert.Equal(t, []string{"ubze -2.1362"}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_change_24h_pct)
-		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool only")
+		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool's ticker")
 
 	// The API: prices, holder counts and origins on the list, the holders
 	// ranked.
@@ -162,10 +205,46 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		tokens[tok.Denom] = tok
 	}
 	require.NotNil(t, tokens["ubze"].PriceUSD)
-	assert.Equal(t, "0.000168060000", *tokens["ubze"].PriceUSD)
+	assert.Equal(t, "0.005555555556", *tokens["ubze"].PriceUSD)
+	assert.Equal(t, "dex", *tokens["ubze"].PriceSource)
 	require.NotNil(t, tokens["ubze"].PriceChange24hPct)
 	assert.Equal(t, "-2.1362", *tokens["ubze"].PriceChange24hPct)
+	assert.Equal(t, "coingecko", *tokens[atomDenom].PriceSource)
 	assert.Nil(t, tokens[atomDenom].PriceChange24hPct, "a change for BZE only")
+	assert.Nil(t, tokens[ggeDenom].PriceUSD, "no DEX route, no CoinGecko id")
+	assert.Nil(t, tokens[ggeDenom].PriceSource)
+	var factory []string
+	for _, tok := range tokenPages(t, strings.TrimSuffix(base, "/api/v1"), "&kind=factory") {
+		factory = append(factory, fmt.Sprintf("%s %s %s", *tok.Symbol, str(tok.PriceUSD), str(tok.PriceSource)))
+	}
+	assert.Equal(t, []string{"C2M null null", "COREY 0.005555555556 dex", "CTL null null", "CTL null null", "GGE null null",
+		"VDL 0.011111111111 dex"},
+		factory, "the factory tokens with a BZE pool are priced")
+
+	// The token page carries the same price and source; GET /prices lists
+	// every priced denom and nothing else.
+	r := fetch(t, base+"/tokens/"+url.PathEscape(tickerVDL))
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	vdl := into[dto.Token](t, r)
+	assert.Equal(t, "0.011111111111", *vdl.PriceUSD)
+	assert.Equal(t, "dex", *vdl.PriceSource)
+	assert.NotNil(t, vdl.PriceUpdatedAt)
+	r = fetch(t, base+"/prices")
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
+	var listed []string
+	for _, p := range into[dto.Prices](t, r).Prices {
+		listed = append(listed, fmt.Sprintf("%s %s %s %s %t", p.Denom, p.PriceUSD, str(p.PriceSource), str(p.PriceChange24hPct),
+			p.UpdatedAt != nil))
+	}
+	assert.Equal(t, []string{
+		tickerVDL + " 0.011111111111 dex null true",
+		tickerCorey + " 0.005555555556 dex null true",
+		atomDenom + " 1.960000000000 coingecko null true",
+		usdcDenom + " 1.000000000000 dex null true",
+		osmoDenom + " 0.034038060000 coingecko null true",
+		"ubze 0.005555555556 dex -2.1362 true",
+	}, listed)
 	require.NotNil(t, tokens[ggeDenom].HoldersCount)
 	assert.Equal(t, int64(4), *tokens[ggeDenom].HoldersCount)
 	require.NotNil(t, tokens[atomDenom].OriginChain)
@@ -181,7 +260,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.False(t, tokens[ggeDenom].Stranded, "not an IBC denom")
 	assert.Nil(t, tokens[ggeDenom].OriginChain)
 
-	r := fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")
+	r = fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
 	page := into[dto.List[dto.TokenHolder]](t, r)
 	require.Len(t, page.Items, 2)
@@ -201,21 +280,40 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, []string{"50305258722", "49491765665", "198000900", "2800000", "174713"}, balances)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/tokens/unothing/holders").status)
 
-	// A second run changes nothing.
+	// A second run changes nothing. The prices set alone prices every denom
+	// in one go: its run time is what a mainnet-sized denoms table scales
+	// from.
 	state := e.tickerState(t)
+	started := time.Now()
+	code, out = e.syncState(t, "--job", "prices")
+	require.Equal(t, 0, code, out)
+	t.Logf("prices run over %d denoms took %s", e.count(t, `SELECT count(*) FROM explorer.denoms`), time.Since(started))
+	assert.Equal(t, state, e.tickerState(t))
 	code, out = e.syncState(t)
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, state, e.tickerState(t))
 
-	// The aggregator down: the run fails, the prices stay.
-	e.agg.setDown(true)
+	// The candles unreadable: the run fails on the change, the prices and
+	// the change stay.
+	_, err := e.db.Exec(`ALTER TABLE explorer.candles RENAME TO candles_away`)
+	require.NoError(t, err)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)
 	assert.Equal(t, state, e.tickerState(t))
 	assert.Equal(t, []string{"prices"}, queryStrings(t, e.db, `SELECT job FROM explorer.sync_jobs WHERE last_error IS NOT NULL`))
+	_, err = e.db.Exec(`ALTER TABLE explorer.candles_away RENAME TO candles`)
+	require.NoError(t, err)
+
+	// CoinGecko down (a new process: no backup to serve): the run fails, the
+	// prices stay, the DEX ones included.
+	e.gecko.setDown(true)
+	code, _ = e.syncState(t)
+	assert.NotEqual(t, 0, code)
+	assert.Equal(t, state, e.tickerState(t))
+	assert.Equal(t, []string{"prices"}, queryStrings(t, e.db, `SELECT job FROM explorer.sync_jobs WHERE last_error IS NOT NULL`))
+	e.gecko.setDown(false)
 
 	// The registry down: the cached rows stay.
-	e.agg.setDown(false)
 	e.reg.SetDown(true)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)
