@@ -274,3 +274,23 @@ func (r *PGReader) First(ctx context.Context, market string) (First, bool, error
 	}
 	return f, found, nil
 }
+
+// Created implements Reader with the market_created and pool_created rows of
+// explorer.token_events.
+func (r *PGReader) Created(ctx context.Context, market, base string) (time.Time, error) {
+	var at *time.Time
+	rows, err := r.db.Query(ctx, `SELECT min(time) FROM explorer.token_events
+		 WHERE denom = $2
+		   AND ((kind = 'market_created' AND details->>'market_id' = $1)
+		     OR (kind = 'pool_created' AND (details->>'base') || '_' || (details->>'quote') = $1))`, market, base)
+	if err == nil {
+		_, err = pgx.ForEachRow(rows, []any{&at}, func() error { return nil })
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("creation of %s: %w", market, err)
+	}
+	if at == nil {
+		return time.Time{}, nil
+	}
+	return at.UTC(), nil
+}
