@@ -71,7 +71,7 @@ func ivTrade(id int64, t time.Time, price string, base int64) candles.Trade {
 }
 
 // ivServer serves ubze/uvdl (6 and 6 decimals) at 10:07:30, with trades in
-// the 10:00 bucket and the floor at 09:54.
+// the 09:55 and 10:00 buckets.
 func ivServer() *echo.Echo {
 	trades := []candles.Trade{
 		ivTrade(1, ivTime(9, 55, 0), "0.5", 4_000_000),
@@ -137,10 +137,13 @@ func TestCompatIntervalsValidation(t *testing.T) {
 // limit is absent or not positive; names bind without case, as echo v4's.
 func TestCompatIntervalsLimits(t *testing.T) {
 	e := ivServer()
-	// The day's bucket starts below the floor (09:54): no candle.
+	// The floor is the start of the first trade's bucket, so the day holding
+	// the trades is answered. The old floor (the first trade minus a minute,
+	// 09:54) fell inside the day and dropped it, leaving "[]".
 	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/intervals?market_id=ubze/uvdl&minutes=1440&limit=100000")
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "[]\n", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"start_at":"2026-10-28T00:00:00Z"`)
+	assert.Contains(t, rec.Body.String(), `"base_volume":"24","quote_volume":"27"`)
 	for _, query := range []string{
 		"market_id=ubze/uvdl&minutes=5&limit=-3",
 		"market_id=ubze/uvdl&minutes=5&limit=",
