@@ -156,13 +156,14 @@ func merge(holes []hole, add ...hole) []hole {
 }
 
 // fillHoles numbers the heights stored in the holes since they were
-// recorded and takes them out, HoleBatch at a time, one transaction each.
-func fillHoles(ctx context.Context, db DB, res *Result) error {
+// recorded, running hook (when not nil) on them, and takes them out,
+// HoleBatch at a time, one transaction each.
+func fillHoles(ctx context.Context, db DB, hook Hook, res *Result) error {
 	for {
 		var done bool
 		err := retry(func() error {
 			var err error
-			done, err = fillHolesOnce(ctx, db, res)
+			done, err = fillHolesOnce(ctx, db, hook, res)
 			return err
 		})
 		if err != nil || done {
@@ -173,7 +174,7 @@ func fillHoles(ctx context.Context, db DB, res *Result) error {
 
 // fillHolesOnce runs one transaction of fillHoles and reports whether the
 // holes held nothing more.
-func fillHolesOnce(ctx context.Context, db DB, res *Result) (bool, error) {
+func fillHolesOnce(ctx context.Context, db DB, hook Hook, res *Result) (bool, error) {
 	tx, err := begin(ctx, db)
 	if err != nil {
 		return false, fmt.Errorf("trades holes: begin: %w", err)
@@ -214,7 +215,7 @@ func fillHolesOnce(ctx context.Context, db DB, res *Result) (bool, error) {
 	}
 	heights := 0
 	for _, r := range runs(found) {
-		n, err := Range(ctx, tx, r[0], r[1])
+		n, err := Range(ctx, tx, r[0], r[1], hook)
 		if err != nil {
 			return false, err
 		}

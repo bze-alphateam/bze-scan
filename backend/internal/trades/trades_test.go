@@ -3,6 +3,7 @@ package trades_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -221,7 +222,7 @@ func TestCatchUpWalksPartitionByPartition(t *testing.T) {
 	for h := int64(22_500_000); h <= 24_000_010; h++ {
 		d.present = append(d.present, h)
 	}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 3, res.Ranges)
 	assert.Equal(t, []any{int64(23_000_000), int64(24_000_000), int64(24_000_011)}, cursorMoves(t, d))
@@ -241,18 +242,18 @@ func TestCatchUpWalksPartitionByPartition(t *testing.T) {
 // before 000023): nothing done at all.
 func TestCatchUpWithNothingToDo(t *testing.T) {
 	d := &db{cursor: int64(101), top: int64p(100)}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Zero(t, res.Ranges)
 
 	d = &db{}
-	res, err = trades.CatchUp(context.Background(), d)
+	res, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Zero(t, res.Ranges)
 	assert.Empty(t, d.txs)
 
 	d = &db{cursor: int64(0), top: (*int64)(nil)}
-	_, err = trades.CatchUp(context.Background(), d)
+	_, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Empty(t, committed(d), "no block stored yet")
 }
@@ -268,7 +269,7 @@ func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 		"FROM explorer.block_events":                   {{int64(70), 3, at, []byte(swap)}},
 		"SELECT height, seq FROM explorer.order_fills": {{int64(70), 1}, {int64(70), 5}},
 	}}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, trades.Result{Ranges: 1, Heights: 1}, res)
 	assert.Empty(t, cursorMoves(t, d))
@@ -309,7 +310,7 @@ func TestCatchUpFailsOnABadStoredSwap(t *testing.T) {
 	d := &db{cursor: int64(0), top: int64p(10), results: map[string][][]any{
 		"FROM explorer.block_events": {{int64(7), 0, time.Unix(1, 0), []byte(`{"in":{"denom":"ubze","amount":"x"}}`)}},
 	}}
-	_, err := trades.CatchUp(context.Background(), d)
+	_, err := trades.CatchUp(context.Background(), d, nil)
 	require.ErrorContains(t, err, "height 7 block event 0")
 	assert.Empty(t, committed(d))
 }
@@ -319,7 +320,7 @@ func TestCatchUpFailsOnABadStoredSwap(t *testing.T) {
 // only pool swaps and no fill to give them away) and cuts them out.
 func TestCatchUpNumbersHeightsStoredInTheHoles(t *testing.T) {
 	d := &db{cursor: int64(100), top: int64p(120), present: []int64{100, 101, 105, 110, 111, 112, 120}}
-	_, err := trades.CatchUp(context.Background(), d)
+	_, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.JSONEq(t, `[[0,99],[102,104],[106,109],[113,119]]`, d.holes)
 
@@ -329,7 +330,7 @@ func TestCatchUpNumbersHeightsStoredInTheHoles(t *testing.T) {
 	d.present = append(d.present, 103, 104, 107)
 	d.results = map[string][][]any{"FROM explorer.block_events": {{int64(104), 0, at, []byte(swap)}}}
 	d.txs = nil
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, trades.Result{Ranges: 1, Heights: 1}, res, "one transaction for the holes, the cursor at the top")
 	require.Len(t, committed(d), 1)
@@ -352,7 +353,7 @@ func TestCatchUpNumbersHeightsStoredInTheHoles(t *testing.T) {
 
 	// Nothing new: the holes are read, nothing written.
 	d.txs = nil
-	res, err = trades.CatchUp(context.Background(), d)
+	res, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Zero(t, res.Ranges)
 	assert.Empty(t, committed(d))
@@ -366,7 +367,7 @@ func TestCatchUpFillsBigHolesInBatches(t *testing.T) {
 	for h := int64(1); h <= int64(n); h++ {
 		d.present = append(d.present, h)
 	}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.Ranges)
 	assert.JSONEq(t, `[]`, d.holes)
@@ -378,7 +379,7 @@ func TestCatchUpFillsBigHolesInBatches(t *testing.T) {
 func TestCatchUpTransactionsAreRepeatableRead(t *testing.T) {
 	d := &db{cursor: int64(100), top: int64p(120), present: []int64{100, 101, 103}, holes: `[[50,60]]`}
 	d.present = append(d.present, 55)
-	_, err := trades.CatchUp(context.Background(), d)
+	_, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	require.Len(t, d.txs, 2, "the holes, the cursor's range")
 	for _, x := range d.txs {
@@ -390,7 +391,7 @@ func TestCatchUpTransactionsAreRepeatableRead(t *testing.T) {
 // the transaction again.
 func TestCatchUpRetriesSerializationFailures(t *testing.T) {
 	d := &db{cursor: int64(100), top: int64p(101), present: []int64{100, 101}, failOnce: "pending_rewrites SET resume_from"}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, res.Ranges)
 	assert.Equal(t, int64(102), d.cursor)
@@ -403,7 +404,7 @@ func TestCatchUpRetriesSerializationFailures(t *testing.T) {
 // overwrite each other's holes.
 func TestHolesRowExistsBeforeItIsLocked(t *testing.T) {
 	d := &db{cursor: int64(100), top: int64p(101), present: []int64{101}}
-	_, err := trades.CatchUp(context.Background(), d)
+	_, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, d.execs)
 	assert.Contains(t, d.execs[0].sql, "ON CONFLICT (key) DO NOTHING")
@@ -418,7 +419,7 @@ func TestHolesRowExistsBeforeItIsLocked(t *testing.T) {
 
 	// An existing row is kept.
 	d = &db{cursor: int64(100), top: int64p(99), holes: `[[7,7]]`}
-	_, err = trades.CatchUp(context.Background(), d)
+	_, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.JSONEq(t, `[[7,7]]`, d.holes)
 }
@@ -432,7 +433,7 @@ func TestFirstRunChecksEverythingBelowTheCursor(t *testing.T) {
 	swap := `{"creator":"bze1c","in":{"denom":"ubze","amount":"5"},"out":{"denom":"uatom","amount":"2"},"pool_id":"uatom_ubze"}`
 	d := &db{cursor: int64(500), top: int64p(499), present: []int64{70, 71, 72, 300},
 		results: map[string][][]any{"FROM explorer.block_events": {{int64(71), 2, at, []byte(swap)}}}}
-	res, err := trades.CatchUp(context.Background(), d)
+	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.Equal(t, trades.Result{Ranges: 1, Heights: 1}, res)
 	var swaps []map[string]any
@@ -447,7 +448,52 @@ func TestFirstRunChecksEverythingBelowTheCursor(t *testing.T) {
 
 	// A cursor still at 0 (the walk from genesis to come) seeds no hole.
 	d = &db{cursor: int64(0), top: (*int64)(nil)}
-	_, err = trades.CatchUp(context.Background(), d)
+	_, err = trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)
 	assert.JSONEq(t, `[]`, d.holes)
+}
+
+// hook records the ranges it ran in and the transaction it got.
+type hook struct {
+	ranges [][2]int64
+	txs    []trades.HookTx
+	fail   error
+}
+
+func (h *hook) AfterNumbering(_ context.Context, tx trades.HookTx, lo, hi int64) error {
+	h.ranges, h.txs = append(h.ranges, [2]int64{lo, hi}), append(h.txs, tx)
+	return h.fail
+}
+
+// The hook runs in every range's transaction, after the numbering, the
+// heights below the cursor one at a time first; its failure rolls the
+// range back.
+func TestCatchUpRunsTheHookInEveryRange(t *testing.T) {
+	d := &db{cursor: int64(23_500_000), top: int64p(24_000_010), results: map[string][][]any{
+		"trade_id IS NULL": {{int64(70)}},
+	}}
+	h := &hook{}
+	_, err := trades.CatchUp(context.Background(), d, h)
+	require.NoError(t, err)
+	assert.Equal(t, [][2]int64{{70, 71}, {23_500_000, 24_000_000}, {24_000_000, 24_000_011}}, h.ranges)
+	require.Len(t, committed(d), 3)
+	for i, x := range committed(d) {
+		assert.Same(t, x, h.txs[i], "the range's own transaction")
+	}
+
+	// The heights stored in the holes since: the hook runs on their runs,
+	// so their candles count them too.
+	d = &db{cursor: int64(100), top: int64p(99), holes: `[[50,60]]`, present: []int64{55, 56, 58}}
+	h = &hook{}
+	_, err = trades.CatchUp(context.Background(), d, h)
+	require.NoError(t, err)
+	assert.Equal(t, [][2]int64{{55, 57}, {58, 59}}, h.ranges)
+	require.Len(t, committed(d), 1, "one transaction for the holes")
+	assert.Same(t, committed(d)[0], h.txs[0])
+
+	d = &db{cursor: int64(100), top: int64p(100)}
+	h = &hook{fail: errors.New("candles are down")}
+	_, err = trades.CatchUp(context.Background(), d, h)
+	assert.ErrorIs(t, err, h.fail)
+	assert.Empty(t, committed(d))
 }

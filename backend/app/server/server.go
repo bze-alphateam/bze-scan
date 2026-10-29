@@ -99,6 +99,9 @@ type Deps struct {
 	// CompatSwaps serves the addresses' pool swaps; nil leaves the
 	// aggregator-compatible /aggregator/api/dex/swaps out.
 	CompatSwaps controller.SwapHistory
+	// CompatIntervals serves the candles; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/intervals out.
+	CompatIntervals controller.Intervals
 	// CompatHistory serves the DEX's trades; nil leaves the
 	// aggregator-compatible /aggregator/api/dex/history out.
 	CompatHistory controller.TradeHistory
@@ -229,6 +232,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatOrders != nil {
 		compat.GET("/dex/orders", controller.NewCompatOrdersController(deps.CompatOrders, deps.CoinGeckoMerges, deps.Log).Orders)
+	}
+	if deps.CompatIntervals != nil {
+		compat.GET("/dex/intervals", controller.NewCompatIntervalsController(deps.CompatIntervals, deps.Log).Intervals)
 	}
 	if deps.CompatSwaps != nil {
 		compat.GET("/dex/swaps", controller.NewCompatSwapsController(deps.CompatSwaps, deps.Log).Swaps)

@@ -1,6 +1,10 @@
 package dto
 
-import "github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
+import (
+	"time"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
+)
 
 // The shapes of the aggregator-compatible routes (/api/…, outside /api/v1):
 // field for field and type for type what the BZE aggregator API answers, so
@@ -90,6 +94,34 @@ type CompatHistoryTrade struct {
 	PoolID      string `json:"pool_id,omitempty"`
 	Base        string `json:"base,omitempty"`
 	Quote       string `json:"quote,omitempty"`
+}
+
+// CompatInterval is one candle of GET /aggregator/api/dex/intervals' default
+// format, display units as strings.
+type CompatInterval struct {
+	MarketID     string    `json:"market_id"`
+	Minutes      int       `json:"minutes"`
+	StartAt      time.Time `json:"start_at"`
+	EndAt        time.Time `json:"end_at"`
+	LowestPrice  string    `json:"lowest_price"`
+	OpenPrice    string    `json:"open_price"`
+	AveragePrice string    `json:"average_price"`
+	HighestPrice string    `json:"highest_price"`
+	ClosePrice   string    `json:"close_price"`
+	BaseVolume   string    `json:"base_volume"`
+	QuoteVolume  string    `json:"quote_volume"`
+}
+
+// CompatTVInterval is one candle of GET
+// /aggregator/api/dex/intervals?format=tv (TradingView): the start in unix
+// seconds, the prices and the base volume as numbers.
+type CompatTVInterval struct {
+	Time  int64   `json:"time"`
+	Low   float64 `json:"low"`
+	Open  float64 `json:"open"`
+	High  float64 `json:"high"`
+	Close float64 `json:"close"`
+	Value float64 `json:"value"`
 }
 
 // CompatCoinGeckoTrade is one trade of GET

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
@@ -117,7 +118,7 @@ func withMigrator(fn func(ctx context.Context, mg *migrations.Migrator) error) e
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	mg, err := migrations.Open(ctx, cfg.DatabaseURL, trades.MigrationStep())
+	mg, err := migrations.Open(ctx, cfg.DatabaseURL, trades.MigrationStep(candles.Default), candles.MigrationStep())
 	if err != nil {
 		return err
 	}

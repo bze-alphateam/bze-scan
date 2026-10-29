@@ -27,7 +27,7 @@ func NewRootCmd(opts ...Option) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
-	rootCmd.AddCommand(newServeCmd(), newMigrateCmd(), newBackfillCmd(), newReindexCmd(), newSyncStateCmd(), newSnapshotsCmd(), newSinkCleanupCmd(), newVersionCmd(o.version))
+	rootCmd.AddCommand(newServeCmd(), newMigrateCmd(), newBackfillCmd(), newReindexCmd(), newSyncStateCmd(), newSnapshotsCmd(), newSinkCleanupCmd(), newCandlesCmd(), newVersionCmd(o.version))
 	return rootCmd
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/debugserver"
 	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
@@ -197,9 +198,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		compatArticles = feed
 	}
 
-	// The aggregator-compatible /aggregator/api/dex/orders reads the books live; left
-	// out without a gRPC address.
+	// The aggregator-compatible /aggregator/api/dex/orders reads the books live, and
+	// /aggregator/api/dex/intervals the markets' denoms; left out without a gRPC address.
 	var compatOrders controller.OrderBooks
+	var compatIntervals controller.Intervals
 	if cfg.NodeGRPCAddr != "" {
 		books, closeBooks, err := NewOrderBook(cfg, codec, apiPool)
 		if err != nil {
@@ -207,6 +209,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		}
 		defer closeBooks()
 		compatOrders = books
+		compatIntervals = candles.NewService(candles.ServiceDeps{Reader: candles.NewPGReader(apiPool), Markets: books,
+			Exponents: dexunits.NewPGStore(apiPool)})
 	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
@@ -245,6 +249,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		CompatOrders:    compatOrders,
 		CoinGeckoMerges: cfg.CoinGeckoMergedMarkets,
 		CompatSupply:    compatSupply,
+		CompatIntervals: compatIntervals,
 		CompatSwaps: swaphistory.New(swaphistory.Deps{Store: swaphistory.NewPGStore(apiPool),
 			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
 		CompatHistory: tradehistory.New(tradehistory.Deps{Store: tradehistory.NewPGStore(apiPool),
@@ -308,7 +313,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			ix := live.New(opts.Live, live.Deps{
 				Listener:    live.NewPGListener(cfg.DatabaseURL),
 				Node:        nodeClient,
-				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, flows.PostFlush),
+				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, candles.Default.PostFlush, flows.PostFlush),
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),
@@ -319,7 +324,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			// (a deploy's overlap) carry no trade ids: numbered from the
 			// stored rows at start and every minute.
 			components = append(components, component{name: "trades", run: func(ctx context.Context) error {
-				return trades.Run(ctx, pool, opts.TradesInterval, log.StandardLogger())
+				return trades.Run(ctx, pool, candles.Default, opts.TradesInterval, log.StandardLogger())
 			}})
 		}
 		if cfg.BackfillEnabled {

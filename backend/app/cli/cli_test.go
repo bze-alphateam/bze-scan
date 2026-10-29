@@ -29,6 +29,7 @@ func TestHelpListsCommands(t *testing.T) {
 	assert.Contains(t, out.String(), "reindex")
 	assert.Contains(t, out.String(), "sync-state")
 	assert.Contains(t, out.String(), "snapshots")
+	assert.Contains(t, out.String(), "candles")
 	assert.Contains(t, out.String(), "version")
 }
 
@@ -80,7 +81,8 @@ func TestDatabaseCommandsRequireDatabaseURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("DATABASE_URL", "")
 
-	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}, {"sync-state"}, {"snapshots"}} {
+	for _, args := range [][]string{{"migrate"}, {"migrate", "up"}, {"migrate", "down", "1"}, {"migrate", "version"}, {"sync-state"}, {"snapshots"},
+		{"candles", "rebuild"}, {"candles", "rebuild", "--market", "ubze/uvdl"}} {
 		root := cli.NewRootCmd()
 		root.SetArgs(args)
 		root.SetOut(&bytes.Buffer{})

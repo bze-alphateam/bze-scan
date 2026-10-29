@@ -76,6 +76,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"validator_last_signed",
 		"order_outcome_events",
 		"pool_swaps",
+		"candles",
 	}, idents)
 }
 
@@ -139,7 +140,7 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 // TestDownMigrationsDropWhatUpCreates checks that every table an up file
 // creates is dropped by its down file.
 func TestDownMigrationsDropWhatUpCreates(t *testing.T) {
-	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps"} {
+	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps", "000024_candles"} {
 		all, _ := createdTables(t, base+".up.sql")
 		down := readMigration(t, base+".down.sql")
 		for _, table := range all {

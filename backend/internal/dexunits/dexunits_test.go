@@ -95,6 +95,10 @@ func TestTradePrice(t *testing.T) {
 		{"quote has two more decimals", "33.333333333333333333", 6, 8, "0.333333333333333333"},
 		// BZE-133: from three more, exact where the aggregator answers 0.
 		{"quote has three more decimals", "1234.5", 6, 9, "1.2345"},
+		// Rounded half to even.
+		{"one decimal short", "0.000000000000000015", 6, 7, "0.000000000000000002"},
+		{"two decimals short", "0.000000000000000125", 6, 8, "0.000000000000000001"},
+		{"one decimal short, exact", "1.5", 6, 7, "0.15"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := dexunits.TradePrice(tc.price, tc.base, tc.quote)
