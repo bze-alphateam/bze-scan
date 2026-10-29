@@ -366,5 +366,6 @@ func TestServeWithoutIndexerStartsNoListener(t *testing.T) {
 	insertSinkBlock(t, db, h316)
 	time.Sleep(500 * time.Millisecond)
 	assert.Empty(t, queryStrings(t, db, `SELECT height::text FROM explorer.blocks`))
-	assert.Empty(t, queryStrings(t, db, `SELECT key FROM explorer.indexer_state`))
+	// trades_holes is migrate up's (the trades catch-up seeds it), not the indexer's.
+	assert.Empty(t, queryStrings(t, db, `SELECT key FROM explorer.indexer_state WHERE key <> 'trades_holes'`))
 }
