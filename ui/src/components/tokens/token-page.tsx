@@ -7,7 +7,9 @@ import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
+import { useApi } from "@/api/provider";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { ExportButton } from "@/components/export/export-modal";
 import { AppLink } from "@/components/layout/app-link";
 import { ExternalLink } from "@/components/ui/external-link";
 import { AccountChip } from "@/components/ui/account-chip";
@@ -27,6 +29,7 @@ import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
 import { externalLinks, websiteLink } from "@/lib/links";
 import { dexAssetUrl, multiHop } from "@/render/account";
+import { holdersExport } from "@/render/exports/holders";
 import { connectionChip, headerChips, isDeadChain, strandedExplainer } from "@/render/badges";
 import {
   activityItems,
@@ -554,11 +557,17 @@ function PanelFoot({ children, onClick }: { children: ReactNode; onClick: () => 
 
 function TopHolders({ t }: { t: Token }) {
   const holders = useTokenHolders(t.denom);
+  const api = useApi();
   const items = holders.data?.pages.flatMap((p) => p.items) ?? [];
   const symbol = tokenSymbol(t);
   return (
     <ListPanel as="section" aria-labelledby="token-holders">
-      <PanelHead id="token-holders" title="Top holders" note={topHoldersText(items) ?? undefined} />
+      <PanelHead
+        id="token-holders"
+        title="Top holders"
+        note={topHoldersText(items) ?? undefined}
+        action={items.length > 0 && <ExportButton definition={() => holdersExport({ api, token: t })} />}
+      />
       {!holders.data ? (
         holders.error ? (
           <SectionError what="The holders" onRetry={() => void holders.refetch()} />

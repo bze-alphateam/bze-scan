@@ -1,12 +1,14 @@
 "use client";
 
-import { Box, Button, Grid, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Grid, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { LuTriangleAlert } from "react-icons/lu";
 
 import { ACTIVITY_PER_PAGE, useAccountActivity, useAccountIbc, useDenoms, useStatus } from "@/api/hooks";
+import { useApi } from "@/api/provider";
 import type { Activity, ActivityCategory, IbcTransfer } from "@/api/types";
+import { ExportButton } from "@/components/export/export-modal";
 import { AccountChip } from "@/components/ui/account-chip";
 import { categoryLook } from "@/components/ui/action-card";
 import { Chip } from "@/components/ui/chip";
@@ -29,6 +31,7 @@ import {
   ibcFor,
   type Part,
 } from "@/render/activity";
+import { activityExport } from "@/render/exports/activity";
 import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext } from "@/render/messages/types";
 
@@ -207,6 +210,7 @@ export function ActivityTab({ address, initialCategory = null, initialPage = 1, 
   const latest = useAccountActivity(address, { category, page: 1, limit: 1, enabled: !neverSeen && page > 1 });
   const ibc = useAccountIbc(address);
   const denoms = useDenoms();
+  const api = useApi();
   const ctx = useMemo(() => createRenderContext({ transfers: NO_TRANSFERS, tokens: denoms.data }), [denoms.data]);
 
   if (neverSeen) return <NeverSeen />;
@@ -225,15 +229,12 @@ export function ActivityTab({ address, initialCategory = null, initialPage = 1, 
 
   return (
     <Box>
-      <Box overflowX="auto" mx={{ base: "-4", md: "0" }} px={{ base: "4", md: "0" }}>
-        <FilterPills
-          label="Show activity"
-          options={ACTIVITY_FILTERS}
-          value={category}
-          onChange={(c) => go(c, 1)}
-          mb="14px"
-        />
-      </Box>
+      <Flex gap="3" align="flex-start" mb="14px">
+        <Box overflowX="auto" flex="1" minW="0" mx={{ base: "-4", md: "0" }} px={{ base: "4", md: "0" }}>
+          <FilterPills label="Show activity" options={ACTIVITY_FILTERS} value={category} onChange={(c) => go(c, 1)} mb="0" />
+        </Box>
+        <ExportButton definition={() => activityExport({ api, address, category, tokens: denoms.data })} />
+      </Flex>
       {!list.data ? (
         list.error ? (
           <LoadError onRetry={() => void list.refetch()} />
