@@ -104,7 +104,7 @@ func (s *Service) ByAddress(ctx context.Context, address string) ([]Trade, error
 			}
 		}
 		for _, sw := range swaps {
-			t, err := convert(sw, exps)
+			t, err := Convert(sw, exps)
 			if err != nil {
 				s.deps.Log.WithError(err).WithField("trade_id", sw.TradeID).Warn("dex swaps: swap left out")
 				continue
@@ -121,10 +121,11 @@ func (s *Service) ByAddress(ctx context.Context, address string) ([]Trade, error
 	return out, nil
 }
 
-// convert computes the display values the aggregator stores for a swap: the
-// chain price is quote / base as an 18-decimal LegacyDec, then shifted by
-// the exponents' difference.
-func convert(sw Swap, exps map[string]int) (t Trade, err error) {
+// Convert computes the display values the aggregator stores for a swap:
+// the chain price is quote / base as an 18-decimal LegacyDec, then shifted
+// by the exponents' difference (dexunits.TradePrice). exps holds the
+// exponents of the swap's denoms; a missing one is an error.
+func Convert(sw Swap, exps map[string]int) (t Trade, err error) {
 	baseExp, okBase := exps[sw.Base]
 	quoteExp, okQuote := exps[sw.Quote]
 	if !okBase || !okQuote {
@@ -143,12 +144,7 @@ func convert(sw Swap, exps map[string]int) (t Trade, err error) {
 	}()
 	chainPrice := sdkmath.LegacyNewDecFromInt(quote).Quo(sdkmath.LegacyNewDecFromInt(base))
 	t = Trade{Swap: sw}
-	if gap := baseExp - quoteExp; gap == -1 || gap == -2 {
-		// The aggregator multiplies by 0.1 or 0.01 as a LegacyDec, which
-		// rounds back to 18 decimals; from three decimals more its factor is
-		// 0 and dexunits' exact shift answers instead (BZE-133).
-		t.Price = dexunits.TrimTrailingZeros(chainPrice.Mul(sdkmath.LegacyNewDecWithPrec(1, int64(-gap))).String())
-	} else if t.Price, err = dexunits.Price(chainPrice.String(), baseExp, quoteExp); err != nil {
+	if t.Price, err = dexunits.TradePrice(chainPrice.String(), baseExp, quoteExp); err != nil {
 		return Trade{}, err
 	}
 	if t.BaseVolume, err = dexunits.Amount(sw.BaseAmount, baseExp); err != nil {

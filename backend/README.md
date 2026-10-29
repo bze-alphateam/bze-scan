@@ -446,6 +446,7 @@ result is `[]`, never `null`.
 | `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
 | `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
 | `GET /aggregator/api/dex/swaps?address=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker":"","taker":"<address>","pool_id","base","quote"}]`, the address's last 100 pool swaps, newest first |
+| `GET /aggregator/api/dex/history?market_id=\|ticker_id=\|address=&limit=&start_time=&end_time=&type=&format=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker","taker"}]`, the last `limit` order book fills and pool swaps, newest first; `format=coingecko`: `{"buy":[{"trade_id","price","base_volume","target_volume","trade_timestamp","type"}],"sell":[…]}` |
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
@@ -468,7 +469,7 @@ to 24 hours after it, then `[]`; the aggregator answers `[]` for 600 s. An
 empty feed is `[]` (the aggregator answers `null`). The route is always 200.
 
 **Display units** (`internal/dexunits`, shared by every DEX route of the
-group: orders, and later history, intervals and tickers). A chain price is
+group: orders, swaps, history, and later intervals and tickers). A chain price is
 quote base units per base base unit; the display price is price ×
 10^(base exponent − quote exponent) and an amount is amount ×
 10^−exponent, both in exact decimals (`dexunits.Price`, `dexunits.Amount`),
@@ -538,6 +539,45 @@ swap is never listed twice, prices are right when the quote has three or
 more decimals more than the base (BZE-133), and `base`/`quote` come from the
 swap's denoms (the aggregator splits the pool id on `_` and drops a swap
 whose denoms contain one).
+
+**History.** `internal/tradehistory` serves the trades the aggregator's
+`market_history` table holds: order book fills from `explorer.order_fills`
+and pool swaps from `explorer.swaps`. A `market_id` is matched exactly
+against both (a fill's market id, a swap's pool id; IBC denoms put a `/` in
+pool ids too), so a pool's history is its swaps; `ticker_id` is a market id
+with `_` for `/`, `market_id` wins. `address` alone is enough: a fill's maker
+or taker (a self-trade once), a swap's creator; with a market, both filters
+apply. `limit` is 500 by default (also for 0 or less), 1000 at most;
+`type=buy|sell` filters the side (anything else is ignored); `start_time`
+and `end_time` are unix milliseconds, inclusive, and apply only when both
+are above 0. The window is first turned into the heights of its blocks
+(`explorer.blocks (time)` index, block times never decrease), so the
+queries prune the partitions outside it. Each query walks a `(…, height
+DESC)` index: `order_fills (market_id|maker|taker, height DESC)`, `swaps
+(pool_id|creator, height DESC)`; an address reads its maker and taker fills
+as two index walks merged. Trades are newest first by trade id (height, then
+the chain's order within the block). A fill's `order_type` is its `side`,
+the resting order's (the chain's `HistoryOrder.order_type`); the price is
+converted like a swap's (`dexunits.TradePrice`), `base_volume` is the amount
+in display units and `quote_volume` = base volume × price as a `LegacyDec`
+truncated to the quote's decimals (`dexunits.QuoteAmount`, the aggregator's
+`GetQuoteAmount`). A swap's maker is `""`, its taker the creator, without the
+`pool_id`/`base`/`quote` of `/dex/swaps`. A trade whose denoms have no known
+exponent (a market id is cut at the `/` where both sides are known denoms)
+is left out and older ones take its place, at most 10 pages of `limit`.
+A fill not yet numbered (`trade_id` NULL, only while a release rolls out) is
+left out until it is. `format=coingecko` splits the trades by side; for a
+market others are folded into (`COINGECKO_MERGED_MARKETS`) their trades are
+merged in, newest first, cut to `limit`. A side without trades is left out
+(`{}` without any), as the aggregator answers. Errors are 400 with the
+aggregator's messages: `invalid request` (a `limit`, `start_time` or
+`end_time` that is no integer), `please provide market_id or ticker_id`
+(no address and both ids shorter than two characters), its "Unknown
+error!…" for a failed read. Differences from the aggregator: ids are stable
+trade ids, `executed_at` is the block time in milliseconds (whole seconds
+there), trades of one second are never lost (the aggregator drops some at
+its sync page boundaries), no trade is listed twice (v8.0.x's doubled events
+count once) and prices are right for big exponent gaps (BZE-133).
 
 ## Migrations
 
