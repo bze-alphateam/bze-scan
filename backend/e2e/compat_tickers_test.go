@@ -25,6 +25,7 @@ const (
 	tickerCorey      = "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey"
 	tickerVDLPool    = tickerVDL + "_ubze"
 	tickerCoreyPool  = tickerCorey + "_ubze"
+	tickerCoreyLP    = "ulp/ACB85D816E5FC1516F2AE65B6BDA9925822F2F16EF1742310C321B2D81DA11A3"
 	tickerUSDCNPool  = recordedPool
 	tickerBlocksFrom = 30_000_001
 )
@@ -110,9 +111,10 @@ func TestCompatTickersOverTheStoredTrades(t *testing.T) {
 	// the LP supplies.
 	e.grpc.SetResponse("tradebin", "AllMarkets", "", []byte(`{"market":[{"base":"ubze","quote":"`+usdcDenom+
 		`","creator":"bze1creator"}],"pagination":{"next_key":null,"total":"1"}}`))
-	for _, pool := range []string{tickerVDLPool, tickerCoreyPool, tickerUSDCNPool} {
-		e.grpc.SetResponse("bank", "SupplyOf", url.PathEscape("ulp_"+pool),
-			[]byte(`{"amount":{"denom":"ulp_`+pool+`","amount":"1000000000000"}}`))
+	// COREY/BZE is a newer pool, whose LP denom is ulp/<hash>.
+	for _, lp := range []string{"ulp_" + tickerVDLPool, tickerCoreyLP, "ulp_" + tickerUSDCNPool} {
+		e.grpc.SetResponse("bank", "SupplyOf", url.PathEscape(lp),
+			[]byte(`{"amount":{"denom":"`+lp+`","amount":"1000000000000"}}`))
 	}
 
 	base := e.serveCompat(t, "https://explorer.getbze.com", func(cfg *config.Config) {
@@ -139,8 +141,9 @@ func TestCompatTickersOverTheStoredTrades(t *testing.T) {
 		get(""))
 
 	// CoinGecko: lp_ ids, the liquidity in USD (BZE at 1/180 USD.n through
-	// its pool, VDL at 2 BZE, COREY at 1 BZE), COREY/BZE folded into
-	// VDL/BZE.
+	// its pool, VDL at 2 BZE, COREY at 1 BZE, its ulp/<hash> LP token priced
+	// too, where the aggregator knows only ulp_<pool id>), COREY/BZE folded
+	// into VDL/BZE.
 	assert.Equal(t, `[{"ticker_id":"lp_`+tickerVDLPool+`","base_currency":"`+tickerVDL+`","target_currency":"ubze",`+
 		`"pool_id":"lp_`+tickerVDLPool+`","last_price":2.5,"base_volume":2,"target_volume":4.5,"bid":0,"ask":0,"high":2.5,"low":2,`+
 		`"liquidity_in_usd":`+jsonFloat(200.0/9+1.0/90)+`},`+

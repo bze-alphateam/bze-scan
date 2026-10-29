@@ -62,7 +62,8 @@ const (
 	DefaultNativeCoinGeckoID = "bzedge"
 )
 
-// LPPrefix starts every LP token denom; the rest is the pool id.
+// LPPrefix starts the older pools' LP token denoms, the rest being the pool
+// id; newer pools name theirs ulp/<hash> (Pool.LPDenom gives either).
 const LPPrefix = "ulp_"
 
 // LPExponent is the LP tokens' decimals.

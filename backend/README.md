@@ -648,7 +648,9 @@ a market whose book, candles or trades fail keeps its ticker with the parts
 that answered (the aggregator answers a 500), and only a market list and
 pools never read are a 500 "unknown error"; no price is cut to six decimals
 (the aggregator formats every USD price with `%f`), so `liquidity_in_usd`
-differs in its last digits; BZE's CoinGecko fallback works (the aggregator
+differs in its last digits; a newer pool's `ulp/<hash>` LP token is priced
+too (the aggregator recognises only `ulp_<pool id>` and lists no liquidity
+for those pools); BZE's CoinGecko fallback works (the aggregator
 looks for the denom instead of its CoinGecko id); prices are right for big
 exponent gaps (BZE-133); doubled events count once; an empty list is `[]`.
 

@@ -390,6 +390,13 @@ func TestCompatTickersUSDPrices(t *testing.T) {
 	// 5 USDC.
 	e := newTkEnv()
 	assert.Equal(t, "10", liquidityOf(t, e, e.pool("ucorey", "uusdc", 10_000_000, 5_000_000)))
+	// A newer pool's LP denom is ulp/<hash>: priced too, where the
+	// aggregator prices only ulp_<pool id> (regression).
+	e2 := newTkEnv()
+	id := e2.pool("ucorey", "uusdc", 10_000_000, 5_000_000)
+	e2.pools[0].LPDenom = "ulp/ABC123"
+	e2.supplies = map[string]sdkmath.Int{"ulp/ABC123": sdkmath.NewInt(1_000_000_000_000)}
+	assert.Equal(t, "10", liquidityOf(t, e2, id))
 	// A pool without an LP supply has no liquidity.
 	delete(e.supplies, tickers.LPPrefix+"ucorey_uusdc")
 	assert.Empty(t, liquidityOf(t, e, "ucorey_uusdc"))

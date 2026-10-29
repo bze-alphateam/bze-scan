@@ -52,7 +52,7 @@ func (s *Service) usd(ctx context.Context, denom string) (*big.Rat, bool) {
 	switch {
 	case usdc != "" && denom == usdc:
 		return big.NewRat(1, 1), false
-	case strings.HasPrefix(denom, LPPrefix):
+	case strings.HasPrefix(denom, LPPrefix) || s.isLPDenom(ctx, denom):
 		return s.lpPrice(ctx, denom)
 	case denom == native:
 		p, failed := s.last(ctx, native, usdc)
@@ -145,8 +145,7 @@ func (s *Service) poolPrice(ctx context.Context, base, quote string) (*big.Rat, 
 // per whole LP token; zero when a side has no price or the supply is not
 // positive. failed reports a failed read.
 func (s *Service) lpPrice(ctx context.Context, denom string) (*big.Rat, bool) {
-	id := strings.TrimPrefix(denom, LPPrefix)
-	p, failed := s.pool(ctx, id)
+	p, failed := s.lpPool(ctx, denom)
 	if p == nil {
 		return new(big.Rat), failed
 	}
@@ -158,7 +157,7 @@ func (s *Service) lpPrice(ctx context.Context, denom string) (*big.Rat, bool) {
 	}
 	exps, err := s.deps.Exponents.Exponents(ctx, []string{p.Base, p.Quote})
 	if err != nil {
-		s.deps.Log.WithError(err).WithField("pool", id).Warn("tickers: exponents of a pool")
+		s.deps.Log.WithError(err).WithField("pool", p.ID).Warn("tickers: exponents of a pool")
 		return new(big.Rat), true
 	}
 	baseExp, okB := exps[p.Base]
@@ -177,6 +176,31 @@ func (s *Service) lpPrice(ctx context.Context, denom string) (*big.Rat, bool) {
 	value := new(big.Rat).Mul(baseUSD, new(big.Rat).SetFrac(p.ReserveBase.BigInt(), pow10(baseExp)))
 	value.Add(value, new(big.Rat).Mul(quoteUSD, new(big.Rat).SetFrac(p.ReserveQuote.BigInt(), pow10(quoteExp))))
 	return value.Quo(value, new(big.Rat).SetFrac(supply.BigInt(), pow10(LPExponent))), failed
+}
+
+// lpPool returns the pool whose LP token is denom: by the pool's LP denom
+// (newer pools have a ulp/<hash> one), else by the pool id after LPPrefix,
+// the aggregator's only rule; nil when there is none.
+func (s *Service) lpPool(ctx context.Context, denom string) (*Pool, bool) {
+	pools, err := s.deps.Pools.Pools(ctx)
+	if err != nil {
+		return nil, true
+	}
+	for i := range pools {
+		if pools[i].LPDenom == denom {
+			return &pools[i], false
+		}
+	}
+	if id, ok := strings.CutPrefix(denom, LPPrefix); ok {
+		return s.pool(ctx, id)
+	}
+	return nil, false
+}
+
+// isLPDenom reports whether denom is a pool's LP denom.
+func (s *Service) isLPDenom(ctx context.Context, denom string) bool {
+	p, _ := s.lpPool(ctx, denom)
+	return p != nil
 }
 
 // pool returns the pool id, nil when there is none; failed when the pools
