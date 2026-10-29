@@ -1046,8 +1046,17 @@ possibly the previous release's) are kept as holes, inclusive ranges in
 `indexer_state` under `trades_holes`; each pass numbers the heights stored
 in them since (a primary-key range scan of `blocks` over the holes only, at
 most 100,000 heights per transaction) and cuts them out, so a block with
-only pool swaps, which no fill gives away, is numbered too. On a fully
-indexed database the holes are empty and the check is one row lock.
+only pool swaps, which no fill gives away, is numbered too. Every
+transaction of a pass runs in one snapshot (REPEATABLE READ), so a block a
+concurrent writer commits meanwhile is either read whole or kept as a hole;
+a serialization failure runs the transaction again. The holes row is
+created before anything locks it. What stays a hole for good (the heights
+below the live floor of a database never backfilled down to genesis) costs
+an empty index range per pass. The first run of a release that tracks holes
+finds no holes row although the cursor already passed heights: it starts
+the row as `[0, cursor − 1]`, so that one pass checks every stored height
+below the cursor once (rows already there are kept, the ids do not change);
+a cursor still at 0 starts with no hole.
 
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0 and later) has no attributed fill or order, or one of

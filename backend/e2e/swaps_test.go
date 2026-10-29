@@ -394,6 +394,48 @@ func TestPoolSwapsOnlyBlockInAHoleIsNumbered(t *testing.T) {
 	}, "the swaps of the hole's block")
 	assert.Equal(t, want, queryStrings(t, e.db, `SELECT concat_ws(' ', trade_id, side, creator, coalesce(block_seq::text, '-'))
 		FROM explorer.swaps WHERE height = $1`, holeH))
-	assert.NotContains(t, queryStrings(t, e.db, `SELECT value FROM explorer.indexer_state WHERE key = 'trades_holes'`)[0],
-		fmt.Sprintf("%d]", holeH), "the height is out of the holes")
+	assert.Equal(t, []string{fmt.Sprintf(`[[0,20230044],[20230046,%d],[%d,24999133]]`, holeH-1, holeH+1)},
+		queryStrings(t, e.db, `SELECT value FROM explorer.indexer_state WHERE key = 'trades_holes'`),
+		"the height is cut out of the holes, the others stay")
+}
+
+// A database the cursor walked before holes were tracked (testnet ran
+// 000023 first): no holes row, the cursor at the tip, and a block with only
+// pool swaps below it that the previous release stored without swaps rows.
+// The first pass of this release checks every stored height below the
+// cursor once and numbers it.
+func TestFirstRunNumbersPoolSwapsBelowAnOldCursor(t *testing.T) {
+	const oldH = int64(24_000_700)
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	live := writer.NewLiveWriter(pool)
+	require.NoError(t, live.WriteBlock(ctx, transformed(t, e, 24999134)))
+	b, r, c := swapBlock(t)
+	b.Height, r.Height, c.Height = oldH, oldH, oldH
+	r.FinalizeBlockEvents = r.FinalizeBlockEvents[1:2] // the burner's swap only
+	ents, err := newTransformer(t).Transform(transform.Input{Block: b, Results: r, Commit: c})
+	require.NoError(t, err)
+	require.NoError(t, live.WriteBlock(ctx, ents))
+	want := queryStrings(t, e.db, `SELECT concat_ws(' ', trade_id, side, creator) FROM explorer.swaps WHERE height = $1`, oldH)
+	require.Len(t, want, 3)
+
+	// As the release before this one leaves it.
+	for _, q := range []string{
+		`DELETE FROM explorer.swaps WHERE height = 24000700`,
+		`DELETE FROM explorer.indexer_state WHERE key = 'trades_holes'`,
+		`UPDATE explorer.pending_rewrites SET resume_from = 24999135 WHERE name = 'swaps'`,
+	} {
+		_, err := e.db.Exec(q)
+		require.NoError(t, err)
+	}
+
+	migrateUp(t, e.url)
+	assert.Equal(t, want, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', trade_id, side, creator) FROM explorer.swaps WHERE height = $1`, oldH))
+	assert.Equal(t, []string{fmt.Sprintf(`[[0,%d],[%d,24999133]]`, oldH-1, oldH+1)},
+		queryStrings(t, e.db, `SELECT value FROM explorer.indexer_state WHERE key = 'trades_holes'`),
+		"only the heights without a block stay holes")
 }
