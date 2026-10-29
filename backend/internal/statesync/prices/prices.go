@@ -2,23 +2,23 @@
 // CoinGecko's USD prices by id from the in-process feed that also serves
 // /aggregator/api/prices, and writes them to the denoms whose chain-registry asset
 // carries that id (BZE's own asset list first, then the origin chain's for
-// an IBC denom). The native denom's 24-hour change comes from the
-// aggregator's ticker of one BZE/USDC market (the liquidity pool), read at
-// most every ChangeTTL, when there is an aggregator. The explorer computes
-// no DEX price; a failed fetch keeps the previous values and is logged once
-// per change of state, not every minute.
+// an IBC denom). The native denom's 24-hour change comes from the DEX
+// ticker of one BZE/USDC market (the liquidity pool), computed in process
+// (package tickers) at most every ChangeTTL. A failed read keeps the
+// previous values and is logged once per change of state, not every minute.
 package prices
 
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
+	"github.com/bze-alphateam/bze-scan/backend/internal/tickers"
 )
 
 // DefaultInterval is the minute refresh.
@@ -34,10 +34,10 @@ type Prices interface {
 	USD(ctx context.Context) (map[string]string, error)
 }
 
-// Tickers reads the DEX tickers; *aggregator.Client satisfies it.
+// Tickers computes the DEX tickers; *tickers.Service satisfies it.
 type Tickers interface {
 	// Ticker returns a market's ticker, nil when the market is not listed.
-	Ticker(ctx context.Context, marketID string) (*aggregator.Ticker, error)
+	Ticker(ctx context.Context, marketID string) (*tickers.Ticker, error)
 }
 
 // Snapshot is one write of the set.
@@ -79,9 +79,10 @@ type Deps struct {
 	ChainID string
 	// Denom is the native denom, whose 24-hour change is read.
 	Denom string
-	// ChangeMarket is the aggregator market id of the ticker the change is
-	// read from (the BZE/USDC liquidity pool); empty (or no Tickers) reads
-	// none and leaves the change alone.
+	// ChangeMarket is the market id (an order book's base/quote, a pool's
+	// base_quote) of the ticker the change is read from (the BZE/USDC
+	// liquidity pool); empty (or no Tickers) reads none and leaves the
+	// change alone.
 	ChangeMarket string
 	// Log defaults to the standard logger, Clock to the wall clock.
 	Log   log.FieldLogger
@@ -150,7 +151,7 @@ func (s *Set) ResyncOne(ctx context.Context, _ string) error {
 }
 
 // readChange reads the change from the ticker when the one held is older
-// than ChangeTTL. A market the aggregator does not list, or a ticker without
+// than ChangeTTL. A market that is not listed, or a ticker without
 // prices, is no change (null); a failed read keeps the one held.
 func (s *Set) readChange(ctx context.Context) error {
 	if s.deps.Tickers == nil || s.deps.ChangeMarket == "" || (s.changed && s.deps.Clock.Now().Sub(s.changeAt) < ChangeTTL) {
@@ -160,11 +161,11 @@ func (s *Set) readChange(ctx context.Context) error {
 	if err == nil && t != nil && t.Base != s.deps.Denom && t.Quote != s.deps.Denom {
 		err = fmt.Errorf("market %s does not trade %s", s.deps.ChangeMarket, s.deps.Denom)
 	}
-	if s.note(&s.changeFailing, err, "aggregator's 24-hour change") != nil {
+	if s.note(&s.changeFailing, err, "DEX ticker's 24-hour change") != nil {
 		return err
 	}
 	s.change, s.changeAt, s.changed = nil, s.deps.Clock.Now(), true
-	if pct, ok := aggregator.ChangePct(t, s.deps.Denom); ok {
+	if pct, ok := ChangePct(t, s.deps.Denom); ok {
 		s.change = &pct
 	}
 	return nil
@@ -182,4 +183,27 @@ func (s *Set) note(failing *bool, err error, what string) error {
 		s.deps.Log.Infof("prices: the %s answers again", what)
 	}
 	return err
+}
+
+// ChangePct is the 24-hour change of denom's price, in percent rounded half
+// away from zero to four decimals, from the ticker of a market it trades in:
+// last over open when denom is the base, open over last when it is the
+// quote (the market prices the other side). ok is false when denom is not
+// in the market or a price is not positive.
+func ChangePct(t *tickers.Ticker, denom string) (pct string, ok bool) {
+	if t == nil || t.OpenPrice == nil || t.LastPrice == nil || t.OpenPrice.Sign() <= 0 || t.LastPrice.Sign() <= 0 {
+		return "", false
+	}
+	var ratio *big.Rat
+	switch denom {
+	case t.Base:
+		ratio = new(big.Rat).Quo(t.LastPrice, t.OpenPrice)
+	case t.Quote:
+		ratio = new(big.Rat).Quo(t.OpenPrice, t.LastPrice)
+	default:
+		return "", false
+	}
+	change := ratio.Sub(ratio, big.NewRat(1, 1))
+	change.Mul(change, big.NewRat(100, 1))
+	return change.FloatString(4), true
 }

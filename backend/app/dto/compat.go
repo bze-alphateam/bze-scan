@@ -143,3 +143,62 @@ type CompatCoinGeckoHistory struct {
 	Buy  []CompatCoinGeckoTrade `json:"buy,omitempty"`
 	Sell []CompatCoinGeckoTrade `json:"sell,omitempty"`
 }
+
+// CompatTicker is one market of GET /aggregator/api/dex/tickers' default
+// format: display units as JSON numbers, the change a float32.
+type CompatTicker struct {
+	Base        string  `json:"base"`
+	Quote       string  `json:"quote"`
+	MarketID    string  `json:"market_id"`
+	LastPrice   float64 `json:"last_price"`
+	BaseVolume  float64 `json:"base_volume"`
+	QuoteVolume float64 `json:"quote_volume"`
+	Bid         float64 `json:"bid"`
+	Ask         float64 `json:"ask"`
+	High        float64 `json:"high"`
+	Low         float64 `json:"low"`
+	OpenPrice   float64 `json:"open_price"`
+	Change      float32 `json:"change"`
+}
+
+// CompatCoinGeckoTicker is one market of GET
+// /aggregator/api/dex/tickers?format=coingecko: ticker_id <base>_<quote>
+// (lp_<base>_<quote> for a pool, which is its pool_id too), the liquidity in
+// USD for a pool with a price only.
+type CompatCoinGeckoTicker struct {
+	TickerID       string  `json:"ticker_id"`
+	Base           string  `json:"base_currency"`
+	Quote          string  `json:"target_currency"`
+	PoolID         string  `json:"pool_id"`
+	LastPrice      float64 `json:"last_price"`
+	BaseVolume     float64 `json:"base_volume"`
+	TargetVolume   float64 `json:"target_volume"`
+	Bid            float64 `json:"bid"`
+	Ask            float64 `json:"ask"`
+	High           float64 `json:"high"`
+	Low            float64 `json:"low"`
+	LiquidityInUSD float64 `json:"liquidity_in_usd,omitempty"`
+}
+
+// Fold adds another market's figures to this ticker, which keeps its own
+// ids, as the aggregator folds a market CoinGecko does not track into one it
+// does: volumes and liquidity summed, high and low spanning both, the last
+// price the other's when it traded, bid and ask the other's (as a pair, so
+// the book cannot cross) when it has orders.
+func (c *CompatCoinGeckoTicker) Fold(other CompatCoinGeckoTicker) {
+	c.BaseVolume += other.BaseVolume
+	c.TargetVolume += other.TargetVolume
+	c.LiquidityInUSD += other.LiquidityInUSD
+	if other.High > c.High {
+		c.High = other.High
+	}
+	if other.Low > 0 && (c.Low == 0 || other.Low < c.Low) {
+		c.Low = other.Low
+	}
+	if other.LastPrice > 0 {
+		c.LastPrice = other.LastPrice
+	}
+	if other.Bid > 0 || other.Ask > 0 {
+		c.Bid, c.Ask = other.Bid, other.Ask
+	}
+}

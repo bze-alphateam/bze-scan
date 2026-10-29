@@ -3,6 +3,7 @@ package prices_test
 import (
 	"context"
 	"errors"
+	"math/big"
 	"testing"
 	"time"
 
@@ -11,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/prices"
+	"github.com/bze-alphateam/bze-scan/backend/internal/tickers"
 )
 
 // The BZE/USDC.n liquidity pool, whose ticker prices USDC.n in ubze.
@@ -22,14 +23,14 @@ const pool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8A
 type fakeSource struct {
 	prices    map[string]string
 	err       error
-	ticker    *aggregator.Ticker
+	ticker    *tickers.Ticker
 	tickerErr error
 	tickers   int
 }
 
 func (s *fakeSource) USD(context.Context) (map[string]string, error) { return s.prices, s.err }
 
-func (s *fakeSource) Ticker(_ context.Context, market string) (*aggregator.Ticker, error) {
+func (s *fakeSource) Ticker(_ context.Context, market string) (*tickers.Ticker, error) {
 	s.tickers++
 	if s.ticker == nil || s.ticker.MarketID != market {
 		return nil, s.tickerErr
@@ -57,9 +58,18 @@ type clock struct{ now time.Time }
 
 func (c *clock) Now() time.Time { return c.now }
 
-func poolTicker(open, last string) *aggregator.Ticker {
-	return &aggregator.Ticker{MarketID: pool, Base: "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
-		Quote: "ubze", OpenPrice: open, LastPrice: last}
+// rat is a decimal string as a number; it panics on anything else.
+func rat(s string) *big.Rat {
+	r, ok := new(big.Rat).SetString(s)
+	if !ok {
+		panic(s)
+	}
+	return r
+}
+
+func poolTicker(open, last string) *tickers.Ticker {
+	return &tickers.Ticker{MarketID: pool, Base: "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+		Quote: "ubze", OpenPrice: rat(open), LastPrice: rat(last)}
 }
 
 func newSet(src *fakeSource, store *fakeStore, c *clock, lg logrus.FieldLogger) *prices.Set {
@@ -135,7 +145,7 @@ func TestTheChangeComesFromThePoolAndIsReadEveryFiveMinutes(t *testing.T) {
 	assert.Equal(t, "2.1828", *store.change)
 }
 
-// Without an aggregator (testnet) the prices are still written and the
+// Without tickers the prices are still written and the
 // change is left alone.
 func TestWithoutTickersThePricesAreWrittenAndTheChangeLeftAlone(t *testing.T) {
 	lg, _ := logtest.NewNullLogger()
@@ -185,7 +195,7 @@ func TestAMarketTheAggregatorDoesNotListClearsTheChange(t *testing.T) {
 	assert.Nil(t, store.change)
 
 	// A market that does not trade ubze is a configuration error.
-	src.ticker = &aggregator.Ticker{MarketID: pool, Base: "uatom", Quote: "uosmo", OpenPrice: "1", LastPrice: "1"}
+	src.ticker = &tickers.Ticker{MarketID: pool, Base: "uatom", Quote: "uosmo", OpenPrice: rat("1"), LastPrice: rat("1")}
 	c.now = c.now.Add(prices.ChangeTTL)
 	require.ErrorContains(t, s.FullResync(context.Background()), "does not trade ubze")
 	assert.Equal(t, 1, countLevel(hook, logrus.WarnLevel))
@@ -222,3 +232,36 @@ func TestAFailureIsNotLoggedAgainByTheSyncer(t *testing.T) {
 type noJobs struct{}
 
 func (noJobs) RecordRun(context.Context, statesync.Run) error { return nil }
+
+// The change of either side of a ticker: the pool's recorded figures
+// (USDC.n +2.18 % in ubze is BZE -2.1362 % in USDC.n).
+func TestChangePctOfEitherSide(t *testing.T) {
+	tk := poolTicker("5624.368717574341", "5747.1387947581325")
+	pct, ok := prices.ChangePct(tk, "ubze")
+	require.True(t, ok)
+	assert.Equal(t, "-2.1362", pct)
+	pct, ok = prices.ChangePct(tk, tk.Base)
+	require.True(t, ok)
+	assert.Equal(t, "2.1828", pct, "the base side as the ticker's own change")
+	pct, ok = prices.ChangePct(poolTicker("0.00018", "0.00018"), "ubze")
+	require.True(t, ok)
+	assert.Equal(t, "0.0000", pct)
+}
+
+func TestChangePctNeedsPricesAndTheDenom(t *testing.T) {
+	for name, tk := range map[string]*tickers.Ticker{
+		"no ticker":     nil,
+		"no trade":      {Base: "ubze", Quote: "uusdc", OpenPrice: rat("0"), LastPrice: rat("1")},
+		"no last price": {Base: "ubze", Quote: "uusdc", OpenPrice: rat("1"), LastPrice: rat("0")},
+		"no prices":     {Base: "ubze", Quote: "uusdc"},
+		"another pair":  {Base: "uatom", Quote: "uusdc", OpenPrice: rat("1"), LastPrice: rat("1")},
+	} {
+		_, ok := prices.ChangePct(tk, "ubze")
+		assert.False(t, ok, name)
+	}
+	pct, ok := prices.ChangePct(&tickers.Ticker{Base: "ubze", Quote: "u", OpenPrice: rat("3"), LastPrice: rat("2")}, "ubze")
+	require.True(t, ok)
+	assert.Equal(t, "-33.3333", pct)
+	pct, _ = prices.ChangePct(&tickers.Ticker{Base: "ubze", Quote: "u", OpenPrice: rat("200000"), LastPrice: rat("200001")}, "ubze")
+	assert.Equal(t, "0.0005", pct, "0.0005 rounds away from zero")
+}

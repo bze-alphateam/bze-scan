@@ -190,18 +190,22 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// The aggregator-compatible /aggregator/api/prices; a nil interface without a
 	// CoinGecko host, never a typed nil.
 	var compatPrices controller.PriceFeed
-	if feed := NewPriceFeed(cfg); feed != nil {
-		compatPrices = feed
+	priceFeed := NewPriceFeed(cfg)
+	if priceFeed != nil {
+		compatPrices = priceFeed
 	}
 	var compatArticles controller.ArticleFeed
 	if feed := NewArticleFeed(cfg); feed != nil {
 		compatArticles = feed
 	}
 
-	// The aggregator-compatible /aggregator/api/dex/orders reads the books live, and
-	// /aggregator/api/dex/intervals the markets' denoms; left out without a gRPC address.
+	// The aggregator-compatible /aggregator/api/dex/orders reads the books live,
+	// /aggregator/api/dex/intervals the markets' denoms and
+	// /aggregator/api/dex/tickers both, with the pools; left out without a gRPC
+	// address.
 	var compatOrders controller.OrderBooks
 	var compatIntervals controller.Intervals
+	var compatTickers controller.Tickers
 	if cfg.NodeGRPCAddr != "" {
 		books, closeBooks, err := NewOrderBook(cfg, codec, apiPool)
 		if err != nil {
@@ -211,6 +215,12 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		compatOrders = books
 		compatIntervals = candles.NewService(candles.ServiceDeps{Reader: candles.NewPGReader(apiPool), Markets: books,
 			Exponents: dexunits.NewPGStore(apiPool)})
+		tk, closeTickers, err := NewTickers(cfg, codec, books, apiPool, priceFeed)
+		if err != nil {
+			return err
+		}
+		defer closeTickers()
+		compatTickers = tk
 	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
@@ -250,6 +260,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		CoinGeckoMerges: cfg.CoinGeckoMergedMarkets,
 		CompatSupply:    compatSupply,
 		CompatIntervals: compatIntervals,
+		CompatTickers:   compatTickers,
 		CompatSwaps: swaphistory.New(swaphistory.Deps{Store: swaphistory.NewPGStore(apiPool),
 			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
 		CompatHistory: tradehistory.New(tradehistory.Deps{Store: tradehistory.NewPGStore(apiPool),

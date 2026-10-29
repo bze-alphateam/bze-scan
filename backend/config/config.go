@@ -106,14 +106,14 @@ type Config struct {
 	// worker of the backfill and the catch-up.
 	BackfillRateLimit float64
 
-	// AggregatorURL is the BZE aggregator API's base URL, whose ticker of
-	// PriceChangeMarket gives the native denom's 24-hour change. Empty
-	// leaves the change alone.
-	AggregatorURL string
-	// PriceChangeMarket is the aggregator market id whose ticker gives the
-	// native denom's 24-hour change (the BZE/USDC liquidity pool); empty
-	// leaves the change null.
+	// PriceChangeMarket is the DEX market id (an order book's base/quote, a
+	// pool's base_quote) whose ticker gives the native denom's 24-hour
+	// change (the BZE/USDC liquidity pool); empty leaves the change null.
 	PriceChangeMarket string
+	// USDCDenom is the USDC denom the tickers price at $1, the anchor of the
+	// pools' liquidity in USD (/aggregator/api/dex/tickers?format=coingecko);
+	// empty anchors none.
+	USDCDenom string
 	// CoinGeckoHost is CoinGecko's API host, whose USD prices of
 	// CoinGeckoPriceIDs back /aggregator/api/prices and the prices job. Load always
 	// sets it; a Config built in code without one serves neither.
@@ -165,9 +165,9 @@ type Config struct {
 	DebugAddr string
 }
 
-// DefaultPriceChangeMarket is mainnet's BZE/USDC.inj liquidity pool as the
-// aggregator names it (USDC.inj priced in ubze). It replaced the USDC.n pool,
-// which stops trading when USDC.n is halted.
+// DefaultPriceChangeMarket is mainnet's BZE/USDC.inj liquidity pool (USDC.inj
+// priced in ubze). It replaced the USDC.n pool, which stops trading when
+// USDC.n is halted.
 const DefaultPriceChangeMarket = "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838_ubze"
 
 // Load reads the environment (and a .env file when present), applies
@@ -195,8 +195,8 @@ func Load() (*Config, error) {
 		ArchiveRPCURL:      strings.TrimRight(envString("ARCHIVE_RPC_URL", "https://rpc.getbze.com"), "/"),
 		ArchiveRPCRetryURL: strings.TrimRight(envString("ARCHIVE_RPC_RETRY_URL", ""), "/"),
 
-		AggregatorURL:       strings.TrimRight(envString("AGGREGATOR_URL", ""), "/"),
 		PriceChangeMarket:   envString("PRICE_CHANGE_MARKET", DefaultPriceChangeMarket),
+		USDCDenom:           envString("USDC_DENOM", ""),
 		CoinGeckoHost:       strings.TrimRight(envString("COINGECKO_HOST", coingecko.DefaultHost), "/"),
 		MediumFeedURL:       envString("MEDIUM_FEED_URL", medium.DefaultFeedURL),
 		ChainRegistryAPIURL: strings.TrimRight(envString("CHAIN_REGISTRY_API_URL", chainregistry.DefaultAPIURL), "/"),
@@ -258,11 +258,11 @@ func Load() (*Config, error) {
 
 	for key, v := range map[string]string{
 		"ARCHIVE_RPC_URL": cfg.ArchiveRPCURL, "ARCHIVE_RPC_RETRY_URL": cfg.ArchiveRPCRetryURL,
-		"AGGREGATOR_URL": cfg.AggregatorURL, "CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
+		"CHAIN_REGISTRY_API_URL": cfg.ChainRegistryAPIURL,
 		"CHAIN_REGISTRY_RAW_URL": cfg.ChainRegistryRawURL, "KEYBASE_URL": cfg.KeybaseURL,
 		"COINGECKO_HOST": cfg.CoinGeckoHost, "MEDIUM_FEED_URL": cfg.MediumFeedURL,
 	} {
-		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "AGGREGATOR_URL" || key == "KEYBASE_URL") {
+		if v == "" && (key == "ARCHIVE_RPC_RETRY_URL" || key == "KEYBASE_URL") {
 			continue
 		}
 		if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

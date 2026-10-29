@@ -74,11 +74,10 @@ func TestCompatPricesFromCoinGecko(t *testing.T) {
 	assert.Empty(t, fetch(t, base+"/api/v1/blocks/x", "Origin", dapp).header.Get("Access-Control-Allow-Origin"))
 }
 
-// Without an aggregator (testnet) the prices job still fills price_usd; the
-// 24-hour change stays empty.
-func TestThePricesJobNeedsNoAggregator(t *testing.T) {
+// Without a trade of the change market in the last 24 hours the prices job
+// still fills price_usd; the 24-hour change stays empty.
+func TestThePricesJobWithoutTradesLeavesTheChangeEmpty(t *testing.T) {
 	e := newSyncEnv(t)
-	e.agg.URL = ""
 	code, out := e.syncState(t)
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, []string{

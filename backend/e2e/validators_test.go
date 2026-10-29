@@ -45,10 +45,9 @@ type syncEnv struct {
 	db   *sql.DB
 	node *fakenode.Node
 	grpc *fakenode.GRPC
-	// reg and agg stand in for the chain registry and the aggregator, the
-	// ticker jobs' outbound HTTPS.
+	// reg stands in for the chain registry, the ticker jobs' outbound
+	// HTTPS.
 	reg *fakeregistry.Registry
-	agg *fakeAggregator
 	// gecko stands in for CoinGecko, the prices' source.
 	gecko *fakeGecko
 	// kb stands in for Keybase, the validator logos' outbound HTTPS.
@@ -62,12 +61,12 @@ func newSyncEnv(t *testing.T) *syncEnv {
 	url := freshDatabase(t, true)
 	migrateUp(t, url)
 	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t),
-		reg: fakeregistry.New(t), agg: newFakeAggregator(t), gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
+		reg: fakeregistry.New(t), gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
 }
 
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
-	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL, cfg.AggregatorURL = e.reg.APIURL, e.reg.RawURL, e.agg.URL
+	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL = e.reg.APIURL, e.reg.RawURL
 	cfg.PriceChangeMarket = recordedPool
 	cfg.CoinGeckoHost, cfg.CoinGeckoPriceIDs = e.gecko.URL, geckoIDs
 	cfg.KeybaseURL = e.kb.URL
@@ -89,7 +88,6 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("ARCHIVE_RPC_URL", archive.URL)
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
-	t.Setenv("AGGREGATOR_URL", e.agg.URL)
 	t.Setenv("PRICE_CHANGE_MARKET", recordedPool)
 	t.Setenv("COINGECKO_HOST", e.gecko.URL)
 	t.Setenv("COINGECKO_PRICE_IDS", strings.Join(geckoIDs, ","))

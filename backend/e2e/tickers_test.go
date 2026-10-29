@@ -22,57 +22,10 @@ import (
 const recordedPrices = `[{"denom":"bzedge","price":0.00016806,"price_denom":"usd"},` +
 	`{"denom":"osmosis","price":0.03403806,"price_denom":"usd"},{"denom":"cosmos","price":1.96,"price_denom":"usd"}]`
 
-// recordedTickers are the two BZE/USDC.n markets of /api/dex/tickers on
-// getbze.com on 2026-10-09: the order book and the liquidity pool, whose
-// ticker gives BZE's 24-hour change (USDC.n +2.18 % in ubze: BZE -2.1362 %).
-const recordedTickers = `[{"base":"ubze","quote":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
-	`"market_id":"ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4","last_price":0.00018,` +
-	`"base_volume":544336.988678,"quote_volume":103.836199,"bid":0.00017,"ask":0.00022,"high":0.00021,"low":0.00018,` +
-	`"open_price":0.00018,"change":0},{"base":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",` +
-	`"quote":"ubze","market_id":"ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",` +
-	`"last_price":5747.1387947581325,"base_volume":144.033022,"quote_volume":828644.939685,"bid":0,"ask":0,` +
-	`"high":6040.911873237037,"low":5604.113494443305,"open_price":5624.368717574341,"change":2.18}]`
-
-// recordedPool is the recorded liquidity pool's market id. The tests point
-// PRICE_CHANGE_MARKET at it, since the default moved to the USDC.inj pool.
+// recordedPool is mainnet's BZE/USDC.n liquidity pool (USDC.n priced in
+// ubze). The tests point PRICE_CHANGE_MARKET at it, since the default moved
+// to the USDC.inj pool.
 const recordedPool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
-
-// fakeAggregator answers /api/prices with recordedPrices and
-// /api/dex/tickers with recordedTickers until it is told to fail.
-type fakeAggregator struct {
-	URL  string
-	mu   sync.Mutex
-	down bool
-}
-
-func newFakeAggregator(t *testing.T) *fakeAggregator {
-	t.Helper()
-	a := &fakeAggregator{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a.mu.Lock()
-		down := a.down
-		a.mu.Unlock()
-		body := map[string]string{"/api/prices": recordedPrices, "/api/dex/tickers": recordedTickers}[r.URL.Path]
-		switch {
-		case body == "":
-			http.NotFound(w, r)
-		case down:
-			http.Error(w, "bad gateway", http.StatusBadGateway)
-		default:
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(body))
-		}
-	}))
-	t.Cleanup(srv.Close)
-	a.URL = srv.URL
-	return a
-}
-
-func (a *fakeAggregator) setDown(down bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.down = down
-}
 
 // geckoIDs are mainnet's COINGECKO_PRICE_IDS.
 var geckoIDs = []string{"bzedge", "osmosis", "cosmos"}
@@ -158,6 +111,9 @@ func (e *syncEnv) tickerState(t *testing.T) []string {
 
 func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	e := newSyncEnv(t)
+	// The BZE/USDC.n pool's ticker gives BZE's change: the pool's recorded
+	// open and last price of 2026-10-09 (USDC.n +2.18 % in ubze).
+	seedChangeSwaps(t, e)
 	// The channels set runs first and fills mainnet's fourteen channels:
 	// Noble's (channel-3) and the Hub's (channel-11) are in the registry
 	// fixtures, OmniFlix's (channel-5) and the others are not.
@@ -213,7 +169,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		"ubze 0.000168060000",
 	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_usd) FROM explorer.denoms WHERE price_usd IS NOT NULL ORDER BY denom`))
 	assert.Equal(t, []string{"ubze -2.1362"}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_change_24h_pct)
-		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool only")
+		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool's ticker")
 
 	// The API: prices, holder counts and origins on the list, the holders
 	// ranked.
@@ -268,16 +224,19 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, state, e.tickerState(t))
 
-	// The aggregator down: the run fails on the change, the prices stay.
-	e.agg.setDown(true)
+	// The candles unreadable: the run fails on the change, the prices and
+	// the change stay.
+	_, err := e.db.Exec(`ALTER TABLE explorer.candles RENAME TO candles_away`)
+	require.NoError(t, err)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)
 	assert.Equal(t, state, e.tickerState(t))
 	assert.Equal(t, []string{"prices"}, queryStrings(t, e.db, `SELECT job FROM explorer.sync_jobs WHERE last_error IS NOT NULL`))
+	_, err = e.db.Exec(`ALTER TABLE explorer.candles_away RENAME TO candles`)
+	require.NoError(t, err)
 
 	// CoinGecko down (a new process: no backup to serve): the run fails, the
 	// prices stay.
-	e.agg.setDown(false)
 	e.gecko.setDown(true)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)

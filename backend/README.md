@@ -108,8 +108,8 @@ documented template with the defaults:
 | `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/aggregator/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
 | `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/aggregator/api/articles/medium` serves |
 | `COINGECKO_MERGED_MARKETS` | empty | markets folded into a market CoinGecko tracks, for `format=coingecko` only: `<new market id>=<tracked market id>,…` (see "Aggregator-compatible endpoints"); mainnet folds BZE/USDC.inj into BZE/USDC.n |
-| `AGGREGATOR_URL` | empty | base URL of the BZE aggregator (production `https://getbze.com`); its `/api/dex/tickers` gives BZE's 24-hour change; empty leaves the change alone |
-| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the aggregator market whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
+| `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the DEX market (an order book's `base/quote`, a pool's `base_quote`) whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
+| `USDC_DENOM` | empty | the USDC denom the tickers price at $1, the anchor of the pools' `liquidity_in_usd` on `/aggregator/api/dex/tickers?format=coingecko` (see "Tickers"); use the aggregator's value (mainnet moves from USDC.n to USDC.inj); empty anchors none |
 | `CHAIN_REGISTRY_API_URL` | `https://api.github.com/repos/cosmos/chain-registry/contents` | GitHub contents API of the Cosmos chain registry, listed by the chain_registry job |
 | `CHAIN_REGISTRY_RAW_URL` | `https://raw.githubusercontent.com/cosmos/chain-registry/master` | base of the registry's raw `chain.json` / `assetlist.json` files |
 | `KEYBASE_URL` | `https://keybase.io/_/api/1.0/user/lookup.json` | the Keybase user lookup the validators set reads validator logos from (`?key_suffix=<identity>&fields=pictures`), at most once a day per validator, 10 s per call |
@@ -267,12 +267,12 @@ internal/statesync/dailystats/
 internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
-internal/aggregator/
-                   the BZE aggregator's /api/dex/tickers reader (BZE's 24-hour change)
 internal/coingecko/
                    CoinGecko's USD prices and the cached feed behind /aggregator/api/prices
 internal/candles/  the DEX candles (explorer.candles): the writers' hook, the
                    rebuild and the intervals served on /aggregator/api
+internal/tickers/  the DEX's 24-hour tickers (/aggregator/api/dex/tickers and
+                   BZE's 24-hour change) and their internal USD prices
 internal/keybase/  the Keybase user lookup (validator logos by identity)
 internal/rawcache/ in-memory LRU of raw node responses, archive fetch on a
                    miss
@@ -372,7 +372,7 @@ every later route follows:
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
 | `GET /api/v1/accounts/{address}/open-orders` | what the address has locked in open DEX orders: `source` (`index` or `node`, for debugging), `height` (the height the answer describes), `orders_count`, `markets_count` and `assets`, one per locked denom sorted by denom: `denom`, `amount` (base units, a string), `orders_count` and `markets` (largest amount first: `market_id`, `base`, `quote`, `amount`, `orders_count`). A sell locks its remaining amount of the base denom, a buy trunc(remaining × price) of the quote denom, truncated per order as the chain does, so a market's `orders_count` under an asset counts only the orders locking that asset. Read from the orders table when its history is complete, from the node otherwise (see Open orders below); cached 15 s per address; no-store. An account without open orders has empty `assets` and zero counts. 400 unless a `bze1…` address; 502 when neither node answers |
-| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the aggregator's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
+| `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (CoinGecko's USD price, null until the prices job and for a denom it does not price), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
@@ -451,6 +451,7 @@ result is `[]`, never `null`.
 | `GET /aggregator/api/supply/circulating?denom=` | plain text: for `ubze` the total minus the community pool, for any other denom its total |
 | `GET /aggregator/api/dex/intervals?market_id=\|ticker_id=&minutes=&limit=&format=` | `[{"market_id","minutes","start_at","end_at","lowest_price","open_price","average_price","highest_price","close_price","base_volume","quote_volume"}]`, display units as strings, RFC3339 UTC times, ascending; `format=tv`: `[{"time":<unix s>,"low","open","high","close","value":<base volume>}]` as numbers (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/dex/swaps?address=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker":"","taker":"<address>","pool_id","base","quote"}]`, the address's last 100 pool swaps, newest first |
+| `GET /aggregator/api/dex/tickers?format=` | `[{"base","quote","market_id","last_price","base_volume","quote_volume","bid","ask","high","low","open_price","change"}]` as numbers, by market id; `format=coingecko`: `[{"ticker_id","base_currency","target_currency","pool_id","last_price","base_volume","target_volume","bid","ask","high","low","liquidity_in_usd"}]` (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/dex/history?market_id=\|ticker_id=\|address=&limit=&start_time=&end_time=&type=&format=` | `[{"order_id":<trade id>,"price","base_volume","quote_volume","executed_at":"<unix ms>","order_type":"buy\|sell","maker","taker"}]`, the last `limit` order book fills and pool swaps, newest first; `format=coingecko`: `{"buy":[{"trade_id","price","base_volume","target_volume","trade_timestamp","type"}],"sell":[…]}` |
 
 **Prices.** `internal/coingecko`: the client calls
@@ -611,6 +612,45 @@ trade ids, `executed_at` is the block time in milliseconds (whole seconds
 there), trades of one second are never lost (the aggregator drops some at
 its sync page boundaries), no trade is listed twice (v8.0.x's doubled events
 count once) and prices are right for big exponent gaps (BZE-133).
+
+**Tickers.** `internal/tickers` builds one ticker per order book market
+(`base/quote`, the node's `AllMarkets`) and per liquidity pool (`base_quote`,
+`AllLiquidityPools`), as the aggregator does: `bid` and `ask` are the best
+levels of the live book (the order book service; a pool has none), the
+volumes the sums of the market's 5-minute candles starting at now − 24 h or
+later (`explorer.candles`, in display units), `high` the highest, `low` the
+lowest (a zero low replaced by the next one), `open_price` the first
+candle's open, `last_price` the newest trade after now − 24 h (fills and
+swaps through `internal/tradehistory`, the window turned into heights once
+per build), else 0, and `change` (last − open) / open × 100 rounded to two
+decimals (0 without a last price or a positive open). Both formats list the
+markets by market id (the aggregator's default format comes in random
+order) and are built together, at most every 5 s. `format=coingecko` names a
+market `<base>_<quote>` and a pool `lp_<base>_<quote>` (its `pool_id` too),
+and gives a pool `liquidity_in_usd`: its LP token's USD price × its LP supply
+in whole tokens (12 decimals), left out without a price. Markets folded for
+CoinGecko (`COINGECKO_MERGED_MARKETS`) are added to the market they report
+as: volumes and liquidity summed, high and low spanning both, the folded
+market's last price when it traded and its bid/ask pair when it has orders;
+the folded market is not listed (unless the market it reports as is not).
+
+The internal USD price, kept 60 s per denom: `USDC_DENOM` is $1; an LP token
+is its pool's reserves at their USD prices per whole LP token; `ubze` is its
+spot price in the BZE/USDC pool, else its last trade on the `ubze/<USDC>`
+order book (the aggregator's "last 24 hours" and "last trade ever" steps,
+which the newest trade answers both), else CoinGecko's `bzedge` price; any
+other denom the average of its USDC price and its BZE price × BZE's USD
+price, or whichever exists (a pair's price is its pool's spot price, else the
+last trade of the `<denom>/<quote>` order book). Pools and LP supplies are
+read from the node at most every 10 s, the last good read served while it
+fails. Differences from the aggregator: the default format is by market id;
+a market whose book, candles or trades fail keeps its ticker with the parts
+that answered (the aggregator answers a 500), and only a market list and
+pools never read are a 500 "unknown error"; no price is cut to six decimals
+(the aggregator formats every USD price with `%f`), so `liquidity_in_usd`
+differs in its last digits; BZE's CoinGecko fallback works (the aggregator
+looks for the denom instead of its CoinGecko id); prices are right for big
+exponent gaps (BZE-133); doubled events count once; an empty list is `[]`.
 
 ## Migrations
 
@@ -1374,7 +1414,7 @@ indexer) the state sync:
 
 Every run is recorded in `explorer.sync_jobs` (`last_run_at`,
 `last_success_at`, `last_error`, `cursor`). A node that is down fails the
-run: it is logged and recorded (the prices set logs a failing aggregator once
+run: it is logged and recorded (the prices set logs a failing price source once
 per change of state, not every minute), the rows stay as they were, and the next
 trigger retries. Nothing here is on the user's critical path. `bze-scan
 sync-state` runs the full resync of every set once and exits 1 when any
@@ -1540,19 +1580,19 @@ keeps it and fails the run.
 
 **Prices.** Every minute the CoinGecko feed behind `/aggregator/api/prices` (see
 "Aggregator-compatible endpoints") gives USD prices by CoinGecko id
-(`bzedge`, `cosmos`, …), with or without an aggregator (testnet has none). A
+(`bzedge`, `cosmos`, …). A
 denom takes the price of its registry asset's CoinGecko id: BZE's own asset
 list first (`ubze` is `bzedge`, and it lists the IBC denoms BZE holds), else
 the origin chain's asset. A denom no longer priced is cleared; a failed fetch
-keeps every price. The explorer computes no DEX price. With `AGGREGATOR_URL`
-set, `ubze`'s `price_change_24h_pct` comes from the aggregator's
-`/api/dex/tickers`, read at
-most every 5 minutes: the ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.inj
-liquidity pool, which prices USDC.inj in ubze), as last over open when `ubze`
-is the market's base and open over last when it is the quote, in percent
-with four decimals. A market the aggregator no longer lists clears it, a
-failed read keeps it, a market that does not trade `ubze` is an error. Every
-other denom's change stays null.
+keeps every price. `ubze`'s `price_change_24h_pct` comes from the DEX
+ticker of `PRICE_CHANGE_MARKET` (the BZE/USDC.inj liquidity pool, which
+prices USDC.inj in ubze), computed in process by `internal/tickers` (see
+"Tickers") at most every 5 minutes: last over open when `ubze` is the
+market's base and open over last when it is the quote, in percent with four
+decimals. A market no longer listed, or without a trade in the last 24
+hours, clears it; a failed read (books, candles or trades) keeps it; a
+market that does not trade `ubze` is an error. Every other denom's change
+stays null.
 
 A dirty denom (a token event, a tokenfactory change event) is resynced alone
 (bank `DenomMetadataByQueryString` and `SupplyOf`, the factory admin, the
@@ -2061,7 +2101,7 @@ to). Recorded on 2026-10-09: 57 validators, 22 bonded. For each address in
 signs at height 25000439 (recorded on 2026-10-09: three balances, one
 delegation, no unbonding).
 
-### The fake chain registry and aggregator
+### The fake chain registry and CoinGecko
 
 `fakeregistry.New` starts an `httptest` server standing in for the Cosmos
 chain registry: its `APIURL` answers the contents API listings (the root
@@ -2077,11 +2117,11 @@ make registry-fixtures CHAINS="beezee cosmoshub noble mirage"
 
 (recorded 2026-10-09: BZE's own asset list maps `ubze` and its IBC denoms
 to CoinGecko ids; `mirage` is a chain without explorers). The e2e harness
-starts one with every sync environment, next to a fake aggregator answering
-`/api/dex/tickers` as getbze.com did on 2026-10-09 and a fake CoinGecko
-answering `/api/v3/simple/price` with the same day's prices, and points
-`sync-state` and `serve` at them, so no test reaches GitHub, getbze.com or
-CoinGecko. A `Config` built in code without `CoinGeckoHost` runs no prices
+starts one with every sync environment, next to a fake CoinGecko answering
+`/api/v3/simple/price` with that day's prices, and points `sync-state` and
+`serve` at them, so no test reaches GitHub or CoinGecko. BZE's 24-hour
+change comes from swaps the tests seed in the BZE/USDC.n pool at the open
+and last price getbze.com's ticker had that day. A `Config` built in code without `CoinGeckoHost` runs no prices
 job and serves no `/aggregator/api/prices`. A fake Keybase
 lookup (`e2e/logos_test.go`) gives ChainTools' identity a picture and every
 other identity none; `sync-state` and `serve` point `KEYBASE_URL` at it.

@@ -24,13 +24,14 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
-	"github.com/bze-alphateam/bze-scan/backend/internal/aggregator"
 	"github.com/bze-alphateam/bze-scan/backend/internal/archive"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/keybase"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/orderbook"
 	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
@@ -49,7 +50,7 @@ import (
 )
 
 // outboundTimeout bounds one HTTPS call of the ticker jobs (the chain
-// registry, the aggregator).
+// registry).
 const outboundTimeout = 30 * time.Second
 
 // keybaseTimeout bounds one validator logo lookup: the validators set looks
@@ -69,7 +70,7 @@ const keybaseTimeout = 10 * time.Second
 // the validators and copies the native price), the daily statistics last
 // (they read only the indexed tables). The chain registry runs only
 // with both its URLs, the prices only with a CoinGecko host (Load always
-// sets one; BZE's 24-hour change also needs AGGREGATOR_URL), the validator
+// sets one; BZE's 24-hour change comes from the DEX tickers), the validator
 // logos only with a KeybaseURL (Load always sets one). The non-voters read
 // the validator sets of the heights the local node pruned from the archive
 // (ARCHIVE_RPC_URL), and the upgrade recovery the commits after an upgrade
@@ -167,14 +168,12 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
 	if feed := NewPriceFeed(cfg); feed != nil {
-		// The change needs the aggregator; a nil interface without it.
-		var tickers prices.Tickers
-		if cfg.AggregatorURL != "" {
-			tickers = aggregator.New(outbound, cfg.AggregatorURL)
-		}
+		// The change comes from the DEX tickers, computed here from the
+		// indexed trades and the node's books and pools.
+		books := orderbook.New(orderbook.Config{}, orderbook.Deps{Node: tradebin, Exponents: dexunits.NewPGStore(pool)})
 		sets = append(sets, prices.New(prices.Deps{
 			Prices:       feed,
-			Tickers:      tickers,
+			Tickers:      newTickers(cfg, books, tradebin, bank, pool, feed),
 			Store:        prices.NewPGStore(pool),
 			ChainID:      cfg.ChainID,
 			Denom:        chain.BondDenom,

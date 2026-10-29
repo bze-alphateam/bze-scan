@@ -105,6 +105,9 @@ type Deps struct {
 	// CompatHistory serves the DEX's trades; nil leaves the
 	// aggregator-compatible /aggregator/api/dex/history out.
 	CompatHistory controller.TradeHistory
+	// CompatTickers serves the DEX's 24-hour tickers; nil leaves the
+	// aggregator-compatible /aggregator/api/dex/tickers out.
+	CompatTickers controller.Tickers
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
 	// sends no CORS headers. The aggregator-compatible routes ignore it.
 	CORSAllowedOrigins []string
@@ -241,6 +244,9 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.CompatHistory != nil {
 		compat.GET("/dex/history", controller.NewCompatHistoryController(deps.CompatHistory, deps.CoinGeckoMerges, deps.Log).History)
+	}
+	if deps.CompatTickers != nil {
+		compat.GET("/dex/tickers", controller.NewCompatTickersController(deps.CompatTickers, deps.CoinGeckoMerges, deps.Log).Tickers)
 	}
 	if deps.CompatSupply != nil {
 		sup := controller.NewCompatSupplyController(deps.CompatSupply)
