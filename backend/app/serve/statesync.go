@@ -168,12 +168,17 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
 	if feed := NewPriceFeed(cfg); feed != nil {
-		// The change comes from the DEX tickers, computed here from the
-		// indexed trades and the node's books and pools.
+		// The prices come from the DEX price chain and the change from the
+		// DEX tickers, both computed here from the indexed trades and the
+		// node's books and pools. The tickers get no CoinGecko feed: the
+		// native denom's CoinGecko fallback is the set's own last step, so
+		// that a price it gives is recorded as CoinGecko's, not the DEX's.
 		books := orderbook.New(orderbook.Config{}, orderbook.Deps{Node: tradebin, Exponents: dexunits.NewPGStore(pool)})
+		dex := newTickers(cfg, books, tradebin, bank, pool, nil)
 		sets = append(sets, prices.New(prices.Deps{
 			Prices:       feed,
-			Tickers:      newTickers(cfg, books, tradebin, bank, pool, feed),
+			USDPricer:    dex,
+			Tickers:      dex,
 			Store:        prices.NewPGStore(pool),
 			ChainID:      cfg.ChainID,
 			Denom:        chain.BondDenom,

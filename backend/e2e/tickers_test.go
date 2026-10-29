@@ -3,12 +3,14 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +82,31 @@ func (g *fakeGecko) answered() (int, string) {
 	return g.calls, g.query
 }
 
+// pricedDenomsSQL lists the priced denoms with their price and source.
+const pricedDenomsSQL = `SELECT concat_ws(' ', denom, price_usd, price_source) FROM explorer.denoms
+	WHERE price_usd IS NOT NULL ORDER BY denom`
+
+// recordedPriceRows is what the prices set writes over the fake node's
+// pools and CoinGecko: the DEX price chain prices the denoms with a pool
+// (BZE at 5000 USDC.n / 900000 BZE = 1/180 USD, VDL at 2 BZE, COREY at 1
+// BZE, USDC.n at $1), CoinGecko the rest with a registry id.
+var recordedPriceRows = []string{
+	tickerVDL + " 0.011111111111 dex",
+	tickerCorey + " 0.005555555556 dex",
+	atomDenom + " 1.960000000000 coingecko",
+	usdcDenom + " 1.000000000000 dex",
+	osmoDenom + " 0.034038060000 coingecko",
+	"ubze 0.005555555556 dex",
+}
+
+// str is a nullable string for an assertion line.
+func str(s *string) string {
+	if s == nil {
+		return "null"
+	}
+	return *s
+}
+
 // Recorded denoms of the ticker jobs: GGE has five owners, recorded over
 // three DenomOwners pages; ATOM and OSMO are priced by BZE's own registry
 // asset list.
@@ -102,7 +129,7 @@ func (e *syncEnv) tickerState(t *testing.T) []string {
 			FROM explorer.registry_assets ORDER BY chain_id, base`,
 		`SELECT concat_ws(' ', denom, address, balance) FROM explorer.token_holders ORDER BY denom, address`,
 		`SELECT concat_ws(' ', denom, symbol, name, exponent, logo_url, origin_chain_id, ibc_base_denom, ibc_path,
-			holders_count, price_usd, price_change_24h_pct) FROM explorer.denoms ORDER BY denom`,
+			holders_count, price_usd, price_source, price_change_24h_pct) FROM explorer.denoms ORDER BY denom`,
 	} {
 		out = append(out, queryStrings(t, e.db, q)...)
 	}
@@ -158,16 +185,15 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, []string{"0"}, queryStrings(t, e.db, `SELECT holders_count FROM explorer.denoms WHERE denom = 'ubze'`),
 		"nobody holds ubze in the fake node")
 
-	// Prices by CoinGecko id, read from CoinGecko itself: ubze through
-	// BZE's own asset list.
+	// Prices by the DEX price chain first (the recorded pools' spot prices:
+	// BZE at 5000 USDC.n / 900000 BZE, VDL and COREY through their BZE
+	// pools), then by CoinGecko id for the denoms without a DEX route,
+	// read from CoinGecko itself: ATOM and OSMO through BZE's own asset
+	// list. The LP tokens and the rest get nothing.
 	calls, query := e.gecko.answered()
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, "ids=bzedge,osmosis,cosmos&vs_currencies=usd", query)
-	assert.Equal(t, []string{
-		atomDenom + " 1.960000000000",
-		osmoDenom + " 0.034038060000",
-		"ubze 0.000168060000",
-	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_usd) FROM explorer.denoms WHERE price_usd IS NOT NULL ORDER BY denom`))
+	assert.Equal(t, recordedPriceRows, queryStrings(t, e.db, pricedDenomsSQL))
 	assert.Equal(t, []string{"ubze -2.1362"}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_change_24h_pct)
 		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool's ticker")
 
@@ -179,10 +205,46 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		tokens[tok.Denom] = tok
 	}
 	require.NotNil(t, tokens["ubze"].PriceUSD)
-	assert.Equal(t, "0.000168060000", *tokens["ubze"].PriceUSD)
+	assert.Equal(t, "0.005555555556", *tokens["ubze"].PriceUSD)
+	assert.Equal(t, "dex", *tokens["ubze"].PriceSource)
 	require.NotNil(t, tokens["ubze"].PriceChange24hPct)
 	assert.Equal(t, "-2.1362", *tokens["ubze"].PriceChange24hPct)
+	assert.Equal(t, "coingecko", *tokens[atomDenom].PriceSource)
 	assert.Nil(t, tokens[atomDenom].PriceChange24hPct, "a change for BZE only")
+	assert.Nil(t, tokens[ggeDenom].PriceUSD, "no DEX route, no CoinGecko id")
+	assert.Nil(t, tokens[ggeDenom].PriceSource)
+	var factory []string
+	for _, tok := range tokenPages(t, strings.TrimSuffix(base, "/api/v1"), "&kind=factory") {
+		factory = append(factory, fmt.Sprintf("%s %s %s", *tok.Symbol, str(tok.PriceUSD), str(tok.PriceSource)))
+	}
+	assert.Equal(t, []string{"C2M null null", "COREY 0.005555555556 dex", "CTL null null", "CTL null null", "GGE null null",
+		"VDL 0.011111111111 dex"},
+		factory, "the factory tokens with a BZE pool are priced")
+
+	// The token page carries the same price and source; GET /prices lists
+	// every priced denom and nothing else.
+	r := fetch(t, base+"/tokens/"+url.PathEscape(tickerVDL))
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	vdl := into[dto.Token](t, r)
+	assert.Equal(t, "0.011111111111", *vdl.PriceUSD)
+	assert.Equal(t, "dex", *vdl.PriceSource)
+	assert.NotNil(t, vdl.PriceUpdatedAt)
+	r = fetch(t, base+"/prices")
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	assert.Equal(t, "public, max-age=60", r.header.Get("Cache-Control"))
+	var listed []string
+	for _, p := range into[dto.Prices](t, r).Prices {
+		listed = append(listed, fmt.Sprintf("%s %s %s %s %t", p.Denom, p.PriceUSD, str(p.PriceSource), str(p.PriceChange24hPct),
+			p.UpdatedAt != nil))
+	}
+	assert.Equal(t, []string{
+		tickerVDL + " 0.011111111111 dex null true",
+		tickerCorey + " 0.005555555556 dex null true",
+		atomDenom + " 1.960000000000 coingecko null true",
+		usdcDenom + " 1.000000000000 dex null true",
+		osmoDenom + " 0.034038060000 coingecko null true",
+		"ubze 0.005555555556 dex -2.1362 true",
+	}, listed)
 	require.NotNil(t, tokens[ggeDenom].HoldersCount)
 	assert.Equal(t, int64(4), *tokens[ggeDenom].HoldersCount)
 	require.NotNil(t, tokens[atomDenom].OriginChain)
@@ -198,7 +260,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.False(t, tokens[ggeDenom].Stranded, "not an IBC denom")
 	assert.Nil(t, tokens[ggeDenom].OriginChain)
 
-	r := fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")
+	r = fetch(t, base+"/tokens/"+url.PathEscape(ggeDenom)+"/holders?limit=2")
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
 	page := into[dto.List[dto.TokenHolder]](t, r)
 	require.Len(t, page.Items, 2)
@@ -218,8 +280,15 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	assert.Equal(t, []string{"50305258722", "49491765665", "198000900", "2800000", "174713"}, balances)
 	assert.Equal(t, http.StatusNotFound, fetch(t, base+"/tokens/unothing/holders").status)
 
-	// A second run changes nothing.
+	// A second run changes nothing. The prices set alone prices every denom
+	// in one go: its run time is what a mainnet-sized denoms table scales
+	// from.
 	state := e.tickerState(t)
+	started := time.Now()
+	code, out = e.syncState(t, "--job", "prices")
+	require.Equal(t, 0, code, out)
+	t.Logf("prices run over %d denoms took %s", e.count(t, `SELECT count(*) FROM explorer.denoms`), time.Since(started))
+	assert.Equal(t, state, e.tickerState(t))
 	code, out = e.syncState(t)
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, state, e.tickerState(t))
@@ -236,7 +305,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	require.NoError(t, err)
 
 	// CoinGecko down (a new process: no backup to serve): the run fails, the
-	// prices stay.
+	// prices stay, the DEX ones included.
 	e.gecko.setDown(true)
 	code, _ = e.syncState(t)
 	assert.NotEqual(t, 0, code)

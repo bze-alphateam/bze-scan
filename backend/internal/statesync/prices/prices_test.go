@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,9 +41,17 @@ func (s *fakeSource) Ticker(_ context.Context, market string) (*tickers.Ticker, 
 
 // fakeStore keeps the last write, and the change as the table keeps it.
 type fakeStore struct {
-	last   prices.Snapshot
-	change *string
-	writes int
+	denoms    []string
+	denomsErr error
+	listed    int
+	last      prices.Snapshot
+	change    *string
+	writes    int
+}
+
+func (s *fakeStore) Denoms(context.Context) ([]string, error) {
+	s.listed++
+	return s.denoms, s.denomsErr
 }
 
 func (s *fakeStore) Save(_ context.Context, snap prices.Snapshot) error {
@@ -264,4 +273,105 @@ func TestChangePctNeedsPricesAndTheDenom(t *testing.T) {
 	assert.Equal(t, "-33.3333", pct)
 	pct, _ = prices.ChangePct(&tickers.Ticker{Base: "ubze", Quote: "u", OpenPrice: rat("200000"), LastPrice: rat("200001")}, "ubze")
 	assert.Equal(t, "0.0005", pct, "0.0005 rounds away from zero")
+}
+
+// fakePricer answers the DEX price chain from fixed prices: a missing denom
+// is zero (no DEX price), a nil one unanswered. It records the order of
+// the calls.
+type fakePricer struct {
+	prices map[string]*big.Rat
+	mu     sync.Mutex
+	calls  []string
+}
+
+func (p *fakePricer) USD(_ context.Context, denom string) *big.Rat {
+	p.mu.Lock()
+	p.calls = append(p.calls, denom)
+	p.mu.Unlock()
+	r, ok := p.prices[denom]
+	if !ok {
+		return new(big.Rat)
+	}
+	return r
+}
+
+const honey = "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney"
+
+func TestTheDEXPriceChainPricesEveryDenomBeforeCoinGecko(t *testing.T) {
+	lg, hook := logtest.NewNullLogger()
+	src := &fakeSource{prices: map[string]string{"bzedge": "0.00017", "cosmos": "1.96"}}
+	// ubze and HONEY trade on the DEX; ATOM has no route (zero, CoinGecko
+	// prices it through its registry id); DUST is priced below the
+	// column's twelve decimals; NOTHING has nothing.
+	pricer := &fakePricer{prices: map[string]*big.Rat{
+		"ubze": rat("0.0002"), honey: rat("0.000001234567891234"), "uatom": new(big.Rat), "udust": rat("0.0000000000001"),
+	}}
+	store := &fakeStore{denoms: []string{honey, "uatom", "ubze", "udust", "unothing"}}
+	s := prices.New(prices.Deps{Prices: src, USDPricer: pricer, Store: store, ChainID: "beezee-1", Denom: "ubze",
+		Log: lg, Clock: &clock{now: time.Unix(1000, 0)}}, 0)
+	require.NoError(t, s.FullResync(context.Background()))
+
+	assert.Equal(t, 1, store.listed)
+	assert.Equal(t, map[string]string{"ubze": "0.000200000000", honey: "0.000001234568"}, store.last.DEX,
+		"a DEX price wins, rounded to the column; a zero price and one below it fall through to CoinGecko")
+	assert.Equal(t, map[string]string{"bzedge": "0.00017", "cosmos": "1.96"}, store.last.Prices, "CoinGecko's prices, for the rest")
+	assert.Empty(t, store.last.Kept)
+	assert.Equal(t, "beezee-1", store.last.ChainID)
+	assert.Equal(t, "ubze", pricer.calls[0], "the native denom first: the others' BZE route reads its cached price")
+	assert.Len(t, pricer.calls, 5)
+	assert.Empty(t, hook.AllEntries())
+}
+
+// A denom the pricer cannot answer keeps its stored price: it is listed as
+// kept, the run is recorded as failed and warned once, until it answers.
+func TestAnUnansweredDenomIsKeptAndLoggedOnce(t *testing.T) {
+	lg, hook := logtest.NewNullLogger()
+	src := &fakeSource{prices: map[string]string{"bzedge": "0.00017"}}
+	pricer := &fakePricer{prices: map[string]*big.Rat{"ubze": rat("0.0002"), honey: nil}}
+	store := &fakeStore{denoms: []string{honey, "ubze"}}
+	s := prices.New(prices.Deps{Prices: src, USDPricer: pricer, Store: store, ChainID: "beezee-1", Denom: "ubze", Log: lg}, 0)
+	ctx := context.Background()
+	for range 3 {
+		err := s.FullResync(ctx)
+		require.ErrorContains(t, err, "1 of 2 denoms unanswered ("+honey+")")
+	}
+	assert.Equal(t, 3, store.writes, "the other denoms are still written")
+	assert.Equal(t, []string{honey}, store.last.Kept)
+	assert.Equal(t, map[string]string{"ubze": "0.000200000000"}, store.last.DEX)
+	assert.Equal(t, 1, countLevel(hook, logrus.WarnLevel), "logged once per change of state")
+
+	pricer.prices[honey] = rat("0.001")
+	require.NoError(t, s.FullResync(ctx))
+	assert.Empty(t, store.last.Kept)
+	assert.Equal(t, "0.001000000000", store.last.DEX[honey])
+	assert.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
+	assert.Len(t, hook.AllEntries(), 2)
+}
+
+// The denoms unreadable: nothing is written, one warning.
+func TestAFailingDenomsListWritesNothing(t *testing.T) {
+	lg, hook := logtest.NewNullLogger()
+	src := &fakeSource{prices: map[string]string{"bzedge": "0.00017"}}
+	store := &fakeStore{denomsErr: errors.New("connection refused")}
+	s := prices.New(prices.Deps{Prices: src, USDPricer: &fakePricer{}, Store: store, ChainID: "beezee-1", Denom: "ubze", Log: lg}, 0)
+	for range 2 {
+		require.ErrorContains(t, s.FullResync(context.Background()), "connection refused")
+	}
+	assert.Zero(t, store.writes)
+	assert.Equal(t, 1, countLevel(hook, logrus.WarnLevel))
+
+	store.denomsErr = nil
+	require.NoError(t, s.FullResync(context.Background()))
+	assert.Equal(t, 1, store.writes)
+}
+
+// Without a pricer the denoms are not listed and CoinGecko prices alone.
+func TestWithoutAPricerCoinGeckoPricesAlone(t *testing.T) {
+	lg, _ := logtest.NewNullLogger()
+	store := &fakeStore{denoms: []string{"ubze"}}
+	s := prices.New(prices.Deps{Prices: &fakeSource{prices: map[string]string{"bzedge": "0.00017"}}, Store: store, Log: lg}, 0)
+	require.NoError(t, s.FullResync(context.Background()))
+	assert.Zero(t, store.listed)
+	assert.Nil(t, store.last.DEX)
+	assert.Equal(t, map[string]string{"bzedge": "0.00017"}, store.last.Prices)
 }

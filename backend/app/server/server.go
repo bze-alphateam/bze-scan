@@ -50,6 +50,8 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
+	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
 	// /api/v1/proposals out.
 	Proposals controller.ProposalReader
@@ -191,6 +193,9 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/token/events", tokens.TokenEvents)
 		api.GET("/token/transfers", tokens.TokenTransfers)
 		api.GET("/token/holders", tokens.TokenHolders)
+	}
+	if deps.Prices != nil {
+		api.GET("/prices", controller.NewPriceController(deps.Prices).Prices)
 	}
 	if deps.Proposals != nil {
 		proposals := controller.NewProposalController(deps.Proposals)

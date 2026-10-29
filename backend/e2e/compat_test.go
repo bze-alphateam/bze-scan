@@ -75,15 +75,12 @@ func TestCompatPricesFromCoinGecko(t *testing.T) {
 }
 
 // Without a trade of the change market in the last 24 hours the prices job
-// still fills price_usd; the 24-hour change stays empty.
+// still fills price_usd (the pools' spot prices need no trade); the 24-hour
+// change stays empty.
 func TestThePricesJobWithoutTradesLeavesTheChangeEmpty(t *testing.T) {
 	e := newSyncEnv(t)
 	code, out := e.syncState(t)
 	require.Equal(t, 0, code, out)
-	assert.Equal(t, []string{
-		atomDenom + " 1.960000000000",
-		osmoDenom + " 0.034038060000",
-		"ubze 0.000168060000",
-	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_usd) FROM explorer.denoms WHERE price_usd IS NOT NULL ORDER BY denom`))
+	assert.Equal(t, recordedPriceRows, queryStrings(t, e.db, pricedDenomsSQL))
 	assert.Zero(t, e.count(t, `SELECT count(*) FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`))
 }
