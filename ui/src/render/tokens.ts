@@ -1,4 +1,4 @@
-import type { Label, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
+import type { Label, PriceSource, Token, TokenEvent, TokenHolder, TokenSummary, TokenTransfer } from "@/api/types";
 import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
@@ -232,7 +232,7 @@ export function tokensTiles(tokens: TokenSummary[], now: Date): TokensTiles {
   return {
     count: tokens.length,
     byKind: parts.join(" · "),
-    onDex: tokens.filter((t) => t.price_usd != null).length,
+    onDex: tokens.filter((t) => t.price_source === "dex").length,
     createdThisMonth: tokens.filter(
       (t) => t.kind === "factory" && t.created_time != null && month(new Date(t.created_time)) === month(now),
     ).length,
@@ -255,8 +255,18 @@ export function changeText(pct: string | null): { text: string; tone: "green" | 
 /** The Price · 24h cell when there is no price to show; null when there is one. */
 export function noPriceText(t: Pick<TokenSummary, "halted" | "price_usd">): string | null {
   if (t.halted) return "— Halted on the DEX";
-  if (t.price_usd == null) return "— no market";
+  if (t.price_usd == null) return "— no price";
   return null;
+}
+
+/** The small tag next to a price saying where it comes from, with its tooltip; null without a price. */
+export function priceSourceTag(t: Pick<TokenSummary, "price_usd" | "price_source">): { text: string; title: string } | null {
+  if (t.price_usd == null || t.price_source == null) return null;
+  const sources: Record<PriceSource, { text: string; title: string }> = {
+    dex: { text: "via DEX", title: "Spot price of its USDC or BZE pool, else its last trade, averaged over both routes" },
+    coingecko: { text: "via CoinGecko", title: "CoinGecko market price" },
+  };
+  return sources[t.price_source];
 }
 
 /** A token's supply, compact with its symbol: `500K HONEY`; null when unknown. */
@@ -470,5 +480,5 @@ export function mergeEvents(newest: TokenEvent[], older: TokenEvent[] | undefine
 /** Holders of at least one display unit: "accounts with at least 1 HONEY". */
 export const holdersSub = (t: Pick<TokenSummary, "symbol" | "denom">) => `accounts with at least 1 ${tokenSymbol(t)}`;
 
-/** True when the token has a market or a price on the DEX: its DEX link is worth showing. */
-export const onDex = (t: Pick<Token, "markets" | "price_usd">) => t.markets.length > 0 || t.price_usd != null;
+/** True when the token has a market or a DEX price: its DEX link is worth showing. A CoinGecko-priced coin is not on the DEX. */
+export const onDex = (t: Pick<Token, "markets" | "price_source">) => t.markets.length > 0 || t.price_source === "dex";

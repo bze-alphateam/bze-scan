@@ -8,6 +8,7 @@
   "holders_count": 95,
   "price_usd": "1",
   "price_change_24h_pct": null,
+  "price_source": "dex",
   "halted": false,
   "logo_url": null,
   "origin_chain": {

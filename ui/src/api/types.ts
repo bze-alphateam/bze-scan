@@ -576,6 +576,9 @@ export interface TokenIbcChannel {
   client_status: string | null;
 }
 
+/** `dex`: the USDC pool's spot price, else the last trade, averaged over the USDC and BZE routes; `coingecko`: CoinGecko by chain-registry id. */
+export type PriceSource = "dex" | "coingecko";
+
 export interface TokenSummary {
   denom: string;
   symbol: string | null;
@@ -586,6 +589,8 @@ export interface TokenSummary {
   holders_count: number | null;
   price_usd: string | null;
   price_change_24h_pct: string | null;
+  /** Where `price_usd` comes from: the DEX price chain or CoinGecko; null while unpriced. */
+  price_source: PriceSource | null;
   halted: boolean;
   logo_url: string | null;
   origin_chain: OriginChain | null;

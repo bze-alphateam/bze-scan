@@ -24,6 +24,8 @@ import {
   mintBurnText,
   multiHopCallout,
   noPriceText,
+  onDex,
+  priceSourceTag,
   priceText,
   routeNote,
   shortDenom,
@@ -48,7 +50,7 @@ describe("tokens list", () => {
     expect(tokensTiles(tokens, now)).toEqual({
       count: 6,
       byKind: "1 native · 2 Factory · 2 cross-chain · 1 pool share",
-      onDex: 4,
+      onDex: 3,
       createdThisMonth: 1,
       chains: ["Cosmos Hub", "Noble"],
     });
@@ -192,8 +194,26 @@ describe("tokens list", () => {
     expect(changeText("-2.1362")).toEqual({ text: "-2.1%", tone: "red" });
     expect(changeText(null)).toBeNull();
     expect(noPriceText(bySymbol("ATOM"))).toBe("— Halted on the DEX");
-    expect(noPriceText(bySymbol("VDL"))).toBe("— no market");
+    expect(noPriceText(bySymbol("VDL"))).toBe("— no price");
     expect(noPriceText(bySymbol("HONEY"))).toBeNull();
+  });
+
+  it("says where a price comes from", () => {
+    expect(priceSourceTag(bySymbol("HONEY"))).toEqual({
+      text: "via DEX",
+      title: "Spot price of its USDC or BZE pool, else its last trade, averaged over both routes",
+    });
+    expect(priceSourceTag(bySymbol("ATOM"))).toEqual({ text: "via CoinGecko", title: "CoinGecko market price" });
+    expect(priceSourceTag(bySymbol("VDL"))).toBeNull();
+    expect(priceSourceTag({ price_usd: "1", price_source: null })).toBeNull();
+  });
+
+  it("counts a token on the DEX by its market or its DEX price, never a CoinGecko one", () => {
+    expect(onDex(honey)).toBe(true);
+    expect(onDex({ markets: [], price_source: "dex" })).toBe(true);
+    expect(onDex({ markets: ["ubze/x"], price_source: null })).toBe(true);
+    expect(onDex({ markets: [], price_source: "coingecko" })).toBe(false);
+    expect(onDex({ markets: [], price_source: null })).toBe(false);
   });
 
   it("round-trips a denom through its URL", () => {

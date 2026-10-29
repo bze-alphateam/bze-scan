@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { noHorizontalScroll } from "./layout";
+import { mockApi } from "./mock-api";
 
 import honey from "../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
 import usdc from "../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
@@ -17,11 +18,17 @@ test.describe("tokens list", () => {
   test("renders the tiles, filters by chip and name, and links to a token", async ({ page }) => {
     await page.goto("/tokens");
     await expect(page).toHaveTitle("Tokens · BZE Explorer");
-    await expect(page.getByText("Every token on BZE. Prices come from the BZE DEX.")).toBeVisible();
+    await expect(page.getByText("Every token on BZE. Prices come from the BZE DEX, else CoinGecko.")).toBeVisible();
     await expect(page.getByTestId("tile")).toHaveCount(4);
     await expect(page.getByTestId("tile").first()).toContainText("1 native · 2 Factory · 2 cross-chain");
+    await expect(page.getByTestId("tile").nth(1)).toContainText("3");
     await expect(rows(page)).toHaveCount(6);
+    // A priced token shows its price and, for a DEX price, its DEX link; an unpriced one says so.
+    await expect(rows(page).nth(1)).toContainText("$0.002");
+    await expect(rows(page).nth(1).getByRole("link", { name: "DEX" })).toBeVisible();
+    await expect(rows(page).nth(2)).toContainText("— no price");
     await expect(rows(page).nth(3)).toContainText("Halted on the DEX");
+    await expect(rows(page).nth(3).getByRole("link", { name: "DEX" })).toHaveCount(0);
     // The pool share shows its two assets' logos; a one-hop token has no hops tag.
     await expect(rows(page).nth(5).getByTestId("lp-logo")).toBeVisible();
     await expect(page.getByTestId("hops-tag")).toHaveCount(0);
@@ -55,6 +62,10 @@ test.describe("token page", () => {
     const dex = page.getByTestId("token-trade").getByRole("link", { name: "DEX" });
     await expect(dex).toHaveAttribute("data-testid", "app-link");
     await expect(dex).toHaveAttribute("target", "_blank");
+    // The price names its source, with the rule as a tooltip.
+    await expect(page.getByTestId("token-tiles")).toContainText("$0.002");
+    await expect(page.getByTestId("price-source")).toHaveText("via DEX");
+    await expect(page.getByTestId("price-source")).toHaveAttribute("title", /Spot price of its USDC or BZE pool/);
     await expect(page.getByTestId("supply-box")).toContainText("So far: 2 mints adding 1,000,500 HONEY, 1 burn removing 200 HONEY.");
     await expect(page.getByTestId("holder-row")).toHaveCount(6);
     await expect(page.getByText("the top 5 hold 87.5%")).toBeVisible();
@@ -93,6 +104,23 @@ test.describe("token page", () => {
     await expect(page.getByTestId("token-about")).toContainText("Path on Osmosis");
     await expect(page.getByText("No activity indexed yet.")).toBeVisible();
     await noHorizontalScroll(page);
+  });
+
+  test("a CoinGecko-priced token says so and has no DEX link; an unpriced one shows no source", async ({ page }) => {
+    await mockApi(page, {
+      [`v1/tokens/${encodeURIComponent(atone.denom)}`]: { ...atone, price_usd: "1.96", price_source: "coingecko" },
+    });
+    await page.goto(tokenPath(atone.denom));
+    await expect(page.getByRole("heading", { level: 1, name: "ATONE" })).toBeVisible();
+    await expect(page.getByTestId("token-tiles")).toContainText("$1.96");
+    await expect(page.getByTestId("price-source")).toHaveText("via CoinGecko");
+    await expect(page.getByTestId("token-trade")).toHaveCount(0);
+
+    await page.unroute("**/api/v1/**");
+    await page.goto(tokenPath(atone.denom));
+    await expect(page.getByRole("heading", { level: 1, name: "ATONE" })).toBeVisible();
+    await expect(page.getByTestId("token-tiles")).toContainText("no price");
+    await expect(page.getByTestId("price-source")).toHaveCount(0);
   });
 
   test("an unknown token answers not found", async ({ page }) => {
