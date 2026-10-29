@@ -77,10 +77,11 @@ func NewCompatCoinGeckoLevels(levels []orderbook.Level) [][]string {
 	return out
 }
 
-// CompatHistoryTrade is one trade of GET /aggregator/api/dex/swaps:
-// display units as strings, the id a JSON number, executed_at the trade's
-// time in unix milliseconds as a string. A swap names no maker ("") and
-// its pool id and denoms; pool_id, base and quote are left out when empty.
+// CompatHistoryTrade is one trade of GET /aggregator/api/dex/swaps and
+// /aggregator/api/dex/history: display units as strings, the id a JSON
+// number, executed_at the trade's time in unix milliseconds as a string. A
+// swap names no maker (""); /dex/swaps names its pool id and denoms too,
+// which are left out when empty.
 type CompatHistoryTrade struct {
 	OrderID     int64  `json:"order_id"`
 	Price       string `json:"price"`
@@ -121,4 +122,24 @@ type CompatTVInterval struct {
 	High  float64 `json:"high"`
 	Close float64 `json:"close"`
 	Value float64 `json:"value"`
+}
+
+// CompatCoinGeckoTrade is one trade of GET
+// /aggregator/api/dex/history?format=coingecko: the trade id a JSON number,
+// trade_timestamp the trade's time in unix milliseconds as a string.
+type CompatCoinGeckoTrade struct {
+	TradeID        int64  `json:"trade_id"`
+	Price          string `json:"price"`
+	BaseVolume     string `json:"base_volume"`
+	TargetVolume   string `json:"target_volume"`
+	TradeTimestamp string `json:"trade_timestamp"`
+	Type           string `json:"type"`
+}
+
+// CompatCoinGeckoHistory is GET /aggregator/api/dex/history?format=coingecko:
+// the trades split by side. As the aggregator answers, a side without
+// trades is left out ({} when there are none at all).
+type CompatCoinGeckoHistory struct {
+	Buy  []CompatCoinGeckoTrade `json:"buy,omitempty"`
+	Sell []CompatCoinGeckoTrade `json:"sell,omitempty"`
 }

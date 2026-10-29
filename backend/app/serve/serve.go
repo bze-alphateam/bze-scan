@@ -33,6 +33,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/swaphistory"
+	"github.com/bze-alphateam/bze-scan/backend/internal/tradehistory"
 	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
@@ -250,6 +251,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		CompatSupply:    compatSupply,
 		CompatIntervals: compatIntervals,
 		CompatSwaps: swaphistory.New(swaphistory.Deps{Store: swaphistory.NewPGStore(apiPool),
+			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
+		CompatHistory: tradehistory.New(tradehistory.Deps{Store: tradehistory.NewPGStore(apiPool),
 			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),

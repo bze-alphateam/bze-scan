@@ -71,17 +71,22 @@ export function SectionHead({ id, title, children }: { id?: string; title: React
   );
 }
 
-/** A panel's head row: the small upper-case title, a muted note on the right. */
-export function PanelHead({ id, title, note }: { id: string; title: string; note?: ReactNode }) {
+/** A panel's head row: the small upper-case title, a muted note and an action (an export button) on the right. */
+export function PanelHead({ id, title, note, action }: { id: string; title: string; note?: ReactNode; action?: ReactNode }) {
   return (
     <Flex justify="space-between" align="center" gap="3" px="4" py="3" borderBottomWidth="1px" borderColor="border.panel">
       <Heading as="h2" textStyle="label" id={id}>
         {title}
       </Heading>
-      {note && (
-        <Text fontSize="12px" color="fg.muted" textAlign="right">
-          {note}
-        </Text>
+      {(note || action) && (
+        <Flex align="center" gap="3" minW="0">
+          {note && (
+            <Text fontSize="12px" color="fg.muted" textAlign="right">
+              {note}
+            </Text>
+          )}
+          {action}
+        </Flex>
       )}
     </Flex>
   );

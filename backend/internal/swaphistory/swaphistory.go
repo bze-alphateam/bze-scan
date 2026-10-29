@@ -104,7 +104,7 @@ func (s *Service) ByAddress(ctx context.Context, address string) ([]Trade, error
 			}
 		}
 		for _, sw := range swaps {
-			t, err := convert(sw, exps)
+			t, err := Convert(sw, exps)
 			if err != nil {
 				s.deps.Log.WithError(err).WithField("trade_id", sw.TradeID).Warn("dex swaps: swap left out")
 				continue
@@ -121,10 +121,11 @@ func (s *Service) ByAddress(ctx context.Context, address string) ([]Trade, error
 	return out, nil
 }
 
-// convert computes the display values the aggregator stores for a swap: the
-// chain price is quote / base as an 18-decimal LegacyDec, then
-// dexunits.TradePrice.
-func convert(sw Swap, exps map[string]int) (t Trade, err error) {
+// Convert computes the display values the aggregator stores for a swap:
+// the chain price is quote / base as an 18-decimal LegacyDec, then shifted
+// by the exponents' difference (dexunits.TradePrice). exps holds the
+// exponents of the swap's denoms; a missing one is an error.
+func Convert(sw Swap, exps map[string]int) (t Trade, err error) {
 	baseExp, okBase := exps[sw.Base]
 	quoteExp, okQuote := exps[sw.Quote]
 	if !okBase || !okQuote {
