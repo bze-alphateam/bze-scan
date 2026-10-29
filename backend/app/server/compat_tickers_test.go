@@ -216,7 +216,7 @@ func (e *tkEnv) server(merges marketmerge.Merges) *echo.Echo {
 
 func tickersBody(t *testing.T, e *echo.Echo, query string) string {
 	t.Helper()
-	rec := serve(t, e, http.MethodGet, "/aggregator/api/dex/tickers"+query)
+	rec := corsRequest(e, http.MethodGet, "/aggregator/api/dex/tickers"+query, "https://dex.getbze.com")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
 	return rec.Body.String()
