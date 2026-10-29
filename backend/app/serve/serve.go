@@ -240,6 +240,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Explorer:        explorerRepo,
 		Accounts:        explorerRepo,
 		Tokens:          explorerRepo,
+		Prices:          explorerRepo,
 		Proposals:       explorerRepo,
 		Upgrades:        explorerRepo,
 		Stats:           explorerRepo,

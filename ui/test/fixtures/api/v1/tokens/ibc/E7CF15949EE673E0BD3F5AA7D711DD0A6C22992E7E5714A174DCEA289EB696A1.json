@@ -8,6 +8,7 @@
   "holders_count": 1,
   "price_usd": null,
   "price_change_24h_pct": null,
+  "price_source": null,
   "halted": false,
   "logo_url": null,
   "origin_chain": {

@@ -67,7 +67,7 @@ func newSyncEnv(t *testing.T) *syncEnv {
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
 	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL = e.reg.APIURL, e.reg.RawURL
-	cfg.PriceChangeMarket = recordedPool
+	cfg.PriceChangeMarket, cfg.USDCDenom = recordedPool, usdcDenom
 	cfg.CoinGeckoHost, cfg.CoinGeckoPriceIDs = e.gecko.URL, geckoIDs
 	cfg.KeybaseURL = e.kb.URL
 	return cfg
@@ -89,6 +89,7 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("CHAIN_REGISTRY_API_URL", e.reg.APIURL)
 	t.Setenv("CHAIN_REGISTRY_RAW_URL", e.reg.RawURL)
 	t.Setenv("PRICE_CHANGE_MARKET", recordedPool)
+	t.Setenv("USDC_DENOM", usdcDenom)
 	t.Setenv("COINGECKO_HOST", e.gecko.URL)
 	t.Setenv("COINGECKO_PRICE_IDS", strings.Join(geckoIDs, ","))
 	t.Setenv("KEYBASE_URL", e.kb.URL)
