@@ -27,7 +27,8 @@
       "taker": "bze10kw8lpqd9emyxn94gkm038t4jj90ark4x8ls0d",
       "taker_message_id": "",
       "taker_tx_hash": "2F775D934E3F775EECCFD9B5E9D44F6E4C35C475E4017D320E1B1D5192263030",
-      "time": "2026-04-28T15:52:31.683549605Z"
+      "time": "2026-04-28T15:52:31.683549605Z",
+      "trade_id": 22551811000003
     }
   ],
   "order_cancels": [
@@ -85,6 +86,38 @@
       "order_id": "000000000000000004237852",
       "height": 22551811,
       "time": "2026-04-28T15:52:31.683549605Z"
+    }
+  ],
+  "swaps": [
+    {
+      "height": 22551811,
+      "trade_id": 22551811000001,
+      "time": "2026-04-28T15:52:31.683549605Z",
+      "pool_id": "ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011_ubze",
+      "base": "ibc/82931180F0962712BFABB189083A94C77EA90E269ABFC6D310AF922B2B14E011",
+      "quote": "ubze",
+      "side": "sell",
+      "base_amount": "16665987",
+      "quote_amount": "1136977755",
+      "creator": "bze1n4qjms7gdam0k8f06eadgn3ecggvwy042casm5",
+      "tx_hash": "FE81352168AC701995487205D41EC6B0DCA758E6DA74CC71DB19561AB56EC0EF",
+      "tx_index": 29,
+      "msg_index": 0
+    },
+    {
+      "height": 22551811,
+      "trade_id": 22551811000002,
+      "time": "2026-04-28T15:52:31.683549605Z",
+      "pool_id": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze",
+      "base": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "quote": "ubze",
+      "side": "buy",
+      "base_amount": "2691817",
+      "quote_amount": "3942911039",
+      "creator": "bze1hywehmyk26d0hcw9ekdkggthjuedmpkj3fgauh",
+      "tx_hash": "C39BF923864A722C232950D7BE5354A69813AB2B919427C2093DD3AC6757E935",
+      "tx_index": 30,
+      "msg_index": 0
     }
   ]
 }

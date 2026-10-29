@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
 
@@ -27,7 +28,7 @@ func Migrate(t testing.TB) string {
 	t.Helper()
 	url := DatabaseURL()
 	ctx := context.Background()
-	mg, err := migrations.Open(ctx, url)
+	mg, err := migrations.Open(ctx, url, trades.MigrationStep())
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}

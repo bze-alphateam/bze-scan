@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
@@ -15,11 +16,20 @@ type Execer interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
+// DB is what a post-migration step gets; *pgxpool.Pool satisfies it.
+type DB interface {
+	Execer
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // Step is a post-migration Go step: it runs after every `migrate up`, in
-// order, and must be idempotent.
+// order, and must be idempotent. Steps that need packages importing this one
+// (the writers) are given to Open by the composition root.
 type Step struct {
 	Name string
-	Run  func(ctx context.Context, db Execer) error
+	Run  func(ctx context.Context, db DB) error
 }
 
 // postMigrate lists the post-migration steps.
@@ -32,19 +42,19 @@ var postMigrate = []Step{
 
 // ensurePartitions creates the history-table partitions for
 // [0, PartitionsUpTo].
-func ensurePartitions(ctx context.Context, db Execer) error {
+func ensurePartitions(ctx context.Context, db DB) error {
 	_, err := db.Exec(ctx, `SELECT explorer.ensure_partitions($1, $2)`, int64(0), PartitionsUpTo)
 	return err
 }
 
 // mirrorClassification rewrites the classification tables from the Go
 // classification and reclassifies the activity stored as "other".
-func mirrorClassification(ctx context.Context, db Execer) error {
+func mirrorClassification(ctx context.Context, db DB) error {
 	return classify.Mirror(ctx, db)
 }
 
 // seedLabels writes the module and known account labels.
-func seedLabels(ctx context.Context, db Execer) error {
+func seedLabels(ctx context.Context, db DB) error {
 	return labels.Seed(ctx, db)
 }
 
@@ -57,7 +67,7 @@ const leanEvents = `'$[*] ? (@.type == "message" || @.type == "transfer" || @.ty
 // exists: one statement per partition, then one for every height above
 // PartitionsUpTo, each its own transaction, then the row goes. Once it has
 // gone every statement stops at its one-time filter without reading a row.
-func rewriteMessageEvents(ctx context.Context, db Execer) error {
+func rewriteMessageEvents(ctx context.Context, db DB) error {
 	const pending = `EXISTS (SELECT 1 FROM explorer.pending_rewrites WHERE name = 'message_events')`
 	rewrite := func(where string) error {
 		_, err := db.Exec(ctx, `UPDATE explorer.messages SET events = explorer.kept_events(events)

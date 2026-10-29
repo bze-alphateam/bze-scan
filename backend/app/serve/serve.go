@@ -22,6 +22,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/debugserver"
+	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/backfill"
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
@@ -30,6 +31,8 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/stakeflow"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
+	"github.com/bze-alphateam/bze-scan/backend/internal/swaphistory"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -53,6 +56,9 @@ type Options struct {
 	// OrderCoverage overrides the open orders' coverage checker (DEX start
 	// heights, interval); ChainID is always CHAIN_ID.
 	OrderCoverage ordercoverage.Config
+	// TradesInterval overrides how often the stored trades are numbered
+	// again (trades.Interval).
+	TradesInterval time.Duration
 }
 
 // component is one long-running part of the process. It runs until ctx is
@@ -216,28 +222,30 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 
 	e := server.New(server.Deps{
-		Explorer:           explorerRepo,
-		Accounts:           explorerRepo,
-		Tokens:             explorerRepo,
-		Proposals:          explorerRepo,
-		Upgrades:           explorerRepo,
-		Stats:              explorerRepo,
-		Daily:              explorerRepo,
-		Params:             liveParams,
-		ParamChanges:       explorerRepo,
-		HaltedDenoms:       haltedDenoms,
-		AccountState:       accountState,
-		OpenOrders:         openOrders,
-		StakeFlows:         flows,
-		ValidatorNames:     explorerRepo,
-		LiveHalt:           liveHalt,
-		Status:             checker,
-		Raw:                raw,
-		CompatPrices:       compatPrices,
-		CompatArticles:     compatArticles,
-		CompatOrders:       compatOrders,
-		CoinGeckoMerges:    cfg.CoinGeckoMergedMarkets,
-		CompatSupply:       compatSupply,
+		Explorer:        explorerRepo,
+		Accounts:        explorerRepo,
+		Tokens:          explorerRepo,
+		Proposals:       explorerRepo,
+		Upgrades:        explorerRepo,
+		Stats:           explorerRepo,
+		Daily:           explorerRepo,
+		Params:          liveParams,
+		ParamChanges:    explorerRepo,
+		HaltedDenoms:    haltedDenoms,
+		AccountState:    accountState,
+		OpenOrders:      openOrders,
+		StakeFlows:      flows,
+		ValidatorNames:  explorerRepo,
+		LiveHalt:        liveHalt,
+		Status:          checker,
+		Raw:             raw,
+		CompatPrices:    compatPrices,
+		CompatArticles:  compatArticles,
+		CompatOrders:    compatOrders,
+		CoinGeckoMerges: cfg.CoinGeckoMergedMarkets,
+		CompatSupply:    compatSupply,
+		CompatSwaps: swaphistory.New(swaphistory.Deps{Store: swaphistory.NewPGStore(apiPool),
+			Exponents: dexunits.NewPGStore(apiPool), Log: log.StandardLogger()}),
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 		Log:                log.StandardLogger(),
 	})
@@ -304,6 +312,12 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 				Dirty:       syncer,
 			})
 			components = append(components, component{name: "live indexer", run: ix.Run})
+			// The blocks a previous release's indexer writes while both run
+			// (a deploy's overlap) carry no trade ids: numbered from the
+			// stored rows at start and every minute.
+			components = append(components, component{name: "trades", run: func(ctx context.Context) error {
+				return trades.Run(ctx, pool, opts.TradesInterval, log.StandardLogger())
+			}})
 		}
 		if cfg.BackfillEnabled {
 			components = append(components, backfillComponent(hist, cfg, opts.BackfillLockRetry))

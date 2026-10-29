@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil"
+	"github.com/bze-alphateam/bze-scan/backend/internal/trades"
 	"github.com/bze-alphateam/bze-scan/backend/migrations"
 )
 
@@ -30,7 +31,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 22
+const latestVersion = 23
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -43,7 +44,7 @@ var explorerTables = []string{
 	"ibc_channels", "ibc_transfers", "index_failures", "indexer_state", "labels",
 	"message_kinds", "messages", "order_fills", "order_messages", "orders",
 	"param_snapshots", "pending_rewrites", "proposal_deposits", "proposal_non_voters", "proposal_votes", "proposals",
-	"registry_assets", "sync_jobs", "token_events", "token_holders",
+	"registry_assets", "swaps", "sync_jobs", "token_events", "token_holders",
 	"transactions", "transfers", "upgrade_recovery", "upgrades", "validator_events", "validators",
 }
 
@@ -90,7 +91,7 @@ func connect(t *testing.T, dbURL string) *sql.DB {
 
 func openMigrator(t *testing.T, dbURL string) *migrations.Migrator {
 	t.Helper()
-	mg, err := migrations.Open(context.Background(), dbURL)
+	mg, err := migrations.Open(context.Background(), dbURL, trades.MigrationStep())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = mg.Close() })
 	return mg
@@ -155,7 +156,7 @@ func TestMigrateUpBuildsTheExplorerSchema(t *testing.T) {
 	db := connect(t, dbURL)
 
 	res := migrateUp(t, dbURL)
-	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification", "labels", "message_events"}}, res)
+	assert.Equal(t, migrations.UpResult{Version: latestVersion, Applied: true, Steps: []string{"partitions", "classification", "labels", "message_events", "swaps"}}, res)
 
 	var version int64
 	var dirty bool

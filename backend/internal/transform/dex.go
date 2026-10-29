@@ -108,6 +108,8 @@ type OrderFill struct {
 	// empty otherwise.
 	TakerTxHash string    `json:"taker_tx_hash"`
 	Time        time.Time `json:"time"`
+	// TradeID is the fill's trade id (see TradeIDsPerBlock).
+	TradeID int64 `json:"trade_id"`
 }
 
 // OrderCancel is an OrderCanceledEvent: the order is closed as cancelled at

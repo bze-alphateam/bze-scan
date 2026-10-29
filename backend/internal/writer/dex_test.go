@@ -3,6 +3,7 @@ package writer_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -208,4 +209,73 @@ func TestAttributeOrdersFromTheFlushLowestHeight(t *testing.T) {
 	err := writer.NewBatchWriter(db, writer.AttributeOrders).Write(context.Background(),
 		[]*transform.Entities{block(13)}, writer.ModeInsert)
 	require.ErrorContains(t, err, "attribute fills")
+}
+
+// Swaps are written like the other history rows, keyed by trade id, and the
+// fills carry theirs; a reindex rewrites the swaps that differ.
+func TestSwapsAndTradeIDsAreWritten(t *testing.T) {
+	ents := dexBlock(100, fill(100, 3, "A", "5"))
+	ents.OrderFills[0].TradeID = 100_000_002
+	txIndex, msgIndex, seq := 4, 1, 7
+	ents.Swaps = []transform.Swap{
+		{Height: 100, TradeID: 100_000_001, Time: time.Unix(100, 0), PoolID: "a_b", Base: "a", Quote: "b", Side: "sell",
+			BaseAmount: "10", QuoteAmount: "200000000000000000000000", Creator: "bze1c", TxHash: "T", TxIndex: &txIndex, MsgIndex: &msgIndex},
+		{Height: 100, TradeID: 100_000_003, Time: time.Unix(100, 0), PoolID: "a_b", Base: "a", Quote: "b", Side: "buy",
+			BaseAmount: "1", QuoteAmount: "2", Creator: "bze1burner", BlockSeq: &seq},
+	}
+	for _, mode := range []writer.Mode{writer.ModeInsert, writer.ModeUpdate} {
+		t.Run(mode.String(), func(t *testing.T) {
+			db := newMockDB(49)
+			require.NoError(t, writer.NewBatchWriter(db).Write(context.Background(), []*transform.Entities{ents}, mode))
+			assert.Equal(t, []string{"INSERT INTO explorer.blocks", "INSERT INTO explorer.swaps"},
+				firstOf(db.txs[0], "INSERT INTO explorer.blocks", "INSERT INTO explorer.swaps"), "the swaps read the stored block's time")
+			inserts := statementsOf(db.txs[0], "INSERT INTO explorer.swaps")
+			require.Len(t, inserts, 1)
+			assert.Contains(t, inserts[0].sql, "ON CONFLICT (height, trade_id) DO NOTHING")
+			assert.Contains(t, inserts[0].sql, "COALESCE((SELECT b.time FROM explorer.blocks b WHERE b.height = r.height), r.time)")
+			rows := payload(t, inserts[0])
+			require.Len(t, rows, 2)
+			assert.Equal(t, map[string]any{"height": float64(100), "trade_id": float64(100_000_001), "pool_id": "a_b",
+				"base": "a", "quote": "b", "side": "sell", "base_amount": "10", "quote_amount": "200000000000000000000000",
+				"creator": "bze1c", "tx_hash": "T", "tx_index": float64(4), "msg_index": float64(1), "block_seq": nil,
+				"time": rows[0]["time"]}, rows[0])
+			assert.Equal(t, []any{nil, nil, nil, float64(7)},
+				[]any{rows[1]["tx_hash"], rows[1]["tx_index"], rows[1]["msg_index"], rows[1]["block_seq"]})
+
+			fills := payload(t, statementsOf(db.txs[0], "INSERT INTO explorer.order_fills")[0])
+			assert.Equal(t, float64(100_000_002), fills[0]["trade_id"])
+
+			updates := statementsOf(db.txs[0], "UPDATE explorer.swaps")
+			if mode == writer.ModeUpdate {
+				require.Len(t, updates, 1)
+				assert.Contains(t, updates[0].sql, "t.height = n.height AND t.trade_id = n.trade_id")
+			} else {
+				assert.Empty(t, updates)
+			}
+		})
+	}
+}
+
+// The live writer, too, writes the swaps after the block.
+func TestLiveSwapsFollowTheBlock(t *testing.T) {
+	ents := block(100)
+	ents.Swaps = []transform.Swap{{Height: 100, TradeID: 100_000_001, Time: time.Unix(100, 0), PoolID: "a_b", Base: "a",
+		Quote: "b", Side: "buy", BaseAmount: "1", QuoteAmount: "1", Creator: "bze1c"}}
+	db := newMockDB(49)
+	require.NoError(t, writer.NewLiveWriter(db).WriteBlock(context.Background(), ents))
+	assert.Equal(t, []string{"INSERT INTO explorer.blocks", "INSERT INTO explorer.swaps"},
+		firstOf(db.txs[0], "INSERT INTO explorer.blocks", "INSERT INTO explorer.swaps"))
+}
+
+// firstOf lists the parts in the order the first statement holding each runs.
+func firstOf(tx *mockTx, parts ...string) []string {
+	var out []string
+	for _, st := range tx.stmts {
+		for _, p := range parts {
+			if strings.Contains(st.sql, p) && !slices.Contains(out, p) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
