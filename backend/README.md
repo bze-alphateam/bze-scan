@@ -1040,10 +1040,14 @@ new one writes too, whose fills then keep a NULL `trade_id`). So the
 at start and every minute: from the cursor to the highest block, and first
 every height below the cursor with a fill without a trade id (partial index
 `idx_order_fills_unnumbered`). Once the previous release is gone each pass
-re-reads only the blocks of the last minute and changes nothing. One case it
-cannot see: a block without fills that the previous release stores below the
-cursor after a pass (a hole its backfill fills late) gets no `swaps` rows;
-`bze-scan reindex` of that height writes them.
+re-reads only the blocks of the last minute and changes nothing. The
+heights the cursor passes without a block (a hole the backfill fills later,
+possibly the previous release's) are kept as holes, inclusive ranges in
+`indexer_state` under `trades_holes`; each pass numbers the heights stored
+in them since (a primary-key range scan of `blocks` over the holes only, at
+most 100,000 heights per transaction) and cuts them out, so a block with
+only pool swaps, which no fill gives away, is numbered too. On a fully
+indexed database the holes are empty and the check is one row lock.
 
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0 and later) has no attributed fill or order, or one of

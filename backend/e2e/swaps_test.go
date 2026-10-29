@@ -354,3 +354,46 @@ func TestReindexRestoresSwapsAndTradeIDs(t *testing.T) {
 		WHERE s.time <> b.time`), "a swap's time is its block's")
 	assert.Equal(t, fills, tradeIDs(t, e))
 }
+
+// A block with pool swaps and no fill that the previous release stores below
+// the cursor after a pass (its backfill filling a hole during a deploy's
+// overlap) gets no swaps rows from it, and no fill gives it away: the
+// cursor recorded the hole, and serve numbers what appeared in it.
+func TestPoolSwapsOnlyBlockInAHoleIsNumbered(t *testing.T) {
+	const holeH = int64(24_000_500)
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	live := writer.NewLiveWriter(pool)
+	for _, h := range []int64{20230045, 24999134} {
+		require.NoError(t, live.WriteBlock(ctx, transformed(t, e, h)))
+	}
+	migrateUp(t, e.url) // the cursor passes holeH, which has no block yet
+	assert.Equal(t, []string{"24999135"}, queryStrings(t, e.db,
+		`SELECT resume_from::text FROM explorer.pending_rewrites WHERE name = 'swaps'`))
+
+	// The previous release stores holeH: its swaps, no swaps rows.
+	b, r, c := swapBlock(t)
+	b.Height, r.Height, c.Height = holeH, holeH, holeH
+	r.FinalizeBlockEvents = r.FinalizeBlockEvents[1:2] // the burner's swap only
+	ents, err := newTransformer(t).Transform(transform.Input{Block: b, Results: r, Commit: c})
+	require.NoError(t, err)
+	require.Empty(t, ents.OrderFills)
+	require.NoError(t, live.WriteBlock(ctx, ents))
+	want := queryStrings(t, e.db, `SELECT concat_ws(' ', trade_id, side, creator, coalesce(block_seq::text, '-'))
+		FROM explorer.swaps WHERE height = $1`, holeH)
+	require.Len(t, want, 3, "two hops and the burner's swap")
+	_, err = e.db.Exec(`DELETE FROM explorer.swaps WHERE height = $1`, holeH)
+	require.NoError(t, err)
+
+	e.serve(t, 24999134)
+	waitFor(t, 20*time.Second, func() bool {
+		return len(queryStrings(t, e.db, `SELECT trade_id::text FROM explorer.swaps WHERE height = $1`, holeH)) == 3
+	}, "the swaps of the hole's block")
+	assert.Equal(t, want, queryStrings(t, e.db, `SELECT concat_ws(' ', trade_id, side, creator, coalesce(block_seq::text, '-'))
+		FROM explorer.swaps WHERE height = $1`, holeH))
+	assert.NotContains(t, queryStrings(t, e.db, `SELECT value FROM explorer.indexer_state WHERE key = 'trades_holes'`)[0],
+		fmt.Sprintf("%d]", holeH), "the height is out of the holes")
+}

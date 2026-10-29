@@ -13,8 +13,8 @@
 // already there are kept: running it again changes nothing.
 //
 // A height the previous release stores below the cursor after CatchUp
-// passed it (a hole its backfill fills late) is not numbered; its fills
-// are, by the check of fills without a trade id that every run starts with.
+// passed it (a hole its backfill fills late) is numbered by the next pass:
+// the cursor records the heights it passes without a block (holes.go).
 package trades
 
 import (
@@ -48,6 +48,7 @@ type DB interface {
 // Tx is the part of a transaction one range uses; pgx.Tx satisfies it.
 type Tx interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
@@ -58,8 +59,10 @@ type Result struct {
 }
 
 // CatchUp numbers the stored trades from the cursor up to the highest stored
-// block, and first the heights of fills without a trade id below it. Without
-// the cursor row (a schema before 000023's) it does nothing.
+// block, recording the heights it finds no block for as holes (holes.go),
+// and first, below the cursor, the heights of fills without a trade id and
+// the heights stored in the holes since. Without the cursor row (a schema
+// before 000023's) it does nothing.
 func CatchUp(ctx context.Context, db DB) (Result, error) {
 	var res Result
 	var from int64
@@ -91,6 +94,10 @@ func CatchUp(ctx context.Context, db DB) (Result, error) {
 		}
 	}
 
+	if err := fillHoles(ctx, db, &res); err != nil {
+		return res, err
+	}
+
 	if top == nil || *top < from {
 		return res, nil
 	}
@@ -117,6 +124,9 @@ func inTx(ctx context.Context, db DB, lo, hi int64, advance bool, res *Result) e
 		return err
 	}
 	if advance {
+		if err := recordHoles(ctx, tx, lo, hi); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE explorer.pending_rewrites SET resume_from = $1
 			WHERE name = 'swaps' AND resume_from < $1`, hi); err != nil {
 			return fmt.Errorf("trades %d..%d: cursor: %w", lo, hi-1, err)
