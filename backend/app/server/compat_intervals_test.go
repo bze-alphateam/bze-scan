@@ -43,6 +43,10 @@ func (r *ivReader) First(_ context.Context, market string) (candles.First, bool,
 	return f, ok, nil
 }
 
+func (r *ivReader) Created(context.Context, string, string) (time.Time, error) {
+	return time.Time{}, nil
+}
+
 type ivMarkets struct{}
 
 func (ivMarkets) Market(_ context.Context, id string) (orderbook.Market, error) {

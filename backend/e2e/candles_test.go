@@ -260,12 +260,31 @@ func TestCandlesIntervalsOverTheStore(t *testing.T) {
 	assert.Equal(t, "0", ivs[2].Close)
 
 	// swapH's two fills of 10 at 2, the market's first trades: its floor
-	// (07:59) leaves 07:55 out.
+	// is their bucket (08:00), so 07:55 is left out.
 	ivs, err = svc.Intervals(ctx, swapMarket, 5, 3)
 	require.NoError(t, err)
 	require.Len(t, ivs, 2)
 	assert.Equal(t, candles.Interval{Start: start, End: start.Add(5 * time.Minute), Low: "2", Open: "2", Average: "2",
 		High: "2", Close: "2", BaseVolume: "0.00002", QuoteVolume: "0.00004"}, ivs[0])
+
+	// Once the market's creation is stored, an hour before, the floor is
+	// that: the window reaches 07:55.
+	_, err = e.db.Exec(`INSERT INTO explorer.token_events (height, tx_index, seq, denom, kind, actor, details, time)
+		VALUES (1, 0, 0, $1, 'market_created', 'bze1creator', jsonb_build_object('market_id', $2::text), $3)`,
+		swapHoney, swapMarket, b.Time.Add(-time.Hour))
+	require.NoError(t, err)
+	svc = candles.NewService(candles.ServiceDeps{
+		Reader:    candles.NewPGReader(pool),
+		Markets:   e2eMarkets{swapMarket: {ID: swapMarket, Base: swapHoney, Quote: "ubze"}},
+		Exponents: e2eExponents{swapAtom: 6, "ubze": 6, swapHoney: 6},
+		Clock:     e2eClock(b.Time.Add(7 * time.Minute)),
+	})
+	ivs, err = svc.Intervals(ctx, swapMarket, 5, 3)
+	require.NoError(t, err)
+	require.Len(t, ivs, 3)
+	assert.Equal(t, start.Add(-5*time.Minute), ivs[0].Start)
+	assert.Equal(t, "0", ivs[0].Close)
+	assert.Equal(t, "2", ivs[1].Close)
 
 	_, err = svc.Intervals(ctx, "uatom/unknown", 5, 10)
 	assert.ErrorIs(t, err, candles.ErrUnknownMarket)

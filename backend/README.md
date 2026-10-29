@@ -552,8 +552,10 @@ whose denoms contain one).
 and answers as the aggregator: `minutes` one of 5, 15, 60, 240, 1440;
 `limit` 500 when absent or not positive, at most 5000 except for daily
 candles; `ticker_id` is a market id with `_` for `/` (a pool is asked by its
-pool id as `market_id`). The floor is the market's or pool's first trade
-minus a minute (cached ten minutes); the window starts at the later of the
+pool id as `market_id`). The floor is the earlier of the market's or
+pool's creation (its `market_created` / `pool_created` row in
+`explorer.token_events`, when stored) and the start of the bucket holding
+its first trade, cached ten minutes; the window starts at the later of the
 floor and now − limit × minutes. When the store holds `limit` candles from
 there they are the answer; otherwise every bucket from the current one down
 to the window's start is answered, a zero candle (every value `"0"`) where
@@ -570,8 +572,12 @@ Parameters bind as echo v4's binder does (a name in another case, an empty
 number as 0, a non-number as `invalid request`). Differences from the
 aggregator: no 50,000-trade cap on a candle's day, doubled v8.0.x events
 counted once, open and close by trade id (the aggregator's ties within a
-second keep an arbitrary row, BZE-135), a pool's floor its first swap (not
-the start of that day), prices right when the quote has three or more
+second keep an arbitrary row, BZE-135), the first trade's candle always
+answered (the aggregator dates an order book market at its first trade
+minus a minute and a back-filled pool at the start of that day minus a
+minute, so its window can start inside the first trade's bucket and drop
+it), a pool's floor its creation rather than the aggregator's sync time,
+prices right when the quote has three or more
 decimals more than the base (BZE-133), times in UTC, and a pool without a
 swap is unknown (the aggregator answers `[]` or one zero candle, from its
 own sync time).
@@ -1115,7 +1121,10 @@ the queue message id (24 zero-filled digits, unique within a block).
   order, v8.1 market by market, the same within a market): a message claims
   the first run, at or after the previous match, of fills of the other side
   at its price taken by its owner (adding up to at most its amount), then
-  for a create the order saved with the rest. It applies only to outcomes
+  for a create the order saved with the rest. "Its price" is the engine's
+  price level: equal as `LegacyDec`s (v8.1.0 on), or equal as float64s
+  printed with ten decimals (the keys before v8.1.0, so a buy at
+  `209999.999999999979` took the sell resting at `210000`). It applies only to outcomes
   without a message id, so it needs no upgrade height (and works on the
   testnet too). It is approximate: a look-alike outcome of a message queued
   in an earlier block can be claimed, a message only refunded claims
