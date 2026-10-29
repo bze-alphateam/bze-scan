@@ -13,8 +13,8 @@
 // already there are kept: running it again changes nothing.
 //
 // A height the previous release stores below the cursor after CatchUp
-// passed it (a hole its backfill fills late) is not numbered; its fills
-// are, by the check of fills without a trade id that every run starts with.
+// passed it (a hole its backfill fills late) is numbered by the next pass:
+// the cursor records the heights it passes without a block (holes.go).
 package trades
 
 import (
@@ -41,22 +41,70 @@ const RangeSize = migrations.PartitionSize
 // DB is what CatchUp needs; *pgxpool.Pool satisfies it.
 type DB interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
-// Tx is the part of a transaction one range uses; pgx.Tx satisfies it. An
-// alias of the interface literal, so a Hook implemented elsewhere against
-// the same method set (candles.Tx) matches.
-type Tx = interface {
+// begin starts a REPEATABLE READ transaction: every statement of a range (the
+// trades read, the blocks it finds, the holes) sees one snapshot, so a block
+// another writer commits meanwhile is either wholly in it or a hole, never
+// half-numbered nor passed unseen.
+func begin(ctx context.Context, db DB) (pgx.Tx, error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	return tx, nil
+}
+
+// Attempts bounds the runs of one transaction that a concurrent writer made
+// fail (a serialization failure or a deadlock, both retryable).
+const Attempts = 5
+
+// retry runs fn again while it fails with a serialization failure or a
+// deadlock, at most Attempts times.
+func retry(fn func() error) error {
+	var err error
+	for range Attempts {
+		if err = fn(); !retryable(err) {
+			return err
+		}
+	}
+	return err
+}
+
+func retryable(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && (pg.Code == "40001" || pg.Code == "40P01")
+}
+
+// Tx is the part of a transaction one range uses; pgx.Tx satisfies it.
+type Tx interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// HookTx is the part of a range's transaction a Hook uses. An alias of the
+// interface literal, so a Hook implemented elsewhere against the same method
+// set (candles.Tx) matches.
+type HookTx = interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-// Hook runs in a range's transaction once its trades are numbered;
-// candles.Upkeep implements it (their candles count them from then on).
+// Hook runs in a range's transaction once its trades are numbered, the
+// cursor's ranges and the holes' alike; candles.Upkeep implements it (their
+// candles count them from then on). The transaction is REPEATABLE READ: a
+// hook's write that a concurrent writer raced fails as a serialization
+// failure, and the range runs again.
 type Hook interface {
-	AfterNumbering(ctx context.Context, tx Tx, lo, hi int64) error
+	AfterNumbering(ctx context.Context, tx HookTx, lo, hi int64) error
 }
 
 // Result counts what a CatchUp wrote.
@@ -66,9 +114,11 @@ type Result struct {
 }
 
 // CatchUp numbers the stored trades from the cursor up to the highest stored
-// block, and first the heights of fills without a trade id below it, running
-// hook (when not nil) in every range's transaction. Without the cursor row
-// (a schema before 000023's) it does nothing.
+// block, recording the heights it finds no block for as holes (holes.go),
+// and first, below the cursor, the heights of fills without a trade id and
+// the heights stored in the holes since, running hook (when not nil) in
+// every range's transaction. Without the cursor row (a schema before
+// 000023's) it does nothing.
 func CatchUp(ctx context.Context, db DB, hook Hook) (Result, error) {
 	var res Result
 	var from int64
@@ -78,6 +128,9 @@ func CatchUp(ctx context.Context, db DB, hook Hook) (Result, error) {
 	}
 	if err != nil {
 		return res, fmt.Errorf("trades cursor: %w", err)
+	}
+	if err := seedHoles(ctx, db, from); err != nil {
+		return res, err
 	}
 	var top *int64
 	if err := db.QueryRow(ctx, `SELECT max(height) FROM explorer.blocks`).Scan(&top); err != nil {
@@ -100,6 +153,10 @@ func CatchUp(ctx context.Context, db DB, hook Hook) (Result, error) {
 		}
 	}
 
+	if err := fillHoles(ctx, db, hook, &res); err != nil {
+		return res, err
+	}
+
 	if top == nil || *top < from {
 		return res, nil
 	}
@@ -116,23 +173,32 @@ func CatchUp(ctx context.Context, db DB, hook Hook) (Result, error) {
 // inTx numbers [lo, hi) in a transaction of its own, moving the cursor to hi
 // when advance is set.
 func inTx(ctx context.Context, db DB, lo, hi int64, advance bool, hook Hook, res *Result) error {
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("trades %d..%d: begin: %w", lo, hi-1, err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	n, err := Range(ctx, tx, lo, hi, hook)
+	var n int
+	err := retry(func() error {
+		tx, err := begin(ctx, db)
+		if err != nil {
+			return fmt.Errorf("trades %d..%d: begin: %w", lo, hi-1, err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if n, err = Range(ctx, tx, lo, hi, hook); err != nil {
+			return err
+		}
+		if advance {
+			if err := recordHoles(ctx, tx, lo, hi); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE explorer.pending_rewrites SET resume_from = $1
+				WHERE name = 'swaps' AND resume_from < $1`, hi); err != nil {
+				return fmt.Errorf("trades %d..%d: cursor: %w", lo, hi-1, err)
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("trades %d..%d: commit: %w", lo, hi-1, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
-	}
-	if advance {
-		if _, err := tx.Exec(ctx, `UPDATE explorer.pending_rewrites SET resume_from = $1
-			WHERE name = 'swaps' AND resume_from < $1`, hi); err != nil {
-			return fmt.Errorf("trades %d..%d: cursor: %w", lo, hi-1, err)
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("trades %d..%d: commit: %w", lo, hi-1, err)
 	}
 	res.Ranges++
 	res.Heights += n

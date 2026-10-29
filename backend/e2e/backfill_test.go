@@ -121,8 +121,8 @@ func TestBackfillFillsTheRangeDownToTheFloor(t *testing.T) {
 	assert.Equal(t, []string{"24998316", "24998320"}, queryStrings(t, e.db,
 		`SELECT height::text FROM explorer.blocks WHERE block_time_ms IS NULL ORDER BY height`),
 		"only the floor and the block above the failed height lack a predecessor")
-	assert.Empty(t, queryStrings(t, e.db, `SELECT key FROM explorer.indexer_state WHERE key <> 'live_floor'`),
-		"the backfill never moves the live cursor")
+	assert.Empty(t, queryStrings(t, e.db, `SELECT key FROM explorer.indexer_state
+		WHERE key NOT IN ('live_floor', 'trades_holes')`), "the backfill never moves the live cursor") // trades_holes: migrate up's
 	var sinkRows int
 	require.NoError(t, e.db.QueryRow(`SELECT count(*) FROM public.blocks`).Scan(&sinkRows))
 	assert.Zero(t, sinkRows, "the backfill never writes the sink")

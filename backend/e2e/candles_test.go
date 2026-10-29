@@ -162,6 +162,56 @@ func TestCandlesOfTradesNumberedLate(t *testing.T) {
 	assert.Equal(t, rows, candleRows(t, e))
 }
 
+// A block the previous release stores in a hole the cursor passed (its
+// backfill during a deploy's overlap: no trade ids, no swaps rows, no
+// candles) reaches its candles when a pass numbers it: the hook runs on the
+// holes' ranges too, so the pools' swaps, which no fill gives away, count.
+func TestCandlesOfABlockNumberedLateThroughAHole(t *testing.T) {
+	const holeH = int64(24_000_600)
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	live := writer.NewLiveWriter(pool, writer.AttributeOrders, candles.Default.PostFlush)
+	for _, h := range []int64{20230045, 24999134} {
+		require.NoError(t, live.WriteBlock(ctx, transformed(t, e, h)))
+	}
+	migrateUp(t, e.url) // the cursor passes holeH, which has no block yet
+
+	// What this release writes for holeH: its candles.
+	b, r, c := swapBlock(t)
+	b.Height, r.Height, c.Height = holeH, holeH, holeH
+	ents, err := newTransformer(t).Transform(transform.Input{Block: b, Results: r, Commit: c})
+	require.NoError(t, err)
+	require.NotEmpty(t, ents.OrderFills)
+	require.NoError(t, live.WriteBlock(ctx, ents))
+	want := candleRows(t, e)
+	day := b.Time.Truncate(candles.Day)
+	markets := queryStrings(t, e.db, `SELECT DISTINCT market_id FROM explorer.order_fills WHERE height = $1
+		UNION SELECT DISTINCT pool_id FROM explorer.swaps WHERE height = $1`, holeH)
+	require.Len(t, markets, 3, "the market and the two pools")
+
+	// As the previous release leaves it.
+	for _, q := range []string{
+		`UPDATE explorer.order_fills SET trade_id = NULL WHERE height = $1`,
+		`DELETE FROM explorer.swaps WHERE height = $1`,
+	} {
+		_, err := e.db.Exec(q, holeH)
+		require.NoError(t, err)
+	}
+	_, err = e.db.Exec(`DELETE FROM explorer.candles WHERE start_at >= $1 AND start_at < $2`, day, day.Add(candles.Day))
+	require.NoError(t, err)
+	require.NotEqual(t, want, candleRows(t, e))
+
+	_, err = trades.CatchUp(ctx, pool, candles.Default)
+	require.NoError(t, err)
+	assert.Equal(t, want, candleRows(t, e))
+	assert.Equal(t, []string{fmt.Sprintf(`[[0,20230044],[20230046,%d],[%d,24999133]]`, holeH-1, holeH+1)},
+		queryStrings(t, e.db, `SELECT value FROM explorer.indexer_state WHERE key = 'trades_holes'`),
+		"numbered through the hole")
+}
+
 type e2eMarkets map[string]orderbook.Market
 
 func (m e2eMarkets) Market(_ context.Context, id string) (orderbook.Market, error) {
