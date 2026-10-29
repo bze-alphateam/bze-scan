@@ -80,3 +80,52 @@ func TestTrimTrailingZeros(t *testing.T) {
 	assert.Equal(t, "2", dexunits.TrimTrailingZeros("2.000"))
 	assert.Equal(t, "100", dexunits.TrimTrailingZeros("100"), "an integer is left alone")
 }
+
+func TestTradePrice(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		price       string
+		base, quote int
+		want        string
+	}{
+		{"same exponents", "0.500000000000000000", 6, 6, "0.5"},
+		{"base has more decimals", "0.05", 8, 6, "5"},
+		// The aggregator's LegacyDec product, rounded back to 18 decimals.
+		{"quote has one more decimal", "0.666666666666666667", 6, 7, "0.066666666666666667"},
+		{"quote has two more decimals", "33.333333333333333333", 6, 8, "0.333333333333333333"},
+		// BZE-133: from three more, exact where the aggregator answers 0.
+		{"quote has three more decimals", "1234.5", 6, 9, "1.2345"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := dexunits.TradePrice(tc.price, tc.base, tc.quote)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+	_, err := dexunits.TradePrice("abc", 6, 7)
+	assert.Error(t, err)
+}
+
+func TestQuoteAmount(t *testing.T) {
+	for _, tc := range []struct {
+		name, amount, price string
+		exp                 int
+		want                string
+	}{
+		{"truncated to the quote's decimals", "123.456789", "0.000334", 6, "0.041234"},
+		{"integer", "2", "1.5", 6, "3"},
+		{"rounded to 18 decimals first, as a LegacyDec", "3", "0.066666666666666667", 7, "0.2"},
+		{"18-decimal quote rounds, as the LegacyDec product does", "0.000000000000000001", "1.5", 18, "0.000000000000000002"},
+		{"no quote decimals", "2.5", "1.5", 0, "3"},
+		{"a price past 18 decimals is multiplied exactly", "7", "0.0000000000000000001", 19, "0.0000000000000000007"},
+		{"exact, truncated", "7", "0.000000000000000000000000000000000001", 18, "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := dexunits.QuoteAmount(tc.amount, tc.price, tc.exp)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+	_, err := dexunits.QuoteAmount("x", "1", 6)
+	assert.Error(t, err)
+}
