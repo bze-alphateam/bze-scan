@@ -32,7 +32,8 @@ const recordedPool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB9
 
 // geckoQuery is the CoinGecko query of the recorded denoms: BZE's id, then
 // the registry ids of the stored denoms by id.
-const geckoQuery = "ids=bzedge,cosmos,osmosis,usd-coin&vs_currencies=usd"
+const geckoQuery = "ids=bzedge,archway,cosmos,dragon-coin-2,injective-protocol,jackal-protocol,osmosis,photon-2,spice-2,usd-coin" +
+	"&vs_currencies=usd"
 
 // recordedGecko is CoinGecko's simple price answer, the prices of
 // recordedPrices, in an order of its own; the other ids asked are unpriced.
