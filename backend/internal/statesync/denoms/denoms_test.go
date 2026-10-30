@@ -256,7 +256,8 @@ func TestFullResyncMapsTheRecordedDenoms(t *testing.T) {
 
 	u := rows[usdc]
 	assert.Equal(t, denoms.KindIBC, u.Kind)
-	assert.Equal(t, 0, u.Exponent, "the display unit is not listed: 0 until the registry story")
+	assert.Equal(t, denoms.DefaultExponent, u.Exponent, "ibc-go's placeholder lists no display unit and no registry asset: 6")
+	assert.Equal(t, denoms.DefaultExponent, rows[photon].Exponent)
 	assert.Empty(t, u.Creator)
 
 	lp := rows[vdlLP]
@@ -459,6 +460,7 @@ func TestIBCDenomsTakeTheRegistryAssetOfTheirOrigin(t *testing.T) {
 	a := rows[atom]
 	assert.Equal(t, "cosmoshub-4", a.OriginChainID, "the origin is known even when its asset is not cached")
 	assert.Equal(t, "UATOM", a.Symbol)
+	assert.Equal(t, denoms.DefaultExponent, a.Exponent, "no registry asset, placeholder metadata: 6, not 0")
 	assert.Equal(t, []string{"cosmoshub-4"}, p.keys, "the missing asset asks for its chain")
 }
 

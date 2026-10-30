@@ -174,9 +174,9 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, ibc_path, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, atomDenom))
 	assert.Equal(t, []string{"noble-1 uusdc USDC.n 6"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, usdcDenom))
-	assert.Equal(t, []string{"omniflixhub-1 uflix UFLIX 0"}, queryStrings(t, e.db,
+	assert.Equal(t, []string{"omniflixhub-1 uflix UFLIX 6"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', origin_chain_id, ibc_base_denom, symbol, exponent) FROM explorer.denoms WHERE denom = $1`, flixDenom),
-		"an origin the registry does not know keeps the bank's metadata")
+		"an origin the registry does not know keeps the bank's symbol; the placeholder has no display unit, so the exponent is the default 6")
 
 	// Holders: five owners over three pages, four of them with 1 GGE or more.
 	assert.Equal(t, 5, e.count(t, `SELECT count(*) FROM explorer.token_holders WHERE denom = $1`, ggeDenom))
