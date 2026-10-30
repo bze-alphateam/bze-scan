@@ -94,3 +94,38 @@ func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
 	}
 	return nil
 }
+
+// RegistryIDs lists the CoinGecko ids of the stored denoms' registry assets,
+// the ids saveSQL prices by; it is the CoinGecko feed's id lister.
+type RegistryIDs struct {
+	db      DB
+	chainID string
+}
+
+// NewRegistryIDs returns the lister over db; chainID is BZE's, whose asset
+// list maps its own denoms.
+func NewRegistryIDs(db DB, chainID string) *RegistryIDs {
+	return &RegistryIDs{db: db, chainID: chainID}
+}
+
+// idsSQL is the CoinGecko id of every denom's registry asset, as saveSQL
+// matches it: on BZE's own asset list ($1), else on its origin chain's.
+const idsSQL = `SELECT DISTINCT coalesce(own.coingecko_id, home.coingecko_id) AS id
+	FROM explorer.denoms d
+	LEFT JOIN explorer.registry_assets own ON own.chain_id = $1 AND own.base = d.denom
+	LEFT JOIN explorer.registry_assets home ON home.chain_id = d.origin_chain_id AND home.base = d.ibc_base_denom
+	WHERE coalesce(own.coingecko_id, home.coingecko_id) <> ''
+	ORDER BY id`
+
+// CoinGeckoIDs lists the ids, sorted.
+func (r *RegistryIDs) CoinGeckoIDs(ctx context.Context) ([]string, error) {
+	rows, err := r.db.Query(ctx, idsSQL, r.chainID)
+	if err != nil {
+		return nil, fmt.Errorf("coingecko ids: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("coingecko ids: %w", err)
+	}
+	return out, nil
+}

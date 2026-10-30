@@ -167,7 +167,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)
-	if feed := NewPriceFeed(cfg); feed != nil {
+	if feed := NewPriceFeed(cfg, pool); feed != nil {
 		// The prices come from the DEX price chain and the change from the
 		// DEX tickers, both computed here from the indexed trades and the
 		// node's books and pools. The tickers get no CoinGecko feed: the
