@@ -9,7 +9,7 @@ import (
 )
 
 // coingeckoTimeout bounds one CoinGecko call; the feed serves its last read
-// meanwhile only to the callers that come after.
+// meanwhile.
 const coingeckoTimeout = 10 * time.Second
 
 // NewPriceFeed returns the CoinGecko feed of cfg's price ids, behind
