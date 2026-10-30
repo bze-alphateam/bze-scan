@@ -108,6 +108,10 @@ const FreshFor = 180 * time.Second
 // fails.
 const BackupFor = 24 * time.Hour
 
+// RetryAfter is how long after a failed read CoinGecko is not asked again,
+// so a failing API is not asked on every request.
+const RetryAfter = time.Minute
+
 // Price is one USD price, by CoinGecko id.
 type Price struct {
 	ID    string
@@ -115,11 +119,13 @@ type Price struct {
 }
 
 // FeedDeps are the feed's collaborators; Log defaults to the standard
-// logger, Clock to the wall clock.
+// logger, Clock to the wall clock, Spawn to a new goroutine.
 type FeedDeps struct {
 	Source Source
 	Log    log.FieldLogger
 	Clock  Clock
+	// Spawn runs a background refresh; tests run it inline.
+	Spawn func(func())
 }
 
 // Feed serves the prices of a fixed list of ids from memory.
@@ -127,10 +133,12 @@ type Feed struct {
 	deps FeedDeps
 	ids  []string
 
-	mu      sync.Mutex
-	held    []Price
-	readAt  time.Time
-	failing bool
+	mu         sync.Mutex
+	held       []Price
+	readAt     time.Time
+	failedAt   time.Time
+	failing    bool
+	refreshing bool
 }
 
 // NewFeed returns a feed of ids, in that order and each once; none reads
@@ -151,31 +159,69 @@ func NewFeed(deps FeedDeps, ids []string) *Feed {
 	if deps.Clock == nil {
 		deps.Clock = realClock{}
 	}
+	if deps.Spawn == nil {
+		deps.Spawn = func(run func()) { go run() }
+	}
 	return &Feed{deps: deps, ids: unique}
 }
 
 // Prices returns the prices of the feed's ids CoinGecko knows, in the
-// configured order: the held read while younger than FreshFor, else a new
-// one. When the new read fails or prices nothing, the held read is served
-// while younger than BackupFor, and nil after that. The slice is shared:
-// callers must not change it.
+// configured order: the held read while younger than FreshFor. An older
+// read still younger than BackupFor is served at once while a new one is
+// fetched in the background (one at a time, at most every RetryAfter while
+// reads fail or price nothing). With nothing to serve the read happens in
+// the call, and nil is returned when it fails. The slice is shared: callers
+// must not change it.
 func (f *Feed) Prices(ctx context.Context) []Price {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	now := f.deps.Clock.Now()
 	if f.held != nil && now.Sub(f.readAt) < FreshFor {
+		defer f.mu.Unlock()
 		return f.held
 	}
-	got, err := f.read(ctx)
-	f.note(err)
-	if err == nil {
-		f.held, f.readAt = got, now
-		return got
+	if f.held != nil && now.Sub(f.readAt) < BackupFor {
+		held := f.held
+		start := !f.refreshing && f.mayRead(now)
+		f.refreshing = f.refreshing || start
+		f.mu.Unlock()
+		if start {
+			f.deps.Spawn(f.refresh)
+		}
+		return held
 	}
+	defer f.mu.Unlock()
+	if !f.mayRead(now) {
+		return nil
+	}
+	f.store(f.read(ctx))
 	if f.held != nil && now.Sub(f.readAt) < BackupFor {
 		return f.held
 	}
 	return nil
+}
+
+// mayRead reports whether CoinGecko may be asked now: not within
+// RetryAfter of a failed read. Callers hold mu.
+func (f *Feed) mayRead(now time.Time) bool {
+	return !f.failing || now.Sub(f.failedAt) >= RetryAfter
+}
+
+// refresh reads CoinGecko in the background and stores the outcome.
+func (f *Feed) refresh() {
+	got, err := f.read(context.Background())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refreshing = false
+	f.store(got, err)
+}
+
+// store keeps a successful read and notes the outcome. Callers hold mu.
+func (f *Feed) store(got []Price, err error) {
+	now := f.deps.Clock.Now()
+	f.note(err, now)
+	if err == nil {
+		f.held, f.readAt = got, now
+	}
 }
 
 // USD returns Prices by id as decimal strings, without negative ones; an
@@ -223,7 +269,10 @@ func (f *Feed) read(ctx context.Context) ([]Price, error) {
 
 // note logs a failure when one starts and the recovery when it ends, not
 // every read.
-func (f *Feed) note(err error) {
+func (f *Feed) note(err error, now time.Time) {
+	if err != nil {
+		f.failedAt = now
+	}
 	switch {
 	case err != nil && !f.failing:
 		f.failing = true

@@ -58,7 +58,10 @@ func (d *feedDoer) Do(req *http.Request) (*http.Response, error) {
 func articlesServer(t *testing.T, doer *feedDoer, clock *compatClock) *echo.Echo {
 	t.Helper()
 	lg, _ := logtest.NewNullLogger()
-	feed := medium.NewFeed(medium.FeedDeps{Source: medium.New(doer, mediumURL), Log: lg, Clock: clock})
+	feed := medium.NewFeed(medium.FeedDeps{
+		Source: medium.New(doer, mediumURL), Log: lg, Clock: clock,
+		Spawn: func(run func()) { run() }, // a background refresh lands before the next request
+	})
 	return server.New(server.Deps{CompatArticles: feed})
 }
 
@@ -195,8 +198,8 @@ func TestCompatArticlesAreCachedThenBackedUp(t *testing.T) {
 	assert.Equal(t, 1, doer.calls)
 
 	// After 600 s the feed fails: the last read is served (the aggregator
-	// answers [] for 600 s), and the feed is asked again at most every
-	// minute meanwhile.
+	// answers [] for 600 s), and the feed is asked again in the background,
+	// at most every minute.
 	doer.fail = true
 	clock.now = clock.now.Add(time.Second)
 	assert.Equal(t, first, get())
@@ -222,6 +225,33 @@ func TestCompatArticlesAreCachedThenBackedUp(t *testing.T) {
 	doer.fail = false
 	clock.now = clock.now.Add(medium.RetryAfter)
 	assert.Contains(t, get(), `"title":"second"`)
+}
+
+func TestCompatArticlesServeTheStaleReadWhileRefreshing(t *testing.T) {
+	doer := &feedDoer{body: rss(item("first", "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", "one"))}
+	clock := &compatClock{now: time.Unix(1000, 0)}
+	lg, _ := logtest.NewNullLogger()
+	var spawned []func()
+	feed := medium.NewFeed(medium.FeedDeps{
+		Source: medium.New(doer, mediumURL), Log: lg, Clock: clock,
+		Spawn: func(run func()) { spawned = append(spawned, run) },
+	})
+	e := server.New(server.Deps{CompatArticles: feed})
+	get := func() string { return serve(t, e, http.MethodGet, "/aggregator/api/articles/medium").Body.String() }
+	first := get()
+	require.Contains(t, first, `"title":"first"`)
+
+	// After 600 s the request is answered from memory; one refresh starts.
+	doer.body = rss(item("second", "beezee", "Fri, 23 Oct 2026 12:07:15 GMT", "two"))
+	clock.now = clock.now.Add(medium.FreshFor)
+	assert.Equal(t, first, get())
+	assert.Equal(t, first, get())
+	require.Len(t, spawned, 1, "one refresh at a time")
+	assert.Equal(t, 1, doer.calls, "no request waited for the feed")
+
+	spawned[0]()
+	assert.Contains(t, get(), `"title":"second"`)
+	assert.Equal(t, 2, doer.calls)
 }
 
 func TestCompatArticlesTreatErrorAnswersAsFailures(t *testing.T) {
