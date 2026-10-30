@@ -116,7 +116,7 @@ documented template with the defaults:
 | `HALT_WATCH_ENABLED` | `true` | with the indexer: run the halt watch (see State sync, Upgrade recovery) |
 | `HALT_WATCH_INTERVAL` | `5s` | how often the halt watch polls the local node during an upgrade's halt |
 | `UPGRADE_RECOVERY_WINDOW` | `10000` | heights after an upgrade whose commits the `upgrade_recovery` set reads (at `BACKFILL_RATE_LIMIT`) for the validators not back yet |
-| `SINK_RETENTION` | empty | how long the CometBFT psql sink keeps a block (a Go duration, e.g. `48h`); set, `serve` runs the sink cleanup (see Sink cleanup). Empty turns it off: keep it off while another reader of the sink (the aggregator's listener) still needs the rows |
+| `SINK_RETENTION` | empty | how long the CometBFT psql sink keeps a block (a Go duration, e.g. `48h`); set, `serve` runs the sink cleanup (see Sink cleanup). Empty turns it off: keep it off while another reader of the sink still needs the rows |
 | `SINK_CLEANUP_INTERVAL` | `24h` | period of the sink cleanup inside `serve` |
 | `SINK_CLEANUP_BATCH` | `1000` | heights the sink cleanup deletes per transaction |
 | `DEBUG_ADDR` | empty | `host:port` on which `serve` exposes `net/http/pprof` under `/debug/pprof/`, on a server of its own; keep it on localhost (`127.0.0.1:6060`). Empty exposes nothing |
@@ -1899,14 +1899,23 @@ the next run starts where this one stopped. `bze-scan sink-cleanup` runs one
 pass by hand.
 
 It is **off by default** and must stay off while another reader of the sink
-still needs its rows: the aggregator's listener reads its unprocessed swap
-events from there, and its own cleanup crons trim the sink meanwhile. The
-database role needs `SELECT` and `DELETE` on the four sink tables (the
+still needs its rows (the aggregator read its swap events from there until
+it became a proxy to this API). The database role needs `SELECT` and `DELETE` on the four sink tables (the
 explorer otherwise holds `SELECT` and `TRIGGER` on `public.blocks` only).
 
-The stock schema has no index on `events.block_id`, so each batch's events
-delete scans `events`; with a daily run over a sink trimmed to a few days
-that stays short, and an index on `events(block_id)` removes it.
+The stock schema has no index on `events.block_id` or `events.tx_id`, and both
+are foreign keys: every `tx_results` and `blocks` row the cleanup deletes
+makes Postgres check `events` for references, and without the indexes each
+check scans the whole table. On mainnet the first pass stalled on its first
+batch until both were added. Create them before setting `SINK_RETENTION`
+(`CONCURRENTLY` keeps the node's inserts flowing while they build):
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_block_id ON public.events (block_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_tx_id ON public.events (tx_id);
+```
+
+With them a batch of 1,000 heights takes about ten seconds on mainnet.
 
 ## Test fixtures and the fake node
 
