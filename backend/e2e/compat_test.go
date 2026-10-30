@@ -25,7 +25,7 @@ func (e *syncEnv) serveCompat(t *testing.T, corsOrigin string, with ...func(*con
 		HTTPAddr: "127.0.0.1:0", LogLevel: "warn", LogFormat: config.LogFormatText,
 		DatabaseURL: e.url, NodeRPCURL: e.node.URL, ChainID: "beezee-1",
 		CORSAllowedOrigins: []string{corsOrigin},
-		CoinGeckoHost:      e.gecko.URL, CoinGeckoPriceIDs: geckoIDs,
+		CoinGeckoHost:      e.gecko.URL,
 	}
 	for _, w := range with {
 		w(cfg)
@@ -52,22 +52,28 @@ func (e *syncEnv) serveCompat(t *testing.T, corsOrigin string, with ...func(*con
 func TestCompatPricesFromCoinGecko(t *testing.T) {
 	e := newSyncEnv(t)
 	const explorer, dapp = "https://explorer.getbze.com", "https://dex.getbze.com"
+	// The state sync fills the denoms and the registry assets whose ids the
+	// feed asks for (its prices job reads CoinGecko once).
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+	synced, _ := e.gecko.answered()
 	base := e.serveCompat(t, explorer)
 
-	// The aggregator's shape, in COINGECKO_PRICE_IDS' order, any origin.
+	// The aggregator's shape, BZE's id first, then the registry ids CoinGecko
+	// prices by id, any origin.
 	r := fetch(t, base+"/aggregator/api/prices", "Origin", dapp)
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
-	assert.Equal(t, recordedPrices+"\n", string(r.body), "getbze.com's answer")
+	assert.Equal(t, recordedPrices+"\n", string(r.body), "getbze.com's prices")
 	assert.Equal(t, "*", r.header.Get("Access-Control-Allow-Origin"))
 	calls, query := e.gecko.answered()
-	assert.Equal(t, 1, calls)
-	assert.Equal(t, "ids=bzedge,osmosis,cosmos&vs_currencies=usd", query)
+	assert.Equal(t, synced+1, calls)
+	assert.Equal(t, geckoQuery, query)
 
 	// Read once per 180 s; a CoinGecko failure meanwhile changes nothing.
 	e.gecko.setDown(true)
 	assert.Equal(t, r.body, fetch(t, base+"/aggregator/api/prices", "Origin", explorer).body)
 	calls, _ = e.gecko.answered()
-	assert.Equal(t, 1, calls)
+	assert.Equal(t, synced+1, calls)
 
 	// /api/v1 keeps its configured origins.
 	assert.Equal(t, explorer, fetch(t, base+"/api/v1/blocks/x", "Origin", explorer).header.Get("Access-Control-Allow-Origin"))

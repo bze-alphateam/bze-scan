@@ -19,21 +19,23 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
-// recordedPrices is the aggregator's /api/prices as getbze.com answered it
-// on 2026-10-09: USD prices by CoinGecko id.
+// recordedPrices are the prices of the aggregator's /api/prices as
+// getbze.com answered it on 2026-10-09, in Scan's order: BZE's id first,
+// then the others by id.
 const recordedPrices = `[{"denom":"bzedge","price":0.00016806,"price_denom":"usd"},` +
-	`{"denom":"osmosis","price":0.03403806,"price_denom":"usd"},{"denom":"cosmos","price":1.96,"price_denom":"usd"}]`
+	`{"denom":"cosmos","price":1.96,"price_denom":"usd"},{"denom":"osmosis","price":0.03403806,"price_denom":"usd"}]`
 
 // recordedPool is mainnet's BZE/USDC.n liquidity pool (USDC.n priced in
 // ubze). The tests point PRICE_CHANGE_MARKET at it, since the default moved
 // to the USDC.inj pool.
 const recordedPool = "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4_ubze"
 
-// geckoIDs are mainnet's COINGECKO_PRICE_IDS.
-var geckoIDs = []string{"bzedge", "osmosis", "cosmos"}
+// geckoQuery is the CoinGecko query of the recorded denoms: BZE's id, then
+// the registry ids of the stored denoms by id.
+const geckoQuery = "ids=bzedge,cosmos,osmosis,usd-coin&vs_currencies=usd"
 
-// recordedGecko is CoinGecko's simple price answer for geckoIDs, the prices
-// of recordedPrices, in an order of its own.
+// recordedGecko is CoinGecko's simple price answer, the prices of
+// recordedPrices, in an order of its own; the other ids asked are unpriced.
 const recordedGecko = `{"cosmos":{"usd":1.96},"bzedge":{"usd":0.00016806},"osmosis":{"usd":0.03403806}}`
 
 // fakeGecko answers CoinGecko's /api/v3/simple/price with recordedGecko
@@ -192,7 +194,7 @@ func TestHoldersPricesAndTheChainRegistry(t *testing.T) {
 	// list. The LP tokens and the rest get nothing.
 	calls, query := e.gecko.answered()
 	assert.Equal(t, 1, calls)
-	assert.Equal(t, "ids=bzedge,osmosis,cosmos&vs_currencies=usd", query)
+	assert.Equal(t, geckoQuery, query, "BZE's id and every stored denom's registry id")
 	assert.Equal(t, recordedPriceRows, queryStrings(t, e.db, pricedDenomsSQL))
 	assert.Equal(t, []string{"ubze -2.1362"}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, price_change_24h_pct)
 		FROM explorer.denoms WHERE price_change_24h_pct IS NOT NULL`), "BZE's change, from the BZE/USDC.n pool's ticker")

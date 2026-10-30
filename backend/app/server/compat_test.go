@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -47,26 +48,31 @@ func (c *compatClock) Now() time.Time { return c.now }
 // recordedGecko is CoinGecko's answer for mainnet's ids, in its own order.
 const recordedGecko = `{"cosmos":{"usd":1.96},"osmosis":{"usd":0.03403806},"bzedge":{"usd":0.00016806}}`
 
+// registryIDs lists mainnet's registry ids besides BZE's.
+type registryIDs []string
+
+func (r registryIDs) CoinGeckoIDs(context.Context) ([]string, error) { return r, nil }
+
 func compatServer(t *testing.T, doer *geckoDoer, clock *compatClock, cors ...string) *echo.Echo {
 	t.Helper()
 	lg, _ := logtest.NewNullLogger()
 	feed := coingecko.NewFeed(coingecko.FeedDeps{
 		Source: coingecko.New(doer, "https://gecko.test/"), Log: lg, Clock: clock,
-		Spawn: func(run func()) { run() },
-	}, []string{"bzedge", "osmosis", "cosmos"})
+		IDs: registryIDs{"osmosis", "cosmos"}, Spawn: func(run func()) { run() },
+	})
 	return server.New(server.Deps{CompatPrices: feed, CORSAllowedOrigins: cors})
 }
 
-func TestCompatPricesAnswerTheAggregatorsShapeInTheConfiguredOrder(t *testing.T) {
+func TestCompatPricesAnswerTheAggregatorsShapeBZEFirst(t *testing.T) {
 	doer := &geckoDoer{body: recordedGecko}
 	e := compatServer(t, doer, &compatClock{now: time.Unix(1000, 0)})
 
 	rec := serve(t, e, http.MethodGet, "/aggregator/api/prices")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, `[{"denom":"bzedge","price":0.00016806,"price_denom":"usd"},`+
-		`{"denom":"osmosis","price":0.03403806,"price_denom":"usd"},{"denom":"cosmos","price":1.96,"price_denom":"usd"}]`+"\n",
+		`{"denom":"cosmos","price":1.96,"price_denom":"usd"},{"denom":"osmosis","price":0.03403806,"price_denom":"usd"}]`+"\n",
 		rec.Body.String())
-	assert.Equal(t, []string{"https://gecko.test/api/v3/simple/price?ids=bzedge,osmosis,cosmos&vs_currencies=usd"}, doer.urls)
+	assert.Equal(t, []string{"https://gecko.test/api/v3/simple/price?ids=bzedge,cosmos,osmosis&vs_currencies=usd"}, doer.urls)
 	assert.Empty(t, rec.Header().Get(echo.HeaderCacheControl), "the aggregator sends none")
 }
 

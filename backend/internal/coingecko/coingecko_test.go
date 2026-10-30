@@ -79,20 +79,61 @@ func (c *clock) Now() time.Time { return c.now }
 // returns, so its outcome is visible to the next call.
 func inline(run func()) { run() }
 
-func newFeed(src *source, c *clock, lg logrus.FieldLogger, ids ...string) *coingecko.Feed {
-	return coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: c, Spawn: inline}, ids)
+// lister answers CoinGeckoIDs with ids or err and counts the calls.
+type lister struct {
+	ids   []string
+	err   error
+	calls int
 }
 
-func TestFeedListsTheConfiguredIDsOnceInOrder(t *testing.T) {
-	lg, _ := logtest.NewNullLogger()
-	src := &source{prices: map[string]string{"cosmos": "1.96", "bzedge": "0.00016806", "unasked": "1"}}
-	f := newFeed(src, &clock{now: time.Unix(1000, 0)}, lg, "bzedge", "", "osmosis", "cosmos", "bzedge")
-	assert.Equal(t, []coingecko.Price{{ID: "bzedge", Price: 0.00016806}, {ID: "cosmos", Price: 1.96}}, f.Prices(context.Background()),
-		"osmosis unpriced, unasked ids left out")
-	assert.Equal(t, []string{"bzedge", "osmosis", "cosmos"}, src.ids)
+func (l *lister) CoinGeckoIDs(context.Context) ([]string, error) {
+	l.calls++
+	return l.ids, l.err
+}
 
-	newFeed(src, &clock{}, lg).Prices(context.Background())
-	assert.Equal(t, []string{coingecko.DefaultID}, src.ids, "no id reads BZE's")
+func newFeed(src *source, c *clock, lg logrus.FieldLogger, ids ...string) *coingecko.Feed {
+	return coingecko.NewFeed(coingecko.FeedDeps{Source: src, IDs: &lister{ids: ids}, Log: lg, Clock: c, Spawn: inline})
+}
+
+func TestFeedReadsBZEsIDThenTheListedOnesByID(t *testing.T) {
+	lg, _ := logtest.NewNullLogger()
+	src := &source{prices: map[string]string{"cosmos": "1.96", "bzedge": "0.00016806", "archway": "0.01", "unasked": "1"}}
+	f := newFeed(src, &clock{now: time.Unix(1000, 0)}, lg, "osmosis", "", "cosmos", "bzedge", "archway", "cosmos")
+	assert.Equal(t, []coingecko.Price{{ID: "bzedge", Price: 0.00016806}, {ID: "archway", Price: 0.01}, {ID: "cosmos", Price: 1.96}},
+		f.Prices(context.Background()), "osmosis unpriced, unasked ids left out")
+	assert.Equal(t, []string{"bzedge", "archway", "cosmos", "osmosis"}, src.ids, "each once, blanks dropped")
+
+	f = coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: &clock{}, Spawn: inline})
+	f.Prices(context.Background())
+	assert.Equal(t, []string{coingecko.DefaultID}, src.ids, "no lister reads BZE's alone")
+}
+
+func TestFeedListsTheIDsOnEveryReadAndKeepsTheLastOnAFailure(t *testing.T) {
+	lg, hook := logtest.NewNullLogger()
+	src := &source{prices: map[string]string{"bzedge": "0.0002", "cosmos": "1.96", "archway": "0.01"}}
+	ids := &lister{err: errors.New("connection refused")}
+	c := &clock{now: time.Unix(1000, 0)}
+	f := coingecko.NewFeed(coingecko.FeedDeps{Source: src, IDs: ids, Log: lg, Clock: c, Spawn: inline})
+	ctx := context.Background()
+
+	f.Prices(ctx)
+	assert.Equal(t, []string{"bzedge"}, src.ids, "nothing listed yet: BZE's alone")
+	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level)
+
+	ids.ids, ids.err = []string{"cosmos"}, nil
+	c.now = c.now.Add(coingecko.FreshFor)
+	f.Prices(ctx)
+	assert.Equal(t, []string{"bzedge", "cosmos"}, src.ids)
+	assert.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
+
+	ids.ids, ids.err = []string{"archway"}, errors.New("connection refused")
+	c.now = c.now.Add(coingecko.FreshFor)
+	f.Prices(ctx)
+	assert.Equal(t, []string{"bzedge", "cosmos"}, src.ids, "the last ids listed")
+	c.now = c.now.Add(coingecko.FreshFor)
+	f.Prices(ctx)
+	assert.Equal(t, 4, ids.calls, "listed once per CoinGecko read")
+	assert.Equal(t, 2, countLevel(hook, logrus.WarnLevel), "one warning per failure, not per read")
 }
 
 func TestFeedCachesThenServesTheBackup(t *testing.T) {
@@ -150,7 +191,7 @@ func TestFeedRefreshesAStaleReadInTheBackground(t *testing.T) {
 	var spawned []func()
 	f := coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: c, Spawn: func(run func()) {
 		spawned = append(spawned, run)
-	}}, []string{"bzedge"})
+	}})
 	ctx := context.Background()
 	old := []coingecko.Price{{ID: "bzedge", Price: 0.0002}}
 
@@ -175,7 +216,7 @@ func TestFeedRefreshesAStaleReadInTheBackground(t *testing.T) {
 func TestFeedUSDLeavesNegativePricesOut(t *testing.T) {
 	lg, _ := logtest.NewNullLogger()
 	src := &source{prices: map[string]string{"bzedge": "0.00016806", "broken": "-1", "big": "123456789.5"}}
-	usd, err := newFeed(src, &clock{}, lg, "bzedge", "broken", "big").USD(context.Background())
+	usd, err := newFeed(src, &clock{}, lg, "broken", "big").USD(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"bzedge": "0.00016806", "big": "123456789.5"}, usd)
 }
