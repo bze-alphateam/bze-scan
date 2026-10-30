@@ -1915,7 +1915,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_block_id ON public.events (bl
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_tx_id ON public.events (tx_id);
 ```
 
-With them a batch of 1,000 heights takes about ten seconds on mainnet.
+With them a batch of 1,000 heights takes about 12 seconds on mainnet.
 
 ## Test fixtures and the fake node
 
