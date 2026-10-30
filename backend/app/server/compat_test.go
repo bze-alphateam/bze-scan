@@ -52,6 +52,7 @@ func compatServer(t *testing.T, doer *geckoDoer, clock *compatClock, cors ...str
 	lg, _ := logtest.NewNullLogger()
 	feed := coingecko.NewFeed(coingecko.FeedDeps{
 		Source: coingecko.New(doer, "https://gecko.test/"), Log: lg, Clock: clock,
+		Spawn: func(run func()) { run() },
 	}, []string{"bzedge", "osmosis", "cosmos"})
 	return server.New(server.Deps{CompatPrices: feed, CORSAllowedOrigins: cors})
 }
@@ -84,7 +85,7 @@ func TestCompatPricesAreCachedThenBackedUp(t *testing.T) {
 	assert.Equal(t, 1, doer.calls)
 
 	// After 180 s CoinGecko fails: the last read is served, and CoinGecko
-	// is asked on every request meanwhile.
+	// is asked again in the background, at most every minute.
 	doer.fail = true
 	clock.now = clock.now.Add(time.Second)
 	assert.Equal(t, first, serve(t, e, http.MethodGet, "/aggregator/api/prices").Body.String())
@@ -98,8 +99,10 @@ func TestCompatPricesAreCachedThenBackedUp(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "[]\n", rec.Body.String(), "[] where the aggregator answers null")
 
-	// CoinGecko answers again: the new price.
+	// CoinGecko answers again: the new price, once a minute has passed
+	// since the last failed read.
 	doer.fail = false
+	clock.now = clock.now.Add(coingecko.RetryAfter)
 	assert.Equal(t, `[{"denom":"bzedge","price":0.0003,"price_denom":"usd"}]`+"\n",
 		serve(t, e, http.MethodGet, "/aggregator/api/prices").Body.String())
 }

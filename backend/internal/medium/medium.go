@@ -166,22 +166,25 @@ const BackupFor = 24 * time.Hour
 const RetryAfter = time.Minute
 
 // FeedDeps are the feed's collaborators; Log defaults to the standard
-// logger, Clock to the wall clock.
+// logger, Clock to the wall clock, Spawn to a new goroutine.
 type FeedDeps struct {
 	Source Source
 	Log    log.FieldLogger
 	Clock  Clock
+	// Spawn runs a background refresh; tests run it inline.
+	Spawn func(func())
 }
 
 // Feed serves the latest articles from memory.
 type Feed struct {
 	deps FeedDeps
 
-	mu       sync.Mutex
-	held     []Article
-	readAt   time.Time
-	failedAt time.Time
-	failing  bool
+	mu         sync.Mutex
+	held       []Article
+	readAt     time.Time
+	failedAt   time.Time
+	failing    bool
+	refreshing bool
 }
 
 // NewFeed returns a feed over deps.Source.
@@ -192,37 +195,74 @@ func NewFeed(deps FeedDeps) *Feed {
 	if deps.Clock == nil {
 		deps.Clock = realClock{}
 	}
+	if deps.Spawn == nil {
+		deps.Spawn = func(run func()) { go run() }
+	}
 	return &Feed{deps: deps}
 }
 
-// Articles returns the held read while younger than FreshFor, else a new
-// one. While reads fail (asked again at most every RetryAfter) the held
-// read is served while younger than BackupFor, and an empty list after
-// that. The slice is never nil and shared: callers must not change it.
+// Articles returns the held read while younger than FreshFor. An older
+// read still younger than BackupFor is served at once while a new one is
+// fetched in the background (one at a time, at most every RetryAfter while
+// reads fail). With nothing to serve the read happens in the call, and an
+// empty list is returned when it fails. The slice is never nil and shared:
+// callers must not change it.
 func (f *Feed) Articles(ctx context.Context) []Article {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	now := f.deps.Clock.Now()
 	if f.held != nil && now.Sub(f.readAt) < FreshFor {
+		defer f.mu.Unlock()
 		return f.held
 	}
-	if !f.failing || now.Sub(f.failedAt) >= RetryAfter {
-		// The read outlives the request that triggered it: a caller that
-		// hangs up must not count as a feed failure. Source bounds it.
-		got, err := f.deps.Source.Articles(context.WithoutCancel(ctx))
-		f.note(err, now)
-		if err == nil {
-			if got == nil {
-				got = []Article{}
-			}
-			f.held, f.readAt = got, now
-			return got
+	if f.held != nil && now.Sub(f.readAt) < BackupFor {
+		held := f.held
+		start := !f.refreshing && f.mayRead(now)
+		f.refreshing = f.refreshing || start
+		f.mu.Unlock()
+		if start {
+			f.deps.Spawn(f.refresh)
 		}
+		return held
 	}
+	defer f.mu.Unlock()
+	if !f.mayRead(now) {
+		return []Article{}
+	}
+	// The read outlives the request that triggered it: a caller that hangs
+	// up must not count as a feed failure. Source bounds it.
+	f.store(f.deps.Source.Articles(context.WithoutCancel(ctx)))
 	if f.held != nil && now.Sub(f.readAt) < BackupFor {
 		return f.held
 	}
 	return []Article{}
+}
+
+// mayRead reports whether the feed may be asked now: not within RetryAfter
+// of a failed read. Callers hold mu.
+func (f *Feed) mayRead(now time.Time) bool {
+	return !f.failing || now.Sub(f.failedAt) >= RetryAfter
+}
+
+// refresh reads the feed in the background and stores the outcome.
+func (f *Feed) refresh() {
+	got, err := f.deps.Source.Articles(context.Background())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refreshing = false
+	f.store(got, err)
+}
+
+// store keeps a successful read and notes the outcome. Callers hold mu.
+func (f *Feed) store(got []Article, err error) {
+	now := f.deps.Clock.Now()
+	f.note(err, now)
+	if err != nil {
+		return
+	}
+	if got == nil {
+		got = []Article{}
+	}
+	f.held, f.readAt = got, now
 }
 
 // note logs a failure when one starts and the recovery when it ends, not
