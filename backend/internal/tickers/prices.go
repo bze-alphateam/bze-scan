@@ -15,13 +15,13 @@ import (
 //     token;
 //   - the native denom is its USDC price (see last), else CoinGecko's price
 //     of its id;
-//   - any other denom is the average of its USDC price and its native
-//     price times the native denom's USD price, or whichever of the two
-//     exists.
+//   - any other denom is its USDC price, else its native price times the
+//     native denom's USD price.
 //
-// Unlike the aggregator, no price is cut to six decimals, and the native
+// Unlike the aggregator, no price is cut to six decimals, the native
 // denom's CoinGecko fallback reads its CoinGecko id (the aggregator looks
-// for the denom and never finds it). A price computed after a failed read
+// for the denom and never finds it), and a denom with a USDC price takes
+// it as is (the aggregator averaged it with the native route). A price computed after a failed read
 // (a store, the node, CoinGecko) is answered but not kept.
 func (s *Service) USD(ctx context.Context, denom string) *big.Rat {
 	p, _ := s.cachedUSD(ctx, denom)
@@ -62,23 +62,17 @@ func (s *Service) usd(ctx context.Context, denom string) (*big.Rat, bool) {
 		cg, cgFailed := s.coinGecko(ctx)
 		return cg, failed || cgFailed
 	}
-	inUSD, failedUSD := s.last(ctx, denom, usdc)
-	inNative, failed := s.last(ctx, denom, native)
-	failed = failed || failedUSD
-	if inNative.Sign() <= 0 {
+	inUSD, failed := s.last(ctx, denom, usdc)
+	if inUSD.Sign() > 0 {
 		return inUSD, failed
 	}
-	nativeUSD, failedNative := s.cachedUSD(ctx, native)
+	inNative, failedNative := s.last(ctx, denom, native)
 	failed = failed || failedNative
-	if nativeUSD.Sign() <= 0 {
-		return inUSD, failed
+	if inNative.Sign() <= 0 {
+		return inNative, failed
 	}
-	fromNative := new(big.Rat).Mul(inNative, nativeUSD)
-	if inUSD.Sign() <= 0 {
-		return fromNative, failed
-	}
-	avg := fromNative.Add(fromNative, inUSD)
-	return avg.Quo(avg, big.NewRat(2, 1)), failed
+	nativeUSD, failedUSD := s.cachedUSD(ctx, native)
+	return inNative.Mul(inNative, nativeUSD), failed || failedUSD
 }
 
 // last is base's price in quote: the spot price of their pool when it has
