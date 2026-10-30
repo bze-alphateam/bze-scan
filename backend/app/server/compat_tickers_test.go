@@ -350,8 +350,8 @@ func liquidityOf(t *testing.T, e *tkEnv, id string) string {
 // The USD prices behind the liquidity, step by step: BZE from its USDC
 // pool, else its last order book price of the last 24 hours, else its last
 // trade ever, else CoinGecko's bzedge price (which the aggregator never
-// finds); another token from its USDC route, its BZE route, or the average
-// of both.
+// finds); another token from its USDC route, else its BZE route (never an
+// average of both, unlike the aggregator).
 func TestCompatTickersUSDPrices(t *testing.T) {
 	// VDL/BZE: 1000 BZE and 500 VDL, so a VDL is 2 BZE.
 	vdlPool := func(e *tkEnv) string { return e.pool("ubze", "uvdl", 1_000_000_000, 500_000_000) }
@@ -373,11 +373,12 @@ func TestCompatTickersUSDPrices(t *testing.T) {
 			e.gecko = map[string]string{"bzedge": "0.02", "ubze": "9"}
 		}, "40"},
 		"no BZE price": {func(*tkEnv) {}, ""},
-		"VDL from both routes, averaged": {func(e *tkEnv) {
+		"VDL from its USDC route, not averaged with BZE": {func(e *tkEnv) {
 			e.pool("ubze", "uusdc", 1_000_000_000, 50_000_000)
-			// 30 USDC and 100 VDL: 0.3 USD a VDL, 0.1 through BZE.
+			// 30 USDC and 100 VDL: 0.3 USD a VDL (0.1 through BZE, unused):
+			// 1000 BZE × 0.05 + 500 VDL × 0.3.
 			e.pool("uusdc", "uvdl", 30_000_000, 100_000_000)
-		}, "150"},
+		}, "200"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newTkEnv()
