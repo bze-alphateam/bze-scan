@@ -12,7 +12,9 @@
 // first hop chain's registry asset and its traces to its home chain; when
 // that fails, the first hop's chain and the raw base denom stay. A chain or
 // an asset missing from the cache is asked of the chain_registry set. A
-// multi-hop denom also keeps its first hop's chain as the via chain.
+// multi-hop denom also keeps its first hop's chain as the via chain. A
+// denom whose exponent neither the registry nor real bank metadata gives
+// (a testnet chain missing from the registry) gets DefaultExponent, 6.
 //
 // An LP denom is mapped to its pool's two assets through the tradebin pool
 // list (a ulp/<hash> denom, chain v8.2.0+, is the hash of the pool id and
@@ -64,6 +66,11 @@ const (
 
 // LPExponent is a pool share's display exponent, as the BZE apps show it.
 const LPExponent = 12
+
+// DefaultExponent is the exponent of a denom whose decimals neither the
+// chain registry nor the bank metadata give: 6, the Cosmos convention the
+// BZE apps assume too.
+const DefaultExponent = 6
 
 // Kind classifies a base denom by its shape: the native denom, a
 // tokenfactory denom, an IBC voucher or a tradebin liquidity-pool share
@@ -582,8 +589,12 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 	if row.Markets == nil {
 		row.Markets = []string{}
 	}
+	// Whether a source gave the exponent: the chain registry (IBC), the bank
+	// metadata's display unit, the native or the LP constants. Else it is
+	// DefaultExponent.
+	known := false
 	if md != nil {
-		applyMetadata(&row, md)
+		known = applyMetadata(&row, md)
 		raw, err := json.Marshal(md)
 		if err != nil {
 			return Denom{}, fmt.Errorf("denom %s: metadata: %w", denom, err)
@@ -591,6 +602,7 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 		row.Metadata = raw
 	} else if denom == chain.BondDenom {
 		row.Symbol, row.Name, row.Exponent = chain.BondDenomSymbol, chain.BondDenomName, chain.BondDenomExponent
+		known = true
 	}
 	if row.Kind == KindFactory {
 		if parts := strings.SplitN(denom, "/", 3); len(parts) == 3 {
@@ -619,11 +631,17 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 		// The chain's metadata says 6; the BZE apps show pool shares with
 		// 12 decimals (LP_ASSETS_DECIMALS), and so does the explorer.
 		row.Exponent = LPExponent
+		known = true
 	}
 	if row.Kind == KindIBC && s.deps.Transfer != nil {
-		if err := s.ibc(ctx, &row, origins); err != nil {
+		fromRegistry, err := s.ibc(ctx, &row, origins)
+		if err != nil {
 			return Denom{}, err
 		}
+		known = known || fromRegistry
+	}
+	if !known {
+		row.Exponent = DefaultExponent
 	}
 	return row, nil
 }
@@ -661,30 +679,30 @@ func (o *origins) publish(p statesync.Publisher) {
 }
 
 // ibc fills an IBC denom's trace, origin and display fields from the
-// registry asset.
-func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) error {
+// registry asset; true when the asset gave the exponent.
+func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) (bool, error) {
 	hash := strings.TrimPrefix(row.Denom, "ibc/")
 	resp, err := s.deps.Transfer.DenomTrace(ctx, &ibctransfertypes.QueryDenomTraceRequest{Hash: hash})
 	switch {
 	case status.Code(err) == codes.NotFound:
-		return nil
+		return false, nil
 	case err != nil:
-		return fmt.Errorf("transfer DenomTrace %s: %w", row.Denom, err)
+		return false, fmt.Errorf("transfer DenomTrace %s: %w", row.Denom, err)
 	case resp.DenomTrace == nil:
-		return nil
+		return false, nil
 	}
 	trace := resp.DenomTrace
 	row.IBCPath, row.IBCBaseDenom = trace.Path, trace.BaseDenom
 	if o == nil {
-		return nil
+		return false, nil
 	}
 	hops := channels(trace.Path)
 	if len(hops) == 0 {
-		return nil
+		return false, nil
 	}
 	first := o.chains[hops[0]]
 	if first == "" {
-		return nil // the channel's chain is not known until the channels sync fills it
+		return false, nil // the channel's chain is not known until the channels sync fills it
 	}
 	row.OriginChainID = first
 	if len(hops) > 1 {
@@ -692,7 +710,7 @@ func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) error {
 	}
 	asset, err := s.originAsset(ctx, row, trace, first, o)
 	if err != nil || asset == nil {
-		return err
+		return false, err
 	}
 	if asset.Symbol != "" {
 		row.Symbol = asset.Symbol
@@ -703,10 +721,11 @@ func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) error {
 	if asset.LogoURL != "" {
 		row.LogoURL = asset.LogoURL
 	}
-	if asset.Exponent != nil {
-		row.Exponent = *asset.Exponent
+	if asset.Exponent == nil {
+		return false, nil
 	}
-	return nil
+	row.Exponent = *asset.Exponent
+	return true, nil
 }
 
 // originAsset returns the registry asset of a traced denom whose first hop
@@ -779,8 +798,9 @@ func IBCDenom(fullPath string) string {
 }
 
 // applyMetadata fills the display fields from bank metadata: the exponent is
-// the display unit's (0 when the display unit is not listed).
-func applyMetadata(row *Denom, md *banktypes.Metadata) {
+// the display unit's; false when the display unit is not listed, as in the
+// placeholder ibc-go writes for a voucher (its display is the full path).
+func applyMetadata(row *Denom, md *banktypes.Metadata) bool {
 	row.Symbol = md.Symbol
 	row.Name = md.Name
 	row.Description = md.Description
@@ -788,6 +808,8 @@ func applyMetadata(row *Denom, md *banktypes.Metadata) {
 	for _, u := range md.DenomUnits {
 		if u != nil && u.Denom == md.Display {
 			row.Exponent = int(u.Exponent)
+			return true
 		}
 	}
+	return false
 }
