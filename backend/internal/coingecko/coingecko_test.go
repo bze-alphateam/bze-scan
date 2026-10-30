@@ -75,8 +75,12 @@ type clock struct{ now time.Time }
 
 func (c *clock) Now() time.Time { return c.now }
 
+// inline runs a background refresh before the call that started it
+// returns, so its outcome is visible to the next call.
+func inline(run func()) { run() }
+
 func newFeed(src *source, c *clock, lg logrus.FieldLogger, ids ...string) *coingecko.Feed {
-	return coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: c}, ids)
+	return coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: c, Spawn: inline}, ids)
 }
 
 func TestFeedListsTheConfiguredIDsOnceInOrder(t *testing.T) {
@@ -109,7 +113,17 @@ func TestFeedCachesThenServesTheBackup(t *testing.T) {
 	c.now = time.Unix(1000, 0).Add(coingecko.FreshFor)
 	src.prices = map[string]string{}
 	assert.Equal(t, want, f.Prices(ctx), "the backup")
+	assert.Equal(t, 2, src.calls)
+
+	// While failing, CoinGecko is asked at most every RetryAfter.
 	src.err = errors.New("HTTP 429")
+	c.now = c.now.Add(coingecko.RetryAfter - time.Nanosecond)
+	assert.Equal(t, want, f.Prices(ctx))
+	assert.Equal(t, 2, src.calls)
+	c.now = c.now.Add(time.Nanosecond)
+	assert.Equal(t, want, f.Prices(ctx))
+	assert.Equal(t, 3, src.calls)
+
 	c.now = time.Unix(1000, 0).Add(coingecko.BackupFor - time.Nanosecond)
 	assert.Equal(t, want, f.Prices(ctx))
 	usd, err := f.USD(ctx)
@@ -122,9 +136,40 @@ func TestFeedCachesThenServesTheBackup(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 1, countLevel(hook, logrus.WarnLevel), "one warning per failure, not per read")
 
+	// Nothing held: the read happens in the call, once RetryAfter has passed.
 	src.err, src.prices = nil, map[string]string{"bzedge": "0.0003"}
+	c.now = c.now.Add(coingecko.RetryAfter)
 	assert.Equal(t, []coingecko.Price{{ID: "bzedge", Price: 0.0003}}, f.Prices(ctx))
 	assert.Equal(t, logrus.InfoLevel, hook.LastEntry().Level)
+}
+
+func TestFeedRefreshesAStaleReadInTheBackground(t *testing.T) {
+	lg, _ := logtest.NewNullLogger()
+	src := &source{prices: map[string]string{"bzedge": "0.0002"}}
+	c := &clock{now: time.Unix(1000, 0)}
+	var spawned []func()
+	f := coingecko.NewFeed(coingecko.FeedDeps{Source: src, Log: lg, Clock: c, Spawn: func(run func()) {
+		spawned = append(spawned, run)
+	}}, []string{"bzedge"})
+	ctx := context.Background()
+	old := []coingecko.Price{{ID: "bzedge", Price: 0.0002}}
+
+	assert.Equal(t, old, f.Prices(ctx), "nothing held: read in the call")
+	assert.Empty(t, spawned)
+
+	// Stale: the held read is served at once, one refresh is started and
+	// no second one while it runs.
+	src.prices = map[string]string{"bzedge": "0.0003"}
+	c.now = c.now.Add(coingecko.FreshFor)
+	assert.Equal(t, old, f.Prices(ctx))
+	assert.Equal(t, old, f.Prices(ctx))
+	require.Len(t, spawned, 1)
+	assert.Equal(t, 1, src.calls, "the request did not read CoinGecko")
+
+	spawned[0]()
+	assert.Equal(t, []coingecko.Price{{ID: "bzedge", Price: 0.0003}}, f.Prices(ctx))
+	assert.Equal(t, 2, src.calls)
+	assert.Len(t, spawned, 1, "the new read is fresh")
 }
 
 func TestFeedUSDLeavesNegativePricesOut(t *testing.T) {

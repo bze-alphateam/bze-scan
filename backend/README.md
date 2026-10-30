@@ -458,9 +458,12 @@ result is `[]`, never `null`.
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
-feed keeps the answer for 180 s; when CoinGecko fails (or prices none of the
-ids) the last read is served for up to 24 hours after it, then `[]` (the
-aggregator answers `null`). The route is always 200. The prices job of the
+feed keeps the answer for 180 s. After that the held answer is still served
+at once while a new read runs in the background (one at a time), so no
+request waits for CoinGecko; only a feed holding nothing reads in the
+request. When CoinGecko fails (or prices none of the ids) it is asked again
+at most every minute and the last read is served for up to 24 hours after
+it, then `[]` (the aggregator answers `null`). The route is always 200. The prices job of the
 state sync reads the same feed. `serve` and `sync-state` each hold one.
 
 **Medium articles.** `internal/medium`: the client reads the RSS feed at
@@ -471,9 +474,10 @@ no content) when it holds `https://cdn`, else `""`; `description` is the
 content without HTML (bluemonday's strict policy, which escapes entities
 again) cut at 150 **bytes**, as the aggregator cuts, then `...`, so a
 multi-byte character across the cut becomes U+FFFD; `publish_date` is the
-item's date in RFC 3339, UTC. The feed keeps the answer for 600 s. When the
-feed fails (asked again at most every minute) the last read is served for up
-to 24 hours after it, then `[]`; the aggregator answers `[]` for 600 s. An
+item's date in RFC 3339, UTC. The feed keeps the answer for 600 s, then
+serves it while a new read runs in the background, as the prices feed does.
+When the feed fails (asked again at most every minute) the last read is
+served for up to 24 hours after it, then `[]`; the aggregator answers `[]` for 600 s. An
 empty feed is `[]` (the aggregator answers `null`). The route is always 200.
 
 **Display units** (`internal/dexunits`, shared by every DEX route of the
