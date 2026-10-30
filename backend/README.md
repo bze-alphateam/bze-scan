@@ -377,7 +377,7 @@ every later route follows:
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
 | `GET /api/v1/tokens/{denom}/transfers?cursor&limit` | every indexed move of the denom, newest first: height, tx_index, tx_hash, time and the transfer as on the transaction page |
-| `GET /api/v1/prices` | `{"prices": [{denom, price_usd, price_source, price_change_24h_pct, updated_at}]}`: every denom with a price, by denom, as the prices job last wrote it (no computation at request time): `price_usd` and `price_change_24h_pct` decimal strings as on the tokens routes (the change is `ubze`'s only, null for the rest), `price_source` `dex` (the DEX price chain: the USDC pool's spot price, else the last trade, averaged over the USDC and BZE routes) or `coingecko` (by chain-registry id), `updated_at` the job's last write. The dapps' own price math can move to this route. `public, max-age=60` |
+| `GET /api/v1/prices` | `{"prices": [{denom, price_usd, price_source, price_change_24h_pct, updated_at}]}`: every denom with a price, by denom, as the prices job last wrote it (no computation at request time): `price_usd` and `price_change_24h_pct` decimal strings as on the tokens routes (the change is `ubze`'s only, null for the rest), `price_source` `dex` (the DEX price chain: the USDC pool's spot price, else the last trade; the USDC route first, the BZE route only without one) or `coingecko` (by chain-registry id), `updated_at` the job's last write. The dapps' own price math can move to this route. `public, max-age=60` |
 | `GET /api/v1/tokens/{denom}/holders?cursor&limit` | the last holders snapshot, largest balance first: rank, address, `label`, balance (base units) and `share_pct` (of the supply, five decimals, null without a supply); every non-zero balance, refreshed hourly |
 | `GET /api/v1/token?denom=`, `/api/v1/token/events?denom=`, `/api/v1/token/transfers?denom=`, `/api/v1/token/holders?denom=` | the same four with the denom as a query value, the chain's own convention for denoms with `/` |
 | `GET /api/v1/proposals?status=deposit_period\|voting_period\|passed\|rejected\|failed\|canceled\|dropped&cursor&limit` | every proposal, id descending: id, title, kind (`software_upgrade`, `community_pool_spend`, `parameter_change`, `cointrunk_publisher`, `ibc_client_update`, `text`, `other`), status, expedited, submit/deposit-end/voting-start/voting-end times, `tally` (`{yes, no, abstain, no_with_veto}` in base units, null until synced), `turnout_pct` (the tally's sum over the bonded tokens it was measured against, five decimals, null without them) and `tally_source` (where those bonded tokens come from: `sync` while the proposal voted, `archive` from the snapshots command, historical; null without them); another status is a 400 |
@@ -651,8 +651,8 @@ is its pool's reserves at their USD prices per whole LP token; `ubze` is its
 spot price in the BZE/USDC pool, else its last trade on the `ubze/<USDC>`
 order book (the aggregator's "last 24 hours" and "last trade ever" steps,
 which the newest trade answers both), else CoinGecko's `bzedge` price; any
-other denom the average of its USDC price and its BZE price × BZE's USD
-price, or whichever exists (a pair's price is its pool's spot price, else the
+other denom its USDC price, else its BZE price × BZE's USD price (never
+an average of the two, unlike the aggregator) (a pair's price is its pool's spot price, else the
 last trade of the `<denom>/<quote>` order book). Pools and LP supplies are
 read from the node at most every 10 s, the last good read served while it
 fails. Differences from the aggregator: the default format is by market id;
@@ -1599,9 +1599,8 @@ keeps it and fails the run.
 and records which one answered in `price_source`. First the DEX price
 chain (`internal/tickers`' internal USD price, the dapps' rule, see
 "Tickers"): the USDC denom (`USDC_DENOM`) is $1, an LP token is its pool's
-reserves at their USD prices, `ubze` is its USDC price, any other denom the
-average of its USDC price and its BZE price times BZE's USD price, or
-whichever exists; each price is the pool's spot price from its reserves,
+reserves at their USD prices, `ubze` is its USDC price, any other denom its
+USDC price, else its BZE price times BZE's USD price; each price is the pool's spot price from its reserves,
 else the newest order-book trade of `base/quote`. No staleness or liquidity
 rule: a pool with reserves or any past trade counts, as the dapps count it.
 A positive price is written with source `dex` (twelve decimals, the
