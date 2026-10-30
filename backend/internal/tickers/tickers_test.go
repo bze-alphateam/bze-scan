@@ -236,3 +236,40 @@ func TestNodePoolsReadOutlivesTheFirstCaller(t *testing.T) {
 	assert.Len(t, <-second, 1)
 	assert.Equal(t, 1, tb.calls, "one read for both callers")
 }
+
+// priceFakes adds two tokens to fakes: ulmn trades on ulmn/uusdc at 0.5 and
+// has a BZE pool at 40 BZE, udog has only a BZE pool at 2 BZE. BZE is $1.
+type priceFakes struct{ fakes }
+
+func (priceFakes) Trades(_ context.Context, f tradehistory.Filter, _ int, _ ...string) ([]tradehistory.Trade, error) {
+	if f.MarketID != "ulmn/uusdc" {
+		return []tradehistory.Trade{}, nil
+	}
+	return []tradehistory.Trade{{TradeID: 3, Price: "0.5"}}, nil
+}
+
+func (priceFakes) Pools(context.Context) ([]tickers.Pool, error) {
+	return []tickers.Pool{
+		{ID: "ubze_uusdc", Base: "ubze", Quote: "uusdc", ReserveBase: sdkmath.NewInt(1), ReserveQuote: sdkmath.NewInt(1)},
+		{ID: "ubze_ulmn", Base: "ubze", Quote: "ulmn", ReserveBase: sdkmath.NewInt(40), ReserveQuote: sdkmath.NewInt(1)},
+		{ID: "ubze_udog", Base: "ubze", Quote: "udog", ReserveBase: sdkmath.NewInt(2), ReserveQuote: sdkmath.NewInt(1)},
+	}, nil
+}
+
+// A token's USD price is its USDC market's price whenever it has one, never
+// averaged with the BZE route; the BZE route prices only a token without a
+// USDC price. Regression: the two routes were averaged, so a token with a
+// stale or thin BZE pool got a USD price far from its USDC market.
+func TestUSDPrefersTheUSDCMarket(t *testing.T) {
+	ctx := context.Background()
+	lg, _ := logtest.NewNullLogger()
+	f := priceFakes{}
+	s := tickers.New(tickers.Config{NativeDenom: "ubze", USDCDenom: "uusdc"}, tickers.Deps{
+		Books: f, Candles: f, Trades: f, Heights: f, Pools: f,
+		Exponents: exps{"ubze": 6, "uusdc": 6, "ulmn": 6, "udog": 6}, Log: lg, Clock: &clock{now: now},
+	})
+	assert.Equal(t, "1", s.USD(ctx, "ubze").RatString())
+	assert.Equal(t, "1/2", s.USD(ctx, "ulmn").RatString(), "the USDC market, not (0.5 + 40) / 2")
+	assert.Equal(t, "2", s.USD(ctx, "udog").RatString(), "no USDC price: the BZE route")
+	assert.Equal(t, "0", s.USD(ctx, "unone").RatString())
+}
