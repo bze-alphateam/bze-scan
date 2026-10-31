@@ -68,7 +68,7 @@ func newSyncEnv(t *testing.T) *syncEnv {
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
 	cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL = e.reg.APIURL, e.reg.RawURL
 	cfg.PriceChangeMarket, cfg.USDCDenom = recordedPool, usdcDenom
-	cfg.CoinGeckoHost, cfg.CoinGeckoPriceIDs = e.gecko.URL, geckoIDs
+	cfg.CoinGeckoHost = e.gecko.URL
 	cfg.KeybaseURL = e.kb.URL
 	return cfg
 }
@@ -91,7 +91,6 @@ func (e *syncEnv) syncState(t *testing.T, args ...string) (int, string) {
 	t.Setenv("PRICE_CHANGE_MARKET", recordedPool)
 	t.Setenv("USDC_DENOM", usdcDenom)
 	t.Setenv("COINGECKO_HOST", e.gecko.URL)
-	t.Setenv("COINGECKO_PRICE_IDS", strings.Join(geckoIDs, ","))
 	t.Setenv("KEYBASE_URL", e.kb.URL)
 	t.Setenv("LOG_LEVEL", "warn")
 	root := cli.NewRootCmd()

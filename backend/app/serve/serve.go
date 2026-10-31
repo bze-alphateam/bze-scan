@@ -190,7 +190,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// The aggregator-compatible /aggregator/api/prices; a nil interface without a
 	// CoinGecko host, never a typed nil.
 	var compatPrices controller.PriceFeed
-	priceFeed := NewPriceFeed(cfg)
+	priceFeed := NewPriceFeed(cfg, apiPool)
 	if priceFeed != nil {
 		compatPrices = priceFeed
 	}

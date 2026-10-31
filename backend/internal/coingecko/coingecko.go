@@ -1,8 +1,10 @@
 // Package coingecko reads USD prices from CoinGecko's simple price API, the
 // way the BZE aggregator does: Client asks for a list of CoinGecko ids, Feed
 // keeps the answer for FreshFor and serves it for BackupFor more when
-// CoinGecko fails. Feed backs GET /aggregator/api/prices of the aggregator-compatible
-// routes and the prices set of the state sync.
+// CoinGecko fails. Feed asks for BZE's id and the ids its IDs lister names
+// (the chain-registry ids of the stored denoms), and backs GET
+// /aggregator/api/prices of the aggregator-compatible routes and the prices
+// set of the state sync.
 package coingecko
 
 import (
@@ -25,7 +27,7 @@ import (
 // DefaultHost is CoinGecko's public API.
 const DefaultHost = "https://api.coingecko.com"
 
-// DefaultID is the CoinGecko id read when none is configured: BZE's.
+// DefaultID is BZE's CoinGecko id, always read and listed first.
 const DefaultID = "bzedge"
 
 // USD is the currency every price is read in.
@@ -118,20 +120,33 @@ type Price struct {
 	Price float64
 }
 
-// FeedDeps are the feed's collaborators; Log defaults to the standard
-// logger, Clock to the wall clock, Spawn to a new goroutine.
+// IDLister names the CoinGecko ids to read besides DefaultID;
+// *prices.RegistryIDs satisfies it.
+type IDLister interface {
+	CoinGeckoIDs(ctx context.Context) ([]string, error)
+}
+
+// FeedDeps are the feed's collaborators; IDs nil reads DefaultID alone, Log
+// defaults to the standard logger, Clock to the wall clock, Spawn to a new
+// goroutine.
 type FeedDeps struct {
 	Source Source
+	IDs    IDLister
 	Log    log.FieldLogger
 	Clock  Clock
 	// Spawn runs a background refresh; tests run it inline.
 	Spawn func(func())
 }
 
-// Feed serves the prices of a fixed list of ids from memory.
+// Feed serves the prices of DefaultID and the listed ids from memory.
 type Feed struct {
 	deps FeedDeps
-	ids  []string
+
+	// idsMu guards ids, the last listed (DefaultID alone before any), and
+	// idsFailing; a background refresh lists them outside mu.
+	idsMu      sync.Mutex
+	ids        []string
+	idsFailing bool
 
 	mu         sync.Mutex
 	held       []Price
@@ -141,18 +156,8 @@ type Feed struct {
 	refreshing bool
 }
 
-// NewFeed returns a feed of ids, in that order and each once; none reads
-// DefaultID.
-func NewFeed(deps FeedDeps, ids []string) *Feed {
-	var unique []string
-	for _, id := range ids {
-		if id != "" && !slices.Contains(unique, id) {
-			unique = append(unique, id)
-		}
-	}
-	if len(unique) == 0 {
-		unique = []string{DefaultID}
-	}
+// NewFeed returns a feed over deps.
+func NewFeed(deps FeedDeps) *Feed {
 	if deps.Log == nil {
 		deps.Log = log.StandardLogger()
 	}
@@ -162,11 +167,11 @@ func NewFeed(deps FeedDeps, ids []string) *Feed {
 	if deps.Spawn == nil {
 		deps.Spawn = func(run func()) { go run() }
 	}
-	return &Feed{deps: deps, ids: unique}
+	return &Feed{deps: deps, ids: []string{DefaultID}}
 }
 
-// Prices returns the prices of the feed's ids CoinGecko knows, in the
-// configured order: the held read while younger than FreshFor. An older
+// Prices returns the prices of the feed's ids CoinGecko knows, DefaultID
+// first and the others by id: the held read while younger than FreshFor. An older
 // read still younger than BackupFor is served at once while a new one is
 // fetched in the background (one at a time, at most every RetryAfter while
 // reads fail or price nothing). With nothing to serve the read happens in
@@ -245,12 +250,13 @@ var errNoPrices = errors.New("coingecko prices: none read in the last 24 hours")
 // read asks the source for the feed's ids; an answer pricing none of them
 // is an error, as the aggregator treats it.
 func (f *Feed) read(ctx context.Context) ([]Price, error) {
-	byID, err := f.deps.Source.Prices(ctx, f.ids)
+	ids := f.listIDs(ctx)
+	byID, err := f.deps.Source.Prices(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	var out []Price
-	for _, id := range f.ids {
+	for _, id := range ids {
 		s, ok := byID[id]
 		if !ok {
 			continue
@@ -262,9 +268,39 @@ func (f *Feed) read(ctx context.Context) ([]Price, error) {
 		out = append(out, Price{ID: id, Price: p})
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("coingecko prices: none of %s priced", strings.Join(f.ids, ","))
+		return nil, fmt.Errorf("coingecko prices: none of %s priced", strings.Join(ids, ","))
 	}
 	return out, nil
+}
+
+// listIDs is DefaultID followed by the lister's other ids, sorted, each
+// once. A failing lister keeps the last ids listed, logged once per failure.
+func (f *Feed) listIDs(ctx context.Context) []string {
+	f.idsMu.Lock()
+	defer f.idsMu.Unlock()
+	if f.deps.IDs == nil {
+		return f.ids
+	}
+	listed, err := f.deps.IDs.CoinGeckoIDs(ctx)
+	switch {
+	case err != nil && !f.idsFailing:
+		f.idsFailing = true
+		f.deps.Log.WithError(err).Warn("coingecko: the ids list fails, the last one is read")
+	case err == nil && f.idsFailing:
+		f.idsFailing = false
+		f.deps.Log.Info("coingecko: the ids list answers again")
+	}
+	if err != nil {
+		return f.ids
+	}
+	ids := []string{DefaultID}
+	for _, id := range slices.Sorted(slices.Values(listed)) {
+		if id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	f.ids = ids
+	return ids
 }
 
 // note logs a failure when one starts and the recovery when it ends, not

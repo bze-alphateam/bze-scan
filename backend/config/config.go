@@ -114,17 +114,15 @@ type Config struct {
 	// pools' liquidity in USD (/aggregator/api/dex/tickers?format=coingecko);
 	// empty anchors none.
 	USDCDenom string
-	// CoinGeckoHost is CoinGecko's API host, whose USD prices of
-	// CoinGeckoPriceIDs back /aggregator/api/prices and the prices job. Load always
-	// sets it; a Config built in code without one serves neither.
+	// CoinGeckoHost is CoinGecko's API host, whose USD prices of BZE's id and
+	// the chain-registry ids of the stored denoms back /aggregator/api/prices
+	// and the prices job. Load always sets it; a Config built in code without
+	// one serves neither.
 	CoinGeckoHost string
 	// CoinGeckoMergedMarkets folds markets into the ones CoinGecko tracks,
 	// for the aggregator-compatible routes' coingecko format
 	// (COINGECKO_MERGED_MARKETS=<new market>=<tracked market>,…).
 	CoinGeckoMergedMarkets marketmerge.Merges
-	// CoinGeckoPriceIDs are the CoinGecko ids priced, in the order
-	// /aggregator/api/prices lists them (mainnet: bzedge, osmosis, cosmos).
-	CoinGeckoPriceIDs []string
 	// MediumFeedURL is the Medium RSS feed whose first articles back
 	// /aggregator/api/articles/medium. Load always sets it; a Config built in code
 	// without one leaves the route out.
@@ -215,12 +213,6 @@ func Load() (*Config, error) {
 			continue
 		}
 		cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
-	}
-
-	for _, id := range strings.Split(envString("COINGECKO_PRICE_IDS", coingecko.DefaultID), ",") {
-		if id = strings.TrimSpace(id); id != "" {
-			cfg.CoinGeckoPriceIDs = append(cfg.CoinGeckoPriceIDs, id)
-		}
 	}
 
 	if merges, err := marketmerge.Parse(envString("COINGECKO_MERGED_MARKETS", "")); err != nil {
