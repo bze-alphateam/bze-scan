@@ -105,7 +105,6 @@ documented template with the defaults:
 | `BACKFILL_QUIET` | `2s` | flush what the writer holds after this long without a new height |
 | `BACKFILL_RATE_LIMIT` | `20` | archive requests per second across every worker of the backfill and the catch-up (three per height) |
 | `COINGECKO_HOST` | `https://api.coingecko.com` | CoinGecko's API host, whose USD prices back the aggregator-compatible `/aggregator/api/prices` and the prices job |
-| `COINGECKO_PRICE_IDS` | `bzedge` | comma-separated CoinGecko ids priced, in the order `/aggregator/api/prices` lists them; mainnet uses `bzedge,osmosis,cosmos` |
 | `MEDIUM_FEED_URL` | `https://medium.com/feed/bzedge-community` | Medium RSS feed whose first six articles `/aggregator/api/articles/medium` serves |
 | `COINGECKO_MERGED_MARKETS` | empty | markets folded into a market CoinGecko tracks, for `format=coingecko` only: `<new market id>=<tracked market id>,…` (see "Aggregator-compatible endpoints"); mainnet folds BZE/USDC.inj into BZE/USDC.n |
 | `PRICE_CHANGE_MARKET` | mainnet's BZE/USDC.inj pool, `ibc/81DA…4838_ubze` | the DEX market (an order book's `base/quote`, a pool's `base_quote`) whose ticker gives BZE's 24-hour change; change it when the USDC pool moves again; empty leaves the change null |
@@ -446,7 +445,7 @@ result is `[]`, never `null`.
 
 | Route | Answers |
 | --- | --- |
-| `GET /aggregator/api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id of `COINGECKO_PRICE_IDS` CoinGecko prices, in that order |
+| `GET /aggregator/api/prices` | `[{"denom":"<coingecko id>","price":<number>,"price_denom":"usd"}]`, one entry per id CoinGecko prices: BZE's `bzedge` first, then the chain-registry ids of the stored denoms (BZE's own asset list first, else the origin chain's) by id |
 | `GET /aggregator/api/articles/medium` | `[{"title","url","picture_url","description","publish_date","author_name"}]`, the first six articles of `MEDIUM_FEED_URL`, in the feed's order |
 | `GET /aggregator/api/dex/orders?market_id=\|ticker_id=&depth=&format=` | `{"market_id","timestamp":"<unix s>","bids":[{"price","volume"}],"asks":[…]}`; `format=coingecko`: `{"ticker_id":"<base>_<quote>","timestamp","bids":[[price,volume]],"asks":[…]}` (needs `NODE_GRPC_ADDR`) |
 | `GET /aggregator/api/supply/total?denom=` | plain text: the denom's bank supply in display units, 2 decimals (`denom` defaults to `ubze`) |
@@ -458,7 +457,10 @@ result is `[]`, never `null`.
 
 **Prices.** `internal/coingecko`: the client calls
 `{COINGECKO_HOST}/api/v3/simple/price?ids=<ids>&vs_currencies=usd`, and the
-feed keeps the answer for 180 s. After that the held answer is still served
+feed keeps the answer for 180 s. The ids are listed on every read:
+`bzedge`, then the chain-registry ids of the stored denoms
+(`prices.RegistryIDs`, the ids the prices job matches); a failing list keeps
+the last one. After that the held answer is still served
 at once while a new read runs in the background (one at a time), so no
 request waits for CoinGecko; only a feed holding nothing reads in the
 request. When CoinGecko fails (or prices none of the ids) it is asked again
