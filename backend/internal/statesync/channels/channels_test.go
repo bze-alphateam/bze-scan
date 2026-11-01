@@ -195,3 +195,20 @@ func TestAFailingSaveFailsTheRun(t *testing.T) {
 	assert.Equal(t, statesync.Channels, set.Name())
 	assert.Equal(t, channels.DefaultInterval, set.Interval())
 }
+
+// Every write asks for an asset list rebuild; a failed one does not.
+func TestEveryWriteRebuildsTheAssetList(t *testing.T) {
+	ch := &fakeChannel{channels: []*channeltypes.IdentifiedChannel{
+		channel("transfer", "channel-0", "channel-340", "connection-0", channeltypes.OPEN),
+	}, chainOf: map[string]string{"channel-0": "osmosis-1"}}
+	store := &fakeStore{known: map[string]bool{"osmosis-1": true}}
+	saved := &publisher{}
+	set := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store, Saved: saved}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	require.Len(t, saved.got, 1)
+	assert.Equal(t, []string{statesync.All}, saved.got[0].Keys(statesync.AssetList))
+
+	store.err = errors.New("db down")
+	require.Error(t, set.ResyncOne(context.Background(), statesync.All))
+	assert.Len(t, saved.got, 1, "nothing written, nothing to rebuild")
+}

@@ -223,6 +223,9 @@ type Deps struct {
 	// Factory denom without a logo in its metadata takes its registry
 	// asset's. Empty leaves them without.
 	ChainID string
+	// Saved, when set, is asked to rebuild the asset list after every
+	// write.
+	Saved statesync.Publisher
 }
 
 // Set is the denoms set.
@@ -378,6 +381,7 @@ func (s *Set) FullResync(ctx context.Context) error {
 	if err := s.deps.Store.Save(ctx, snap); err != nil {
 		return err
 	}
+	statesync.Announce(s.deps.Saved, statesync.AssetList)
 	s.learn(true, all...)
 	origins.publish(s.deps.Misses)
 	return nil
@@ -442,6 +446,7 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	if err := s.deps.Store.Save(ctx, Snapshot{Denoms: []Denom{row}}); err != nil {
 		return err
 	}
+	statesync.Announce(s.deps.Saved, statesync.AssetList)
 	s.learn(false, key)
 	origins.publish(s.deps.Misses)
 	return nil

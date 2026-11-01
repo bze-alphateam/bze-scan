@@ -193,6 +193,10 @@ func TestGovDepositsVotesAndResolutions(t *testing.T) {
 		"the failed transaction's proposal 53 is not dirty")
 	assert.Equal(t, []string{"59"}, ents.Dirty.Keys(statesync.Params),
 		"only a passed proposal asks for a parameters snapshot")
+	assert.Equal(t, []string{statesync.All}, ents.Dirty.Keys(statesync.Denoms),
+		"a passed proposal may have halted a denom: every denom is resynced")
+	assert.Equal(t, []string{statesync.All}, ents.Dirty.Keys(statesync.Channels),
+		"a passed proposal may have recovered a client: every channel is resynced")
 }
 
 func TestVoteOptions(t *testing.T) {
