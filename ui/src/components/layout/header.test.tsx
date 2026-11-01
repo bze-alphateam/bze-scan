@@ -53,6 +53,10 @@ describe("Header", () => {
     expect(within(drawer).getByRole("link", { name: "Validators" })).toHaveAttribute("href", "/validators");
     expect(within(drawer).getByRole("link", { name: "DEX" })).toHaveAttribute("href", "https://dex.getbze.com");
     expect(within(drawer).getByRole("link", { name: "Docs" })).toHaveAttribute("href", "https://docs.getbze.com");
+    // The Apps links leave the explorer in a new tab; the nav stays in this one.
+    expect(within(drawer).getByRole("link", { name: "DEX" })).toHaveAttribute("target", "_blank");
+    expect(within(drawer).getByRole("link", { name: "Docs" })).toHaveAttribute("rel", "noopener noreferrer");
+    expect(within(drawer).getByRole("link", { name: "Validators" })).not.toHaveAttribute("target");
     // One icon per app link, and none on the explorer's own sections.
     expect(appIconsIn(drawer)).toEqual(["website", "staking", "dex", "burner", "factory", "communities", "docs"]);
     expect(appIconsIn(within(drawer).getByRole("link", { name: "DEX" }))).toEqual(["dex"]);
