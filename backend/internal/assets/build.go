@@ -3,6 +3,7 @@ package assets
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
@@ -40,7 +41,17 @@ type builder struct {
 	byName   map[string]string // registry name → chain id
 	assets   map[[2]string]*RegistryAsset
 	channels map[string]Channel
-	open     []Channel // open transfer channels to known chains, by id
+	// canonical is each chain's canonical channel: its oldest usable
+	// confirmed transfer channel (the lowest channel-N), else its oldest
+	// confirmed one.
+	canonical map[string]string
+	open      []Channel // canonical channels to known chains, open, by id
+	// direct holds the origins (chain id, base denom) of the one-hop IBC
+	// denoms over canonical channels.
+	direct map[[2]string]bool
+	// shadowed holds the multi-hop IBC denoms whose origin also arrives
+	// directly.
+	shadowed map[string]bool
 }
 
 // build maps every denom of t; the list is ordered by kind (native,
@@ -48,7 +59,8 @@ type builder struct {
 func build(t *Tables, cur Curation, bzeChainID string) []Asset {
 	b := &builder{
 		bze: bzeChainID, flags: cur.flags(), chains: map[string]Chain{}, byName: map[string]string{},
-		assets: map[[2]string]*RegistryAsset{}, channels: map[string]Channel{},
+		assets: map[[2]string]*RegistryAsset{}, channels: map[string]Channel{}, canonical: map[string]string{},
+		direct: map[[2]string]bool{}, shadowed: map[string]bool{},
 	}
 	for _, c := range t.Chains {
 		b.chains[c.ChainID] = c
@@ -62,11 +74,26 @@ func build(t *Tables, cur Curation, bzeChainID string) []Asset {
 	}
 	for _, c := range t.Channels {
 		b.channels[c.ChannelID] = c
-		if c.PortID == transferPort && c.State == "open" && b.chains[c.CounterpartyChainID].Known {
+		if c.PortID != transferPort || !c.Confirmed || c.CounterpartyChainID == "" {
+			continue
+		}
+		if cur, ok := b.canonical[c.CounterpartyChainID]; !ok || preferred(c, b.channels[cur]) {
+			b.canonical[c.CounterpartyChainID] = c.ChannelID
+		}
+	}
+	for _, c := range t.Channels {
+		if b.isCanonical(c) && c.State == "open" && b.chains[c.CounterpartyChainID].Known {
 			b.open = append(b.open, c)
 		}
 	}
 	slices.SortFunc(b.open, func(x, y Channel) int { return strings.Compare(x.ChannelID, y.ChannelID) })
+	for _, d := range t.Denoms {
+		if hops := pathChannels(d.IBCPath); d.Kind == denoms.KindIBC && len(hops) == 1 {
+			if c := b.channels[hops[0]]; b.isCanonical(c) {
+				b.direct[[2]string{c.CounterpartyChainID, d.IBCBaseDenom}] = true
+			}
+		}
+	}
 
 	out := make([]Asset, 0, len(t.Denoms))
 	var lps []Denom
@@ -95,6 +122,46 @@ func build(t *Tables, cur Curation, bzeChainID string) []Asset {
 		return strings.Compare(x.Denom, y.Denom)
 	})
 	return out
+}
+
+// isCanonical is whether c is its chain's canonical channel (and so
+// confirmed).
+func (b *builder) isCanonical(c Channel) bool {
+	return c.ChannelID != "" && c.CounterpartyChainID != "" && b.canonical[c.CounterpartyChainID] == c.ChannelID
+}
+
+// preferred is whether confirmed channel x is a better canonical channel
+// than y to the same chain: a usable one (open, its client not known to be
+// expired or frozen) first, then the older. A chain's oldest channel can
+// outlive its client while a newer one carries the transfers.
+func preferred(x, y Channel) bool {
+	if ux, uy := usable(x), usable(y); ux != uy {
+		return ux
+	}
+	return olderChannel(x.ChannelID, y.ChannelID)
+}
+
+func usable(c Channel) bool {
+	return c.State == "open" && (c.ClientStatus == "" || c.ClientStatus == "active")
+}
+
+// olderChannel is whether channel id x was opened before y: BZE numbers its
+// channels channel-N in order. An id of another shape sorts last.
+func olderChannel(x, y string) bool {
+	nx, okx := channelNumber(x)
+	ny, oky := channelNumber(y)
+	switch {
+	case okx && oky:
+		return nx < ny
+	case okx != oky:
+		return okx
+	}
+	return x < y
+}
+
+func channelNumber(id string) (uint64, bool) {
+	n, err := strconv.ParseUint(strings.TrimPrefix(id, "channel-"), 10, 64)
+	return n, err == nil && strings.HasPrefix(id, "channel-")
 }
 
 func kindRank(kind string) int {
@@ -197,9 +264,13 @@ func fromMetadata(a *Asset, raw json.RawMessage) {
 	}
 }
 
-// ibc maps an IBC denom: the home chain's registry asset, else BZE's own
-// registry entry for the exact voucher, else the unknown treatment. Only
-// the home chain's asset verifies it.
+// ibc maps an IBC denom. Over an unconfirmed channel it gets the unknown
+// treatment: nothing its counterparty declares (chain, base denom's
+// asset) is trusted. Otherwise: the home chain's registry asset, else
+// BZE's own registry entry for the exact voucher, else the unknown
+// treatment. It is verified only with the home chain's asset over its
+// chain's canonical channel, when its origin does not also arrive directly
+// and it is not halted.
 func (b *builder) ibc(d Denom) Asset {
 	a := base(d, KindIBC)
 	hops := pathChannels(d.IBCPath)
@@ -221,23 +292,36 @@ func (b *builder) ibc(d Denom) Asset {
 		_, rest, _ = strings.Cut(rest, "/")
 		cpBase = denoms.IBCDenom(rest + "/" + d.IBCBaseDenom)
 	}
+	if !ch.Confirmed {
+		a.IBC = &IBC{
+			ChannelID: hops[0],
+			Counterparty: Counterparty{
+				ChainInfo: ChainInfo{ChainID: cpID, PrettyName: UnknownChain, REST: []string{}, RPC: []string{}},
+				ChannelID: ch.CounterpartyChannelID, BaseDenom: cpBase,
+			},
+		}
+		fromUnknown(&a, d.IBCBaseDenom)
+		return a
+	}
 	cp := b.chains[cpID]
 	a.IBC = &IBC{
-		ChannelID:    hops[0],
-		Counterparty: Counterparty{ChainInfo: b.chainInfo(cpID), ChannelID: ch.CounterpartyChannelID, BaseDenom: cpBase},
+		ChannelID:        hops[0],
+		Counterparty:     Counterparty{ChainInfo: b.chainInfo(cpID), ChannelID: ch.CounterpartyChannelID, BaseDenom: cpBase},
+		ChannelConfirmed: true,
 	}
 
 	home, homeBase, reg := b.home(d, cpID, cpBase, len(hops))
 	if c := b.chains[home]; home != "" && c.Known && c.Name != "" {
 		a.IBC.Origin = &Origin{ChainName: c.Name, BaseDenom: homeBase, Hops: len(hops)}
 	}
+	b.shadowed[d.Denom] = len(hops) > 1 && home != "" && b.direct[[2]string{home, homeBase}]
 	switch own := b.assets[[2]string{b.bze, d.Denom}]; {
 	case reg != nil:
 		a.Name = reg.Name
 		a.Ticker = strings.ToUpper(reg.Symbol)
 		a.Decimals = exponent(reg)
 		a.Logo = registryLogo(reg.Logos, reg.LogoURL)
-		a.Verified = !d.Halted
+		a.Verified = b.isCanonical(ch) && !b.shadowed[d.Denom] && !d.Halted
 	case own != nil:
 		fromOwnRegistry(&a, own)
 	default:
@@ -319,7 +403,10 @@ func (b *builder) lp(d Denom, byDenom map[string]Asset) Asset {
 	return a
 }
 
-// curate applies the curation file's flags.
+// curate applies the curation file's flags. An IBC denom is depositable
+// unless its first hop is unconfirmed or its origin also arrives directly
+// (the direct denom is the one to deposit), and withdrawable whenever its
+// first hop is confirmed, so its holders are never stranded.
 func (b *builder) curate(a *Asset) {
 	f := b.flags
 	if f.unverified[a.Denom] {
@@ -329,13 +416,18 @@ func (b *builder) curate(a *Asset) {
 	a.Excluded = f.excluded[a.Denom]
 	a.DepositAllowed = !f.noDeposit[a.Denom]
 	a.WithdrawAllowed = !f.noWithdraw[a.Denom]
+	if a.Kind == KindIBC {
+		confirmed := a.IBC != nil && a.IBC.ChannelConfirmed
+		a.DepositAllowed = a.DepositAllowed && confirmed && !b.shadowed[a.Denom]
+		a.WithdrawAllowed = a.WithdrawAllowed && confirmed
+	}
 	if n, ok := f.notices[a.Denom]; ok {
 		a.Notice = &n
 	}
 }
 
-// routes are denom's vouchers on every chain an open transfer channel
-// leads to; empty, never nil.
+// routes are denom's vouchers on every chain the registry knows, over its
+// canonical channel when that is open; empty, never nil.
 func (b *builder) routes(denom string) []Route {
 	out := make([]Route, 0, len(b.open))
 	for _, c := range b.open {
@@ -356,7 +448,7 @@ func (b *builder) chainInfo(chainID string) ChainInfo {
 	if !c.Known {
 		return info
 	}
-	info.ChainName, info.PrettyName, info.Bech32Prefix = c.Name, c.PrettyName, c.Bech32Prefix
+	info.ChainName, info.PrettyName, info.Bech32Prefix = optional(c.Name), c.PrettyName, optional(c.Bech32Prefix)
 	info.Logo = registryLogo(c.Logos, c.LogoURL)
 	if c.REST != nil {
 		info.REST = c.REST

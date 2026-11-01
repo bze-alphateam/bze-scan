@@ -49,14 +49,19 @@ type Asset struct {
 	Version string  `json:"version"`
 }
 
+// UnknownChain is the pretty name of the counterparty of an unconfirmed
+// channel.
+const UnknownChain = "Unknown chain"
+
 // ChainInfo describes a counterparty chain from the registry cache; only
-// ChainID is set for a chain the registry does not know.
+// ChainID is set for a chain the registry does not know (ChainName,
+// Logo and Bech32Prefix null).
 type ChainInfo struct {
-	ChainName    string   `json:"chain_name"`
+	ChainName    *string  `json:"chain_name"`
 	ChainID      string   `json:"chain_id"`
 	PrettyName   string   `json:"pretty_name"`
 	Logo         *string  `json:"logo"`
-	Bech32Prefix string   `json:"bech32_prefix"`
+	Bech32Prefix *string  `json:"bech32_prefix"`
 	REST         []string `json:"rest"`
 	RPC          []string `json:"rpc"`
 }
@@ -68,7 +73,10 @@ type IBC struct {
 	Counterparty Counterparty `json:"counterparty"`
 	// Origin is nil when the registry cache cannot name the home chain.
 	Origin *Origin `json:"origin"`
-	// ChannelConfirmed is false until the channel confirmation rules land.
+	// ChannelConfirmed is whether the first hop's counterparty was
+	// confirmed to be the chain its light client claims. Without it the
+	// denom gets the unknown treatment: nothing the counterparty declares is
+	// trusted.
 	ChannelConfirmed bool `json:"channel_confirmed"`
 }
 
@@ -95,8 +103,8 @@ type LP struct {
 	Quote string `json:"quote"`
 }
 
-// Route is a way to send a native or factory denom out of BZE: an open
-// transfer channel to a chain the registry knows.
+// Route is a way to send a native or factory denom out of BZE: the
+// canonical channel to a chain the registry knows, open.
 type Route struct {
 	ChainInfo
 	ChannelID             string `json:"channel_id"`

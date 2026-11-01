@@ -43,7 +43,8 @@ func svg(u string) chainregistry.Logos {
 }
 
 // tables is a small chain: BZE's own registry list, Noble, Osmosis and
-// AtomOne in the registry cache, four channels.
+// AtomOne in the registry cache, five channels, all confirmed but the one
+// to a chain the registry does not know.
 func tables() *assets.Tables {
 	return &assets.Tables{
 		Denoms: []assets.Denom{
@@ -57,8 +58,8 @@ func tables() *assets.Tables {
 			{Denom: usdc, Kind: "ibc", IBCPath: "transfer/channel-3", IBCBaseDenom: "uusdc", OriginChainID: "noble-1",
 				Metadata: json.RawMessage(`{"name":"placeholder","symbol":"UUSDC"}`)},
 			{Denom: haltedIBC, Kind: "ibc", IBCPath: "transfer/channel-3", IBCBaseDenom: "uhalt", OriginChainID: "noble-1", Halted: true},
-			{Denom: ownIBC, Kind: "ibc", IBCPath: "transfer/channel-9", IBCBaseDenom: "uown", OriginChainID: "own-1"},
-			{Denom: unknown, Kind: "ibc", IBCPath: "transfer/channel-9", IBCBaseDenom: "averyveryverylongdenom"},
+			{Denom: ownIBC, Kind: "ibc", IBCPath: "transfer/channel-4", IBCBaseDenom: "uown", OriginChainID: "own-1"},
+			{Denom: unknown, Kind: "ibc", IBCPath: "transfer/channel-4", IBCBaseDenom: "averyveryverylongdenom"},
 			{Denom: atone, Kind: "ibc", IBCPath: "transfer/channel-0/transfer/channel-94814", IBCBaseDenom: "uatone",
 				OriginChainID: "osmosis-1", ViaChainID: "osmosis-1"},
 			{Denom: lpKnown, Kind: "lp", LPBase: vdl, LPQuote: "ubze"},
@@ -89,10 +90,11 @@ func tables() *assets.Tables {
 				LogoURL: "https://r/atone-old.png"},
 		},
 		Channels: []assets.Channel{
-			{ChannelID: "channel-0", PortID: "transfer", CounterpartyChainID: "osmosis-1", CounterpartyChannelID: "channel-750", State: "open"},
-			{ChannelID: "channel-1", PortID: "transfer", CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-1", State: "closed"},
+			{ChannelID: "channel-0", PortID: "transfer", CounterpartyChainID: "osmosis-1", CounterpartyChannelID: "channel-750", State: "open", ClientStatus: "active", Confirmed: true},
+			{ChannelID: "channel-1", PortID: "transfer", CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-1", State: "closed", Confirmed: true},
 			{ChannelID: "channel-2", PortID: "transfer", CounterpartyChainID: "nowhere-1", CounterpartyChannelID: "channel-5", State: "open"},
-			{ChannelID: "channel-3", PortID: "transfer", CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-95", State: "open"},
+			{ChannelID: "channel-3", PortID: "transfer", CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-95", State: "open", ClientStatus: "active", Confirmed: true},
+			{ChannelID: "channel-4", PortID: "transfer", CounterpartyChainID: "own-1", CounterpartyChannelID: "channel-8", State: "open", Confirmed: true},
 		},
 	}
 }
@@ -178,17 +180,18 @@ func TestTheNativeCoin(t *testing.T) {
 	assert.Nil(t, bze.IBC)
 	assert.Nil(t, bze.LP)
 
-	// One route per open transfer channel to a chain the registry knows:
-	// not the closed channel-1, not channel-2 to an unknown chain.
+	// One route per chain the registry knows, over its canonical channel:
+	// not the closed channel-1, not the unconfirmed channel-2, not
+	// channel-4 to a chain the registry does not know.
 	require.Len(t, bze.Routes, 2)
 	osmo := bze.Routes[0]
 	assert.Equal(t, "channel-0", osmo.ChannelID)
 	assert.Equal(t, "channel-750", osmo.CounterpartyChannelID)
 	assert.Equal(t, ubzeOnOsmosis, osmo.CounterpartyDenom, "the ICS-20 voucher of ubze on the counterparty")
-	assert.Equal(t, "osmosis", osmo.ChainName)
+	assert.Equal(t, str("osmosis"), osmo.ChainName)
 	assert.Equal(t, "osmosis-1", osmo.ChainID)
 	assert.Equal(t, "Osmosis", osmo.PrettyName)
-	assert.Equal(t, "osmo", osmo.Bech32Prefix)
+	assert.Equal(t, str("osmo"), osmo.Bech32Prefix)
 	assert.Equal(t, str("https://r/osmo-old.png"), osmo.Logo, "a row without logos falls back to the stored logo")
 	assert.Equal(t, []string{}, osmo.REST)
 	noble := bze.Routes[1]
@@ -261,12 +264,12 @@ func TestIBCPrecedence(t *testing.T) {
 	assert.Equal(t, "channel-3", u.IBC.ChannelID)
 	assert.Equal(t, "channel-95", u.IBC.Counterparty.ChannelID)
 	assert.Equal(t, "uusdc", u.IBC.Counterparty.BaseDenom)
-	assert.Equal(t, "noble", u.IBC.Counterparty.ChainName)
+	assert.Equal(t, str("noble"), u.IBC.Counterparty.ChainName)
 	assert.Equal(t, "noble-1", u.IBC.Counterparty.ChainID)
 	assert.Equal(t, "Noble", u.IBC.Counterparty.PrettyName)
 	assert.Equal(t, []string{"https://rest.noble"}, u.IBC.Counterparty.REST)
 	assert.Equal(t, &assets.Origin{ChainName: "noble", BaseDenom: "uusdc", Hops: 1}, u.IBC.Origin)
-	assert.False(t, u.IBC.ChannelConfirmed)
+	assert.True(t, u.IBC.ChannelConfirmed)
 
 	h := got[haltedIBC]
 	assert.Equal(t, "HLT", h.Ticker)
@@ -280,8 +283,9 @@ func TestIBCPrecedence(t *testing.T) {
 	assert.Equal(t, str("listed by BZE"), o.Description)
 	assert.False(t, o.Verified, "only the origin chain's registry verifies")
 	require.NotNil(t, o.IBC)
-	assert.Equal(t, "own-1", o.IBC.Counterparty.ChainID, "a channel the explorer does not hold keeps the denom's chain")
-	assert.Nil(t, o.IBC.Origin, "a chain the registry does not know")
+	assert.Equal(t, "own-1", o.IBC.Counterparty.ChainID)
+	assert.Nil(t, o.IBC.Counterparty.ChainName, "a chain the registry does not know")
+	assert.Nil(t, o.IBC.Origin)
 
 	x := got[unknown]
 	assert.Equal(t, "aver…nom", x.Name, "the raw base denom, shortened past 10 characters")
@@ -293,6 +297,7 @@ func TestIBCPrecedence(t *testing.T) {
 
 func TestUnknownIBCShortBaseAndSlashedBase(t *testing.T) {
 	tb := tables()
+	// Over a channel the explorer does not hold: unconfirmed.
 	tb.Denoms = []assets.Denom{
 		{Denom: "ibc/SHORT", Kind: "ibc", IBCPath: "transfer/channel-9", IBCBaseDenom: "ushort"},
 		{Denom: "ibc/SLASHED", Kind: "ibc", IBCPath: "transfer/channel-9", IBCBaseDenom: "gamm/pool/1"},
@@ -318,7 +323,7 @@ func TestTwoHopIBCIsSuffixedWithItsFirstHop(t *testing.T) {
 	require.NotNil(t, a.IBC)
 	assert.Equal(t, "channel-0", a.IBC.ChannelID)
 	assert.Equal(t, atoneVoucher, a.IBC.Counterparty.BaseDenom, "the denom on the first hop chain is a voucher itself")
-	assert.Equal(t, "osmosis", a.IBC.Counterparty.ChainName)
+	assert.Equal(t, str("osmosis"), a.IBC.Counterparty.ChainName)
 	assert.Equal(t, &assets.Origin{ChainName: "atomone", BaseDenom: "uatone", Hops: 2}, a.IBC.Origin)
 
 	// Resolved by the denoms set already: its home is used as it is.

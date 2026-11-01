@@ -446,15 +446,17 @@ An asset: `denom`, `kind` (`native`, `factory`, `ibc`, `lp`), `name`,
 (`{title, text, url?}`), `ibc` (IBC denoms: `{channel_id, counterparty,
 origin, channel_confirmed}`, the counterparty a chain with its
 `channel_id` and `base_denom` there, `origin` `{chain_name, base_denom,
-hops}` or null when the registry cache cannot name it), `lp` (pool shares:
-`{base, quote}`), `routes` (native and factory denoms: one per open
-transfer channel to a chain the registry knows, the chain with
-`channel_id`, `counterparty_channel_id` and `counterparty_denom`, the
-ICS-20 voucher `ibc/` + upper-case hex SHA-256 of
+hops}` or null when the registry cache cannot name it, `channel_confirmed`
+whether the first hop's channel is confirmed, see "IBC channels" under State
+sync), `lp` (pool shares: `{base, quote}`), `routes` (native and factory
+denoms: one per chain the registry knows, over its canonical channel when
+that is open, the chain with `channel_id`, `counterparty_channel_id` and
+`counterparty_denom`, the ICS-20 voucher `ibc/` + upper-case hex SHA-256 of
 `transfer/<counterparty_channel_id>/<denom>`; empty without channels) and
 `version`. A chain is `{chain_name, chain_id, pretty_name, logo,
-bech32_prefix, rest, rpc}`, only `chain_id` set when the registry does not
-know it. Absent values are `null`; nothing in it changes with blocks (no
+bech32_prefix, rest, rpc}`, only `chain_id` set (`chain_name`, `logo`,
+`bech32_prefix` null, `rest`, `rpc` empty) when the registry does not know
+it. Absent values are `null`; nothing in it changes with blocks (no
 supply: the dapps read it from the chain).
 
 Fields follow the dapps' order, curation, then registry, then bank metadata,
@@ -467,13 +469,37 @@ then defaults:
   unit's exponent; `uri` as logo; description), else the denom shortened as
   the dapps do with 0 decimals. Verified only on the curation file's list,
   whatever the registry lists.
-- IBC: the origin chain's registry asset (name, symbol upper-cased, display
-  exponent, logo; verified unless halted), else BZE's own registry entry for
-  the exact `ibc/<hash>`, else the raw base denom as name (shortened past 10
-  characters, not when it has a `/`), the shortened `ibc/…` as ticker, 0
-  decimals, no logo. A denom whose counterparty denom is itself a voucher
-  (several hops) gets `<TICKER>.<chain_name>` and `<name> (<pretty_name>)`
-  of the first hop chain. `channel_confirmed` is false.
+- IBC over a confirmed first channel: the origin chain's registry asset
+  (name, symbol upper-cased, display exponent, logo), else BZE's own
+  registry entry for the exact `ibc/<hash>`, else the unknown treatment's
+  name, ticker, decimals and logo. A denom whose counterparty denom is
+  itself a voucher (several hops) gets `<TICKER>.<chain_name>` and
+  `<name> (<pretty_name>)` of the first hop chain.
+- IBC over an unconfirmed first channel (or none known): the unknown
+  treatment, whatever the denom claims to be. Name = the raw base denom
+  (shortened past 10 characters, not when it has a `/`), ticker = the
+  shortened `ibc/…`, 0 decimals, no logo, not verified, neither depositable
+  nor withdrawable; its counterparty is `"Unknown chain"` with
+  `chain_name`, `logo` and `bech32_prefix` null and no endpoints (its
+  `chain_id` is the light client's claim, `channel_id` and `base_denom` as
+  they are); `origin` null.
+- IBC `verified` when all hold: the first channel is confirmed; one hop:
+  the base denom is an asset of the counterparty's registry asset list,
+  several hops: the first hop chain's registry asset traces lead to the
+  origin; the first channel is its chain's canonical one; it is not a
+  multi-hop denom whose origin (chain and base denom) also arrives in one
+  hop over a canonical channel (ATOM through Osmosis while ATOM comes from
+  the Cosmos Hub directly); not halted; not on the curation's `unverified`
+  list. A chain's canonical channel is its oldest confirmed transfer
+  channel (the lowest `channel-N`) that is usable, open with a client not
+  known to be expired or frozen, else its oldest confirmed one: a denom
+  over a newer duplicate channel keeps its real chain and asset but is not
+  verified.
+- IBC `deposit_allowed`: the first channel confirmed, and not a multi-hop
+  denom whose origin also arrives directly (its direct sibling is the one to
+  deposit; without one a two-hop denom stays depositable).
+  `withdraw_allowed`: the first channel confirmed, so holders of a two-hop
+  denom are never stranded. The curation's exclusions apply on top.
 - LP: `<BASE>/<QUOTE> LP Shares`, `<BASE>/<QUOTE> LP` from the two assets'
   tickers, 12 decimals, verified when both assets are listed, halted when
   either is.
@@ -1624,6 +1650,38 @@ names follow the registry. No event marks a client expiring: the hourly
 run is what notices it. A denom whose first channel is closed or whose
 client expired or froze, or whose origin or via chain the registry lists
 as `killed`, is `stranded` on the tokens API.
+
+*Channel confirmation.* A light client's chain id and a trace's base denom
+are both declared by the counterparty: anyone can start a chain called
+`osmosis-1`, open a channel to BZE and send a coin traced as `uosmo`. So
+each transfer channel is confirmed against the real chain before the asset
+list trusts it. A channel is confirmed when either:
+
+1. the chain registry's IBC file of BZE and the counterparty
+   (`_IBC/<a>-<b>.json`, the two registry names sorted, under `testnets/`
+   on a testnet; reviewed by the registry's maintainers) lists a channel
+   whose BZE end is this channel on port `transfer` and whose other end's
+   chain is the registry name of the stored counterparty chain; or
+2. the counterparty's REST endpoints (its registry `apis.rest`, the first
+   3, 10 seconds each, the first that answers decides) agree: its
+   `GET /ibc/core/channel/v1/channels/{counterparty channel}/ports/transfer`
+   leads to this channel on port `transfer`, over `connection_hops[0]` =
+   the counterparty connection of this channel's connection on BZE, and
+   `GET /ibc/core/connection/v1/connections/{that connection}/client_state`
+   is a Tendermint client of BZE's `CHAIN_ID`. One honest endpoint is
+   enough: a fake chain cannot make the real chain's endpoints lie. An
+   endpoint that answers but disagrees leaves the channel unconfirmed.
+
+Only channels whose counterparty the registry cache knows are checked, on
+the set's runs, an unconfirmed one at most hourly. A confirmed channel is
+never checked again (its counterparty is fixed at the handshake, a channel
+id is never reused); a change of its stored `client_id`, `connection_id`,
+`counterparty_chain_id` or `counterparty_channel_id` (a governance client
+recovery, a channel upgrade) resets it and it is checked again at once.
+`explorer.ibc_channels` keeps `confirmed_via` (`registry`, `endpoint`, NULL
+while unconfirmed), `confirmed_at`, `confirm_checked_at` (the last check)
+and `confirm_note` (the last failed check's reason); a check does not move
+`updated_at`. Every write rebuilds the asset list.
 
 **Chain registry.** `explorer.chains` and `explorer.registry_assets` cache
 the Cosmos chain registry: the GitHub contents API lists its directories

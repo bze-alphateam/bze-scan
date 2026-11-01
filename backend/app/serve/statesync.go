@@ -14,6 +14,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
@@ -109,6 +110,13 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec, a
 		logos = keybase.New(&http.Client{Timeout: keybaseTimeout}, cfg.KeybaseURL)
 	}
 
+	// The channel confirmation reads the registry's IBC files only with the
+	// registry's URLs.
+	var ibcFiles channels.Registry
+	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {
+		ibcFiles = chainregistry.New(outbound, cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL)
+	}
+
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
 			Staking:  staking,
@@ -118,11 +126,15 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec, a
 			Logos:    logos,
 		}, 0),
 		channels.New(channels.Deps{
-			Channel: channeltypes.NewQueryClient(conn),
-			Client:  clienttypes.NewQueryClient(conn),
-			Store:   channels.NewPGStore(pool),
-			Misses:  resyncs,
-			Saved:   resyncs,
+			Channel:    channeltypes.NewQueryClient(conn),
+			Client:     clienttypes.NewQueryClient(conn),
+			Store:      channels.NewPGStore(pool),
+			Misses:     resyncs,
+			Saved:      resyncs,
+			ChainID:    cfg.ChainID,
+			Registry:   ibcFiles,
+			Connection: connectiontypes.NewQueryClient(conn),
+			HTTP:       outbound,
 		}, 0),
 	}
 	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {

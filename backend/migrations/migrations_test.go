@@ -79,6 +79,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"candles",
 		"price_source",
 		"registry_asset_list",
+		"ibc_channel_confirmation",
 	}, idents)
 }
 

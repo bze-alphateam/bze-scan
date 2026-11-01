@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/assets"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
 // ubzeOnNoble is the ICS-20 voucher of ubze on Noble over BZE's channel-3
@@ -41,6 +42,9 @@ func TestRegistryAssetsFollowTheDenomsSet(t *testing.T) {
 	e.grpc.SetResponse("bank", "DenomsMetadata", "", withoutDenom(t, "DenomsMetadata", "metadatas", "base", usdcDenom))
 	code, out := e.syncState(t)
 	require.Equal(t, 0, code, out)
+	// The channels' second run confirms channel-3 now Noble is cached.
+	code, out = e.syncState(t, "--job", statesync.Channels)
+	require.Equal(t, 0, code, out)
 
 	// An API-only process: the list is built from the tables at start.
 	api := e.serveAPI(t)
@@ -68,9 +72,9 @@ func TestRegistryAssetsFollowTheDenomsSet(t *testing.T) {
 			toNoble = &bze.Routes[i]
 		}
 	}
-	require.NotNil(t, toNoble, "an open channel to a chain the registry knows")
+	require.NotNil(t, toNoble, "Noble's canonical channel, confirmed by the registry")
 	assert.Equal(t, "noble-1", toNoble.ChainID)
-	assert.Equal(t, "noble", toNoble.ChainName)
+	assert.Equal(t, "noble", *toNoble.ChainName)
 	assert.Equal(t, "channel-95", toNoble.CounterpartyChannelID)
 	assert.Equal(t, ubzeOnNoble, toNoble.CounterpartyDenom)
 
@@ -112,6 +116,7 @@ func TestRegistryAssetsFollowTheDenomsSet(t *testing.T) {
 	require.NotNil(t, usdc.IBC)
 	assert.Equal(t, "channel-3", usdc.IBC.ChannelID)
 	assert.Equal(t, "noble-1", usdc.IBC.Counterparty.ChainID)
-	assert.False(t, usdc.IBC.ChannelConfirmed)
+	assert.True(t, usdc.IBC.ChannelConfirmed)
+	assert.True(t, usdc.Verified)
 	assert.Equal(t, http.StatusOK, fetch(t, base+"/api/v1/registry/assets/"+url.PathEscape(usdcDenom)).status)
 }

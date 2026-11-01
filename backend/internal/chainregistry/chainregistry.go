@@ -176,6 +176,97 @@ func (c *Client) Assets(ctx context.Context, dir string) ([]Asset, error) {
 	return assets, nil
 }
 
+// IBCDir holds the registry's IBC connection files, in the mainnets' and
+// in the testnets' directory.
+const IBCDir = "_IBC"
+
+// IBCChain is one side of an IBC connection file.
+type IBCChain struct {
+	ChainName    string `json:"chain_name"`
+	ClientID     string `json:"client_id"`
+	ConnectionID string `json:"connection_id"`
+}
+
+// IBCEnd is one end of a channel of an IBC connection file.
+type IBCEnd struct {
+	ChannelID string `json:"channel_id"`
+	PortID    string `json:"port_id"`
+}
+
+// IBCChannel is a channel of an IBC connection file.
+type IBCChannel struct {
+	Chain1 IBCEnd `json:"chain_1"`
+	Chain2 IBCEnd `json:"chain_2"`
+}
+
+// IBCFile is the registry's record of the IBC paths between two chains,
+// reviewed by its maintainers.
+type IBCFile struct {
+	Chain1   IBCChain     `json:"chain_1"`
+	Chain2   IBCChain     `json:"chain_2"`
+	Channels []IBCChannel `json:"channels"`
+}
+
+// IBCPath is the IBC connection file of the chains named a and b (registry
+// directory names): _IBC/<a>-<b>.json with the two sorted, under testnets/
+// for testnets.
+func IBCPath(a, b string, testnet bool) string {
+	if b < a {
+		a, b = b, a
+	}
+	p := IBCDir + "/" + a + "-" + b + ".json"
+	if testnet {
+		p = TestnetsDir + "/" + p
+	}
+	return p
+}
+
+// IBC reads the IBC connection file of the chains named a and b; nil (and
+// no error) when the registry has none.
+func (c *Client) IBC(ctx context.Context, a, b string, testnet bool) (*IBCFile, error) {
+	p := IBCPath(a, b, testnet)
+	body, err := c.get(ctx, c.raw+"/"+p, "")
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("chain registry %s: %w", p, err)
+	}
+	f, err := ParseIBC(body)
+	if err != nil {
+		return nil, fmt.Errorf("chain registry %s: %w", p, err)
+	}
+	return f, nil
+}
+
+// ParseIBC parses an IBC connection file.
+func ParseIBC(raw []byte) (*IBCFile, error) {
+	var f IBCFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// Channel returns the channel whose end on the chain named chainName is
+// channelID on port; ok is false when the file has none (or does not
+// connect chainName). other is the far end and otherChain its chain.
+func (f *IBCFile) Channel(chainName, port, channelID string) (other IBCEnd, otherChain string, ok bool) {
+	for _, ch := range f.Channels {
+		switch chainName {
+		case f.Chain1.ChainName:
+			if ch.Chain1.PortID == port && ch.Chain1.ChannelID == channelID {
+				return ch.Chain2, f.Chain2.ChainName, true
+			}
+		case f.Chain2.ChainName:
+			if ch.Chain2.PortID == port && ch.Chain2.ChannelID == channelID {
+				return ch.Chain1, f.Chain1.ChainName, true
+			}
+		}
+	}
+	return IBCEnd{}, "", false
+}
+
 func (c *Client) get(ctx context.Context, url, accept string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

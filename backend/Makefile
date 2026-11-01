@@ -63,8 +63,8 @@ grpc-fixtures: ## Record fake gRPC fixtures: make grpc-fixtures [SETS="validator
 	SETS="$(SETS)" VALIDATORS="$(VALIDATORS)" ACCOUNTS="$(ACCOUNTS)" DENOMS="$(DENOMS)" PROPOSALS="$(PROPOSALS)" HOLDERS="$(HOLDERS)" HOLDERS_PAGE_LIMIT="$(or $(HOLDERS_PAGE_LIMIT),1000)" OWNERS="$(OWNERS)" ORDERS_HEIGHT="$(ORDERS_HEIGHT)" MARKETS="$(MARKETS)" REST="$(REST)" scripts/record-grpc-fixtures.sh
 
 .PHONY: registry-fixtures
-registry-fixtures: ## Record fake chain-registry fixtures: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [RAW=...]
-	CHAINS="$(CHAINS)" RAW="$(RAW)" scripts/record-registry-fixtures.sh
+registry-fixtures: ## Record fake chain-registry fixtures: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [IBC="beezee-noble"] [RAW=...]
+	CHAINS="$(CHAINS)" IBC="$(IBC)" RAW="$(RAW)" scripts/record-registry-fixtures.sh
 
 .PHONY: node-build
 node-build: ## Soak: build bzed from source at mainnet's tag into .local/bin [BZED_VERSION=v8.1.1]
