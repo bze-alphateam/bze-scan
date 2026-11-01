@@ -177,7 +177,7 @@ func render(list []Asset) (*Snapshot, error) {
 		}
 		snap.assets[a.Denom] = rendered{version: a.Version, body: body}
 		bodies = append(bodies, body)
-		fmt.Fprintf(whole, "%s %s\n", a.Denom, a.Version)
+		_, _ = fmt.Fprintf(whole, "%s %s\n", a.Denom, a.Version)
 	}
 	snap.Version = hex.EncodeToString(whole.Sum(nil))[:versionLen]
 	var buf bytes.Buffer
