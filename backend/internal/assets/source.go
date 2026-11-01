@@ -65,6 +65,12 @@ type Channel struct {
 	CounterpartyChainID   string
 	CounterpartyChannelID string
 	State                 string
+	// ClientStatus is the light client's status (active, expired…); empty
+	// when unknown.
+	ClientStatus string
+	// Confirmed is whether the channel's counterparty was confirmed to be
+	// the chain its light client claims.
+	Confirmed bool
 }
 
 // Tables is everything one build reads.
@@ -110,7 +116,7 @@ const (
 			coalesce(logo_url, ''), logos, coalesce(description, ''), traces
 		FROM explorer.registry_assets ORDER BY chain_id, base`
 	channelsSQL = `SELECT channel_id, port_id, coalesce(counterparty_chain_id, ''), coalesce(counterparty_channel_id, ''),
-			coalesce(state, '')
+			coalesce(state, ''), coalesce(client_status, ''), confirmed_via IS NOT NULL
 		FROM explorer.ibc_channels ORDER BY channel_id`
 )
 
@@ -174,7 +180,7 @@ func (s *PGSource) Load(ctx context.Context) (*Tables, error) {
 	rows, _ = tx.Query(ctx, channelsSQL)
 	t.Channels, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (Channel, error) {
 		var c Channel
-		err := r.Scan(&c.ChannelID, &c.PortID, &c.CounterpartyChainID, &c.CounterpartyChannelID, &c.State)
+		err := r.Scan(&c.ChannelID, &c.PortID, &c.CounterpartyChainID, &c.CounterpartyChannelID, &c.State, &c.ClientStatus, &c.Confirmed)
 		return c, err
 	})
 	if err != nil {

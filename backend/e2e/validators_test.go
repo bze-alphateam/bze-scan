@@ -60,9 +60,18 @@ func newSyncEnv(t *testing.T) *syncEnv {
 	t.Helper()
 	url := freshDatabase(t, true)
 	migrateUp(t, url)
+	reg := fakeregistry.New(t)
+	// The channel confirmation asks a counterparty's REST endpoints: never
+	// the real chains' from a test (a test that wants one sets its own).
+	for _, dir := range []string{"cosmoshub", "noble"} {
+		reg.SetREST(dir, unreachable)
+	}
 	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t),
-		reg: fakeregistry.New(t), gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
+		reg: reg, gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
 }
+
+// unreachable is an address that refuses connections at once.
+const unreachable = "http://127.0.0.1:1"
 
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {

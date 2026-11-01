@@ -50,8 +50,10 @@
 #   channels (the IBC channels sync):
 #     channel/Channels.json (every channel, one page), and per transfer channel
 #     channel/ChannelClientState.transfer.<channel>.json (the light client
-#     naming the counterparty chain) and client/ClientStatus.<client>.json
-#     (whether that client is active or expired)
+#     naming the counterparty chain), client/ClientStatus.<client>.json
+#     (whether that client is active or expired) and
+#     connection/Connection.<connection>.json (the counterparty's end of the
+#     channel's connection, for the channel confirmation)
 #   orders (the open orders' reconciliation and the open orders route), per
 #     address in OWNERS, every read pinned to ORDERS_HEIGHT (x-cosmos-block-height;
 #     default: the node's latest height):
@@ -95,7 +97,7 @@ PIN=""
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel client mint rewards burner cointrunk txfeecollector; do
+for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel client connection mint rewards burner cointrunk txfeecollector; do
   mkdir -p "${OUT}/${d}"
 done
 
@@ -223,6 +225,9 @@ if has channels; then
     fetch "ibc/core/channel/v1/channels/${ch}/ports/transfer/client_state" "channel/ChannelClientState.transfer.${ch}.json"
     client="$(jq -r '.identified_client_state.client_id' "${OUT}/channel/ChannelClientState.transfer.${ch}.json")"
     fetch "ibc/core/client/v1/client_status/${client}" "client/ClientStatus.${client}.json"
+  done
+  for conn in $(jq -r '.channels[] | select(.port_id == "transfer") | .connection_hops[0]' "${OUT}/channel/Channels.json"); do
+    fetch "ibc/core/connection/v1/connections/${conn}" "connection/Connection.${conn}.json"
   done
 fi
 

@@ -2,20 +2,24 @@
 # Records the fake chain registry's fixtures (internal/testutil/fakeregistry/
 # testdata): chain.json and assetlist.json of each chain directory in CHAINS,
 # from the cosmos/chain-registry repository as raw.githubusercontent.com
-# serves it. A chain without an asset list gets none. The directory listings
+# serves it, and the _IBC connection file of each pair in IBC. A chain
+# without an asset list gets none. The directory listings
 # the GitHub contents API answers are not recorded: the fake builds them from
 # the directories it holds.
 #
 # Fixtures are committed and re-recorded only on purpose, never as a routine
 # refresh.
 #
-# Usage: CHAINS="beezee cosmoshub" scripts/record-registry-fixtures.sh
-#        (or: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [RAW=…])
+# Usage: CHAINS="beezee cosmoshub" IBC="beezee-noble" scripts/record-registry-fixtures.sh
+#        (or: make registry-fixtures [CHAINS="beezee cosmoshub noble mirage"] [IBC="beezee-noble"] [RAW=…])
 set -euo pipefail
 
 RAW="${RAW:-https://raw.githubusercontent.com/cosmos/chain-registry/master}"
 RAW="${RAW%/}"
 CHAINS="${CHAINS:-beezee cosmoshub noble mirage}"
+# Only BZE-Noble: the e2e confirms the Cosmos Hub channels through the
+# counterparty's endpoints instead.
+IBC="${IBC:-beezee-noble}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakeregistry/testdata"
@@ -43,4 +47,15 @@ for c in ${CHAINS}; do
     esac
     rm -f "${tmp}"
   done
+done
+
+mkdir -p "${OUT}/_IBC"
+for p in ${IBC}; do
+  tmp="$(mktemp)"
+  code="$(curl -sS -o "${tmp}" -w '%{http_code}' "${RAW}/_IBC/${p}.json")"
+  [[ "${code}" == 200 ]] || { echo "GET _IBC/${p}.json: HTTP ${code}" >&2; exit 1; }
+  jq . "${tmp}" > "${OUT}/_IBC/${p}.json"
+  chmod 644 "${OUT}/_IBC/${p}.json"
+  rm -f "${tmp}"
+  echo "recorded _IBC/${p}.json"
 done

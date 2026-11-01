@@ -35,6 +35,7 @@ var Services = map[string]string{
 	"transfer":       "ibc.applications.transfer.v1.Query",
 	"channel":        "ibc.core.channel.v1.Query",
 	"client":         "ibc.core.client.v1.Query",
+	"connection":     "ibc.core.connection.v1.Query",
 	"tradebin":       "bze.tradebin.Query",
 	"tokenfactory":   "bze.tokenfactory.Query",
 	"rewards":        "bze.rewards.Query",

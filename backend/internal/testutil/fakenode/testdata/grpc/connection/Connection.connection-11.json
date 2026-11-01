@@ -1,0 +1,28 @@
+{
+  "connection": {
+    "client_id": "07-tendermint-39",
+    "versions": [
+      {
+        "identifier": "1",
+        "features": [
+          "ORDER_ORDERED",
+          "ORDER_UNORDERED"
+        ]
+      }
+    ],
+    "state": "STATE_OPEN",
+    "counterparty": {
+      "client_id": "07-tendermint-1488",
+      "connection_id": "connection-1294",
+      "prefix": {
+        "key_prefix": "aWJj"
+      }
+    },
+    "delay_period": "0"
+  },
+  "proof": null,
+  "proof_height": {
+    "revision_number": "1",
+    "revision_height": "25346384"
+  }
+}
