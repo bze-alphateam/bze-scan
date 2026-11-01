@@ -64,6 +64,12 @@ type Chain struct {
 	// templates (${txHash}, ${accountAddress}); empty without explorers.
 	ExplorerTxURL      string
 	ExplorerAccountURL string
+	// Logos keeps the logo's SVG and PNG apart; LogoURL is its PNG first.
+	Logos Logos
+	// REST and RPC are the addresses of apis.rest and apis.rpc, in the
+	// registry's order.
+	REST []string
+	RPC  []string
 }
 
 // Asset is the part of an assetlist.json asset the explorer keeps.
@@ -77,6 +83,9 @@ type Asset struct {
 	Exponent    *int
 	LogoURL     string
 	CoingeckoID string
+	Description string
+	// Logos keeps the logo's SVG and PNG apart; LogoURL is its PNG first.
+	Logos Logos
 	// Traces is the registry's trace list as it is; nil without.
 	Traces json.RawMessage
 }
@@ -191,13 +200,60 @@ func (c *Client) get(ctx context.Context, url, accept string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, maxBody))
 }
 
-type logoURIs struct {
-	PNG string `json:"png"`
-	SVG string `json:"svg"`
+// LogoPair is one logo in its two formats.
+type LogoPair struct {
+	PNG string `json:"png,omitempty"`
+	SVG string `json:"svg,omitempty"`
+}
+
+// Logos are a chain's or an asset's logo URLs as the registry lists them:
+// logo_URIs, and the first entry of images.
+type Logos struct {
+	URIs  LogoPair `json:"logo_uris"`
+	Image LogoPair `json:"image"`
+}
+
+// SVGFirst is the logo the BZE dapps show: logo_URIs.svg, logo_URIs.png,
+// images[0].svg, images[0].png, the first one set; empty without.
+func (l Logos) SVGFirst() string {
+	for _, u := range []string{l.URIs.SVG, l.URIs.PNG, l.Image.SVG, l.Image.PNG} {
+		if u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+// logos gathers the two sources of a logo.
+func logos(uris *LogoPair, images []LogoPair) Logos {
+	var out Logos
+	if uris != nil {
+		out.URIs = *uris
+	}
+	if len(images) > 0 {
+		out.Image = images[0]
+	}
+	return out
+}
+
+// apiEntry is one endpoint of a chain.json apis list.
+type apiEntry struct {
+	Address string `json:"address"`
+}
+
+// apiAddresses are the addresses of one apis list, in order; nil without.
+func apiAddresses(list []apiEntry) []string {
+	var out []string
+	for _, a := range list {
+		if a.Address != "" {
+			out = append(out, a.Address)
+		}
+	}
+	return out
 }
 
 // url is the PNG, else the SVG.
-func (l *logoURIs) url() string {
+func (l *LogoPair) url() string {
 	if l == nil {
 		return ""
 	}
@@ -216,12 +272,16 @@ func ParseChain(raw []byte) (*Chain, error) {
 		NetworkType  string     `json:"network_type"`
 		Bech32Prefix string     `json:"bech32_prefix"`
 		Status       string     `json:"status"`
-		LogoURIs     *logoURIs  `json:"logo_URIs"`
-		Images       []logoURIs `json:"images"`
+		LogoURIs     *LogoPair  `json:"logo_URIs"`
+		Images       []LogoPair `json:"images"`
 		Explorers    []struct {
 			TxPage      string `json:"tx_page"`
 			AccountPage string `json:"account_page"`
 		} `json:"explorers"`
+		APIs struct {
+			REST []apiEntry `json:"rest"`
+			RPC  []apiEntry `json:"rpc"`
+		} `json:"apis"`
 	}
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return nil, err
@@ -232,6 +292,7 @@ func ParseChain(raw []byte) (*Chain, error) {
 	out := &Chain{
 		ChainID: c.ChainID, Name: c.ChainName, PrettyName: c.PrettyName, NetworkType: c.NetworkType,
 		Bech32Prefix: c.Bech32Prefix, LogoURL: c.LogoURIs.url(), Status: c.Status,
+		Logos: logos(c.LogoURIs, c.Images), REST: apiAddresses(c.APIs.REST), RPC: apiAddresses(c.APIs.RPC),
 	}
 	if out.LogoURL == "" && len(c.Images) > 0 {
 		out.LogoURL = c.Images[0].url()
@@ -255,9 +316,10 @@ func ParseAssets(raw []byte) ([]Asset, error) {
 				Exponent int      `json:"exponent"`
 				Aliases  []string `json:"aliases"`
 			} `json:"denom_units"`
-			LogoURIs    *logoURIs       `json:"logo_URIs"`
-			Images      []logoURIs      `json:"images"`
+			LogoURIs    *LogoPair       `json:"logo_URIs"`
+			Images      []LogoPair      `json:"images"`
 			CoingeckoID string          `json:"coingecko_id"`
+			Description string          `json:"description"`
 			Traces      json.RawMessage `json:"traces"`
 		} `json:"assets"`
 	}
@@ -271,7 +333,8 @@ func ParseAssets(raw []byte) ([]Asset, error) {
 		}
 		asset := Asset{
 			Base: a.Base, Symbol: a.Symbol, Name: a.Name, Display: a.Display,
-			LogoURL: a.LogoURIs.url(), CoingeckoID: a.CoingeckoID,
+			LogoURL: a.LogoURIs.url(), CoingeckoID: a.CoingeckoID, Description: a.Description,
+			Logos: logos(a.LogoURIs, a.Images),
 		}
 		if asset.LogoURL == "" && len(a.Images) > 0 {
 			asset.LogoURL = a.Images[0].url()

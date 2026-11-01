@@ -264,6 +264,9 @@ internal/statesync/prices/
 internal/statesync/dailystats/
                    the daily_stats set (the home charts' days, nightly)
                    and the aggregation the stats' live "today" shares
+internal/assets/   the dapps' asset list in memory (the asset_list set):
+                   built from the denoms, chains, registry and channel
+                   tables plus the embedded curation.json
 internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
@@ -344,7 +347,7 @@ every later route follows:
   except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
   asked at its tip), which is `public, max-age=60`.
 - **CORS** only for the origins in `CORS_ALLOWED_ORIGINS` (the
-  aggregator-compatible routes below answer any origin).
+  aggregator-compatible routes below and the asset list answer any origin).
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
 
@@ -424,6 +427,75 @@ The live indexer puts the three bodies of every height it writes, so recent
 heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
 for one height share one fetch, which outlives a request that gives up.
+
+### Asset list
+
+The asset list the BZE dapps build on every client (every chain asset merged
+with the chain registry), built by Scan once and served from memory, never
+from PostgreSQL on a request (see "Asset list" under State sync for when it
+is rebuilt).
+
+| Route | Answers |
+| --- | --- |
+| `GET /api/v1/registry/assets` | `{"version": "<hash>", "assets": [...]}`: every denom the bank holds a supply of, native first, then factory, IBC and LP denoms, each by denom; unpaginated |
+| `GET /api/v1/registry/assets/{denom}` | one asset; the denom URL-encoded (`factory%2Fbze1…%2Fuvdl`, `ibc%2F…`, `ulp%2F…`, legacy `ulp_…`) or not; 404 `not_found` for a denom the list does not hold (logged at info with the denom and request id) |
+
+An asset: `denom`, `kind` (`native`, `factory`, `ibc`, `lp`), `name`,
+`ticker`, `decimals`, `logo`, `description`, `verified`, `stable`,
+`excluded`, `halted`, `deposit_allowed`, `withdraw_allowed`, `notice`
+(`{title, text, url?}`), `ibc` (IBC denoms: `{channel_id, counterparty,
+origin, channel_confirmed}`, the counterparty a chain with its
+`channel_id` and `base_denom` there, `origin` `{chain_name, base_denom,
+hops}` or null when the registry cache cannot name it), `lp` (pool shares:
+`{base, quote}`), `routes` (native and factory denoms: one per open
+transfer channel to a chain the registry knows, the chain with
+`channel_id`, `counterparty_channel_id` and `counterparty_denom`, the
+ICS-20 voucher `ibc/` + upper-case hex SHA-256 of
+`transfer/<counterparty_channel_id>/<denom>`; empty without channels) and
+`version`. A chain is `{chain_name, chain_id, pretty_name, logo,
+bech32_prefix, rest, rpc}`, only `chain_id` set when the registry does not
+know it. Absent values are `null`; nothing in it changes with blocks (no
+supply: the dapps read it from the chain).
+
+Fields follow the dapps' order, curation, then registry, then bank metadata,
+then defaults:
+
+- `ubze`: BZE's registry asset (ticker = its display unit upper-cased), the
+  logo forced to the dapps' BZE circle logo; verified.
+- factory: BZE's registry asset, else the bank metadata (name; ticker = the
+  symbol, then the display unit's denom, upper-cased; decimals = the display
+  unit's exponent; `uri` as logo; description), else the denom shortened as
+  the dapps do with 0 decimals. Verified only on the curation file's list,
+  whatever the registry lists.
+- IBC: the origin chain's registry asset (name, symbol upper-cased, display
+  exponent, logo; verified unless halted), else BZE's own registry entry for
+  the exact `ibc/<hash>`, else the raw base denom as name (shortened past 10
+  characters, not when it has a `/`), the shortened `ibc/…` as ticker, 0
+  decimals, no logo. A denom whose counterparty denom is itself a voucher
+  (several hops) gets `<TICKER>.<chain_name>` and `<name> (<pretty_name>)`
+  of the first hop chain. `channel_confirmed` is false.
+- LP: `<BASE>/<QUOTE> LP Shares`, `<BASE>/<QUOTE> LP` from the two assets'
+  tickers, 12 decimals, verified when both assets are listed, halted when
+  either is.
+- Logos from the registry: `logo_URIs.svg`, `logo_URIs.png`,
+  `images[0].svg`, `images[0].png`, the first one set.
+
+`version` is a content hash (16 hex characters of a SHA-256): per asset of
+its JSON, for the list of every asset's denom and version. A rebuild that
+changes nothing keeps it. Both routes send `ETag: "<version>"` (the list's,
+or the asset's) and `Cache-Control: public, max-age=30`; a request whose
+`If-None-Match` holds that ETag answers 304 without a body. They answer CORS
+from any origin, whatever `CORS_ALLOWED_ORIGINS` says. Before the first build
+after a start they answer 503 `upstream_error` (`no-store`).
+
+**Curation file.** `internal/assets/curation.json`, embedded in the binary,
+holds what no chain or registry says: a `mainnet` section (`CHAIN_ID`
+`beezee-1`) and a `testnet` section (every other chain id), each with
+`verified` (the only source of a factory denom's verified flag), `unverified`
+(clears the flag whatever the other rules say), `stable`, `excluded`,
+`deposit_excluded`, `withdraw_excluded` (BZE denoms; the flags default to
+false, false, deposit and withdraw allowed) and `notices` (`denom →
+{title, text, url?}`). A change ships with a release.
 
 ## Aggregator-compatible endpoints
 
@@ -1426,8 +1498,8 @@ indexer) the state sync:
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
    proposals, proposals' non-voters, upgrade recovery, prices, chain state: one minute; denoms, holders, IBC
-   channels, orders: one hour;
-   chain registry, params: one day; daily statistics: every night at
+   channels, orders, chain registry, asset list: one hour;
+   params: one day; daily statistics: every night at
    00:10 UTC), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
@@ -1558,18 +1630,36 @@ the Cosmos chain registry: the GitHub contents API lists its directories
 (mainnets and `testnets/`, `CHAIN_REGISTRY_API_URL`), each chain's
 `chain.json` and `assetlist.json` come from `raw.githubusercontent.com`
 (`CHAIN_REGISTRY_RAW_URL`, no API rate limit). The set refetches BZE
-(`CHAIN_ID`) and every chain the explorer met (channel counterparties,
-denom origins, chains already cached) daily, and a missed chain at once with
-a 10-minute cool-down per key. The registry is organised by directory: a
+(`CHAIN_ID`, its own `assetlist.json` on every run) and every chain the
+explorer met (channel counterparties, denom origins, chains already cached)
+hourly, so the asset list follows the registry within an hour, and a missed
+chain at once with a 10-minute cool-down per key. The registry is organised by directory: a
 chain id is found by reading `chain.json` files, the directory named like the
 chain id first (`cosmoshub` for `cosmoshub-4`); every one read is
 remembered until the next listing (daily), so the whole registry is read at
 most once a day. A chain id no directory holds gets a `chains` row with
 `registry_fetched_at` NULL, shown by its id. A chain row holds the pretty
 name, network type, bech32 prefix, logo (PNG, else SVG) and the first
-explorer's `tx_page`/`account_page` templates; an asset its symbol, name,
-display unit and its exponent, logo, CoinGecko id and `traces`. A failed
-fetch keeps the previous rows; `updated_at` moves only when a value changes.
+explorer's `tx_page`/`account_page` templates, the `apis.rest` and
+`apis.rpc` addresses in order (`rest_urls`, `rpc_urls`); an asset its symbol,
+name, display unit and its exponent, logo, description, CoinGecko id and
+`traces`. Both keep `logos` too: `logo_URIs` and the first `images` entry
+with their SVG and PNG apart, for the asset list's SVG-first pick (the
+tokens API keeps the PNG-first `logo_url`). A failed fetch keeps the
+previous rows; `updated_at` moves only when a value changes. A run that
+saved a chain marks the IBC channels and the asset list.
+
+**Asset list.** `internal/assets` holds the dapps' asset list in memory (see
+"Asset list" under the HTTP API). It is built at start from
+`explorer.denoms` (the denoms with a supply), `explorer.chains`,
+`explorer.registry_assets` and `explorer.ibc_channels`, retried every 5
+seconds until the first build succeeds, and registered last as the
+`asset_list` set: the denoms, channels and chain registry sets mark it after
+every write, so the list is rebuilt once the tables changed (a new IBC coin
+whose chain missed the cache: the miss fetches the chain, the save rebuilds
+the list). A passed proposal marks the denoms and the channels in full
+(a halt, a client recovery) and so rebuilds it after both. A rebuild that
+changes nothing keeps the version.
 
 **Holders.** `explorer.token_holders` is a snapshot of bank `DenomOwners`,
 never a balance derived from events: at start and hourly every denom is paged

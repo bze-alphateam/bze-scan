@@ -88,6 +88,9 @@ type Deps struct {
 	Store   Store
 	// Misses receives the counterparty chains the registry cache lacks.
 	Misses statesync.Publisher
+	// Saved, when set, is asked to rebuild the asset list after every
+	// write.
+	Saved statesync.Publisher
 }
 
 // Set is the channels set.
@@ -169,6 +172,7 @@ func (s *Set) FullResync(ctx context.Context) error {
 	if err := s.deps.Store.Save(ctx, rows); err != nil {
 		return errors.Join(append(errs, err)...)
 	}
+	statesync.Announce(s.deps.Saved, statesync.AssetList)
 
 	ids := make([]string, 0, len(chains))
 	for id := range chains {

@@ -49,6 +49,10 @@ const (
 	// UpgradeRecovery is when each validator came back after a software
 	// upgrade's halt; its keys are plan heights.
 	UpgradeRecovery = "upgrade_recovery"
+	// AssetList is the in-memory asset list of /api/v1/registry/assets,
+	// rebuilt from the denoms, channels and chain registry tables after
+	// those sets write; it has one key, All.
+	AssetList = "asset_list"
 )
 
 // registryNamePrefix starts the chain_registry keys that name a chain by its
@@ -99,6 +103,18 @@ func (d *Deferred) Publish(dirty Dirty) {
 	if d.to != nil {
 		d.to.Publish(dirty)
 	}
+}
+
+// Announce publishes a full resync of the set named set to p; a nil p
+// drops it. Sets announce their writes to the sets built from their tables
+// (the asset list) this way.
+func Announce(p Publisher, set string) {
+	if p == nil {
+		return
+	}
+	var d Dirty
+	d.Mark(set, All)
+	p.Publish(d)
 }
 
 // loggedError is a failure its set already logged.

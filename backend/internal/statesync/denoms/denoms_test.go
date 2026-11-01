@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -674,4 +675,29 @@ func TestNativeAndFactoryDenomsTakeTheirChainsRegistryLogo(t *testing.T) {
 	require.NoError(t, denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Transfer: n, Lookup: l}, 0).
 		FullResync(context.Background()))
 	assert.Empty(t, byDenom(st.last(t))["ubze"].LogoURL)
+}
+
+// assetLists records the asset list rebuilds the set asks for.
+type assetLists struct{ n int }
+
+func (a *assetLists) Publish(d statesync.Dirty) {
+	if slices.Equal(d.Keys(statesync.AssetList), []string{statesync.All}) {
+		a.n++
+	}
+}
+
+// Every write asks for an asset list rebuild; a failed one does not.
+func TestEveryWriteRebuildsTheAssetList(t *testing.T) {
+	n, st := newFakeNode(t), &fakeStore{}
+	lists := &assetLists{}
+	set := denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: st, Saved: lists}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	assert.Equal(t, 1, lists.n)
+	require.NoError(t, set.ResyncOne(context.Background(), vdl))
+	assert.Equal(t, 2, lists.n)
+
+	st.err = errors.New("db down")
+	require.Error(t, set.FullResync(context.Background()))
+	require.Error(t, set.ResyncOne(context.Background(), vdl))
+	assert.Equal(t, 2, lists.n, "nothing written, nothing to rebuild")
 }

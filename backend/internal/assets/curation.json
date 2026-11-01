@@ -1,0 +1,47 @@
+{
+  "mainnet": {
+    "verified": [
+      "ubze",
+      "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uvdl",
+      "factory/bze1972aqfzdg29ugjln74edx0xvcg4ehvysjptk77/CTL"
+    ],
+    "unverified": [],
+    "stable": [
+      "factory/bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l/testusd",
+      "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "ibc/81DA528F4C5546208D1D50F84C2D0B388B45D37AA36FCA622A3CB2D8EF014838"
+    ],
+    "excluded": [
+      "factory/bze1972aqfzdg29ugjln74edx0xvcg4ehvysjptk77/1000000000",
+      "ibc/689DD6F80E4DBCE14877462B182504037FAEAD0699D5804A7F5CB328D33ED24B",
+      "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey"
+    ],
+    "deposit_excluded": [
+      "ibc/693DDB2D9B4260D67C8136C22D837F37488E0FBD81857D8E9C6022332EA26E33"
+    ],
+    "withdraw_excluded": [],
+    "notices": {
+      "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4": {
+        "title": "USDC.n is being retired",
+        "text": "USDC.n is USDC issued on the Noble chain, which Circle is retiring. New deposits to BZE are closed; you can still withdraw it to Noble, trade it and send it."
+      }
+    }
+  },
+  "testnet": {
+    "verified": [
+      "ubze",
+      "utbz",
+      "factory/testbz1w9vva0muctcrmd9xgret9x4wasw2rrflsdkwfs/faneatiku2",
+      "factory/testbz1z3mkcr2jz424w6m49frgjmy9uhlrx69p4cvrgf/vidulum",
+      "factory/testbz1z3mkcr2jz424w6m49frgjmy9uhlrx69p4cvrgf/bitcoinz"
+    ],
+    "unverified": [],
+    "stable": [
+      "factory/testbz1z3mkcr2jz424w6m49frgjmy9uhlrx69p4cvrgf/uusdt"
+    ],
+    "excluded": [],
+    "deposit_excluded": [],
+    "withdraw_excluded": [],
+    "notices": {}
+  }
+}

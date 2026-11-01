@@ -165,8 +165,12 @@ func blockGovEvents(ents *Entities, b Block, events []node.Event) {
 		case result == resultPassed:
 			st.Status = proposals.StatusPassed
 			// A passed proposal may have changed parameters: the params set
-			// snapshots them and attributes a change to it.
+			// snapshots them and attributes a change to it. It may also have
+			// halted a denom or recovered an IBC client: the denoms and the
+			// channels are resynced in full (and the asset list after them).
 			ents.Dirty.Mark(statesync.Params, proposals.Key(id))
+			ents.Dirty.Mark(statesync.Denoms, statesync.All)
+			ents.Dirty.Mark(statesync.Channels, statesync.All)
 		case result == resultFailed:
 			st.Status = proposals.StatusFailed
 		case result == resultExpeditedRejected:
