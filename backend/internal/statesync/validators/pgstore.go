@@ -128,6 +128,14 @@ func (s *PGStore) Save(ctx context.Context, snap Snapshot) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Every stored row is locked first, in operator order, the order the
+	// live writer's last-signed update locks them in. Otherwise the upserts
+	// below lock them in the node's order and the two transactions can each
+	// hold a row the other waits on, a deadlock Postgres ends by failing one.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM explorer.validators ORDER BY operator_address FOR UPDATE`); err != nil {
+		return fmt.Errorf("validators: lock: %w", err)
+	}
+
 	operators := make([]string, 0, len(snap.Validators))
 	for _, v := range snap.Validators {
 		operators = append(operators, v.OperatorAddress)
