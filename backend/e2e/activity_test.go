@@ -5,8 +5,6 @@ package e2e_test
 import (
 	"fmt"
 	"net/http"
-	"net/url"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,63 +111,6 @@ func TestAccountActivity(t *testing.T) {
 	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, chainToolsOwner, "", 25), "nothing indexed: an empty list")
 	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/accounts/"+trader+"/activity?category=fees").status)
 	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/accounts/"+thamar+"/activity").status)
-}
-
-// ?denom= keeps the rows whose deltas hold the denom (a failed
-// transaction's fee-only row among them), pages by cursor and by page
-// without a gap, and combines with category.
-func TestAccountActivityDenomFilter(t *testing.T) {
-	e := newSyncEnv(t)
-	code, _ := e.syncState(t)
-	require.Equal(t, 0, code)
-	e.index(t, txHeights...)
-	base := e.serveAPI(t)
-
-	// Expected rows read straight from the table (queryStrings sorts them, so
-	// the lists are compared sorted; the order itself is asserted above).
-	expected := func(denom, category string) []string {
-		return queryStrings(t, e.db, `SELECT concat_ws(' ', height, CASE WHEN tx_index < 0 THEN '-' ELSE 'tx' END, kind, category)
-			FROM explorer.account_activity a
-			WHERE address = $1 AND ($3 = '' OR category = $3) AND EXISTS (
-			  SELECT 1 FROM jsonb_array_elements(a.deltas) d WHERE d->>'denom' = $2 AND d->>'amount' <> '0')
-			ORDER BY height DESC, tx_index DESC`, trader, denom, category)
-	}
-	denoms := queryStrings(t, e.db, `SELECT DISTINCT d->>'denom' FROM explorer.account_activity a,
-		jsonb_array_elements(a.deltas) d WHERE address = $1 ORDER BY 1`, trader)
-	require.GreaterOrEqual(t, len(denoms), 2, "the trader moves more than one denom")
-
-	for _, denom := range denoms {
-		want := expected(denom, "")
-		require.NotEmpty(t, want, denom)
-		for _, limit := range []int{1, 2, 25} {
-			got := positions(activityPages(t, base, trader, "&denom="+url.QueryEscape(denom), limit))
-			sort.Strings(got)
-			assert.Equal(t, want, got, "%s, %d at a time: cursor paging has no gap", denom, limit)
-		}
-		page := into[dto.PagedList[dto.Activity]](t, fetch(t, base+"/accounts/"+trader+"/activity?limit=1&page=2&denom="+url.QueryEscape(denom)))
-		require.NotNil(t, page.Total)
-		assert.Equal(t, int64(len(want)), *page.Total, "%s: the total counts the filtered rows", denom)
-		if len(want) > 1 {
-			require.Len(t, page.Items, 1)
-			assert.Contains(t, want, positions([][]dto.Activity{page.Items})[0], "%s: page 2", denom)
-		}
-		for _, a := range activityPages(t, base, trader, "&denom="+url.QueryEscape(denom), 25)[0] {
-			var held bool
-			for _, b := range append(a.Deltas, a.Fee...) {
-				held = held || b.Denom == denom
-			}
-			assert.True(t, held, "%s: %d holds the denom", denom, a.Height)
-		}
-	}
-
-	// The failed transaction's fee-only row is a ubze row.
-	assert.Contains(t, positions(activityPages(t, base, trader, "&denom=ubze", 25)), "24999004 tx fee_only other")
-	assert.Equal(t, []string{"24999004 tx fee_only other"},
-		positions(activityPages(t, base, trader, "&denom=ubze&category=other", 25)))
-
-	// An unknown but valid denom is an empty list, an invalid one a 400.
-	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, trader, "&denom=unknowndenom", 25))
-	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/accounts/"+trader+"/activity?denom=1bad").status)
 }
 
 // A row the indexer stored as "other" before its message type had an entry

@@ -66,7 +66,7 @@ func TestSearchEscapesTheLikeWildcards(t *testing.T) {
 // now, and only its rows are joined.
 func TestActivityPageIsCutBeforeTheJoins(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
-	_, err := repository.NewExplorer(db).ActivityPage(context.Background(), "bze1a", nil, nil, 75_000, 26)
+	_, err := repository.NewExplorer(db).ActivityPage(context.Background(), "bze1a", nil, 75_000, 26)
 	assert.ErrorIs(t, err, errDB)
 	sql := db.sql[0]
 	page := strings.Index(sql, "LIMIT $5 OFFSET $6) a")
@@ -81,26 +81,9 @@ func TestActivityPageIsCutBeforeTheJoins(t *testing.T) {
 func TestActivityCursorPageKeepsTheKeyset(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
 	cat := "dex"
-	_, err := repository.NewExplorer(db).Activity(context.Background(), "bze1a", &cat, nil,
+	_, err := repository.NewExplorer(db).Activity(context.Background(), "bze1a", &cat,
 		&repository.ActivityKey{Height: 9, TxIndex: 2}, 26)
 	assert.ErrorIs(t, err, errDB)
 	assert.Contains(t, db.sql[0], "($3::bigint IS NULL OR (height, tx_index) < ($3::bigint, $4::integer))")
 	assert.Contains(t, db.sql[0], "ORDER BY a.height DESC, a.tx_index DESC")
-}
-
-// The denom filter is added to the text only when a denom is given: the
-// unfiltered statement keeps its six parameters.
-func TestActivityDenomFilterIsOnlyAddedWithADenom(t *testing.T) {
-	db := &fakeDB{queryErr: errDB}
-	ex := repository.NewExplorer(db)
-	_, err := ex.Activity(context.Background(), "bze1a", nil, nil, nil, 26)
-	assert.ErrorIs(t, err, errDB)
-	assert.NotContains(t, db.sql[0], "deltas @>")
-
-	denom := "factory/bze1x/upage"
-	_, err = ex.Activity(context.Background(), "bze1a", nil, &denom, nil, 26)
-	assert.ErrorIs(t, err, errDB)
-	assert.Contains(t, db.sql[1], "AND deltas @> $7::jsonb\n")
-	assert.Equal(t, []any{"bze1a", (*string)(nil), (*int64)(nil), (*int64)(nil), 26, int64(0),
-		`[{"denom":"factory/bze1x/upage"}]`}, db.args[1])
 }

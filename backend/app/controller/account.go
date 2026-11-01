@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"slices"
 
 	"github.com/labstack/echo/v5"
@@ -15,9 +14,6 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/openorders"
 )
 
-// denomRe is the Cosmos SDK's denom syntax.
-var denomRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9/:._-]{2,127}$`)
-
 // AccountReader is the read side of the explorer tables the account route
 // needs. Implemented by repository.Explorer.
 type AccountReader interface {
@@ -26,15 +22,15 @@ type AccountReader interface {
 	Account(ctx context.Context, address string) (*repository.Account, error)
 	// Activity returns up to limit activity rows of address, newest first,
 	// of category when not nil, after before when not nil.
-	Activity(ctx context.Context, address string, category, denom *string, before *repository.ActivityKey,
+	Activity(ctx context.Context, address string, category *string, before *repository.ActivityKey,
 		limit int) ([]repository.Activity, error)
 	// ActivityPage returns up to limit activity rows of address, newest
 	// first, of category when not nil, skipping the newest offset rows.
-	ActivityPage(ctx context.Context, address string, category, denom *string, offset int64,
+	ActivityPage(ctx context.Context, address string, category *string, offset int64,
 		limit int) ([]repository.Activity, error)
 	// ActivityTotal returns the number of activity rows of address, of
 	// category when not nil.
-	ActivityTotal(ctx context.Context, address string, category, denom *string) (int64, error)
+	ActivityTotal(ctx context.Context, address string, category *string) (int64, error)
 	// AccountOrders returns up to limit orders owned by owner, newest
 	// first, of status when not nil, after before when not nil.
 	AccountOrders(ctx context.Context, owner string, status *string, before *repository.OrderKey,
@@ -130,12 +126,11 @@ func (h *AccountController) Account(c *echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewAccount(acc, live, denoms, monikers))
 }
 
-// Activity serves GET /api/v1/accounts/{address}/activity?category&denom&cursor|page&limit:
+// Activity serves GET /api/v1/accounts/{address}/activity?category&cursor|page&limit:
 // the address's activity rows, newest first, one per transaction or block
-// that touched it, optionally of one category and of one denom (a row whose
-// deltas, the fee included, hold it). Anything but a bze1 address, a known
-// category or a valid denom is a 400; an address without activity, or a denom
-// it never moved, is an empty list.
+// that touched it, optionally of one category. Anything but a bze1 address
+// or a known category is a 400; an address without activity is an empty
+// list.
 func (h *AccountController) Activity(c *echo.Context) error {
 	hrp, address, ok := bech32Address(c.Param("address"))
 	if !ok || hrp != accountPrefix {
@@ -151,13 +146,6 @@ func (h *AccountController) Activity(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "category is not known")
 		}
 		category = &s
-	}
-	var denom *string
-	if s := c.QueryParam("denom"); s != "" {
-		if !denomRe.MatchString(s) {
-			return echo.NewHTTPError(http.StatusBadRequest, "denom is not valid")
-		}
-		denom = &s
 	}
 	var before *repository.ActivityKey
 	if s := c.QueryParam("cursor"); s != "" {
@@ -177,16 +165,16 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	var rows []repository.Activity
 	var total *int64
 	if pageNo > 0 {
-		n, err := h.repo.ActivityTotal(ctx, address, category, denom)
+		n, err := h.repo.ActivityTotal(ctx, address, category)
 		if err != nil {
 			return err
 		}
 		total = &n
-		rows, err = h.repo.ActivityPage(ctx, address, category, denom, (pageNo-1)*int64(limit), limit+1)
+		rows, err = h.repo.ActivityPage(ctx, address, category, (pageNo-1)*int64(limit), limit+1)
 		if err != nil {
 			return err
 		}
-	} else if rows, err = h.repo.Activity(ctx, address, category, denom, before, limit+1); err != nil {
+	} else if rows, err = h.repo.Activity(ctx, address, category, before, limit+1); err != nil {
 		return err
 	}
 	page := rows[:min(len(rows), limit)]
