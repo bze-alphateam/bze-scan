@@ -43,40 +43,37 @@ type Activity struct {
 
 // Activity returns up to limit account_activity rows of address, newest
 // first (height, then tx_index, descending), only of category when it is not
-// nil, only those moving denom (a delta in it, the fee included) when it is
-// not nil, after before when it is not nil. The category index serves the
-// category list, the primary key the unfiltered one, the deltas index the
-// denom list.
-func (r *Explorer) Activity(ctx context.Context, address string, category, denom *string, before *ActivityKey,
+// nil, after before when it is not nil. The category index serves the
+// filtered list, the primary key the unfiltered one.
+func (r *Explorer) Activity(ctx context.Context, address string, category *string, before *ActivityKey,
 	limit int) ([]Activity, error) {
-	return r.activity(ctx, address, category, denom, before, 0, limit)
+	return r.activity(ctx, address, category, before, 0, limit)
 }
 
 // ActivityPage returns up to limit account_activity rows of address, newest
-// first, only of category and denom when they are not nil, skipping the
-// newest offset rows. Offsets stay within one address, so they are bounded by
-// its own activity count.
-func (r *Explorer) ActivityPage(ctx context.Context, address string, category, denom *string,
+// first, only of category when it is not nil, skipping the newest offset
+// rows. Offsets stay within one address, so they are bounded by its own
+// activity count.
+func (r *Explorer) ActivityPage(ctx context.Context, address string, category *string,
 	offset int64, limit int) ([]Activity, error) {
-	return r.activity(ctx, address, category, denom, nil, offset, limit)
+	return r.activity(ctx, address, category, nil, offset, limit)
 }
 
 // ActivityTotal returns the number of account_activity rows of address, only
 // of category when it is not nil: the unfiltered count is the accounts row's
-// activity_count (0 when the address has no row), a category or a denom is
-// counted on its index.
-func (r *Explorer) ActivityTotal(ctx context.Context, address string, category, denom *string) (int64, error) {
+// activity_count (0 when the address has no row), a category is counted on
+// its index.
+func (r *Explorer) ActivityTotal(ctx context.Context, address string, category *string) (int64, error) {
 	var n int64
 	var err error
-	if category == nil && denom == nil {
+	if category == nil {
 		err = r.db.QueryRow(ctx, `SELECT activity_count FROM explorer.accounts WHERE address = $1`, address).Scan(&n)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, nil
 		}
 	} else {
 		err = r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.account_activity
-			WHERE address = $1 AND ($2::text IS NULL OR category = $2)`+denomClause(denom, 3),
-			append([]any{address, category}, denomArgs(denom)...)...).Scan(&n)
+			WHERE address = $1 AND category = $2`, address, *category).Scan(&n)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("activity total %s: %w", address, err)
@@ -84,28 +81,7 @@ func (r *Explorer) ActivityTotal(ctx context.Context, address string, category, 
 	return n, nil
 }
 
-// denomClause is the filter of the rows with a delta in denom, whose
-// parameter is number n; empty without a denom. It is added to the text only
-// when a denom is given: behind an `$n IS NULL OR` the planner could not rely
-// on the deltas index in a generic plan.
-func denomClause(denom *string, n int) string {
-	if denom == nil {
-		return ""
-	}
-	return fmt.Sprintf(" AND deltas @> $%d::jsonb", n)
-}
-
-// denomArgs is the parameter of denomClause: the one-coin array the deltas
-// have to contain.
-func denomArgs(denom *string) []any {
-	if denom == nil {
-		return nil
-	}
-	b, _ := json.Marshal([]map[string]string{{"denom": *denom}})
-	return []any{string(b)}
-}
-
-func (r *Explorer) activity(ctx context.Context, address string, category, denom *string, before *ActivityKey,
+func (r *Explorer) activity(ctx context.Context, address string, category *string, before *ActivityKey,
 	offset int64, limit int) ([]Activity, error) {
 	var beforeHeight, beforeTxIndex *int64
 	if before != nil {
@@ -120,14 +96,13 @@ func (r *Explorer) activity(ctx context.Context, address string, category, denom
 		FROM (SELECT * FROM explorer.account_activity
 			WHERE address = $1
 			  AND ($2::text IS NULL OR category = $2)
-			  AND ($3::bigint IS NULL OR (height, tx_index) < ($3::bigint, $4::integer))`+denomClause(denom, 7)+`
+			  AND ($3::bigint IS NULL OR (height, tx_index) < ($3::bigint, $4::integer))
 			ORDER BY height DESC, tx_index DESC
 			LIMIT $5 OFFSET $6) a
 		LEFT JOIN explorer.transactions t ON t.height = a.height AND t.tx_index = a.tx_index
 		LEFT JOIN explorer.labels l ON l.address = a.counterparty
 		LEFT JOIN explorer.validators v ON v.operator_address = a.counterparty
-		ORDER BY a.height DESC, a.tx_index DESC`,
-		append([]any{address, category, beforeHeight, beforeTxIndex, limit, offset}, denomArgs(denom)...)...)
+		ORDER BY a.height DESC, a.tx_index DESC`, address, category, beforeHeight, beforeTxIndex, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("activity %s: %w", address, err)
 	}
