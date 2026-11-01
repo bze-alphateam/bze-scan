@@ -66,7 +66,8 @@ describe("TokensPage", () => {
     });
     await screen.findAllByTestId("token-list-row");
     const rows = screen.getAllByTestId("token-list-row");
-    const direct = rows[3];
+    // Both are halted copies of ATOM, so they come last, in the API's order.
+    const direct = rows[5];
     const hop = rows[6];
     expect(within(direct).queryByTestId("hops-tag")).not.toBeInTheDocument();
     // Born cross-chain, minted on Cosmos Hub (outlined), received from Osmosis (dashed), 2 hops (accent outline).
@@ -82,7 +83,7 @@ describe("TokensPage", () => {
     expect(looks(rows[0])).toEqual(["acc"]);
     expect(within(hop).getByTestId("hops-tag")).toHaveAttribute("title", expect.stringContaining("through Osmosis"));
 
-    const lp = within(rows[5]).getByTestId("lp-logo");
+    const lp = within(rows[4]).getByTestId("lp-logo");
     // BZE's own logo (the DEX's, not the registry's) over the top-left corner, the DEX's placeholder for USDC
     // (no logo) under the bottom-right one.
     await waitFor(() =>
@@ -109,8 +110,9 @@ describe("TokensPage", () => {
       "Created this month1on Factory",
       "Cross-chain2 chainsCosmos Hub, Noble",
     ]);
-    expect(symbols()).toEqual(["BZE", "HONEY", "VDL", "ATOM", "USDC", "BZE/USDC LP"]);
-    const [bze, honey, vdl, atom, usdc] = screen.getAllByTestId("token-list-row");
+    // ATOM is halted, so it comes last.
+    expect(symbols()).toEqual(["BZE", "HONEY", "VDL", "USDC", "BZE/USDC LP", "ATOM"]);
+    const [bze, honey, vdl, usdc, , atom] = screen.getAllByTestId("token-list-row");
     expect(bze).toHaveTextContent("Native");
     expect(bze).toHaveTextContent("1B BZE");
     expect(bze).toHaveTextContent("12,000");
@@ -138,7 +140,7 @@ describe("TokensPage", () => {
     renderWithProviders(<TokensPage />, { api: api() });
     await userEvent.click(await screen.findByRole("button", { name: "Cross-chain" }));
     expect(screen.getByRole("button", { name: "Cross-chain" })).toHaveAttribute("aria-pressed", "true");
-    expect(symbols()).toEqual(["ATOM", "USDC"]);
+    expect(symbols()).toEqual(["USDC", "ATOM"]);
     await userEvent.click(screen.getByRole("button", { name: "Created on Factory" }));
     expect(symbols()).toEqual(["HONEY", "VDL"]);
     await userEvent.type(screen.getByRole("textbox", { name: "Find a token" }), "vid");

@@ -192,14 +192,25 @@ export const TOKEN_FILTERS: { value: TokenFilter; label: string }[] = [
   { value: "ibc", label: "Cross-chain" },
 ];
 
-/** The list's rows for a chip and the "Find a token" text (symbol or name, any case). */
+/**
+ * Whether a token is flagged as one people should not use: obsolete (the apps
+ * no longer list it), stranded (its IBC route is gone) or halted on the DEX.
+ */
+export const isFlaggedToken = (t: Pick<TokenSummary, "denom" | "kind" | "stranded" | "halted">) =>
+  t.halted || (t.kind === "ibc" && t.stranded) || isObsolete(t.denom);
+
+/**
+ * The list's rows for a chip and the "Find a token" text (symbol or name, any case),
+ * flagged tokens last; each group keeps the API's order.
+ */
 export function filterTokens(tokens: TokenSummary[], filter: TokenFilter, query: string): TokenSummary[] {
   const q = query.trim().toLowerCase();
-  return tokens.filter(
+  const rows = tokens.filter(
     (t) =>
       (filter === "all" || t.kind === filter) &&
       (q === "" || [t.symbol, t.name].some((v) => v != null && v.toLowerCase().includes(q))),
   );
+  return [...rows.filter((t) => !isFlaggedToken(t)), ...rows.filter(isFlaggedToken)];
 }
 
 const plural = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
