@@ -78,6 +78,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"pool_swaps",
 		"candles",
 		"price_source",
+		"registry_asset_list",
 	}, idents)
 }
 
