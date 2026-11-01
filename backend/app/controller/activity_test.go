@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,39 @@ func TestActivityPage(t *testing.T) {
 	assert.Equal(t, &repository.ActivityKey{Height: 30, TxIndex: -1}, repo.gotBefore)
 	assert.Nil(t, repo.gotCategory, "no filter means every category")
 	assert.Equal(t, controller.DefaultLimit+1, repo.gotLimit)
+}
+
+func TestActivityDenomFilter(t *testing.T) {
+	repo := &fakeAccounts{activity: activityRows(), total: 3}
+	for _, tc := range []struct{ query, denom string }{
+		{"?denom=ubze", "ubze"},
+		{"?denom=factory/bze1abc/upage&category=dex", "factory/bze1abc/upage"},
+		{"?denom=factory%2Fbze1abc%2Fupage", "factory/bze1abc/upage"},
+		{"?denom=ibc%2F27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2&cursor=" +
+			dto.EncodeActivityCursor(repository.Activity{Height: 30, TxIndex: 2}),
+			"ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"},
+		{"?denom=ubze&page=2&limit=1", "ubze"},
+	} {
+		repo.gotDenom = nil
+		rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity"+tc.query)
+		require.Equal(t, http.StatusOK, rec.Code, tc.query+" "+rec.Body.String())
+		require.NotNil(t, repo.gotDenom, tc.query)
+		assert.Equal(t, tc.denom, *repo.gotDenom, tc.query)
+	}
+
+	// No denom, or an empty one, is today's behaviour.
+	for _, q := range []string{"", "?denom="} {
+		stale := "stale"
+		repo.gotDenom = &stale
+		require.Equal(t, http.StatusOK, get(t, newActivityAPI(repo), "/accounts/"+account+"/activity"+q).Code)
+		assert.Nil(t, repo.gotDenom, q)
+	}
+
+	for _, q := range []string{"?denom=u", "?denom=1ubze", "?denom=ub%20ze", "?denom=ubze%27", "?denom=" + strings.Repeat("a", 129)} {
+		rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity"+q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, q)
+		assert.Contains(t, rec.Body.String(), "denom is not valid", q)
+	}
 }
 
 func TestActivityLastPageAndErrors(t *testing.T) {
