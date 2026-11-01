@@ -22,7 +22,7 @@ function isActive(pathname: string, href: string): boolean {
  * The header of every page. From `md` up: logo, search box, Apps, theme
  * toggle, and the nav row with the current section underlined. Below `md`: logo, a search icon that
  * opens the box under the bar, and a menu button opening a drawer with the
- * nav and the Apps links.
+ * nav and the Apps links (each opening in a new tab, as in the Apps menu).
  */
 export function Header() {
   const pathname = usePathname();
@@ -86,7 +86,7 @@ export function Header() {
                       </Text>
                       <Stack gap="0">
                         {appLinks.map((link) => (
-                          <Link key={link.label} href={link.href} minH="44px" gap="2.5">
+                          <Link key={link.label} href={link.href} target="_blank" rel="noopener noreferrer" minH="44px" gap="2.5">
                             <AppIcon app={link.icon} size={20} />
                             {link.label}
                           </Link>

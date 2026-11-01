@@ -34,7 +34,7 @@ const (
 
 // Defaults of Config.
 const (
-	DefaultTTL        = 15 * time.Second
+	DefaultTTL        = 4 * time.Second
 	DefaultMarketsTTL = 5 * time.Minute
 	DefaultInFlight   = 8
 )

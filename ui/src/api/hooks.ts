@@ -354,15 +354,20 @@ export function useAccountIbc(address: string) {
 /**
  * What the account's open DEX orders lock, per asset then market: the Orders
  * tab and the Tokens tab's "in orders" lines read the same query. It starts
- * with the page and nothing waits for it.
+ * with the page and nothing waits for it. Slow by default; the Orders tab
+ * asks for it live, so placed, filled and cancelled orders show while it is
+ * open (the query refetches at the shortest interval of its observers).
  */
-export function useAccountOpenOrders(address: string, { enabled = true }: { enabled?: boolean } = {}) {
+export function useAccountOpenOrders(
+  address: string,
+  { enabled = true, polling = "slow" }: { enabled?: boolean; polling?: "slow" | "live" } = {},
+) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.accountOpenOrders(address),
     queryFn: ({ signal }) => api.accountOpenOrders(address, signal),
     enabled,
-    ...slow,
+    ...(polling === "live" ? live : slow),
   });
 }
 
