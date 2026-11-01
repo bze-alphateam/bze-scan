@@ -168,3 +168,56 @@ func TestUnavailableRegistry(t *testing.T) {
 	_, err = c.Assets(ctx, "cosmoshub")
 	require.Error(t, err, "a failure is not an absent asset list")
 }
+
+func TestLogosAreKeptApartAndPickedSVGFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, want string
+	}{
+		{"logo_URIs svg first", `"logo_URIs":{"png":"a.png","svg":"a.svg"},"images":[{"png":"b.png","svg":"b.svg"}]`, "a.svg"},
+		{"logo_URIs png", `"logo_URIs":{"png":"a.png"},"images":[{"png":"b.png","svg":"b.svg"}]`, "a.png"},
+		{"images svg", `"images":[{"png":"b.png","svg":"b.svg"},{"svg":"c.svg"}]`, "b.svg"},
+		{"images png", `"images":[{"png":"b.png"}]`, "b.png"},
+		{"none", ``, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			extra := ""
+			if tc.raw != "" {
+				extra = "," + tc.raw
+			}
+			ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x"` + extra + `}`))
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, ch.Logos.SVGFirst())
+			assets, err := chainregistry.ParseAssets([]byte(`{"assets":[{"base":"ux"` + extra + `}]}`))
+			require.NoError(t, err)
+			require.Len(t, assets, 1)
+			assert.Equal(t, tc.want, assets[0].Logos.SVGFirst())
+		})
+	}
+
+	ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x","logo_URIs":{"png":"a.png","svg":"a.svg"}}`))
+	require.NoError(t, err)
+	assert.Equal(t, "a.png", ch.LogoURL, "the explorer's own logo stays PNG first")
+	assert.Equal(t, chainregistry.Logos{URIs: chainregistry.LogoPair{PNG: "a.png", SVG: "a.svg"}}, ch.Logos)
+}
+
+func TestChainAPIsAndAssetDescriptions(t *testing.T) {
+	c, _ := client(t)
+	ctx := context.Background()
+	bze, err := c.Chain(ctx, "beezee")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(bze.REST), 2)
+	assert.Equal(t, []string{"https://rest.getbze.com", "https://rest-1.getbze.com"}, bze.REST[:2], "in the registry's order")
+	assert.NotEmpty(t, bze.RPC)
+
+	ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x","apis":{"rest":[{"address":"r1"},{"address":""},{"address":"r2"}]}}`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"r1", "r2"}, ch.REST)
+	assert.Nil(t, ch.RPC)
+
+	assets, err := c.Assets(ctx, "beezee")
+	require.NoError(t, err)
+	require.NotEmpty(t, assets)
+	assert.Equal(t, "ubze", assets[0].Base)
+	assert.NotEmpty(t, assets[0].Description)
+	assert.NotEmpty(t, assets[0].Logos.URIs.SVG)
+}

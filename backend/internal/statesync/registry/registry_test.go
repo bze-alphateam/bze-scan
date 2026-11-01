@@ -121,6 +121,7 @@ func TestFullResyncFetchesBZEAndEveryChainMet(t *testing.T) {
 	s := newSet(reg, store, &clock{now: time.Unix(1000, 0)})
 	assert.Equal(t, statesync.ChainRegistry, s.Name())
 	assert.Equal(t, registry.DefaultInterval, s.Interval())
+	assert.Equal(t, time.Hour, registry.DefaultInterval, "the asset list follows the registry within an hour")
 
 	require.NoError(t, s.FullResync(context.Background()))
 	assert.Equal(t, map[string][]string{"beezee-1": {"ubeezee"}, "cosmoshub-4": {"ucosmoshub"}, "noble-1": {"unoble"}}, store.saved)
@@ -230,10 +231,11 @@ type publisher struct{ got []statesync.Dirty }
 
 func (p *publisher) Publish(d statesync.Dirty) { p.got = append(p.got, d) }
 
-// The channels' escrow labels carry their chain's name: a run that saved a
-// chain asks the channels set to resync, once; a run that saved none does
-// not.
-func TestSavedChainsResyncTheChannels(t *testing.T) {
+// The channels' escrow labels carry their chain's name and the asset list
+// its assets: a run that saved a chain asks the channels set to resync and
+// the asset list to rebuild, once; a run that saved none does not. A new
+// IBC coin's chain, fetched on its cache miss, so reaches the asset list.
+func TestSavedChainsResyncTheChannelsAndTheAssetList(t *testing.T) {
 	reg, store := newRegistry(), &fakeStore{wanted: []string{"noble-1", "cosmoshub-4"}}
 	c := &clock{now: time.Unix(1000, 0)}
 	pub := &publisher{}
@@ -242,6 +244,7 @@ func TestSavedChainsResyncTheChannels(t *testing.T) {
 	require.NoError(t, s.FullResync(context.Background()))
 	require.Len(t, pub.got, 1)
 	assert.Equal(t, []string{statesync.All}, pub.got[0].Keys(statesync.Channels))
+	assert.Equal(t, []string{statesync.All}, pub.got[0].Keys(statesync.AssetList))
 
 	require.NoError(t, s.ResyncOne(context.Background(), "unknown-7"))
 	assert.Len(t, pub.got, 1, "a chain the registry does not know names nothing")
@@ -249,5 +252,6 @@ func TestSavedChainsResyncTheChannels(t *testing.T) {
 
 	c.now = c.now.Add(registry.CoolDown)
 	require.NoError(t, s.ResyncOne(context.Background(), "noble-1"))
-	assert.Len(t, pub.got, 2)
+	require.Len(t, pub.got, 2, "a cache miss fetched")
+	assert.Equal(t, []string{statesync.All}, pub.got[1].Keys(statesync.AssetList))
 }
