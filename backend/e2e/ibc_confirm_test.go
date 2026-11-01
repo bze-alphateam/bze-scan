@@ -96,7 +96,7 @@ func TestIBCChannelConfirmation(t *testing.T) {
 	require.NotNil(t, usdc.IBC)
 	assert.True(t, usdc.IBC.ChannelConfirmed, "channel-3, by the registry")
 	assert.True(t, usdc.Verified)
-	assert.False(t, usdc.DepositAllowed, "the curation's notice stands")
+	assert.True(t, usdc.DepositAllowed, "confirmed, one hop; the curation does not exclude it")
 
 	atom := got[atomDenom] // over channel-11, the hub's channel-1898
 	require.NotNil(t, atom.IBC)
