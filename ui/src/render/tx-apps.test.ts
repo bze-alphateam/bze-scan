@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import fundBurner from "../../test/fixtures/messages/burner-fund-burner.json";
+import moveIbc from "../../test/fixtures/messages/burner-move-ibc-locked-coins.json";
 import joinRaffle from "../../test/fixtures/messages/burner-join-raffle.json";
 import startRaffle from "../../test/fixtures/messages/burner-start-raffle.json";
 import send from "../../test/fixtures/messages/bank-send.json";
@@ -51,6 +53,25 @@ describe("appDestinations", () => {
     expect(appDestinations([without(msg(joinRaffle), "denom")])).toEqual([]);
     expect(appDestinations([msg(send)])).toEqual([]);
     expect(appDestinations([])).toEqual([]);
+  });
+
+  it("sends a burner fund to the coin's Burner page, or the Burner home for several or unparsable coins", () => {
+    const withAmount = (amount: string) => msg({ ...fundBurner, body: { ...fundBurner.body, amount } });
+    expect(appDestinations([msg(fundBurner)])).toEqual([
+      { app: "burner", verb: "Burn more on", name: "Burner", href: "https://burner.getbze.com/coin?coin=ubze" },
+    ]);
+    expect(appDestinations([withAmount("5ubze,7uatom")])[0]?.href).toBe("https://burner.getbze.com");
+    expect(appDestinations([withAmount("5ubze,junk")])[0]?.href).toBe("https://burner.getbze.com");
+    expect(appDestinations([withAmount("junk")])[0]?.href).toBe("https://burner.getbze.com");
+    expect(appDestinations([without(msg(fundBurner), "amount")])[0]?.href).toBe("https://burner.getbze.com");
+  });
+
+  it("sends moving IBC-locked coins to that denom's Burner page, or the home without a denom", () => {
+    expect(appDestinations([msg(moveIbc)])[0]).toMatchObject({
+      app: "burner",
+      href: `https://burner.getbze.com/coin?coin=${encodeURIComponent(moveIbc.body.denom)}`,
+    });
+    expect(appDestinations([without(msg(moveIbc), "denom")])[0]?.href).toBe("https://burner.getbze.com");
   });
 
   it("gives one link per app, from the first message that has one", () => {
