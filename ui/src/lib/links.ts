@@ -120,6 +120,11 @@ export function burnerRaffleHref(denom: string): string {
   return `${externalLinks.burner}/coin?coin=${encodeURIComponent(denom)}`;
 }
 
+/** The Burner's home page, where coins are burned. */
+export function burnerHomeHref(): string {
+  return externalLinks.burner;
+}
+
 /** A proposal on Ping.pub. */
 export function pingPubProposal(id: number): string {
   return `${env.pingPubUrl}/gov/${id}`;
