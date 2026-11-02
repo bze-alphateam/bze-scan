@@ -7,6 +7,7 @@ import { live, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "@/api/policy";
 import type { Block, Page, RawTx, Status, TokenSummary, Tx, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
+import fundBurner from "../../../test/fixtures/messages/burner-fund-burner.json";
 import block from "../../../test/fixtures/api/v1/blocks/25120440.json";
 import rawSend from "../../../test/fixtures/api/v1/raw/tx/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
 import status from "../../../test/fixtures/api/v1/status.json";
@@ -267,6 +268,14 @@ describe("TxPage app links", () => {
     const link = within(apps).getByRole("link", { name: /Burner/ });
     expect(link).toHaveAttribute("href", `https://burner.getbze.com/coin?coin=${encodeURIComponent(HONEY)}`);
     expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("links a burner fund to the coin's page on the Burner", async () => {
+    const fund = { ...raffleTx, messages: [{ ...raffleTx.messages[0], ...fundBurner }] };
+    renderWithProviders(<TxPage hash={raffleTx.hash} />, { api: api(fund) });
+    const apps = await screen.findByTestId("tx-apps");
+    expect(apps).toHaveTextContent("Burn more on Burner");
+    expect(within(apps).getByRole("link", { name: /Burner/ })).toHaveAttribute("href", "https://burner.getbze.com/coin?coin=ubze");
   });
 
   it("links a vote to its proposal on Staking, failed or not", async () => {

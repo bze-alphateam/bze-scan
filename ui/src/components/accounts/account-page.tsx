@@ -26,6 +26,7 @@ import { usdValue } from "@/lib/math";
 import {
   activeSince,
   amountOf,
+  stakedValidators,
   BOND_DENOM,
   daysText,
   moduleBondWhere,
@@ -172,7 +173,7 @@ function PersonalTiles({ a }: { a: Account }) {
   const available = amountOf(a.balances, BOND_DENOM);
   const usd = usdValue(available, BOND.exponent, denoms.data?.get(BOND_DENOM)?.price_usd);
   const unbonding = unstaking(a.unbonding, new Date());
-  const n = a.delegations.length;
+  const n = stakedValidators(a);
   return (
     <SimpleGrid columns={TILE_COLUMNS} gap="3" mt="6" data-testid="account-tiles">
       <Tile label="Available" value={bondCompact(available)} sub={usd != null ? formatUsd(usd) : null} />
@@ -232,7 +233,7 @@ function PersonalView({
   };
   const live = a.live.available;
   const tokens = live ? tokenRows(a.balances, undefined, "name").length : null;
-  const n = a.delegations.length;
+  const n = stakedValidators(a);
   return (
     <Box>
       <PersonalHead a={a} />

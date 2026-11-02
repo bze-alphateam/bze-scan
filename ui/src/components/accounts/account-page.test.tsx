@@ -313,6 +313,27 @@ describe("Tokens tab", () => {
 });
 
 describe("Staking tab", () => {
+  it("hides dust delegations behind a toggle and shows them last", async () => {
+    const dusty = { ...plain, delegations: [{ ...plain.delegations[0], amount: "0" }, ...plain.delegations.slice(1)] };
+    renderWithProviders(<AccountPage address={ADDR} initialTab="staking" />, { api: api(dusty) });
+    expect(await screen.findAllByTestId("delegation-row")).toHaveLength(2);
+    expect(screen.getByTestId("staking-summary")).toHaveTextContent("with 2 validators");
+    expect(screen.getByRole("tab", { name: "Staking 2 validators" })).toBeInTheDocument();
+    expect(screen.getByTestId("dust-note")).toHaveTextContent("usually cannot be cleared");
+    await userEvent.click(screen.getByRole("button", { name: "Show dust delegations (1)" }));
+    const rows = screen.getAllByTestId("delegation-row");
+    expect(rows).toHaveLength(3);
+    expect(rows[2]).toHaveTextContent("Honeycomb");
+    await userEvent.click(screen.getByRole("button", { name: "Hide dust delegations (1)" }));
+    expect(screen.getAllByTestId("delegation-row")).toHaveLength(2);
+  });
+
+  it("offers no toggle without dust", async () => {
+    renderWithProviders(<AccountPage address={ADDR} initialTab="staking" />, { api: api() });
+    await screen.findAllByTestId("delegation-row");
+    expect(screen.queryByTestId("dust-toggle")).not.toBeInTheDocument();
+  });
+
   it("lists the stake by validator with statuses, a total and what is unstaking", async () => {
     renderWithProviders(<AccountPage address={ADDR} initialTab="staking" />, { api: api() });
     const rows = await screen.findAllByTestId("delegation-row");
