@@ -27,6 +27,7 @@ import {
   parseModuleTab,
   parsePage,
   parseTab,
+  stakedValidators,
   stakingRows,
   tokenRows,
   tokensTotalUsd,
@@ -207,6 +208,22 @@ describe("staking tab", () => {
       ["Sleepy Node", "10%", null],
     ]);
     expect(stakingRows({ ...a, total_staked: "0" })[0].share).toBe("—");
+  });
+
+  it("flags delegations under 1 base unit as dust and lists them last", () => {
+    const dusty = {
+      ...a,
+      delegations: [{ ...a.delegations[0], amount: "0" }, ...a.delegations.slice(1)],
+    };
+    expect(stakingRows(dusty).map((r) => [r.moniker, r.dust])).toEqual([
+      ["Deep Fields", false],
+      ["Sleepy Node", false],
+      ["Honeycomb", true],
+    ]);
+    expect(stakingRows(a).some((r) => r.dust)).toBe(false);
+    const at = (amount: string) => stakingRows({ ...a, delegations: [{ ...a.delegations[0], amount }] })[0].dust;
+    expect([at("1"), at("0.4")]).toEqual([false, true]);
+    expect([stakedValidators(a), stakedValidators(dusty)]).toEqual([3, 2]);
   });
 
   it("chips a validator Active, Inactive or Jailed, with its uptime under 99%", () => {

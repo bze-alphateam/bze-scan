@@ -421,11 +421,20 @@ export interface StakingRow {
   share: string;
   /** Pending `ubze` rewards from this validator; null when none. */
   rewards: string | null;
+  /** A leftover sliver of shares worth under 1 base unit, which no unstake can clear. */
+  dust: boolean;
 }
 
-/** The Staking tab's rows, in the API's order. */
+/** A delegation worth under 1 base unit: the share rounding an unstake or redelegation leaves behind. */
+const isDustDelegation = (amount: string): boolean => compareDecimals(amount, "1") < 0;
+
+/** How many validators the account really stakes with: its delegations, dust left out. */
+export const stakedValidators = (a: Pick<Account, "delegations">): number =>
+  a.delegations.filter((d) => !isDustDelegation(d.amount)).length;
+
+/** The Staking tab's rows, in the API's order, with dust delegations moved last. */
 export function stakingRows(a: Pick<Account, "delegations" | "rewards" | "total_staked">): StakingRow[] {
-  return a.delegations.map((d) => {
+  const rows = a.delegations.map((d) => {
     const share = percentOf(d.amount, a.total_staked);
     const reward = a.rewards.find((r) => r.validator === d.validator);
     const amount = reward ? amountOf(reward.coins, BOND_DENOM) : "0";
@@ -435,8 +444,10 @@ export function stakingRows(a: Pick<Account, "delegations" | "rewards" | "total_
       amount: d.amount,
       share: share != null ? formatPct(share, { trim: true }) : "—",
       rewards: isAboveZero(amount) ? amount : null,
+      dust: isDustDelegation(d.amount),
     };
   });
+  return [...rows.filter((r) => !r.dust), ...rows.filter((r) => r.dust)];
 }
 
 /** A validator's status chip on the Staking tab, and its uptime when below 99%. */
