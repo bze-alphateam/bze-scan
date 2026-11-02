@@ -253,3 +253,27 @@ func TestHallOfFameFails(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, "internal", errorCode(t, rec))
 }
+
+func TestValidatorPageCarriesTheJailAndTheLastSignedTime(t *testing.T) {
+	f := validatorPage()
+	height, signed := int64(400), int64(380)
+	at, signedAt := time.Unix(1_800_000_000, 0), time.Unix(1_799_000_000, 0)
+	reason := "missing_signature"
+	f.validator.Jailed = true
+	f.validator.Status = "unbonding"
+	f.validator.JailHeight, f.validator.JailTime, f.validator.JailReason = &height, &at, &reason
+	f.validator.LastSignedHeight, f.validator.LastSignedTime = &signed, &signedAt
+
+	v := decode[dto.ValidatorDetail](t, get(t, newAPI(f), "/validators/"+valoper))
+	assert.Nil(t, v.Uptime, "jailed")
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, &height, v.Jail.Height)
+	assert.Equal(t, "downtime", *v.Jail.Reason)
+	assert.True(t, v.Jail.Time.Equal(at))
+	assert.Equal(t, &signed, v.LastSignedHeight)
+	assert.True(t, v.LastSignedTime.Equal(signedAt))
+
+	body := decodeRaw(t, get(t, newAPI(validatorPage()), "/validators/"+valoper))
+	assert.JSONEq(t, `null`, string(body["jail"]), "an active validator has no jail")
+	assert.JSONEq(t, `null`, string(body["last_signed_time"]))
+}

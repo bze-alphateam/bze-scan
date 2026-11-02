@@ -37,6 +37,10 @@ import {
   uptimeText,
   voteOption,
   voteTone,
+  isInactive,
+  jailLines,
+  lastActiveText,
+  lastSignedLine,
 } from "./validators";
 
 const v = detail as unknown as ValidatorDetail;
@@ -298,5 +302,53 @@ describe("stake movements", () => {
     expect(movementsRange(2, 10, 12)).toBe("Movements 11–12 of 12");
     expect(movementsRange(1, 10, 0)).toBe("Movements 0 of 0");
     expect(movementsRange(3, 10, 12)).toBe("Movements 0 of 12");
+  });
+});
+
+describe("validators outside the active set", () => {
+  const now = new Date("2026-11-01T12:00:00Z");
+  const jail = { height: 100, time: "2026-10-30T12:00:00Z", reason: "downtime" as const };
+
+  it("is inactive when not bonded or jailed", () => {
+    expect(isInactive({ status: "bonded", jailed: false })).toBe(false);
+    expect(isInactive({ status: "bonded", jailed: true })).toBe(true);
+    expect(isInactive({ status: "unbonding", jailed: false })).toBe(true);
+    expect(isInactive({ status: "unbonded", jailed: false })).toBe(true);
+  });
+
+  it("words the last cell of a row: jailed, last signed, or a dash", () => {
+    expect(lastActiveText({ jailed: true, jail, last_signed_time: null }, now)).toBe("jailed 2 days ago");
+    expect(lastActiveText({ jailed: true, jail: { ...jail, time: null }, last_signed_time: "2026-10-31T12:00:00Z" }, now)).toBe(
+      "last signed 1 day ago",
+    );
+    expect(lastActiveText({ jailed: true, jail: { height: null, time: null, reason: null }, last_signed_time: null }, now)).toBe("—");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: "2026-11-01T09:00:00Z" }, now)).toBe("3 hours ago");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: null }, now)).toBe("—");
+  });
+
+  it("words the last signed block of the page", () => {
+    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: "2026-11-01T11:00:00Z" }, now)).toEqual({ height: 5, ago: "1 hour ago" });
+    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: null }, now)).toEqual({ height: 5, ago: null });
+    expect(lastSignedLine({ last_signed_height: null, last_signed_time: null }, now)).toBeNull();
+  });
+
+  const base = { last_signed_height: null, last_signed_time: null, tombstoned: false, jailed_until: null };
+
+  it("lines the Jailed card: the jail block, the last signed block, whether it can unjail", () => {
+    expect(
+      jailLines({ ...base, jail, last_signed_height: 90, last_signed_time: "2026-10-30T11:00:00Z", jailed_until: "2026-11-02T00:00:00Z" }, now),
+    ).toEqual([
+      { text: "Jailed at block 100, 2 days ago, for downtime.", height: 100 },
+      { text: "Last signed block 90, 2 days ago.", height: 90 },
+      { text: "Can unjail after Nov 2, 2026, 00:00:00 UTC." },
+    ]);
+    expect(jailLines({ ...base, jail: { ...jail, reason: "double_sign" }, tombstoned: true }, now)).toEqual([
+      { text: "Jailed at block 100, 2 days ago, for double signing.", height: 100 },
+      { text: "Tombstoned: can never unjail." },
+    ]);
+    expect(jailLines({ ...base, jail: { height: null, time: null, reason: null }, jailed_until: "2026-10-01T00:00:00Z" }, now)).toEqual([
+      { text: "Jailed before the explorer's indexed history." },
+    ]);
+    expect(jailLines({ ...base, jail: null, last_signed_height: 7 }, now)).toEqual([{ text: "Last signed block 7.", height: 7 }]);
   });
 });

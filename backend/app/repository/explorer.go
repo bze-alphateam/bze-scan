@@ -444,6 +444,16 @@ type ValidatorSummary struct {
 	// the start of the watch; nil for any other validator or before the live
 	// indexer wrote.
 	MissedInARow *int64
+	// LastSignedTime is the time of the LastSignedHeight block, nil when
+	// either is unknown.
+	LastSignedTime *time.Time
+	// JailHeight, JailTime and JailReason are the latest slashed event of a
+	// currently jailed validator, when no unjailed event is newer; nil
+	// otherwise (the jail happened below the indexed range, or the validator
+	// is not jailed). JailReason is the slash event's details.reason.
+	JailHeight *int64
+	JailTime   *time.Time
+	JailReason *string
 }
 
 // OfflineMissedInARow is how many blocks in a row an active validator must
@@ -453,6 +463,16 @@ const OfflineMissedInARow = 10
 // signingCols are last_signed_height and the missed-in-a-row count of the
 // validators row aliased t (see ValidatorSummary).
 func signingCols(t string) string {
+	// The jail columns read the latest slashed event after the latest
+	// unjailed one (idx_validator_events_val serves both lookups).
+	jail := func(col string) string {
+		return `CASE WHEN ` + t + `.jailed THEN (
+		  SELECT ` + col + ` FROM explorer.validator_events e
+		   WHERE e.operator_address = ` + t + `.operator_address AND e.kind = 'slashed'
+		     AND e.height > coalesce((SELECT max(u.height) FROM explorer.validator_events u
+		                               WHERE u.operator_address = ` + t + `.operator_address AND u.kind = 'unjailed'), 0)
+		   ORDER BY e.height DESC, e.tx_index DESC, e.seq DESC LIMIT 1) END`
+	}
 	return t + `.last_signed_height,
 		CASE WHEN ` + t + `.status = 'bonded' AND NOT ` + t + `.jailed THEN (
 		  SELECT CASE WHEN s.since IS NULL THEN NULL ELSE GREATEST(c.h - s.since, 0) END
@@ -463,7 +483,9 @@ func signingCols(t string) string {
 		                 (SELECT coalesce(max(value) FILTER (WHERE key = 'signing_watch_from'),
 		                                  max(value) FILTER (WHERE key = 'live_floor'))::bigint
 		                    FROM explorer.indexer_state)) AS since) s)
-		END`
+		END,
+		(SELECT b.time FROM explorer.blocks b WHERE b.height = ` + t + `.last_signed_height),
+		` + jail("e.height") + `, ` + jail("e.time") + `, ` + jail("e.details->>'reason'")
 }
 
 // RecentProposals is how many of the last proposals whose voting ended a
@@ -532,7 +554,7 @@ func scanValidatorSummaries(rows pgx.Rows) ([]ValidatorSummary, error) {
 		var v ValidatorSummary
 		if err := rows.Scan(&v.Position, &v.Rank, &v.Moniker, &v.OperatorAddress, &v.Tokens, &v.VotingPowerPct,
 			&v.CommissionRate, &v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL,
-			&v.RecentVotes, &v.RecentProposals, &v.LastSignedHeight, &v.MissedInARow); err != nil {
+			&v.RecentVotes, &v.RecentProposals, &v.LastSignedHeight, &v.MissedInARow, &v.LastSignedTime, &v.JailHeight, &v.JailTime, &v.JailReason); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -678,7 +700,7 @@ func (r *Explorer) Validator(ctx context.Context, operator string) (*ValidatorDe
 		FROM explorer.validators vl WHERE operator_address = $1`, operator).Scan(
 		&v.Rank, &v.Moniker, &v.Tokens, &v.VotingPowerPct, &v.CommissionRate,
 		&v.MissedBlocks, &v.SignedBlocksWindow, &v.Jailed, &v.Status, &v.LogoURL, &v.RecentVotes, &v.RecentProposals,
-		&v.LastSignedHeight, &v.MissedInARow,
+		&v.LastSignedHeight, &v.MissedInARow, &v.LastSignedTime, &v.JailHeight, &v.JailTime, &v.JailReason,
 		&v.AccountAddress, &v.ConsensusAddress, &v.ConsensusPubkey, &v.Identity, &v.Website, &v.SecurityContact,
 		&v.Details, &v.Tombstoned, &v.JailedUntil, &v.DelegatorShares, &v.CommissionMaxRate,
 		&v.CommissionMaxChangeRate, &v.CommissionUpdateTime, &v.MinSelfDelegation,

@@ -19,7 +19,9 @@
       },
       "offline": false,
       "missed_in_a_row": 0,
-      "last_signed_height": 25120450
+      "last_signed_height": 25120450,
+      "last_signed_time": "2026-10-30T12:00:00Z",
+      "jail": null
     },
     {
       "rank": 2,
@@ -40,7 +42,9 @@
       },
       "offline": false,
       "missed_in_a_row": 0,
-      "last_signed_height": 25120450
+      "last_signed_height": 25120450,
+      "last_signed_time": "2026-10-30T12:00:00Z",
+      "jail": null
     },
     {
       "rank": 3,
@@ -61,7 +65,9 @@
       },
       "offline": true,
       "missed_in_a_row": 160,
-      "last_signed_height": 25120290
+      "last_signed_height": 25120290,
+      "last_signed_time": "2026-10-30T12:00:00Z",
+      "jail": null
     },
     {
       "rank": null,
@@ -70,7 +76,7 @@
       "tokens": "1200000000000",
       "voting_power_pct": null,
       "commission_rate": "0.05",
-      "uptime": "61.20000",
+      "uptime": null,
       "jailed": true,
       "status": "unbonding",
       "logo_url": null,
@@ -82,7 +88,13 @@
       },
       "offline": null,
       "missed_in_a_row": null,
-      "last_signed_height": null
+      "last_signed_height": null,
+      "last_signed_time": null,
+      "jail": {
+        "height": 24100000,
+        "time": "2026-09-20T08:30:00Z",
+        "reason": "downtime"
+      }
     },
     {
       "rank": null,
@@ -103,7 +115,9 @@
       },
       "offline": null,
       "missed_in_a_row": null,
-      "last_signed_height": null
+      "last_signed_height": 24000000,
+      "last_signed_time": "2026-08-01T10:00:00Z",
+      "jail": null
     }
   ],
   "next_cursor": null,

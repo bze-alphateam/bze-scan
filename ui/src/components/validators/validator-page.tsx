@@ -52,6 +52,8 @@ import {
   splitValidators,
   stakeChangeLines,
   statusLine,
+  isInactive,
+  lastSignedLine,
   uptimeDetail,
   uptimeText,
   voteOption,
@@ -59,7 +61,7 @@ import {
 } from "@/render/validators";
 
 import { CrownMark, Moniker } from "./hall-of-fame";
-import { OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
+import { JailedCallout, OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
 import { StakeChangeText } from "./stake-change";
 import { StakeMovements } from "./stake-movements";
 
@@ -182,17 +184,44 @@ function Tiles({
             : "the base rate minus the commission"
         }
       />
-      <Tile
-        label="Uptime"
-        value={
-          <Flex as="span" align="center" gap="2">
-            {uptimeText(v.uptime)}
-            <OnlineDot v={v} avgBlockMs={avgBlockMs} />
-          </Flex>
-        }
-        sub={uptimeDetail(v.missed_blocks, signedWindow)}
-      />
+      {isInactive(v) ? (
+        <LastSignedTile v={v} />
+      ) : (
+        <Tile
+          label="Uptime"
+          value={
+            <Flex as="span" align="center" gap="2">
+              {uptimeText(v.uptime)}
+              <OnlineDot v={v} avgBlockMs={avgBlockMs} />
+            </Flex>
+          }
+          sub={uptimeDetail(v.missed_blocks, signedWindow)}
+        />
+      )}
     </SimpleGrid>
+  );
+}
+
+/** The uptime tile of a validator outside the active set: its slashing figure is stale, so it shows the last signed block. */
+function LastSignedTile({ v }: { v: ValidatorDetail }) {
+  const last = lastSignedLine(v);
+  if (v.jailed) {
+    return <Tile label="Uptime" value="—" sub="not counted while jailed, see above" />;
+  }
+  return (
+    <Tile
+      label="Last signed block"
+      value={
+        last ? (
+          <Link asChild fontFamily="mono" color="accent.fg">
+            <NextLink href={`/blocks/${last.height}`}>#{formatCount(last.height)}</NextLink>
+          </Link>
+        ) : (
+          "—"
+        )
+      }
+      sub={last?.ago ?? (last ? null : "not seen signing since the explorer started watching")}
+    />
   );
 }
 
@@ -472,6 +501,7 @@ export function ValidatorView({ v }: { v: ValidatorDetail }) {
     <Box>
       <Header v={v} activeCount={activeCount} fame={fame.data ?? null} />
       <OfflineCallout v={v} params={params.data} avgBlockMs={avgBlockMs} />
+      <JailedCallout v={v} />
       <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} avgBlockMs={avgBlockMs} />
       <About v={v} />
       <RecentBlocks v={v} />

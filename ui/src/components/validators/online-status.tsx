@@ -1,13 +1,15 @@
 "use client";
 
-import { Box, Text } from "@chakra-ui/react";
+import { Box, Link, Text } from "@chakra-ui/react";
+import NextLink from "next/link";
 import { useId } from "react";
 
-import type { ChainParams, Validator } from "@/api/types";
+import type { ChainParams, Validator, ValidatorDetail } from "@/api/types";
 import { Callout } from "@/components/ui/callout";
 import { useHoverCard } from "@/components/ui/hover-card";
 import { Tag } from "@/components/ui/status-pill";
-import { downtimeSlashText, jailedInText, onlineLines, onlineState, type OnlineState } from "@/render/validators";
+import { formatCount } from "@/lib/format";
+import { downtimeSlashText, jailLines, jailedInText, onlineLines, onlineState, type OnlineState } from "@/render/validators";
 
 type Signing = Pick<Validator, "offline" | "missed_in_a_row" | "last_signed_height">;
 
@@ -136,6 +138,37 @@ export function OfflineCallout({
           Stakers then earn nothing from it{slash ? ` and lose ${slash} of their stake` : ""}.
         </Text>
       )}
+    </Callout>
+  );
+}
+
+/** A line that names a block: the block number links to the block's page. */
+function BlockLine({ text, height }: { text: string; height?: number }) {
+  const label = height == null ? null : formatCount(height);
+  const at = label == null ? -1 : text.indexOf(label);
+  if (label == null || at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <Link asChild fontFamily="mono" color="accent.fg">
+        <NextLink href={`/blocks/${height}`}>{label}</NextLink>
+      </Link>
+      {text.slice(at + label.length)}
+    </>
+  );
+}
+
+/** The validator page's red card for a jailed validator: the jail block, the last signed block, whether it can unjail. */
+export function JailedCallout({ v }: { v: Pick<ValidatorDetail, "jailed" | "jail" | "last_signed_height" | "last_signed_time" | "tombstoned" | "jailed_until" | "moniker"> }) {
+  if (!v.jailed) return null;
+  const lines = jailLines(v);
+  return (
+    <Callout tone="bad" title="Jailed: not producing blocks" mt="5" data-testid="jailed-callout">
+      {lines.map((line, i) => (
+        <Text as="span" key={line.text} display="block" color={i === 0 ? "fg" : "fg.muted"}>
+          <BlockLine {...line} />
+        </Text>
+      ))}
     </Callout>
   );
 }

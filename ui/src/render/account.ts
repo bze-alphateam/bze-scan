@@ -442,7 +442,8 @@ export function stakingRows(a: Pick<Account, "delegations" | "rewards" | "total_
 /** A validator's status chip on the Staking tab, and its uptime when below 99%. */
 export function validatorStatus(v: Validator | undefined): { text: string; tone: "green" | "gray" | "red"; uptime: string | null } | null {
   if (!v) return null;
-  const uptime = v.uptime != null && compareDecimals(v.uptime, "99") < 0 ? `${uptimeText(v.uptime)} uptime` : null;
+  const active = v.status === "bonded" && !v.jailed;
+  const uptime = active && v.uptime != null && compareDecimals(v.uptime, "99") < 0 ? `${uptimeText(v.uptime)} uptime` : null;
   if (v.jailed) return { text: "Jailed", tone: "red", uptime };
   if (v.status === "bonded") return { text: "Active", tone: "green", uptime };
   return { text: "Inactive", tone: "gray", uptime };

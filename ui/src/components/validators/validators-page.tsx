@@ -33,6 +33,8 @@ import {
   splitValidators,
   stakeChangeLines,
   unbondingText,
+  isInactive,
+  lastActiveText,
   uptimeText,
   uptimeTone,
 } from "@/render/validators";
@@ -132,7 +134,8 @@ function ValidatorRow({
 }) {
   const member = fame?.members.get(v.operator_address);
   const change = stakeChangeLines(changes, v.operator_address);
-  const tone = uptimeTone(v.uptime);
+  const inactive = isInactive(v);
+  const tone = inactive ? null : uptimeTone(v.uptime);
   return (
     <ListRow role="listitem" templateColumns={COLUMNS} _last={LAST_ROW} data-testid="validator-row" data-fame={member ? "" : undefined}>
       <Text fontFamily="mono" color="fg.muted" fontSize="13px">
@@ -157,6 +160,11 @@ function ValidatorRow({
                 Jailed
               </Tag>
             )}
+            {v.jailed && (
+              <Text as="span" hideFrom="c3" ms="2" color="fg.muted" fontSize="12px" data-testid="jailed-ago">
+                {lastActiveText(v)}
+              </Text>
+            )}
             {v.status === "unbonding" && (
               <Chip ms="2" verticalAlign="1px">
                 Unbonding
@@ -180,7 +188,7 @@ function ValidatorRow({
       </Text>
       <Flex hideBelow="c3" justify="flex-end" align="center" gap="1" fontFamily="mono" fontSize="13px">
         <Text as="span" color={tone === "bad" ? "neg.fg" : tone === "muted" ? "fg.muted" : "fg"}>
-          {uptimeText(v.uptime)}
+          {inactive ? lastActiveText(v) : uptimeText(v.uptime)}
         </Text>
         <OnlineDot v={v} avgBlockMs={avgBlockMs} />
       </Flex>
@@ -188,7 +196,7 @@ function ValidatorRow({
   );
 }
 
-function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: string; fame: FameMarks | null }) {
+function ValidatorTable({ items, empty, fame, inactive = false }: { items: Validator[]; empty: string; fame: FameMarks | null; inactive?: boolean }) {
   const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
   // The change fills in when it answers; the table never waits for it.
   const changes = useStakeChanges().data;
@@ -207,7 +215,7 @@ function ValidatorTable({ items, empty, fame }: { items: Validator[]; empty: str
           Commission
         </Text>
         <Text hideBelow="c3" textAlign="right">
-          Uptime
+          {inactive ? "Last signed" : "Uptime"}
         </Text>
       </ListHead>
       <Box role="list" aria-label="Validators">
@@ -437,6 +445,7 @@ export function ValidatorsView({ list, fame }: { list: ValidatorList; fame: Fame
                   : "Every validator is active."
             }
             fame={marks}
+            inactive={tab === "inactive"}
           />
         )}
       </VTabPanel>
