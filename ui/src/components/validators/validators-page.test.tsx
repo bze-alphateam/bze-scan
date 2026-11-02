@@ -132,7 +132,7 @@ describe("ValidatorsPage", () => {
     expect(within(sleepy).getByText("Jailed")).toHaveAttribute("data-tag", "bad");
     expect(within(sleepy).getByText("Unbonding")).toBeInTheDocument();
     expect(within(old).queryByText("Jailed")).not.toBeInTheDocument();
-    expect(old).toHaveTextContent("—");
+    expect(old).toHaveTextContent(/ago$/);
   });
 
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
