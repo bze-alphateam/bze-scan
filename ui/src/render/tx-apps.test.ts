@@ -61,6 +61,7 @@ describe("appDestinations", () => {
       { app: "burner", verb: "Burn more on", name: "Burner", href: "https://burner.getbze.com/coin?coin=ubze" },
     ]);
     expect(appDestinations([withAmount("5ubze,7uatom")])[0]?.href).toBe("https://burner.getbze.com");
+    expect(appDestinations([withAmount("5ubze,junk")])[0]?.href).toBe("https://burner.getbze.com");
     expect(appDestinations([withAmount("junk")])[0]?.href).toBe("https://burner.getbze.com");
     expect(appDestinations([without(msg(fundBurner), "amount")])[0]?.href).toBe("https://burner.getbze.com");
   });

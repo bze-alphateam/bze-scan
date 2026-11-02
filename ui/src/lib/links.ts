@@ -116,7 +116,7 @@ export function stakingVoteHref(id: number): string {
 }
 
 /** The Burner's page for one coin, where its raffle is joined. */
-export function burnerRaffleHref(denom: string): string {
+export function burnerCoinHref(denom: string): string {
   return `${externalLinks.burner}/coin?coin=${encodeURIComponent(denom)}`;
 }
 
