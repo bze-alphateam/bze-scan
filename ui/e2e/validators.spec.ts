@@ -49,6 +49,11 @@ test.describe("validators list", () => {
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
+    // A jailed row says when, an unbonded one when it last signed; the column is "Last active", not "Uptime".
+    await expect(rows(page).first()).toContainText(/jailed .* ago/);
+    await expect(rows(page).first()).not.toContainText("last signed");
+    await expect(rows(page).nth(1)).toContainText(/ago/);
+    await expect(rows(page).nth(1)).not.toContainText("jailed");
 
     await page.getByRole("tab", { name: "Active 3" }).click();
     await page.getByRole("textbox", { name: "Find a validator" }).fill("thamar");
@@ -134,6 +139,32 @@ test.describe("validators on a phone", () => {
 
     await page.goto(`/validators/${OP}`);
     await expect(page.getByTestId("tile")).toHaveCount(4);
+    await noHorizontalScroll(page);
+  });
+});
+
+test.describe("a jailed validator's page", () => {
+  test("shows the Jailed card with the jail block and the last signed block", async ({ page }) => {
+    await mockApi(page, {
+      [`v1/validators/${OP}`]: {
+        ...honeycomb,
+        jailed: true,
+        status: "unbonding",
+        rank: null,
+        uptime: null,
+        offline: null,
+        missed_in_a_row: null,
+        last_signed_height: 25100000,
+        last_signed_time: "2026-10-01T10:00:00Z",
+        jail: { height: 25100500, time: "2026-10-01T11:00:00Z", reason: "downtime" },
+      },
+    });
+    await page.goto(`/validators/${OP}`);
+    const card = page.getByTestId("jailed-callout");
+    await expect(card).toContainText("Jailed at block 25,100,500");
+    await expect(card).toContainText("for downtime");
+    await expect(card).toContainText("Last signed block 25,100,000");
+    await expect(card.getByRole("link", { name: "25,100,500" })).toHaveAttribute("href", "/blocks/25100500");
     await noHorizontalScroll(page);
   });
 });

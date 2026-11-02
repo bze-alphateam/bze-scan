@@ -6,6 +6,14 @@
 // counterparty chain of the cross-chain transfers stored before their
 // channel was known. A counterparty chain absent from the registry cache is
 // published to the chain_registry set.
+//
+// Both the light client's chain id and the denoms a counterparty sends are
+// self-declared, so the set confirms each channel against the real chain:
+// the chain registry's IBC connection file lists it, or the counterparty's
+// public REST endpoints report the same channel and connection and a client
+// tracking BZE. A confirmed channel is never checked again (a channel's
+// counterparty is fixed at its handshake); a client, connection or
+// counterparty change resets the confirmation.
 package channels
 
 import (
@@ -24,6 +32,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
@@ -67,6 +76,9 @@ type Row struct {
 	ClientStatus string
 	// Escrow is the channel's ICS-20 escrow account.
 	Escrow string
+	// Confirmation is the channel's confirmation, written as it is; nil
+	// keeps the stored one.
+	Confirmation *Confirmation
 }
 
 // Store persists the set.
@@ -79,6 +91,11 @@ type Store interface {
 	// UnknownChains returns the chain ids of ids absent from the registry
 	// cache (explorer.chains).
 	UnknownChains(ctx context.Context, ids []string) ([]string, error)
+	// Stored returns every stored channel by channel id.
+	Stored(ctx context.Context) (map[string]Stored, error)
+	// Chains returns the chains of ids the registry cache knows, by chain
+	// id.
+	Chains(ctx context.Context, ids []string) (map[string]ChainRef, error)
 }
 
 // Deps of the set.
@@ -88,6 +105,21 @@ type Deps struct {
 	Store   Store
 	// Misses receives the counterparty chains the registry cache lacks.
 	Misses statesync.Publisher
+	// Saved, when set, is asked to rebuild the asset list after every
+	// write.
+	Saved statesync.Publisher
+	// ChainID is BZE's chain id: the client the counterparty's end of a
+	// confirmed channel uses tracks it.
+	ChainID string
+	// Registry reads the registry's IBC connection files; nil skips them.
+	Registry Registry
+	// Connection reads BZE's connections; with HTTP, the counterparty
+	// endpoints' check. Nil skips it.
+	Connection Connection
+	// HTTP asks the counterparties' REST endpoints; nil skips them.
+	HTTP Doer
+	// Clock defaults to the wall clock.
+	Clock Clock
 }
 
 // Set is the channels set.
@@ -100,6 +132,9 @@ type Set struct {
 func New(deps Deps, interval time.Duration) *Set {
 	if interval <= 0 {
 		interval = DefaultInterval
+	}
+	if deps.Clock == nil {
+		deps.Clock = realClock{}
 	}
 	return &Set{deps: deps, interval: interval}
 }
@@ -118,7 +153,9 @@ func (s *Set) ResyncOne(ctx context.Context, _ string) error { return s.FullResy
 // FullResync rewrites every transfer channel. A channel whose client state
 // or client status fails is saved without its counterparty chain or client
 // status (the stored ones are kept); the failures are returned joined. The
-// hourly run is what notices a client expiring: no event marks it.
+// hourly run is what notices a client expiring: no event marks it. Each
+// unconfirmed channel whose counterparty the registry cache knows is
+// checked, at most every RetryInterval.
 func (s *Set) FullResync(ctx context.Context) error {
 	var channels []*channeltypes.IdentifiedChannel
 	req := &channeltypes.QueryChannelsRequest{Pagination: &query.PageRequest{Limit: PageLimit}}
@@ -166,9 +203,13 @@ func (s *Set) FullResync(ctx context.Context) error {
 		}
 		rows = append(rows, row)
 	}
+	if err := s.confirm(ctx, rows); err != nil {
+		errs = append(errs, err)
+	}
 	if err := s.deps.Store.Save(ctx, rows); err != nil {
 		return errors.Join(append(errs, err)...)
 	}
+	statesync.Announce(s.deps.Saved, statesync.AssetList)
 
 	ids := make([]string, 0, len(chains))
 	for id := range chains {
@@ -186,6 +227,62 @@ func (s *Set) FullResync(ctx context.Context) error {
 		s.deps.Misses.Publish(misses)
 	}
 	return errors.Join(errs...)
+}
+
+// confirm carries each row's stored confirmation over, resets it when the
+// channel's client, connection or counterparty changed, and checks the
+// unconfirmed channels that are due. When the stored channels cannot be
+// read, every row keeps its stored confirmation (nil).
+func (s *Set) confirm(ctx context.Context, rows []Row) error {
+	stored, err := s.deps.Store.Stored(ctx)
+	if err != nil {
+		return err
+	}
+	ids := []string{s.deps.ChainID}
+	chainOf := make([]string, len(rows))
+	for i := range rows {
+		r := &rows[i]
+		old, ok := stored[r.ChannelID]
+		// A value the node did not answer keeps the stored one.
+		chainID, clientID := r.CounterpartyChainID, r.ClientID
+		if chainID == "" {
+			chainID = old.CounterpartyChainID
+		}
+		if clientID == "" {
+			clientID = old.ClientID
+		}
+		conf := Confirmation{}
+		if ok && old.ClientID == clientID && old.ConnectionID == r.ConnectionID &&
+			old.CounterpartyChainID == chainID && old.CounterpartyChannelID == r.CounterpartyChannelID {
+			conf = old.Confirmation
+		}
+		r.Confirmation = &conf
+		chainOf[i] = chainID
+		if chainID != "" {
+			ids = append(ids, chainID)
+		}
+	}
+	chains, err := s.deps.Store.Chains(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	now := s.deps.Clock.Now()
+	c := &confirmer{s: s, bze: chains[s.deps.ChainID], files: map[string]*chainregistry.IBCFile{}, errs: map[string]error{}}
+	for i := range rows {
+		r := &rows[i]
+		cp, known := chains[chainOf[i]]
+		due := r.Confirmation.CheckedAt.IsZero() || now.Sub(r.Confirmation.CheckedAt) >= RetryInterval
+		if r.Confirmation.Confirmed() || !known || !due {
+			continue
+		}
+		via, note := c.check(ctx, *r, cp)
+		r.Confirmation = &Confirmation{Via: via, CheckedAt: now, Note: note}
+		if via != "" {
+			r.Confirmation.At = now
+		}
+	}
+	return nil
 }
 
 // client returns the channel's light client and, for a Tendermint client,

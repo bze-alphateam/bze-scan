@@ -296,6 +296,7 @@ export interface Validator {
   tokens: string;
   voting_power_pct: string | null;
   commission_rate: string;
+  /** Null outside the active set (not bonded, or jailed): the slashing module stops counting there. */
   uptime: string | null;
   jailed: boolean;
   status: ValidatorStatus;
@@ -312,6 +313,17 @@ export interface Validator {
   missed_in_a_row: number | null;
   /** The highest block it was seen signing; null when none since the explorer watches signatures. */
   last_signed_height: number | null;
+  /** The time of the `last_signed_height` block; null when unknown. */
+  last_signed_time: string | null;
+  /** How a currently jailed validator was jailed; null for any other. */
+  jail: ValidatorJail | null;
+}
+
+/** The latest `slashed` event of a jailed validator (unless an `unjailed` one is newer); the fields are null when the jail is below the indexed history. */
+export interface ValidatorJail {
+  height: number | null;
+  time: string | null;
+  reason: "downtime" | "double_sign" | null;
 }
 
 export interface ValidatorsSummary {

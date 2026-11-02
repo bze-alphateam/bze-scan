@@ -27,6 +27,7 @@ import {
   parseModuleTab,
   parsePage,
   parseTab,
+  stakedValidators,
   stakingRows,
   tokenRows,
   tokensTotalUsd,
@@ -209,11 +210,30 @@ describe("staking tab", () => {
     expect(stakingRows({ ...a, total_staked: "0" })[0].share).toBe("—");
   });
 
+  it("flags delegations under 1 base unit as dust and lists them last", () => {
+    const dusty = {
+      ...a,
+      delegations: [{ ...a.delegations[0], amount: "0" }, ...a.delegations.slice(1)],
+    };
+    expect(stakingRows(dusty).map((r) => [r.moniker, r.dust])).toEqual([
+      ["Deep Fields", false],
+      ["Sleepy Node", false],
+      ["Honeycomb", true],
+    ]);
+    expect(stakingRows(a).some((r) => r.dust)).toBe(false);
+    const at = (amount: string) => stakingRows({ ...a, delegations: [{ ...a.delegations[0], amount }] })[0].dust;
+    expect([at("1"), at("0.4")]).toEqual([false, true]);
+    expect([stakedValidators(a), stakedValidators(dusty)]).toEqual([3, 2]);
+  });
+
   it("chips a validator Active, Inactive or Jailed, with its uptime under 99%", () => {
     const [honeycomb, , deep, sleepy, old] = validators;
     expect(validatorStatus(honeycomb)).toEqual({ text: "Active", tone: "green", uptime: null });
     expect(validatorStatus(deep)).toEqual({ text: "Active", tone: "green", uptime: "98.4% uptime" });
-    expect(validatorStatus(sleepy)).toEqual({ text: "Jailed", tone: "red", uptime: "61.2% uptime" });
+    expect(validatorStatus(sleepy)).toEqual({ text: "Jailed", tone: "red", uptime: null });
+    // Never an uptime for a validator outside the active set, whatever a stale payload carries.
+    expect(validatorStatus({ ...sleepy, uptime: "61.20000" })).toEqual({ text: "Jailed", tone: "red", uptime: null });
+    expect(validatorStatus({ ...old, uptime: "61.20000" })).toEqual({ text: "Inactive", tone: "gray", uptime: null });
     expect(validatorStatus(old)).toEqual({ text: "Inactive", tone: "gray", uptime: null });
     expect(validatorStatus(undefined)).toBeNull();
   });

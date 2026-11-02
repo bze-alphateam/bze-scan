@@ -4,10 +4,15 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Every link that leaves the explorer goes through AppLink (a BZE app) or
-// ExternalLink (anything else). Only they may open a new tab themselves. The
-// Apps menu, the home page's Go-to tiles and the footer keep their own design
-// as navigation and open in the same tab.
-const NEW_TAB_ALLOWED = new Set(["components/layout/app-link.tsx", "components/ui/external-link.tsx"]);
+// ExternalLink (anything else). Only they, and the header's Apps links (the
+// menu and the phone drawer), may open a new tab themselves. The home page's Go-to tiles and the footer keep
+// their own design as navigation and open in the same tab.
+const NEW_TAB_ALLOWED = new Set([
+  "components/layout/app-link.tsx",
+  "components/ui/external-link.tsx",
+  "components/layout/apps-menu.tsx",
+  "components/layout/header.tsx",
+]);
 const NEW_TAB = /target=\{?\s*["'`]_blank/;
 
 const SRC = join(__dirname, "..");

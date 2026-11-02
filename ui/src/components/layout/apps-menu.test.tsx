@@ -17,4 +17,14 @@ describe("AppsMenu", () => {
     // The icon is decorative: the name alone labels the link.
     expect(screen.getByRole("menuitem", { name: "Staking" })).toHaveAttribute("href", "https://staking.getbze.com");
   });
+
+  it("opens every app in a new tab", async () => {
+    renderWithProviders(<AppsMenu />);
+    await userEvent.click(screen.getByRole("button", { name: "Apps" }));
+
+    for (const item of await screen.findAllByRole("menuitem")) {
+      expect(item).toHaveAttribute("target", "_blank");
+      expect(item).toHaveAttribute("rel", "noopener noreferrer");
+    }
+  });
 });

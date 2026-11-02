@@ -67,6 +67,16 @@ describe("Orders tab", () => {
     expect(query?.options).toMatchObject({ staleTime: 30_000, refetchInterval: 30_000, refetchIntervalInBackground: false });
   });
 
+  it("polls the open orders live while the Orders tab is shown, so changed orders show without a reload", async () => {
+    const orders = vi.fn(() => Promise.resolve(o));
+    const { queryClient } = renderWithProviders(<AccountPage address={ADDR} initialTab="orders" />, { api: api(orders) });
+    await screen.findByTestId("orders-summary");
+    const query = queryClient.getQueryCache().find({ queryKey: queryKeys.accountOpenOrders(ADDR) });
+    // The page's slow observer stays; the tab's live one sets the pace.
+    expect(query?.observers.map((ob) => ob.options.refetchInterval).sort()).toEqual([30_000, 4_000]);
+    expect(query?.observers.every((ob) => ob.options.refetchIntervalInBackground === false)).toBe(true);
+  });
+
   it("lists the assets by value with their counts, collapsed, and the priced total", async () => {
     renderWithProviders(<AccountPage address={ADDR} initialTab="orders" />, { api: api() });
     expect(await screen.findByTestId("orders-summary")).toHaveTextContent("Locked in 6 open orders · 3 markets");

@@ -1,6 +1,6 @@
-import { burnerRaffleHref, stakingVoteHref, type AppKey } from "@/lib/links";
+import { burnerHomeHref, burnerCoinHref, stakingVoteHref, type AppKey } from "@/lib/links";
 
-import { str } from "./messages/common";
+import { parseCoins, str } from "./messages/common";
 import { govProposalId } from "./messages/gov";
 import type { RenderMessage } from "./messages/types";
 
@@ -28,7 +28,19 @@ for (const v of ["v1", "v1beta1"]) {
 function destination(msg: RenderMessage): AppDestination | null {
   if (RAFFLES.has(msg.type_url)) {
     const denom = str(msg, "denom");
-    return denom ? { app: "burner", verb: "Open raffle on", name: "Burner", href: burnerRaffleHref(denom) } : null;
+    return denom ? { app: "burner", verb: "Open raffle on", name: "Burner", href: burnerCoinHref(denom) } : null;
+  }
+  if (msg.type_url === "/bze.burner.MsgFundBurner") {
+    const amount = str(msg, "amount");
+    const coins = parseCoins(amount);
+    // parseCoins drops malformed parts, so a partial parse must not pick a coin.
+    const whole = coins.length === (amount?.split(",").length ?? 0);
+    const href = whole && coins.length === 1 ? burnerCoinHref(coins[0].denom) : burnerHomeHref();
+    return { app: "burner", verb: "Burn more on", name: "Burner", href };
+  }
+  if (msg.type_url === "/bze.burner.MsgMoveIbcLockedCoins") {
+    const denom = str(msg, "denom");
+    return { app: "burner", verb: "Open on", name: "Burner", href: denom ? burnerCoinHref(denom) : burnerHomeHref() };
   }
   const verb = GOV_VERBS[msg.type_url];
   if (verb) {

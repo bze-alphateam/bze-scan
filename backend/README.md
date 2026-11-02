@@ -238,7 +238,7 @@ internal/ordercoverage/
                    indexed history from the DEX's first market)
 internal/openorders/
                    an account's open orders per denom and market, from the
-                   orders table or the nodes, behind a 15 s cache
+                   orders table or the nodes, behind a 4 s cache
 internal/labels/   the module and known account labels `migrate` seeds
 internal/statesync/
                    the state sync: dirty sets, coalescing queue, workers,
@@ -264,6 +264,9 @@ internal/statesync/prices/
 internal/statesync/dailystats/
                    the daily_stats set (the home charts' days, nightly)
                    and the aggregation the stats' live "today" shares
+internal/assets/   the dapps' asset list in memory (the asset_list set):
+                   built from the denoms, chains, registry and channel
+                   tables plus the embedded curation.json
 internal/chainregistry/
                    the Cosmos chain registry reader (GitHub contents API +
                    raw files)
@@ -344,7 +347,7 @@ every later route follows:
   except a raw `/commit` that is not `"canonical": true` (a node's seen commit,
   asked at its tip), which is `public, max-age=60`.
 - **CORS** only for the origins in `CORS_ALLOWED_ORIGINS` (the
-  aggregator-compatible routes below answer any origin).
+  aggregator-compatible routes below and the asset list answer any origin).
 - **Request log**: one info line per request with method, path, status,
   duration and request id.
 
@@ -359,7 +362,7 @@ every later route follows:
 | `GET /api/v1/txs/{hash}` | every column of the transaction (with `first_message` as on the list) plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled), since chain v8.3.0 `refunds` (`height`, `message_id`, `market_id`, `order_type`, `amount` = the base amount not executed, `refund` = the coin sent back `{denom, amount}` or null when it rounded to zero and only dust was kept, `reason` `no_match`/`unfilled_remainder`/`below_min_amount`), `skipped_cancels` (`height`, `message_id`, `market_id`, `order_type`, `order_id`, `reason` `order_not_found`) and `failed` (`message_id`, `message_type`, `height` of the latest block the engine failed to process it in; it stays queued), empty before that release, and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, else cached for a minute). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
 | `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_status` (its light client: `active`, `expired`, `frozen`; null until asked — an expired or frozen client carries nothing until governance revives it), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
 | `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
-| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status, `logo_url` (the Keybase picture of its identity, null without an identity or a picture), `missed_blocks` and `signed_blocks_window` (the slashing signing info, null until synced), `recent_votes` (`{voted, of}`: how many of the last ten proposals whose voting ended — fewer while the chain has fewer — its account voted on, whatever the option; also on `/validators/{op}`), `offline` / `missed_in_a_row` / `last_signed_height` (also on `/validators/{op}` and the Hall of Fame: an active — bonded, unjailed — validator's blocks not signed in a row up to the live cursor, counted from the latest of its last signed block, its last `bonded`/`unjailed` event and the start of the watch, `offline` from ten; all three null outside the active set, `last_signed_height` also null when it signed nothing since the watch began — the live writer records each block's signers in `validators.last_signed_height`, migration 000021, without history). `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank and voting power are null outside the active set; another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
+| `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status, `logo_url` (the Keybase picture of its identity, null without an identity or a picture), `missed_blocks` and `signed_blocks_window` (the slashing signing info, null until synced), `recent_votes` (`{voted, of}`: how many of the last ten proposals whose voting ended — fewer while the chain has fewer — its account voted on, whatever the option; also on `/validators/{op}`), `offline` / `missed_in_a_row` / `last_signed_height` (also on `/validators/{op}` and the Hall of Fame: an active — bonded, unjailed — validator's blocks not signed in a row up to the live cursor, counted from the latest of its last signed block, its last `bonded`/`unjailed` event and the start of the watch, `offline` from ten; all three null outside the active set, `last_signed_height` also null when it signed nothing since the watch began — the live writer records each block's signers in `validators.last_signed_height`, migration 000021, without history). `last_signed_time` (the time of the `last_signed_height` block, null when unknown) and `jail` (also on `/validators/{op}`: `{height, time, reason}` for a currently jailed validator, null otherwise — the earliest `slashed` event after the latest `unjailed` one — the block that jailed it, `reason` `downtime` or `double_sign`; `height`/`time`/`reason` are null when the jail happened below the indexed range). `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank, voting power and uptime are null outside the active set (not bonded, or jailed: the slashing module stops counting there, so the figure would be stale); another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
 | `GET /api/v1/validators/hall-of-fame` | the Hall of Fame, in one page (`next_cursor` null): the bonded, unjailed validators whose account voted, whatever the option, on every one of the last four proposals whose voting ended (all of them while the chain has fewer; nobody while none ended) that missed at most ten blocks of the slashing signing window and that came back at most ten minutes after the halt of the last decided upgrade (`upgrade_recovery.seconds_back`; an upgrade is decided once its recovery is computed or once the commits read reach a block ten minutes after its halt, since a later return is too late anyway; a validator outside the set at that upgrade does not qualify; no such condition while no upgrade is decided, and a newer upgrade not decided yet doesn't count), by voting power ascending; items as in `/validators`, except that `recent_votes` counts on those four proposals. `rules` states the rule for clients to word it: `{proposals: 4, max_missed_blocks: 10, signed_blocks_window, max_seconds_back: 600, upgrade: {height, name}}` (the window null until synced, `upgrade` null while no upgrade is decided) |
 | `GET /api/v1/validators/{operator}` | every column of the validator (the list item plus account_address, consensus_address and key, description fields, tombstoned, jailed_until, commission limits and update time, min_self_delegation, self_delegation, delegator_count, missed_blocks, signed_blocks_window, first_seen_height/time, updated_at), `recent_blocks` (the last 10 it proposed), `events` (its last 20 `validator_events`, newest first, with `tx_hash` null for block-level and sync-found ones) and `votes` (the owner account's last 20 governance votes); 400 unless a `bzevaloper1…` address, 404 when not synced |
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
@@ -371,7 +374,7 @@ every later route follows:
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled` or `cancelled`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
 | `GET /api/v1/accounts/{address}/ibc?direction=&cursor&limit` | the cross-chain transfers the address sent (`direction=out`), received (`in`) or both (no direction), newest first (creating transaction, then channel number and sequence): `channel_id` (BZE's side), `sequence`, `direction`, `status` (out: `pending`, `delivered`, `refunded_rejected`, `refunded_timeout`; in: `received`, `rejected`), `expired` (pending past `timeout_time`, waiting for the relayer to bring the timeout back), `sender`, `receiver`, `denom` (the BZE denom sent; for an inbound transfer the packet denom before BZE's `ibc/` hash), `amount`, `memo`, `counterparty` (`{chain_id, pretty_name, logo_url, explorer_account_url, explorer_tx_url}` from the chain registry, the templates with `${accountAddress}` / `${txHash}`; null fields when unknown), `created_height`/`created_tx_hash`/`created_time`, `timeout_height` (`revision-height`, null for none), `timeout_time`, `result_height`/`result_tx_hash`/`result_time` (null while pending) and `ack_error` (the other chain's error, or `blocked inbound denom`). 400 unless a `bze1…` address or a known direction |
 | `GET /api/v1/accounts/{address}/fills?cursor&limit` | the fills where the address is the maker or the taker, newest first (height, then seq): `height`, `time`, `order_id` (the resting order), `market_id`, `side` (of the resting order), `price`, `amount`, `maker`, `taker`, `taker_tx_hash` and `taker_message_id` (null when unknown). 400 unless a `bze1…` address |
-| `GET /api/v1/accounts/{address}/open-orders` | what the address has locked in open DEX orders: `source` (`index` or `node`, for debugging), `height` (the height the answer describes), `orders_count`, `markets_count` and `assets`, one per locked denom sorted by denom: `denom`, `amount` (base units, a string), `orders_count` and `markets` (largest amount first: `market_id`, `base`, `quote`, `amount`, `orders_count`). A sell locks its remaining amount of the base denom, a buy trunc(remaining × price) of the quote denom, truncated per order as the chain does, so a market's `orders_count` under an asset counts only the orders locking that asset. Read from the orders table when its history is complete, from the node otherwise (see Open orders below); cached 15 s per address; no-store. An account without open orders has empty `assets` and zero counts. 400 unless a `bze1…` address; 502 when neither node answers |
+| `GET /api/v1/accounts/{address}/open-orders` | what the address has locked in open DEX orders: `source` (`index` or `node`, for debugging), `height` (the height the answer describes), `orders_count`, `markets_count` and `assets`, one per locked denom sorted by denom: `denom`, `amount` (base units, a string), `orders_count` and `markets` (largest amount first: `market_id`, `base`, `quote`, `amount`, `orders_count`). A sell locks its remaining amount of the base denom, a buy trunc(remaining × price) of the quote denom, truncated per order as the chain does, so a market's `orders_count` under an asset counts only the orders locking that asset. Read from the orders table when its history is complete, from the node otherwise (see Open orders below); cached 4 s per address (the UI's live poll); no-store. An account without open orders has empty `assets` and zero counts. 400 unless a `bze1…` address; 502 when neither node answers |
 | `GET /api/v1/tokens?kind=native\|factory\|ibc\|lp\|unknown&cursor&limit` | every denom by kind (native, factory, ibc, lp, unknown) then symbol: denom, symbol, name, kind, exponent, supply (base units), holders_count (owners of at least one display unit, null until the holders job), price_usd (the prices job's USD price: the DEX price chain, else CoinGecko by chain-registry id, see "Prices" under State sync; null until the prices job and for a denom neither prices), `price_source` (`dex` or `coingecko`, null while unpriced), price_change_24h_pct (`ubze` only: BZE's 24-hour change in percent, four decimals, from the BZE/USDC pool's ticker; null for every other denom), halted, logo_url, `origin_chain` (an IBC denom's `{chain_id, name, logo_url, status}`, name, logo and status (`live`, `upcoming`, `killed` = shut down) from the chain registry and null for a chain it does not know; null for other denoms and until the denom's channel is known), `ibc_hops` (an IBC denom's number of hops, the port/channel pairs of its path; null for other denoms and until traced), `via_chain` (a multi-hop IBC denom's first hop chain, the counterparty of the BZE channel, shaped like `origin_chain`; null for one hop and other denoms), `lp_pair` (an LP denom's pool assets `{base, quote}`, both denoms; null for other denoms and when unknown), `created_time` (the block time of its `created` token event, null without one), `ibc_channel` (BZE's channel of an IBC denom's first hop: `{channel_id, state, client_status}`; null for other denoms and until known), `stranded` (an IBC denom that can no longer travel back: its channel closed, its client expired or frozen, or its origin or via chain `killed`); another kind is a 400 |
 | `GET /api/v1/tokens/{denom}` | every column of the denom (the list item plus description, the IBC origin fields, creator and admin with their labels (admin null once renounced), created_height/tx_hash/time from its `created` event, website, markets, raw bank `metadata`, updated_at), `events` (its last 20 token events, newest first), `events_next_cursor` and `transfers_24h` (`{count, amount}`: the transfers rows of the denom in the 24 hours before the latest indexed block, like `txs_24h` on `/stats`, the amount summed in base units as a string; read through the `(denom, height)` index); the denom is URL-encoded (`factory%2Fbze1…%2Fuhoney`) since it contains `/`; 404 when unknown |
 | `GET /api/v1/tokens/{denom}/events?cursor&limit` | the denom's token events, newest first: height, tx_index, seq, tx_hash (null for a block-level halt), kind, actor (and `actor_label`), amount, details, time |
@@ -424,6 +427,101 @@ The live indexer puts the three bodies of every height it writes, so recent
 heights never reach the archive. A miss fetches from `ARCHIVE_RPC_URL`, then
 once from `ARCHIVE_RPC_RETRY_URL` (or the same URL again); concurrent misses
 for one height share one fetch, which outlives a request that gives up.
+
+### Asset list
+
+The asset list the BZE dapps build on every client (every chain asset merged
+with the chain registry), built by Scan once and served from memory, never
+from PostgreSQL on a request (see "Asset list" under State sync for when it
+is rebuilt).
+
+| Route | Answers |
+| --- | --- |
+| `GET /api/v1/registry/assets` | `{"version": "<hash>", "assets": [...]}`: every denom the bank holds a supply of, native first, then factory, IBC and LP denoms, each by denom; unpaginated |
+| `GET /api/v1/registry/assets/{denom}` | one asset; the denom URL-encoded (`factory%2Fbze1…%2Fuvdl`, `ibc%2F…`, `ulp%2F…`, legacy `ulp_…`) or not; 404 `not_found` for a denom the list does not hold (logged at info with the denom and request id) |
+
+An asset: `denom`, `kind` (`native`, `factory`, `ibc`, `lp`), `name`,
+`ticker`, `decimals`, `logo`, `description`, `verified`, `stable`,
+`excluded`, `halted`, `deposit_allowed`, `withdraw_allowed`, `notice`
+(`{title, text, url?}`), `ibc` (IBC denoms: `{channel_id, counterparty,
+origin, channel_confirmed}`, the counterparty a chain with its
+`channel_id` and `base_denom` there, `origin` `{chain_name, base_denom,
+hops}` or null when the registry cache cannot name it, `channel_confirmed`
+whether the first hop's channel is confirmed, see "IBC channels" under State
+sync), `lp` (pool shares: `{base, quote}`), `routes` (native and factory
+denoms: one per chain the registry knows, over its canonical channel when
+that is open, the chain with `channel_id`, `counterparty_channel_id` and
+`counterparty_denom`, the ICS-20 voucher `ibc/` + upper-case hex SHA-256 of
+`transfer/<counterparty_channel_id>/<denom>`; empty without channels) and
+`version`. A chain is `{chain_name, chain_id, pretty_name, logo,
+bech32_prefix, rest, rpc}`, only `chain_id` set (`chain_name`, `logo`,
+`bech32_prefix` null, `rest`, `rpc` empty) when the registry does not know
+it. Absent values are `null`; nothing in it changes with blocks (no
+supply: the dapps read it from the chain).
+
+Fields follow the dapps' order, curation, then registry, then bank metadata,
+then defaults:
+
+- `ubze`: BZE's registry asset (ticker = its display unit upper-cased), the
+  logo forced to the dapps' BZE circle logo; verified.
+- factory: BZE's registry asset, else the bank metadata (name; ticker = the
+  symbol, then the display unit's denom, upper-cased; decimals = the display
+  unit's exponent; `uri` as logo; description), else the denom shortened as
+  the dapps do with 0 decimals. Verified only on the curation file's list,
+  whatever the registry lists.
+- IBC over a confirmed first channel: the origin chain's registry asset
+  (name, symbol upper-cased, display exponent, logo), else BZE's own
+  registry entry for the exact `ibc/<hash>`, else the unknown treatment's
+  name, ticker, decimals and logo. A denom whose counterparty denom is
+  itself a voucher (several hops) gets `<TICKER>.<chain_name>` and
+  `<name> (<pretty_name>)` of the first hop chain.
+- IBC over an unconfirmed first channel (or none known): the unknown
+  treatment, whatever the denom claims to be. Name = the raw base denom
+  (shortened past 10 characters, not when it has a `/`), ticker = the
+  shortened `ibc/…`, 0 decimals, no logo, not verified, neither depositable
+  nor withdrawable; its counterparty is `"Unknown chain"` with
+  `chain_name`, `logo` and `bech32_prefix` null and no endpoints (its
+  `chain_id` is the light client's claim, `channel_id` and `base_denom` as
+  they are); `origin` null.
+- IBC `verified` when all hold: the first channel is confirmed; one hop:
+  the base denom is an asset of the counterparty's registry asset list,
+  several hops: the first hop chain's registry asset traces lead to the
+  origin; the first channel is its chain's canonical one; it is not a
+  multi-hop denom whose origin (chain and base denom) also arrives in one
+  hop over a canonical channel (ATOM through Osmosis while ATOM comes from
+  the Cosmos Hub directly); not halted; not on the curation's `unverified`
+  list. A chain's canonical channel is its oldest confirmed transfer
+  channel (the lowest `channel-N`) that is usable, open with a client not
+  known to be expired or frozen, else its oldest confirmed one: a denom
+  over a newer duplicate channel keeps its real chain and asset but is not
+  verified.
+- IBC `deposit_allowed`: the first channel confirmed, and not a multi-hop
+  denom whose origin also arrives directly (its direct sibling is the one to
+  deposit; without one a two-hop denom stays depositable).
+  `withdraw_allowed`: the first channel confirmed, so holders of a two-hop
+  denom are never stranded. The curation's exclusions apply on top.
+- LP: `<BASE>/<QUOTE> LP Shares`, `<BASE>/<QUOTE> LP` from the two assets'
+  tickers, 12 decimals, verified when both assets are listed, halted when
+  either is.
+- Logos from the registry: `logo_URIs.svg`, `logo_URIs.png`,
+  `images[0].svg`, `images[0].png`, the first one set.
+
+`version` is a content hash (16 hex characters of a SHA-256): per asset of
+its JSON, for the list of every asset's denom and version. A rebuild that
+changes nothing keeps it. Both routes send `ETag: "<version>"` (the list's,
+or the asset's) and `Cache-Control: public, max-age=30`; a request whose
+`If-None-Match` holds that ETag answers 304 without a body. They answer CORS
+from any origin, whatever `CORS_ALLOWED_ORIGINS` says. Before the first build
+after a start they answer 503 `upstream_error` (`no-store`).
+
+**Curation file.** `internal/assets/curation.json`, embedded in the binary,
+holds what no chain or registry says: a `mainnet` section (`CHAIN_ID`
+`beezee-1`) and a `testnet` section (every other chain id), each with
+`verified` (the only source of a factory denom's verified flag), `unverified`
+(clears the flag whatever the other rules say), `stable`, `excluded`,
+`deposit_excluded`, `withdraw_excluded` (BZE denoms; the flags default to
+false, false, deposit and withdraw allowed) and `notices` (`denom →
+{title, text, url?}`). A change ships with a release.
 
 ## Aggregator-compatible endpoints
 
@@ -1426,8 +1524,8 @@ indexer) the state sync:
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
    proposals, proposals' non-voters, upgrade recovery, prices, chain state: one minute; denoms, holders, IBC
-   channels, orders: one hour;
-   chain registry, params: one day; daily statistics: every night at
+   channels, orders, chain registry, asset list: one hour;
+   params: one day; daily statistics: every night at
    00:10 UTC), the safety net for what no event announces. A full resync, from
    a block or the timer, restarts the wait.
 
@@ -1553,23 +1651,73 @@ run is what notices it. A denom whose first channel is closed or whose
 client expired or froze, or whose origin or via chain the registry lists
 as `killed`, is `stranded` on the tokens API.
 
+*Channel confirmation.* A light client's chain id and a trace's base denom
+are both declared by the counterparty: anyone can start a chain called
+`osmosis-1`, open a channel to BZE and send a coin traced as `uosmo`. So
+each transfer channel is confirmed against the real chain before the asset
+list trusts it. A channel is confirmed when either:
+
+1. the chain registry's IBC file of BZE and the counterparty
+   (`_IBC/<a>-<b>.json`, the two registry names sorted, under `testnets/`
+   on a testnet; reviewed by the registry's maintainers) lists a channel
+   whose BZE end is this channel on port `transfer` and whose other end's
+   chain is the registry name of the stored counterparty chain; or
+2. the counterparty's REST endpoints (its registry `apis.rest`, the first
+   3, 10 seconds each, the first that answers decides) agree: its
+   `GET /ibc/core/channel/v1/channels/{counterparty channel}/ports/transfer`
+   leads to this channel on port `transfer`, over `connection_hops[0]` =
+   the counterparty connection of this channel's connection on BZE, and
+   `GET /ibc/core/connection/v1/connections/{that connection}/client_state`
+   is a Tendermint client of BZE's `CHAIN_ID`. One honest endpoint is
+   enough: a fake chain cannot make the real chain's endpoints lie. An
+   endpoint that answers but disagrees leaves the channel unconfirmed.
+
+Only channels whose counterparty the registry cache knows are checked, on
+the set's runs, an unconfirmed one at most hourly. A confirmed channel is
+never checked again (its counterparty is fixed at the handshake, a channel
+id is never reused); a change of its stored `client_id`, `connection_id`,
+`counterparty_chain_id` or `counterparty_channel_id` (a governance client
+recovery, a channel upgrade) resets it and it is checked again at once.
+`explorer.ibc_channels` keeps `confirmed_via` (`registry`, `endpoint`, NULL
+while unconfirmed), `confirmed_at`, `confirm_checked_at` (the last check)
+and `confirm_note` (the last failed check's reason); a check does not move
+`updated_at`. Every write rebuilds the asset list.
+
 **Chain registry.** `explorer.chains` and `explorer.registry_assets` cache
 the Cosmos chain registry: the GitHub contents API lists its directories
 (mainnets and `testnets/`, `CHAIN_REGISTRY_API_URL`), each chain's
 `chain.json` and `assetlist.json` come from `raw.githubusercontent.com`
 (`CHAIN_REGISTRY_RAW_URL`, no API rate limit). The set refetches BZE
-(`CHAIN_ID`) and every chain the explorer met (channel counterparties,
-denom origins, chains already cached) daily, and a missed chain at once with
-a 10-minute cool-down per key. The registry is organised by directory: a
+(`CHAIN_ID`, its own `assetlist.json` on every run) and every chain the
+explorer met (channel counterparties, denom origins, chains already cached)
+hourly, so the asset list follows the registry within an hour, and a missed
+chain at once with a 10-minute cool-down per key. The registry is organised by directory: a
 chain id is found by reading `chain.json` files, the directory named like the
 chain id first (`cosmoshub` for `cosmoshub-4`); every one read is
 remembered until the next listing (daily), so the whole registry is read at
 most once a day. A chain id no directory holds gets a `chains` row with
 `registry_fetched_at` NULL, shown by its id. A chain row holds the pretty
 name, network type, bech32 prefix, logo (PNG, else SVG) and the first
-explorer's `tx_page`/`account_page` templates; an asset its symbol, name,
-display unit and its exponent, logo, CoinGecko id and `traces`. A failed
-fetch keeps the previous rows; `updated_at` moves only when a value changes.
+explorer's `tx_page`/`account_page` templates, the `apis.rest` and
+`apis.rpc` addresses in order (`rest_urls`, `rpc_urls`); an asset its symbol,
+name, display unit and its exponent, logo, description, CoinGecko id and
+`traces`. Both keep `logos` too: `logo_URIs` and the first `images` entry
+with their SVG and PNG apart, for the asset list's SVG-first pick (the
+tokens API keeps the PNG-first `logo_url`). A failed fetch keeps the
+previous rows; `updated_at` moves only when a value changes. A run that
+saved a chain marks the IBC channels and the asset list.
+
+**Asset list.** `internal/assets` holds the dapps' asset list in memory (see
+"Asset list" under the HTTP API). It is built at start from
+`explorer.denoms` (the denoms with a supply), `explorer.chains`,
+`explorer.registry_assets` and `explorer.ibc_channels`, retried every 5
+seconds until the first build succeeds, and registered last as the
+`asset_list` set: the denoms, channels and chain registry sets mark it after
+every write, so the list is rebuilt once the tables changed (a new IBC coin
+whose chain missed the cache: the miss fetches the chain, the save rebuilds
+the list). A passed proposal marks the denoms and the channels in full
+(a halt, a client recovery) and so rebuilds it after both. A rebuild that
+changes nothing keeps the version.
 
 **Holders.** `explorer.token_holders` is a snapshot of bank `DenomOwners`,
 never a balance derived from events: at start and hourly every denom is paged

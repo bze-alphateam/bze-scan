@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -49,30 +50,34 @@ func (s *PGStore) Wanted(ctx context.Context) ([]string, error) {
 // chainSQL upserts a chain; updated_at moves only when a value changes, the
 // fetch time on every fetch.
 const chainSQL = `INSERT INTO explorer.chains AS c (chain_id, registry_name, pretty_name, network_type, bech32_prefix,
-		logo_url, explorer_tx_url, explorer_account_url, status, registry_fetched_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, $9)
+		logo_url, explorer_tx_url, explorer_account_url, status, registry_fetched_at, updated_at, logos, rest_urls, rpc_urls)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, $9, $11::jsonb, $12::text[], $13::text[])
 	ON CONFLICT (chain_id) DO UPDATE SET
 		registry_name = EXCLUDED.registry_name, pretty_name = EXCLUDED.pretty_name,
 		network_type = EXCLUDED.network_type, bech32_prefix = EXCLUDED.bech32_prefix,
 		logo_url = EXCLUDED.logo_url, explorer_tx_url = EXCLUDED.explorer_tx_url,
 		explorer_account_url = EXCLUDED.explorer_account_url, status = EXCLUDED.status,
+		logos = EXCLUDED.logos, rest_urls = EXCLUDED.rest_urls, rpc_urls = EXCLUDED.rpc_urls,
 		registry_fetched_at = EXCLUDED.registry_fetched_at,
 		updated_at = CASE WHEN (c.registry_name, c.pretty_name, c.network_type, c.bech32_prefix, c.logo_url,
-				c.explorer_tx_url, c.explorer_account_url, c.status)
+				c.explorer_tx_url, c.explorer_account_url, c.status, c.logos, c.rest_urls, c.rpc_urls)
 			IS DISTINCT FROM (EXCLUDED.registry_name, EXCLUDED.pretty_name, EXCLUDED.network_type, EXCLUDED.bech32_prefix,
-				EXCLUDED.logo_url, EXCLUDED.explorer_tx_url, EXCLUDED.explorer_account_url, EXCLUDED.status)
+				EXCLUDED.logo_url, EXCLUDED.explorer_tx_url, EXCLUDED.explorer_account_url, EXCLUDED.status,
+				EXCLUDED.logos, EXCLUDED.rest_urls, EXCLUDED.rpc_urls)
 			THEN EXCLUDED.updated_at ELSE c.updated_at END`
 
 // assetSQL upserts an asset; updated_at moves only when a value changes.
 const assetSQL = `INSERT INTO explorer.registry_assets AS a (chain_id, base, symbol, name, display, exponent, logo_url,
-		coingecko_id, traces, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+		coingecko_id, traces, updated_at, logos, description)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11::jsonb, $12)
 	ON CONFLICT (chain_id, base) DO UPDATE SET
 		symbol = EXCLUDED.symbol, name = EXCLUDED.name, display = EXCLUDED.display, exponent = EXCLUDED.exponent,
 		logo_url = EXCLUDED.logo_url, coingecko_id = EXCLUDED.coingecko_id, traces = EXCLUDED.traces,
-		updated_at = CASE WHEN (a.symbol, a.name, a.display, a.exponent, a.logo_url, a.coingecko_id, a.traces)
+		logos = EXCLUDED.logos, description = EXCLUDED.description,
+		updated_at = CASE WHEN (a.symbol, a.name, a.display, a.exponent, a.logo_url, a.coingecko_id, a.traces, a.logos,
+				a.description)
 			IS DISTINCT FROM (EXCLUDED.symbol, EXCLUDED.name, EXCLUDED.display, EXCLUDED.exponent, EXCLUDED.logo_url,
-				EXCLUDED.coingecko_id, EXCLUDED.traces)
+				EXCLUDED.coingecko_id, EXCLUDED.traces, EXCLUDED.logos, EXCLUDED.description)
 			THEN EXCLUDED.updated_at ELSE a.updated_at END`
 
 // goneAssetsSQL deletes the assets of a chain its asset list no longer has.
@@ -86,10 +91,14 @@ func (s *PGStore) Save(ctx context.Context, chain chainregistry.Chain, assets []
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	chainLogos, err := logosJSON(chain.Logos)
+	if err != nil {
+		return fmt.Errorf("chain registry save %s: %w", chain.ChainID, err)
+	}
 	batch := &pgx.Batch{}
 	batch.Queue(chainSQL, chain.ChainID, null(chain.Name), null(chain.PrettyName), null(chain.NetworkType),
 		null(chain.Bech32Prefix), null(chain.LogoURL), null(chain.ExplorerTxURL), null(chain.ExplorerAccountURL), fetched,
-		null(chain.Status))
+		null(chain.Status), chainLogos, list(chain.REST), list(chain.RPC))
 	bases := make([]string, 0, len(assets))
 	for _, a := range assets {
 		bases = append(bases, a.Base)
@@ -97,8 +106,12 @@ func (s *PGStore) Save(ctx context.Context, chain chainregistry.Chain, assets []
 		if a.Traces != nil {
 			traces = string(a.Traces)
 		}
+		assetLogos, err := logosJSON(a.Logos)
+		if err != nil {
+			return fmt.Errorf("chain registry save %s: %w", chain.ChainID, err)
+		}
 		batch.Queue(assetSQL, chain.ChainID, a.Base, null(a.Symbol), null(a.Name), null(a.Display), a.Exponent,
-			null(a.LogoURL), null(a.CoingeckoID), traces, fetched)
+			null(a.LogoURL), null(a.CoingeckoID), traces, fetched, assetLogos, null(a.Description))
 	}
 	batch.Queue(goneAssetsSQL, chain.ChainID, bases)
 	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
@@ -117,6 +130,26 @@ func (s *PGStore) SaveUnknown(ctx context.Context, chainID string) error {
 		return fmt.Errorf("chain registry unknown %s: %w", chainID, err)
 	}
 	return nil
+}
+
+// logosJSON is the logos column: NULL without any logo.
+func logosJSON(l chainregistry.Logos) (any, error) {
+	if l == (chainregistry.Logos{}) {
+		return nil, nil
+	}
+	raw, err := json.Marshal(l)
+	if err != nil {
+		return nil, err
+	}
+	return string(raw), nil
+}
+
+// list is a text[] value: never NULL.
+func list(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 func null(s string) any {

@@ -14,6 +14,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
@@ -67,15 +68,17 @@ const keybaseTimeout = 10 * time.Second
 // parameters after the proposals that explain their changes,
 // the open orders' reconciliation with the node's order book anywhere (it
 // reads nothing the others write), the chain state after them (it counts
-// the validators and copies the native price), the daily statistics last
-// (they read only the indexed tables). The chain registry runs only
+// the validators and copies the native price), the daily statistics
+// (they read only the indexed tables), then the sets of after (the asset
+// list, rebuilt from the denoms, channels and registry tables whenever
+// those sets write). The chain registry runs only
 // with both its URLs, the prices only with a CoinGecko host (Load always
 // sets one; BZE's 24-hour change comes from the DEX tickers), the validator
 // logos only with a KeybaseURL (Load always sets one). The non-voters read
 // the validator sets of the heights the local node pruned from the archive
 // (ARCHIVE_RPC_URL), and the upgrade recovery the commits after an upgrade
 // the same way, paced by BACKFILL_RATE_LIMIT. Call closeFn when done.
-func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (syncer *statesync.Syncer, closeFn func(), err error) {
+func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec, after ...statesync.Set) (syncer *statesync.Syncer, closeFn func(), err error) {
 	if err := cfg.RequireDatabase(); err != nil {
 		return nil, nil, err
 	}
@@ -107,6 +110,13 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		logos = keybase.New(&http.Client{Timeout: keybaseTimeout}, cfg.KeybaseURL)
 	}
 
+	// The channel confirmation reads the registry's IBC files only with the
+	// registry's URLs.
+	var ibcFiles channels.Registry
+	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {
+		ibcFiles = chainregistry.New(outbound, cfg.ChainRegistryAPIURL, cfg.ChainRegistryRawURL)
+	}
+
 	sets := []statesync.Set{
 		validators.New(validators.Deps{
 			Staking:  staking,
@@ -116,10 +126,15 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Logos:    logos,
 		}, 0),
 		channels.New(channels.Deps{
-			Channel: channeltypes.NewQueryClient(conn),
-			Client:  clienttypes.NewQueryClient(conn),
-			Store:   channels.NewPGStore(pool),
-			Misses:  resyncs,
+			Channel:    channeltypes.NewQueryClient(conn),
+			Client:     clienttypes.NewQueryClient(conn),
+			Store:      channels.NewPGStore(pool),
+			Misses:     resyncs,
+			Saved:      resyncs,
+			ChainID:    cfg.ChainID,
+			Registry:   ibcFiles,
+			Connection: connectiontypes.NewQueryClient(conn),
+			HTTP:       outbound,
 		}, 0),
 	}
 	if cfg.ChainRegistryAPIURL != "" && cfg.ChainRegistryRawURL != "" {
@@ -140,6 +155,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 			Lookup:       denomStore,
 			Misses:       resyncs,
 			ChainID:      cfg.ChainID,
+			Saved:        resyncs,
 		}, 0),
 		proposals.New(proposals.Deps{
 			Gov:     govv1.NewQueryClient(conn),
@@ -195,6 +211,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec) (
 		Store:        chainstate.NewPGStore(pool),
 		Denom:        chain.BondDenom,
 	}, 0), dailystats.New(dailystats.Deps{Store: dailystats.NewPGStore(pool)}))
+	sets = append(sets, after...)
 	syncer = statesync.New(statesync.Config{Log: log.StandardLogger()}, statesync.NewPGJobStore(pool), sets...)
 	resyncs.Bind(syncer)
 	return syncer, func() {

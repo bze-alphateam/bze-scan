@@ -170,10 +170,10 @@ function AssetRow({ row, open, onToggle, ctx }: { row: OrderAssetRow; open: bool
 /**
  * The tokens a personal account has locked in open DEX orders, per asset,
  * each expanding to the markets holding it. Its own request: a slow or
- * failed answer changes this panel only.
+ * failed answer changes this panel only. Refetched live while shown.
  */
 export function OrdersTab({ address }: { address: string }) {
-  const orders = useAccountOpenOrders(address);
+  const orders = useAccountOpenOrders(address, { polling: "live" });
   const denoms = useDenoms();
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const ctx = useMemo(() => createRenderContext({ transfers: NO_TRANSFERS, tokens: denoms.data }), [denoms.data]);

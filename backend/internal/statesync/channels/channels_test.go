@@ -27,6 +27,7 @@ type fakeChannel struct {
 	fail       map[string]bool   // channel → its client state fails
 	status     map[string]string // client → its status
 	statusFail map[string]bool   // client → its status query fails
+	clientOf   map[string]string // channel → its client, else 07-tendermint-<channel>
 	pages      int
 }
 
@@ -65,21 +66,70 @@ func (f *fakeChannel) ChannelClientState(_ context.Context, in *channeltypes.Que
 	} else if cs, err = codectypes.NewAnyWithValue(&ibctm.ClientState{ChainId: f.chainOf[in.ChannelId]}); err != nil {
 		return nil, err
 	}
+	client := "07-tendermint-" + in.ChannelId
+	if id, ok := f.clientOf[in.ChannelId]; ok {
+		client = id
+	}
 	return &channeltypes.QueryChannelClientStateResponse{
-		IdentifiedClientState: &clienttypes.IdentifiedClientState{ClientId: "07-tendermint-" + in.ChannelId, ClientState: cs},
+		IdentifiedClientState: &clienttypes.IdentifiedClientState{ClientId: client, ClientState: cs},
 	}, nil
 }
 
+// fakeStore keeps what it saves as a database would: a value the row
+// lacks keeps the stored one, a nil confirmation too.
 type fakeStore struct {
-	saved []channels.Row
-	known map[string]bool
-	asked []string
-	err   error
+	saved     []channels.Row
+	known     map[string]bool
+	asked     []string
+	err       error
+	stored    map[string]channels.Stored
+	storedErr error
+	chains    map[string]channels.ChainRef
 }
 
 func (s *fakeStore) Save(_ context.Context, rows []channels.Row) error {
 	s.saved = rows
-	return s.err
+	if s.err != nil {
+		return s.err
+	}
+	if s.stored == nil {
+		s.stored = map[string]channels.Stored{}
+	}
+	for _, r := range rows {
+		old := s.stored[r.ChannelID]
+		st := channels.Stored{ClientID: r.ClientID, ConnectionID: r.ConnectionID,
+			CounterpartyChainID: r.CounterpartyChainID, CounterpartyChannelID: r.CounterpartyChannelID,
+			Confirmation: old.Confirmation}
+		if st.ClientID == "" {
+			st.ClientID = old.ClientID
+		}
+		if st.CounterpartyChainID == "" {
+			st.CounterpartyChainID = old.CounterpartyChainID
+		}
+		if r.Confirmation != nil {
+			st.Confirmation = *r.Confirmation
+		}
+		s.stored[r.ChannelID] = st
+	}
+	return nil
+}
+
+func (s *fakeStore) Stored(context.Context) (map[string]channels.Stored, error) {
+	out := map[string]channels.Stored{}
+	for k, v := range s.stored {
+		out[k] = v
+	}
+	return out, s.storedErr
+}
+
+func (s *fakeStore) Chains(_ context.Context, ids []string) (map[string]channels.ChainRef, error) {
+	out := map[string]channels.ChainRef{}
+	for _, id := range ids {
+		if c, ok := s.chains[id]; ok {
+			out[id] = c
+		}
+	}
+	return out, nil
 }
 
 func (s *fakeStore) UnknownChains(_ context.Context, ids []string) ([]string, error) {
@@ -124,15 +174,15 @@ func TestFullResyncWritesTheTransferChannels(t *testing.T) {
 	assert.Equal(t, []channels.Row{
 		{ChannelID: "channel-0", PortID: "transfer", ClientID: "07-tendermint-channel-0", ConnectionID: "connection-0",
 			CounterpartyChainID: "osmosis-1", CounterpartyChannelID: "channel-340", State: "open",
-			ClientStatus: "active", Escrow: "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee"},
+			ClientStatus: "active", Escrow: "bze1a53udazy8ayufvy0s434pfwjcedzqv34tgwwee", Confirmation: &channels.Confirmation{}},
 		{ChannelID: "channel-2", PortID: "transfer", ClientID: "07-tendermint-channel-2", ConnectionID: "connection-2",
 			CounterpartyChainID: "cosmoshub-4", CounterpartyChannelID: "channel-147", State: "closed",
-			ClientStatus: "expired", Escrow: store.saved[1].Escrow},
+			ClientStatus: "expired", Escrow: store.saved[1].Escrow, Confirmation: &channels.Confirmation{}},
 		{ChannelID: "channel-3", PortID: "transfer", ClientID: "07-tendermint-channel-3", ConnectionID: "connection-3",
 			CounterpartyChainID: "noble-1", CounterpartyChannelID: "channel-95", State: "open",
-			ClientStatus: "active", Escrow: store.saved[2].Escrow},
+			ClientStatus: "active", Escrow: store.saved[2].Escrow, Confirmation: &channels.Confirmation{}},
 		{ChannelID: "channel-4", PortID: "transfer", ClientID: "07-tendermint-channel-4", ConnectionID: "connection-4",
-			CounterpartyChannelID: "channel-1", State: "tryopen", ClientStatus: "active", Escrow: store.saved[3].Escrow},
+			CounterpartyChannelID: "channel-1", State: "tryopen", ClientStatus: "active", Escrow: store.saved[3].Escrow, Confirmation: &channels.Confirmation{}},
 	}, store.saved, "transfer port only; a non-Tendermint client names no chain")
 	assert.NotEqual(t, store.saved[1].Escrow, store.saved[2].Escrow)
 
@@ -194,4 +244,21 @@ func TestAFailingSaveFailsTheRun(t *testing.T) {
 	assert.Empty(t, misses.got)
 	assert.Equal(t, statesync.Channels, set.Name())
 	assert.Equal(t, channels.DefaultInterval, set.Interval())
+}
+
+// Every write asks for an asset list rebuild; a failed one does not.
+func TestEveryWriteRebuildsTheAssetList(t *testing.T) {
+	ch := &fakeChannel{channels: []*channeltypes.IdentifiedChannel{
+		channel("transfer", "channel-0", "channel-340", "connection-0", channeltypes.OPEN),
+	}, chainOf: map[string]string{"channel-0": "osmosis-1"}}
+	store := &fakeStore{known: map[string]bool{"osmosis-1": true}}
+	saved := &publisher{}
+	set := channels.New(channels.Deps{Channel: ch, Client: ch, Store: store, Saved: saved}, 0)
+	require.NoError(t, set.FullResync(context.Background()))
+	require.Len(t, saved.got, 1)
+	assert.Equal(t, []string{statesync.All}, saved.got[0].Keys(statesync.AssetList))
+
+	store.err = errors.New("db down")
+	require.Error(t, set.ResyncOne(context.Background(), statesync.All))
+	assert.Len(t, saved.got, 1, "nothing written, nothing to rebuild")
 }

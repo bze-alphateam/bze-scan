@@ -60,9 +60,18 @@ func newSyncEnv(t *testing.T) *syncEnv {
 	t.Helper()
 	url := freshDatabase(t, true)
 	migrateUp(t, url)
+	reg := fakeregistry.New(t)
+	// The channel confirmation asks a counterparty's REST endpoints: never
+	// the real chains' from a test (a test that wants one sets its own).
+	for _, dir := range []string{"cosmoshub", "noble"} {
+		reg.SetREST(dir, unreachable)
+	}
 	return &syncEnv{url: url, db: connect(t, url), node: fakenode.New(t), grpc: fakenode.NewGRPC(t),
-		reg: fakeregistry.New(t), gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
+		reg: reg, gecko: newFakeGecko(t), kb: newFakeKeybase(t)}
 }
+
+// unreachable is an address that refuses connections at once.
+const unreachable = "http://127.0.0.1:1"
 
 // tickers points cfg's ticker jobs at the fakes.
 func (e *syncEnv) tickers(cfg *config.Config) *config.Config {
@@ -434,4 +443,120 @@ func TestValidatorsOnlineFromTheirLastSignedBlock(t *testing.T) {
 	require.NotNil(t, detail.Offline)
 	assert.True(t, *detail.Offline, "the validator page says the same")
 	assert.Equal(t, int64(15), *detail.MissedInARow)
+}
+
+// A jailed validator carries the jail object of its earliest slashed
+// event after its latest unjailed one; every other validator has none. The last
+// signed block is a top-level field, and uptime is null outside the active
+// set.
+func TestJailedValidatorsCarryTheirJail(t *testing.T) {
+	e := newSyncEnv(t)
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+	base := e.serve(t, restakeHeight)
+	waitFor(t, 10*time.Second, func() bool {
+		return e.count(t, `SELECT count(*) FROM explorer.validators WHERE last_signed_height = $1`, restakeHeight) == recordedBonded
+	}, "every bonded validator signed %d", restakeHeight)
+
+	ops := queryStrings(t, e.db, `SELECT operator_address FROM explorer.validators
+		WHERE status = 'bonded' AND NOT jailed ORDER BY tokens DESC, operator_address LIMIT 7`)
+	require.Len(t, ops, 7)
+	downtime, doubleSign, noEvent, again, unjailedAfter, free, laterSlash := ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], ops[6]
+	jailedStatus := func(op string) {
+		_, err := e.db.Exec(`UPDATE explorer.validators SET jailed = true WHERE operator_address = $1`, op)
+		require.NoError(t, err)
+	}
+	event := func(op, kind string, height int64, seq int, reason string) {
+		details := "NULL"
+		if reason != "" {
+			details = `'{"reason":"` + reason + `"}'::jsonb`
+		}
+		_, err := e.db.Exec(`INSERT INTO explorer.validator_events (height, tx_index, seq, operator_address, kind, details, time)
+			VALUES ($1, -1, $2, $3, $4, `+details+`, now())`,
+			height, seq, op, kind)
+		require.NoError(t, err)
+	}
+	h := restakeHeight
+	for _, op := range []string{downtime, doubleSign, noEvent, again, unjailedAfter, laterSlash} {
+		jailedStatus(op)
+	}
+	_, err := e.db.Exec(`UPDATE explorer.validators SET status = 'unbonding' WHERE operator_address = $1`, downtime)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`UPDATE explorer.validators SET last_signed_height = NULL WHERE operator_address IN ($1, $2)`,
+		doubleSign, noEvent)
+	require.NoError(t, err)
+	event(downtime, "slashed", h-10, 90001, "missing_signature")
+	event(doubleSign, "slashed", h-10, 90002, "double_sign")
+	event(again, "slashed", h-30, 90003, "missing_signature")
+	event(again, "unjailed", h-20, 90004, "")
+	event(again, "slashed", h-10, 90005, "double_sign")
+	event(unjailedAfter, "slashed", h-20, 90006, "missing_signature")
+	event(unjailedAfter, "unjailed", h-10, 90007, "")
+	event(laterSlash, "slashed", h-10, 90009, "missing_signature")
+	event(laterSlash, "slashed", h-5, 90010, "double_sign")
+	event(free, "slashed", h-10, 90008, "missing_signature")
+
+	var blockTime time.Time
+	require.NoError(t, e.db.QueryRow(`SELECT time FROM explorer.blocks WHERE height = $1`, h).Scan(&blockTime))
+	byOp := map[string]dto.Validator{}
+	for _, v := range getValidators(t, base, "?limit=100").Items {
+		byOp[v.OperatorAddress] = v
+	}
+	reason := func(v dto.Validator) string {
+		if v.Jail == nil || v.Jail.Reason == nil {
+			return "-"
+		}
+		return *v.Jail.Reason
+	}
+
+	v := byOp[downtime]
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, h-10, *v.Jail.Height)
+	assert.Equal(t, "downtime", reason(v))
+	assert.Nil(t, v.Uptime, "no uptime outside the active set")
+	require.NotNil(t, v.LastSignedTime)
+	assert.Equal(t, h, *v.LastSignedHeight)
+	assert.True(t, v.LastSignedTime.Equal(blockTime), "the signed block's time")
+
+	v = byOp[doubleSign]
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, "double_sign", reason(v))
+	assert.Nil(t, v.LastSignedHeight)
+	assert.Nil(t, v.LastSignedTime, "unknown last signed block")
+	assert.Nil(t, v.Uptime, "jailed")
+
+	v = byOp[noEvent]
+	require.NotNil(t, v.Jail, "jailed below the indexed range")
+	assert.Nil(t, v.Jail.Height)
+	assert.Nil(t, v.Jail.Time)
+	assert.Equal(t, "-", reason(v))
+
+	v = byOp[again]
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, h-10, *v.Jail.Height, "the slash after its last unjail")
+	assert.Equal(t, "double_sign", reason(v))
+
+	v = byOp[laterSlash]
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, h-10, *v.Jail.Height, "a later double-sign slash while jailed is not the jail block")
+	assert.Equal(t, "downtime", reason(v))
+
+	v = byOp[unjailedAfter]
+	require.NotNil(t, v.Jail)
+	assert.Nil(t, v.Jail.Height, "unjailed after its slash: no jail block in range")
+	assert.Equal(t, "-", reason(v))
+
+	v = byOp[free]
+	assert.Nil(t, v.Jail, "not jailed")
+	assert.NotNil(t, v.Uptime)
+
+	// The validator page says the same.
+	resp, err := http.Get(base + "/api/v1/validators/" + downtime)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	var detail dto.ValidatorDetail
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&detail))
+	require.NotNil(t, detail.Jail)
+	assert.Equal(t, h-10, *detail.Jail.Height)
+	assert.NotNil(t, detail.LastSignedTime)
 }

@@ -34,6 +34,11 @@ const APIPrefix = "/api/v1"
 // aggregator.
 const CompatPrefix = "/aggregator/api"
 
+// RegistryPrefix is the prefix of the asset list routes. Like the
+// aggregator-compatible routes, they answer CORS requests from any origin,
+// whatever CORSAllowedOrigins says: every dapp reads them.
+const RegistryPrefix = APIPrefix + "/registry"
+
 // Deps is what the routes read from, built by the composition root.
 type Deps struct {
 	// Explorer reads the explorer tables.
@@ -83,6 +88,9 @@ type Deps struct {
 	ValidatorNames controller.ValidatorNames
 	// Raw serves the node's raw by-height JSON; nil leaves /api/v1/raw out.
 	Raw controller.RawReader
+	// AssetList serves the dapps' asset list from memory; nil leaves
+	// /api/v1/registry/assets out.
+	AssetList controller.AssetList
 	// CompatPrices serves CoinGecko's prices; nil leaves the
 	// aggregator-compatible /aggregator/api/prices out.
 	CompatPrices controller.PriceFeed
@@ -111,7 +119,8 @@ type Deps struct {
 	// aggregator-compatible /aggregator/api/dex/tickers out.
 	CompatTickers controller.Tickers
 	// CORSAllowedOrigins enables CORS for these origins ("*" for any); empty
-	// sends no CORS headers. The aggregator-compatible routes ignore it.
+	// sends no CORS headers. The aggregator-compatible and the asset list
+	// routes ignore it.
 	CORSAllowedOrigins []string
 	// Log receives the request log; nil is the standard logger.
 	Log log.FieldLogger
@@ -130,14 +139,14 @@ func New(deps Deps) *echo.Echo {
 	e.Use(appmw.RequestLog(deps.Log))
 	if len(deps.CORSAllowedOrigins) > 0 {
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-			Skipper:       isCompat,
+			Skipper:       isOpen,
 			AllowOrigins:  deps.CORSAllowedOrigins,
 			AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
 			ExposeHeaders: []string{appmw.RequestIDHeader},
 		}))
 	}
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		Skipper:       func(c *echo.Context) bool { return !isCompat(c) },
+		Skipper:       func(c *echo.Context) bool { return !isOpen(c) },
 		AllowOrigins:  []string{"*"},
 		AllowMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions},
 		ExposeHeaders: []string{appmw.RequestIDHeader},
@@ -228,6 +237,12 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/raw/commit/:height", raw.Commit)
 		api.GET("/raw/tx/:hash", raw.Tx)
 	}
+	if deps.AssetList != nil {
+		registry := controller.NewRegistryController(deps.AssetList, deps.Log)
+		api.GET("/registry/assets", registry.Assets)
+		// A wildcard: the denom is URL-encoded (factory%2F…) or not.
+		api.GET("/registry/assets/*", registry.Asset)
+	}
 
 	// The aggregator-compatible routes: every endpoint ported from the BZE
 	// aggregator API is added here.
@@ -262,11 +277,17 @@ func New(deps Deps) *echo.Echo {
 	return e
 }
 
-// isCompat reports whether c's path is an aggregator-compatible one, under
-// CompatPrefix.
-func isCompat(c *echo.Context) bool {
+// isOpen reports whether c's path answers CORS requests from any origin:
+// an aggregator-compatible one, under CompatPrefix, or an asset list one,
+// under RegistryPrefix.
+func isOpen(c *echo.Context) bool {
 	p := c.Request().URL.Path
-	return p == CompatPrefix || strings.HasPrefix(p, CompatPrefix+"/")
+	for _, prefix := range []string{CompatPrefix, RegistryPrefix} {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // Run serves e on addr until ctx is cancelled, then stops accepting

@@ -19,6 +19,7 @@ import {
   eventLine,
   filterTokens,
   hopsExplainer,
+  isFlaggedToken,
   ibcRoute,
   mergeEvents,
   mintBurnText,
@@ -181,10 +182,36 @@ describe("tokens list", () => {
   it("filters by chip, then on symbol or name", () => {
     const symbols = (rows: TokenSummary[]) => rows.map((t) => t.symbol);
     expect(symbols(filterTokens(tokens, "factory", ""))).toEqual(["HONEY", "VDL"]);
-    expect(symbols(filterTokens(tokens, "ibc", ""))).toEqual(["ATOM", "USDC"]);
+    expect(symbols(filterTokens(tokens, "ibc", ""))).toEqual(["USDC", "ATOM"]);
     expect(symbols(filterTokens(tokens, "all", " coin "))).toEqual(["USDC"]);
     expect(symbols(filterTokens(tokens, "native", "hon"))).toEqual([]);
     expect(filterTokens(tokens, "all", "")).toHaveLength(6);
+  });
+
+  it("flags obsolete, stranded and halted tokens", () => {
+    const ok = bySymbol("USDC");
+    expect(isFlaggedToken(ok)).toBe(false);
+    expect(isFlaggedToken({ ...ok, halted: true })).toBe(true);
+    expect(isFlaggedToken({ ...ok, stranded: true })).toBe(true);
+    // Only an IBC voucher can be stranded, as the badge says.
+    expect(isFlaggedToken({ ...bySymbol("HONEY"), stranded: true })).toBe(false);
+    expect(isFlaggedToken({ ...bySymbol("HONEY"), denom: "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey" })).toBe(true);
+  });
+
+  it("lists flagged tokens last, each group in the API's order", () => {
+    const symbols = (rows: TokenSummary[]) => rows.map((t) => t.symbol);
+    // ATOM is halted in the fixture.
+    expect(symbols(filterTokens(tokens, "all", ""))).toEqual(["BZE", "HONEY", "VDL", "USDC", "BZE/USDC LP", "ATOM"]);
+
+    const obsolete = { ...bySymbol("VDL"), symbol: "OLD", denom: "factory/bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw/ucorey" };
+    const stranded = { ...bySymbol("USDC"), symbol: "GONE", stranded: true };
+    const halted = { ...bySymbol("HONEY"), symbol: "STOP", halted: true };
+    const mixed = [obsolete, bySymbol("BZE"), stranded, bySymbol("HONEY"), halted, bySymbol("USDC")];
+    expect(symbols(filterTokens(mixed, "all", ""))).toEqual(["BZE", "HONEY", "USDC", "OLD", "GONE", "STOP"]);
+    // The filters still apply before the sort.
+    expect(symbols(filterTokens(mixed, "ibc", ""))).toEqual(["USDC", "GONE"]);
+    // The input is left untouched.
+    expect(symbols(mixed)).toEqual(["OLD", "BZE", "GONE", "HONEY", "STOP", "USDC"]);
   });
 
   it("words the price cell", () => {

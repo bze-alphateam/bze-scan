@@ -27,17 +27,18 @@ test.describe("tokens list", () => {
     await expect(rows(page).nth(1)).toContainText("$0.002");
     await expect(rows(page).nth(1).getByRole("link", { name: "DEX" })).toBeVisible({ visible: !isMobile });
     await expect(rows(page).nth(2)).toContainText("— no price");
-    await expect(rows(page).nth(3)).toContainText("Halted on the DEX");
-    await expect(rows(page).nth(3).getByRole("link", { name: "DEX" })).toHaveCount(0);
+    // A halted token is listed last.
+    await expect(rows(page).nth(5)).toContainText("Halted on the DEX");
+    await expect(rows(page).nth(5).getByRole("link", { name: "DEX" })).toHaveCount(0);
     // The pool share shows its two assets' logos; a one-hop token has no hops tag.
-    await expect(rows(page).nth(5).getByTestId("lp-logo")).toBeVisible();
+    await expect(rows(page).nth(4).getByTestId("lp-logo")).toBeVisible();
     await expect(page.getByTestId("hops-tag")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Cross-chain", exact: true }).click();
     await expect(rows(page)).toHaveCount(2);
-    await expect(rows(page).first().getByTestId("token-badges")).toContainText("Cross-chainCosmos Hub");
+    await expect(rows(page).nth(1).getByTestId("token-badges")).toContainText("Cross-chainCosmos Hub");
     // A badge explains itself on tap.
-    await rows(page).first().getByTestId("direct-tag").click();
+    await rows(page).nth(1).getByTestId("direct-tag").click();
     await expect(page.getByRole("dialog")).toContainText("ATOM comes from Cosmos Hub, sent straight to BZE.");
     await page.keyboard.press("Escape");
 

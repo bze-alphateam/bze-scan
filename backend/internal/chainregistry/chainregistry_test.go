@@ -168,3 +168,98 @@ func TestUnavailableRegistry(t *testing.T) {
 	_, err = c.Assets(ctx, "cosmoshub")
 	require.Error(t, err, "a failure is not an absent asset list")
 }
+
+func TestLogosAreKeptApartAndPickedSVGFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, want string
+	}{
+		{"logo_URIs svg first", `"logo_URIs":{"png":"a.png","svg":"a.svg"},"images":[{"png":"b.png","svg":"b.svg"}]`, "a.svg"},
+		{"logo_URIs png", `"logo_URIs":{"png":"a.png"},"images":[{"png":"b.png","svg":"b.svg"}]`, "a.png"},
+		{"images svg", `"images":[{"png":"b.png","svg":"b.svg"},{"svg":"c.svg"}]`, "b.svg"},
+		{"images png", `"images":[{"png":"b.png"}]`, "b.png"},
+		{"none", ``, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			extra := ""
+			if tc.raw != "" {
+				extra = "," + tc.raw
+			}
+			ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x"` + extra + `}`))
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, ch.Logos.SVGFirst())
+			assets, err := chainregistry.ParseAssets([]byte(`{"assets":[{"base":"ux"` + extra + `}]}`))
+			require.NoError(t, err)
+			require.Len(t, assets, 1)
+			assert.Equal(t, tc.want, assets[0].Logos.SVGFirst())
+		})
+	}
+
+	ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x","logo_URIs":{"png":"a.png","svg":"a.svg"}}`))
+	require.NoError(t, err)
+	assert.Equal(t, "a.png", ch.LogoURL, "the explorer's own logo stays PNG first")
+	assert.Equal(t, chainregistry.Logos{URIs: chainregistry.LogoPair{PNG: "a.png", SVG: "a.svg"}}, ch.Logos)
+}
+
+func TestChainAPIsAndAssetDescriptions(t *testing.T) {
+	c, _ := client(t)
+	ctx := context.Background()
+	bze, err := c.Chain(ctx, "beezee")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(bze.REST), 2)
+	assert.Equal(t, []string{"https://rest.getbze.com", "https://rest-1.getbze.com"}, bze.REST[:2], "in the registry's order")
+	assert.NotEmpty(t, bze.RPC)
+
+	ch, err := chainregistry.ParseChain([]byte(`{"chain_id":"x-1","chain_name":"x","apis":{"rest":[{"address":"r1"},{"address":""},{"address":"r2"}]}}`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"r1", "r2"}, ch.REST)
+	assert.Nil(t, ch.RPC)
+
+	assets, err := c.Assets(ctx, "beezee")
+	require.NoError(t, err)
+	require.NotEmpty(t, assets)
+	assert.Equal(t, "ubze", assets[0].Base)
+	assert.NotEmpty(t, assets[0].Description)
+	assert.NotEmpty(t, assets[0].Logos.URIs.SVG)
+}
+
+func TestIBCPathSortsTheChains(t *testing.T) {
+	assert.Equal(t, "_IBC/beezee-osmosis.json", chainregistry.IBCPath("osmosis", "beezee", false))
+	assert.Equal(t, "_IBC/beezee-osmosis.json", chainregistry.IBCPath("beezee", "osmosis", false))
+	assert.Equal(t, "testnets/_IBC/beezeetestnet-osmosistestnet.json",
+		chainregistry.IBCPath("osmosistestnet", "beezeetestnet", true))
+}
+
+func TestRecordedIBCFile(t *testing.T) {
+	c, reg := client(t)
+	ctx := context.Background()
+	f, err := c.IBC(ctx, "noble", "beezee", false)
+	require.NoError(t, err)
+	require.NotNil(t, f)
+	assert.Equal(t, 1, reg.Requests("/raw/_IBC/beezee-noble.json"))
+	assert.Equal(t, "beezee", f.Chain1.ChainName)
+	assert.Equal(t, "connection-3", f.Chain1.ConnectionID)
+
+	other, chain, ok := f.Channel("beezee", "transfer", "channel-3")
+	require.True(t, ok)
+	assert.Equal(t, "noble", chain)
+	assert.Equal(t, chainregistry.IBCEnd{ChannelID: "channel-95", PortID: "transfer"}, other)
+	other, chain, ok = f.Channel("noble", "transfer", "channel-95")
+	require.True(t, ok, "from the second chain's side")
+	assert.Equal(t, "beezee", chain)
+	assert.Equal(t, "channel-3", other.ChannelID)
+	_, _, ok = f.Channel("beezee", "transfer", "channel-95")
+	assert.False(t, ok, "BZE's end is channel-3")
+	_, _, ok = f.Channel("osmosis", "transfer", "channel-3")
+	assert.False(t, ok, "a chain the file does not connect")
+
+	none, err := c.IBC(ctx, "beezee", "cosmoshub", false)
+	require.NoError(t, err, "no file is no error")
+	assert.Nil(t, none)
+
+	reg.SetDown(true)
+	_, err = c.IBC(ctx, "beezee", "noble", false)
+	require.ErrorContains(t, err, "_IBC/beezee-noble.json")
+
+	_, err = chainregistry.ParseIBC([]byte(`[`))
+	require.Error(t, err)
+}

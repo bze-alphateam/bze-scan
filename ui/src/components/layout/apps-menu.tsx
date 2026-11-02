@@ -7,7 +7,7 @@ import { appLinks } from "@/lib/links";
 
 import { AppIcon } from "./app-icon";
 
-/** "Apps": the other BZE apps, opened in the same tab. */
+/** "Apps": the other BZE apps, each opened in a new tab. */
 export function AppsMenu() {
   return (
     <Menu.Root>
@@ -22,7 +22,7 @@ export function AppsMenu() {
           <Menu.Content minW="44">
             {appLinks.map((link) => (
               <Menu.Item key={link.label} value={link.label} asChild minH="44px">
-                <a href={link.href}>
+                <a href={link.href} target="_blank" rel="noopener noreferrer">
                   <HStack as="span" gap="2.5">
                     <AppIcon app={link.icon} size={20} />
                     {link.label}

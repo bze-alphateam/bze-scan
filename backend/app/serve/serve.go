@@ -20,6 +20,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/app/server"
 	"github.com/bze-alphateam/bze-scan/backend/config"
+	"github.com/bze-alphateam/bze-scan/backend/internal/assets"
 	"github.com/bze-alphateam/bze-scan/backend/internal/candles"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/debugserver"
@@ -225,6 +226,17 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	explorerRepo := repository.NewExplorer(apiPool)
 
+	// The dapps' asset list lives in memory: built at start from the
+	// tables by a component of its own, then rebuilt by the state sync
+	// after the denoms, channels and chain registry sets write.
+	curation, err := assets.CurationFor(cfg.ChainID)
+	if err != nil {
+		return err
+	}
+	assetList := assets.New(assets.Config{}, assets.Deps{
+		Source: assets.NewPGSource(apiPool), Curation: curation, ChainID: cfg.ChainID, Log: log.StandardLogger(),
+	})
+
 	// The aggregator-compatible /aggregator/api/supply routes read the local node.
 	var compatSupply controller.SupplyReader
 	if cfg.NodeGRPCAddr != "" {
@@ -255,6 +267,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		LiveHalt:        liveHalt,
 		Status:          checker,
 		Raw:             raw,
+		AssetList:       assetList,
 		CompatPrices:    compatPrices,
 		CompatArticles:  compatArticles,
 		CompatOrders:    compatOrders,
@@ -275,6 +288,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		}},
 		{name: "status checker", run: checker.Run},
 		{name: "stake movements", run: flows.Run},
+		{name: "asset list", run: assetList.Run},
 	}
 	if coverage.run != nil {
 		components = append(components, coverage)
@@ -312,7 +326,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			// finishes the height in flight first.
 			defer pool.Close()
 
-			syncer, closeSync, err := NewStateSync(ctx, cfg, codec)
+			syncer, closeSync, err := NewStateSync(ctx, cfg, codec, assetList)
 			if err != nil {
 				return err
 			}

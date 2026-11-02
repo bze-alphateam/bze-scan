@@ -2,7 +2,7 @@
 // the Cosmos chain registry's chain.json and assetlist.json of BZE itself
 // and of every chain the explorer meets (an IBC channel's counterparty, an
 // IBC denom's origin) in explorer.chains and explorer.registry_assets. It
-// runs daily, and on every cache miss another set publishes (a chain id, or
+// runs hourly (BZE's own asset list on every run), and on every cache miss another set publishes (a chain id, or
 // a registry name from an asset's traces) with a cool-down per key so a
 // chain the registry does not know cannot cause a fetch per minute. A
 // failed fetch keeps the previous rows.
@@ -26,8 +26,9 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
-// DefaultInterval is the daily refresh.
-const DefaultInterval = 24 * time.Hour
+// DefaultInterval is the hourly refresh: the asset list the dapps read
+// follows the registry within an hour.
+const DefaultInterval = time.Hour
 
 // CoolDown is the shortest time between two fetches of one chain on a
 // cache miss.
@@ -74,8 +75,9 @@ type Deps struct {
 	ChainID string
 	// Clock defaults to the wall clock.
 	Clock Clock
-	// Saved, when set, is asked to resync the channels after a run that
-	// saved a chain: the channels' escrow labels carry the chain's name.
+	// Saved, when set, is asked to resync the channels and to rebuild the
+	// asset list after a run that saved a chain: the channels' escrow
+	// labels carry the chain's name, the asset list its assets.
 	Saved statesync.Publisher
 }
 
@@ -112,7 +114,7 @@ var _ statesync.Set = (*Set)(nil)
 // Name is statesync.ChainRegistry.
 func (s *Set) Name() string { return statesync.ChainRegistry }
 
-// Interval is the daily refresh.
+// Interval is the hourly refresh.
 func (s *Set) Interval() time.Duration { return s.interval }
 
 // FullResync refetches BZE and every chain the explorer has met. A chain
@@ -143,13 +145,15 @@ func (s *Set) FullResync(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// announce asks the channels set to resync after a run that saved a chain.
+// announce asks the channels set to resync and the asset list to rebuild
+// after a run that saved a chain.
 func (s *Set) announce(saved bool) {
 	if !saved || s.deps.Saved == nil {
 		return
 	}
 	var d statesync.Dirty
 	d.Mark(statesync.Channels, statesync.All)
+	d.Mark(statesync.AssetList, statesync.All)
 	s.deps.Saved.Publish(d)
 }
 
