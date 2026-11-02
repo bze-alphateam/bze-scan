@@ -472,7 +472,7 @@ func TestJailedValidatorsCarryTheirJail(t *testing.T) {
 			details = `'{"reason":"` + reason + `"}'::jsonb`
 		}
 		_, err := e.db.Exec(`INSERT INTO explorer.validator_events (height, tx_index, seq, operator_address, kind, details, time)
-			VALUES ($1, -1, $2, $3, $4, `+details+`, (SELECT time FROM explorer.blocks WHERE height = $1))`,
+			VALUES ($1, -1, $2, $3, $4, `+details+`, now())`,
 			height, seq, op, kind)
 		require.NoError(t, err)
 	}
