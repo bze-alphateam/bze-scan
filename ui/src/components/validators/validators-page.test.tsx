@@ -132,7 +132,7 @@ describe("ValidatorsPage", () => {
     expect(within(sleepy).getByText("Jailed")).toHaveAttribute("data-tag", "bad");
     expect(within(sleepy).getByText("Unbonding")).toBeInTheDocument();
     expect(within(old).queryByText("Jailed")).not.toBeInTheDocument();
-    expect(old).toHaveTextContent("—");
+    expect(old).toHaveTextContent(/ago$/);
   });
 
   it("lists the Hall of Fame, the smallest first, with what earned each its place", async () => {
@@ -318,6 +318,28 @@ describe("ValidatorsPage", () => {
     await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
     await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(2));
     expect(screen.queryAllByTestId("online-dot")).toHaveLength(0);
+  });
+
+  it("shows the inactive rows' last signed time in place of an uptime, and a jailed row its jail time", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
+    await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(2));
+    expect(screen.getByText("Last active")).toBeInTheDocument();
+    expect(screen.queryByText("Uptime")).not.toBeInTheDocument();
+    const [jailed, old] = screen.getAllByTestId("validator-row");
+    // Sleepy Node: jailed, never "last signed"; the narrow-screen copy follows its tag.
+    expect(within(jailed).getAllByText(/^jailed .* ago$/).length).toBeGreaterThan(0);
+    expect(within(jailed).queryByText(/last signed/)).not.toBeInTheDocument();
+    // Old Timer: unbonded, last signed known.
+    expect(within(old).getByText(/ago$/)).toBeInTheDocument();
+    expect(within(old).queryByText(/jailed/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the Uptime column on the active tab", async () => {
+    renderWithProviders(<ValidatorsPage />, { api: api() });
+    await openActive();
+    expect(screen.getByText("Uptime")).toBeInTheDocument();
+    expect(screen.queryByText("Last active")).not.toBeInTheDocument();
   });
 
   it("shows each validator's picture, else its initials", async () => {

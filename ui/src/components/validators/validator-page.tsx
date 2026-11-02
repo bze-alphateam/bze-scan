@@ -52,6 +52,9 @@ import {
   splitValidators,
   stakeChangeLines,
   statusLine,
+  isInactive,
+  lastSignedLine,
+  type Timing,
   uptimeDetail,
   uptimeText,
   voteOption,
@@ -59,7 +62,7 @@ import {
 } from "@/render/validators";
 
 import { CrownMark, Moniker } from "./hall-of-fame";
-import { OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
+import { JailedCallout, OfflineCallout, OnlineDot, OnlineTag } from "./online-status";
 import { StakeChangeText } from "./stake-change";
 import { StakeMovements } from "./stake-movements";
 
@@ -146,11 +149,13 @@ function Tiles({
   summary,
   window,
   avgBlockMs,
+  headHeight,
 }: {
   v: ValidatorDetail;
   summary: ValidatorsSummary | null;
   window: number | null;
   avgBlockMs: number | null;
+  headHeight: number | null;
 }) {
   const yours = rewardRateAfterCommission(summary?.reward_rate, v.commission_rate);
   const signedWindow = v.signed_blocks_window ?? window;
@@ -182,17 +187,44 @@ function Tiles({
             : "the base rate minus the commission"
         }
       />
-      <Tile
-        label="Uptime"
-        value={
-          <Flex as="span" align="center" gap="2">
-            {uptimeText(v.uptime)}
-            <OnlineDot v={v} avgBlockMs={avgBlockMs} />
-          </Flex>
-        }
-        sub={uptimeDetail(v.missed_blocks, signedWindow)}
-      />
+      {isInactive(v) ? (
+        <LastSignedTile v={v} timing={{ avgBlockMs, headHeight }} />
+      ) : (
+        <Tile
+          label="Uptime"
+          value={
+            <Flex as="span" align="center" gap="2">
+              {uptimeText(v.uptime)}
+              <OnlineDot v={v} avgBlockMs={avgBlockMs} />
+            </Flex>
+          }
+          sub={uptimeDetail(v.missed_blocks, signedWindow)}
+        />
+      )}
     </SimpleGrid>
+  );
+}
+
+/** The uptime tile of a validator outside the active set: its slashing figure is stale, so it shows the last signed block. */
+function LastSignedTile({ v, timing }: { v: ValidatorDetail; timing: Timing }) {
+  const last = lastSignedLine(v, timing);
+  if (v.jailed) {
+    return <Tile label="Uptime" value="—" sub="not counted while jailed, see above" />;
+  }
+  return (
+    <Tile
+      label="Last signed block"
+      value={
+        last ? (
+          <Link asChild fontFamily="mono" color="accent.fg">
+            <NextLink href={`/blocks/${last.height}`}>#{formatCount(last.height)}</NextLink>
+          </Link>
+        ) : (
+          "—"
+        )
+      }
+      sub={last?.ago ?? (last ? null : "not seen signing since the explorer started watching")}
+    />
   );
 }
 
@@ -464,7 +496,9 @@ export function ValidatorSkeleton() {
 export function ValidatorView({ v }: { v: ValidatorDetail }) {
   const all = useAllValidators();
   const params = useParams();
-  const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
+  const stats = useStats().data;
+  const avgBlockMs = stats?.avg_block_time_ms ?? null;
+  const headHeight = stats?.latest_height ?? null;
   // Membership marks wait for the Hall of Fame; the page never does.
   const fame = useHallOfFame();
   const activeCount = all.data ? splitValidators(all.data.items).active.length : null;
@@ -472,7 +506,8 @@ export function ValidatorView({ v }: { v: ValidatorDetail }) {
     <Box>
       <Header v={v} activeCount={activeCount} fame={fame.data ?? null} />
       <OfflineCallout v={v} params={params.data} avgBlockMs={avgBlockMs} />
-      <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} avgBlockMs={avgBlockMs} />
+      <JailedCallout v={v} avgBlockMs={avgBlockMs} headHeight={headHeight} />
+      <Tiles v={v} summary={all.data?.summary ?? null} window={signedBlocksWindow(params.data)} avgBlockMs={avgBlockMs} headHeight={headHeight} />
       <About v={v} />
       <RecentBlocks v={v} />
       <Box mt="8">

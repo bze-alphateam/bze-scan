@@ -230,7 +230,10 @@ describe("staking tab", () => {
     const [honeycomb, , deep, sleepy, old] = validators;
     expect(validatorStatus(honeycomb)).toEqual({ text: "Active", tone: "green", uptime: null });
     expect(validatorStatus(deep)).toEqual({ text: "Active", tone: "green", uptime: "98.4% uptime" });
-    expect(validatorStatus(sleepy)).toEqual({ text: "Jailed", tone: "red", uptime: "61.2% uptime" });
+    expect(validatorStatus(sleepy)).toEqual({ text: "Jailed", tone: "red", uptime: null });
+    // Never an uptime for a validator outside the active set, whatever a stale payload carries.
+    expect(validatorStatus({ ...sleepy, uptime: "61.20000" })).toEqual({ text: "Jailed", tone: "red", uptime: null });
+    expect(validatorStatus({ ...old, uptime: "61.20000" })).toEqual({ text: "Inactive", tone: "gray", uptime: null });
     expect(validatorStatus(old)).toEqual({ text: "Inactive", tone: "gray", uptime: null });
     expect(validatorStatus(undefined)).toBeNull();
   });

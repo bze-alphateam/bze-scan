@@ -19,7 +19,9 @@
       },
       "offline": false,
       "missed_in_a_row": 0,
-      "last_signed_height": 25120450
+      "last_signed_height": 25120450,
+      "last_signed_time": "2026-10-30T12:00:00Z",
+      "jail": null
     },
     {
       "rank": 1,
@@ -40,7 +42,9 @@
       },
       "offline": false,
       "missed_in_a_row": 0,
-      "last_signed_height": 25120450
+      "last_signed_height": 25120450,
+      "last_signed_time": "2026-10-30T12:00:00Z",
+      "jail": null
     }
   ],
   "next_cursor": null,
@@ -49,6 +53,9 @@
     "max_missed_blocks": 10,
     "signed_blocks_window": 10000,
     "max_seconds_back": 600,
-    "upgrade": { "height": 25263600, "name": "v8.2.0" }
+    "upgrade": {
+      "height": 25263600,
+      "name": "v8.2.0"
+    }
   }
 }

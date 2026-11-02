@@ -116,9 +116,68 @@ func TestNewValidatorUptime(t *testing.T) {
 		{ptr(0), ptr(0), nil},
 	}
 	for _, c := range cases {
-		got := dto.NewValidator(repository.ValidatorSummary{MissedBlocks: c.missed, SignedBlocksWindow: c.window}).Uptime
+		got := dto.NewValidator(repository.ValidatorSummary{Status: "bonded", MissedBlocks: c.missed, SignedBlocksWindow: c.window}).Uptime
 		assert.Equal(t, c.want, got)
 	}
+}
+
+func TestUptimeIsNullOutsideTheActiveSet(t *testing.T) {
+	missed, window := int64(16), int64(10000)
+	cases := []struct {
+		name   string
+		status string
+		jailed bool
+		want   *string
+	}{
+		{"bonded", "bonded", false, strPtr("99.84000")},
+		{"unbonding", "unbonding", false, nil},
+		{"unbonded", "unbonded", false, nil},
+		{"bonded but jailed", "bonded", true, nil},
+		{"unbonding and jailed", "unbonding", true, nil},
+	}
+	for _, c := range cases {
+		v := dto.NewValidator(repository.ValidatorSummary{
+			Status: c.status, Jailed: c.jailed, MissedBlocks: &missed, SignedBlocksWindow: &window,
+		})
+		assert.Equal(t, c.want, v.Uptime, c.name)
+		assert.Equal(t, &missed, v.MissedBlocks, "the raw signing info stays")
+	}
+}
+
+func TestJailIsSetOnlyForAJailedValidator(t *testing.T) {
+	h := int64(900)
+	at := time.Unix(1_800_000_000, 0)
+	signed := time.Unix(1_700_000_000, 0)
+	reason := func(s string) *string { return &s }
+
+	notJailed := dto.NewValidator(repository.ValidatorSummary{JailHeight: &h, JailTime: &at, LastSignedTime: &signed})
+	assert.Nil(t, notJailed.Jail)
+	require.NotNil(t, notJailed.LastSignedTime)
+	assert.True(t, notJailed.LastSignedTime.Equal(signed))
+
+	cases := []struct {
+		reason *string
+		want   *string
+	}{
+		{reason("missing_signature"), reason("downtime")},
+		{reason("double_sign"), reason("double_sign")},
+		{reason("other"), nil},
+		{nil, nil},
+	}
+	for _, c := range cases {
+		v := dto.NewValidator(repository.ValidatorSummary{Jailed: true, JailHeight: &h, JailTime: &at, JailReason: c.reason})
+		require.NotNil(t, v.Jail)
+		assert.Equal(t, &h, v.Jail.Height)
+		assert.True(t, v.Jail.Time.Equal(at))
+		assert.Equal(t, c.want, v.Jail.Reason)
+	}
+
+	unknown := dto.NewValidator(repository.ValidatorSummary{Jailed: true})
+	require.NotNil(t, unknown.Jail, "jailed below the indexed range")
+	assert.Nil(t, unknown.Jail.Height)
+	assert.Nil(t, unknown.Jail.Time)
+	assert.Nil(t, unknown.Jail.Reason)
+	assert.Nil(t, unknown.LastSignedTime)
 }
 
 func TestValidatorIsOfflineFromTenBlocksMissedInARow(t *testing.T) {

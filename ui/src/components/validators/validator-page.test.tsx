@@ -331,6 +331,51 @@ describe("ValidatorPage", () => {
     expect(screen.queryByTestId("online-dot")).not.toBeInTheDocument();
   });
 
+  it("shows a jailed validator's Jailed card in place of an uptime", async () => {
+    const jailed = {
+      ...detail,
+      jailed: true,
+      status: "unbonding",
+      rank: null,
+      uptime: null,
+      offline: null,
+      missed_in_a_row: null,
+      last_signed_height: 25100000,
+      last_signed_time: "2026-10-01T10:00:00Z",
+      jail: { height: 25100500, time: "2026-10-01T11:00:00Z", reason: "downtime" },
+    };
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api(jailed) });
+    const card = await screen.findByTestId("jailed-callout");
+    expect(card).toHaveAttribute("data-tone", "bad");
+    expect(card).toHaveTextContent(/Jailed at block 25,100,500, .* ago, for downtime\./);
+    expect(card).toHaveTextContent(/Last signed block 25,100,000, .* ago\./);
+    expect(within(card).getByRole("link", { name: "25,100,500" })).toHaveAttribute("href", "/blocks/25100500");
+    expect(screen.queryByText("Last signed block")).not.toBeInTheDocument();
+  });
+
+  it("says a jailed validator below the indexed history has no known block", async () => {
+    const jailed = { ...detail, jailed: true, status: "unbonded", uptime: null, last_signed_height: null, last_signed_time: null, jail: { height: null, time: null, reason: null } };
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api(jailed) });
+    expect(await screen.findByTestId("jailed-callout")).toHaveTextContent("Jailed before the explorer's indexed history.");
+  });
+
+  it("shows the last signed block of an inactive validator that is not jailed, in place of its uptime", async () => {
+    const away = { ...detail, status: "unbonded", rank: null, uptime: null, offline: null, missed_in_a_row: null, last_signed_height: 25100000, last_signed_time: "2026-10-01T10:00:00Z" };
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api(away) });
+    const tile = (await screen.findByText("Last signed block")).closest("[data-testid=tile]") as HTMLElement;
+    expect(within(tile).getByRole("link", { name: "#25,100,000" })).toHaveAttribute("href", "/blocks/25100000");
+    expect(tile).toHaveTextContent(/ago/);
+    expect(screen.queryByText("Uptime")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("jailed-callout")).not.toBeInTheDocument();
+  });
+
+  it("shows a dash when an inactive validator was never seen signing", async () => {
+    const away = { ...detail, status: "unbonded", rank: null, uptime: null, offline: null, missed_in_a_row: null, last_signed_height: null, last_signed_time: null };
+    renderWithProviders(<ValidatorPage operator={OP} />, { api: api(away) });
+    const tile = (await screen.findByText("Last signed block")).closest("[data-testid=tile]") as HTMLElement;
+    expect(tile).toHaveTextContent("—");
+  });
+
   it("offers a retry when the API fails", async () => {
     const validator = vi.fn(() => Promise.reject(new ApiError(500, "internal", "boom")));
     renderWithProviders(<ValidatorPage operator={OP} />, { api: api(detail, { validator }) });

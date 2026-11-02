@@ -220,8 +220,8 @@ type Message struct {
 
 // Validator is an item of GET /api/v1/validators. VotingPowerPct and
 // Uptime are percentages with five decimals; Rank and VotingPowerPct are
-// null for a validator outside the active set, Uptime before its first
-// signing window is known. LogoURL is the Keybase picture of its identity,
+// null for a validator outside the active set, Uptime too (and while its
+// signing window is unknown). LogoURL is the Keybase picture of its identity,
 // null without an identity or a picture.
 type Validator struct {
 	Rank            *int64  `json:"rank"`
@@ -247,6 +247,22 @@ type Validator struct {
 	Offline          *bool  `json:"offline"`
 	MissedInARow     *int64 `json:"missed_in_a_row"`
 	LastSignedHeight *int64 `json:"last_signed_height"`
+	// LastSignedTime is the time of the LastSignedHeight block, null when
+	// unknown.
+	LastSignedTime *time.Time `json:"last_signed_time"`
+	// Jail is set for a currently jailed validator, null otherwise.
+	Jail *Jail `json:"jail"`
+}
+
+// Jail is how a currently jailed validator was jailed: the latest slashed
+// event after the latest unjailed one (the block that jailed it). Height and Time are null when
+// that happened below the indexed range; Reason is downtime, double_sign or
+// null when unknown. Its last signed block is the validator's top-level
+// last_signed_height / last_signed_time.
+type Jail struct {
+	Height *int64     `json:"height"`
+	Time   *time.Time `json:"time"`
+	Reason *string    `json:"reason"`
 }
 
 // RecentVotes is how many (Voted) of the last Of proposals whose voting
@@ -258,17 +274,42 @@ type RecentVotes struct {
 }
 
 // NewValidator maps a validator list row. Uptime is 1 − missed / window,
-// from the slashing module's signing info, in percent.
+// from the slashing module's signing info, in percent, null unless the
+// validator is bonded and not jailed: the slashing module stops counting
+// outside the active set, so the figure would be stale.
 func NewValidator(v repository.ValidatorSummary) Validator {
+	var up *string
+	if v.Status == "bonded" && !v.Jailed {
+		up = uptime(v.MissedBlocks, v.SignedBlocksWindow)
+	}
 	return Validator{
 		Rank: v.Rank, Moniker: v.Moniker, OperatorAddress: v.OperatorAddress, Tokens: v.Tokens,
 		VotingPowerPct: v.VotingPowerPct, CommissionRate: v.CommissionRate, Jailed: v.Jailed, Status: v.Status,
-		Uptime: uptime(v.MissedBlocks, v.SignedBlocksWindow), LogoURL: v.LogoURL,
+		Uptime: up, LogoURL: v.LogoURL,
 		MissedBlocks: v.MissedBlocks, SignedBlocksWindow: v.SignedBlocksWindow,
 		RecentVotes:  RecentVotes{Voted: v.RecentVotes, Of: v.RecentProposals},
 		Offline:      offline(v.MissedInARow),
 		MissedInARow: v.MissedInARow, LastSignedHeight: v.LastSignedHeight,
+		LastSignedTime: utc(v.LastSignedTime), Jail: newJail(v),
 	}
+}
+
+// newJail is the jail object of a jailed validator, nil for any other.
+func newJail(v repository.ValidatorSummary) *Jail {
+	if !v.Jailed {
+		return nil
+	}
+	j := &Jail{Height: v.JailHeight, Time: utc(v.JailTime)}
+	switch {
+	case v.JailReason == nil:
+	case *v.JailReason == "missing_signature":
+		r := "downtime"
+		j.Reason = &r
+	case *v.JailReason == "double_sign":
+		r := "double_sign"
+		j.Reason = &r
+	}
+	return j
 }
 
 // offline is whether missedInARow reaches repository.OfflineMissedInARow,

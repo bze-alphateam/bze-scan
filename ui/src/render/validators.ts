@@ -11,7 +11,7 @@ import type {
   ValidatorEvent,
   ValidatorVote,
 } from "@/api/types";
-import { formatAmount, formatCount, formatDate, formatDateTime, formatPct, shortAddress } from "@/lib/format";
+import { formatAmount, formatCount, formatDate, formatDateTime, formatPct, relativeTime, shortAddress } from "@/lib/format";
 import { aboutDuration } from "@/lib/parameters";
 
 // The validators pages' words and numbers, kept pure so they are tested
@@ -156,6 +156,84 @@ export function statusLine(v: ValidatorDetail, activeCount: number | null, now: 
     return `Active${rank}`;
   }
   return v.status === "unbonding" ? "Unbonding" : "Inactive";
+}
+
+/** Whether the validator is outside the active set: not bonded, or jailed. */
+export function isInactive(v: Pick<Validator, "status" | "jailed">): boolean {
+  return v.status !== "bonded" || v.jailed;
+}
+
+/** What the "X ago" texts are measured against: the clock, and the latest block with the average block time for blocks without a time. */
+export interface Timing {
+  now?: Date;
+  headHeight?: number | null;
+  avgBlockMs?: number | null;
+}
+
+/** "3 months ago" from the block's time, else "about 3 days ago" from blocks × the average block time; null when neither is known. */
+function agoOf(time: string | null | undefined, height: number | null | undefined, t: Timing): string | null {
+  if (time) return relativeTime(time, t.now);
+  if (height == null || t.headHeight == null) return null;
+  const span = blocksDuration(Math.max(t.headHeight - height, 0), t.avgBlockMs);
+  return span ? `${span} ago` : null;
+}
+
+/**
+ * The inactive row's last cell, in place of the uptime: "jailed 3 months ago" for a jailed validator (from its
+ * jail block, else "last signed" from its last signed block), "3 months ago" otherwise; "—" when unknown.
+ */
+export function lastActiveText(
+  v: Pick<Validator, "jailed" | "jail" | "last_signed_time" | "last_signed_height">,
+  t: Timing = {},
+): string {
+  if (v.jailed) {
+    const jailed = agoOf(v.jail?.time, v.jail?.height, t);
+    if (jailed) return `jailed ${jailed}`;
+    const signed = agoOf(v.last_signed_time, v.last_signed_height, t);
+    return signed ? `last signed ${signed}` : "—";
+  }
+  return agoOf(v.last_signed_time, v.last_signed_height, t) ?? "—";
+}
+
+/** The validator page's "Last signed block 1,234, 3 months ago" line for a non-jailed inactive validator; null when unknown. */
+export function lastSignedLine(
+  v: Pick<Validator, "last_signed_height" | "last_signed_time">,
+  t: Timing = {},
+): { height: number; ago: string | null } | null {
+  if (v.last_signed_height == null) return null;
+  return { height: v.last_signed_height, ago: agoOf(v.last_signed_time, v.last_signed_height, t) };
+}
+
+export interface JailLine {
+  text: string;
+  /** A block height to link, set when the line names a block. */
+  height?: number;
+}
+
+/**
+ * The lines of the Jailed card: the jail block with its reason, the last signed block, and whether it can unjail.
+ * With neither block known: "Jailed before the explorer's indexed history."
+ */
+export function jailLines(
+  v: Pick<ValidatorDetail, "jail" | "last_signed_height" | "last_signed_time" | "tombstoned" | "jailed_until">,
+  t: Timing = {},
+): JailLine[] {
+  const now = t.now ?? new Date();
+  const lines: JailLine[] = [];
+  const j = v.jail;
+  if (j?.height != null) {
+    const ago = agoOf(j.time, j.height, t);
+    const why = j.reason === "downtime" ? ", for downtime" : j.reason === "double_sign" ? ", for double signing" : "";
+    lines.push({ text: `Jailed at block ${formatCount(j.height)}${ago ? `, ${ago}` : ""}${why}.`, height: j.height });
+  }
+  if (v.last_signed_height != null) {
+    const ago = agoOf(v.last_signed_time, v.last_signed_height, t);
+    lines.push({ text: `Last signed block ${formatCount(v.last_signed_height)}${ago ? `, ${ago}` : ""}.`, height: v.last_signed_height });
+  }
+  if (lines.length === 0) lines.push({ text: "Jailed before the explorer's indexed history." });
+  if (v.tombstoned) lines.push({ text: "Tombstoned: can never unjail." });
+  else if (v.jailed_until && new Date(v.jailed_until) > now) lines.push({ text: `Can unjail after ${formatDateTime(v.jailed_until)}.` });
+  return lines;
 }
 
 /** An inactive row's standing in place of its rank. */
