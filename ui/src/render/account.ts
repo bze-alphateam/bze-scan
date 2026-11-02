@@ -426,7 +426,11 @@ export interface StakingRow {
 }
 
 /** A delegation worth under 1 base unit: the share rounding an unstake or redelegation leaves behind. */
-export const isDustDelegation = (amount: string): boolean => compareDecimals(amount, "1") < 0;
+const isDustDelegation = (amount: string): boolean => compareDecimals(amount, "1") < 0;
+
+/** How many validators the account really stakes with: its delegations, dust left out. */
+export const stakedValidators = (a: Pick<Account, "delegations">): number =>
+  a.delegations.filter((d) => !isDustDelegation(d.amount)).length;
 
 /** The Staking tab's rows, in the API's order, with dust delegations moved last. */
 export function stakingRows(a: Pick<Account, "delegations" | "rewards" | "total_staked">): StakingRow[] {

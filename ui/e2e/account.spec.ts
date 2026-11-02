@@ -92,6 +92,7 @@ test.describe("account page", () => {
     await mockApi(page, { [`v1/accounts/${ADDR}`]: dusty });
     await page.goto(`/accounts/${ADDR}?tab=staking`);
     await expect(page.getByTestId("delegation-row")).toHaveCount(2);
+    await expect(page.getByRole("tab", { name: "Staking 2 validators" })).toBeVisible();
     await page.getByTestId("dust-toggle").click();
     const rows = page.getByTestId("delegation-row");
     await expect(rows).toHaveCount(3);

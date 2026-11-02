@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Flex, Link, Stack, Text } from "@chakra-ui/react";
+import { Box, Button, Flex, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useState } from "react";
 
@@ -14,7 +14,7 @@ import { TableSkeleton } from "@/components/ui/skeleton";
 import { ValidatorChip } from "@/components/ui/validator-chip";
 import { formatCount } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
-import { amountOf, BOND_DENOM, stakingRows, unlockText, validatorStatus, type StakingRow } from "@/render/account";
+import { amountOf, BOND_DENOM, stakedValidators, stakingRows, unlockText, validatorStatus, type StakingRow } from "@/render/account";
 import { bondFull, unbondingText } from "@/render/validators";
 
 // Validator · Staked · Share of your stake (c2) · Rewards to claim (c3).
@@ -92,7 +92,7 @@ export function StakingTab({ a }: { a: Account }) {
   const all = stakingRows(a);
   const dustCount = all.filter((r) => r.dust).length;
   const rows = showDust ? all : all.filter((r) => !r.dust);
-  const n = all.length;
+  const n = stakedValidators(a);
   const rewards = amountOf(a.total_rewards, BOND_DENOM);
   const period = unbondingText(validators.data?.summary?.unbonding_period);
   const now = new Date();
@@ -154,17 +154,17 @@ export function StakingTab({ a }: { a: Account }) {
       </ListPanel>
       {dustCount > 0 && (
         <Flex mt="3" gap="2" align="baseline" wrap="wrap" fontSize="13px" color="fg.muted" data-testid="dust-note">
-          <Link
-            as="button"
-            {...{ type: "button" }}
+          <Button
+            size="xs"
+            variant="plain"
+            color="accent.fg"
             onClick={() => setShowDust((v) => !v)}
             aria-pressed={showDust}
-            color="accent.fg"
             data-testid="dust-toggle"
           >
             {showDust ? "Hide" : "Show"} dust delegations ({formatCount(dustCount)})
-          </Link>
-          <Text as="span">Leftover slivers under 1 base unit that rounding leaves after an unstake; they cannot be cleared.</Text>
+          </Button>
+          <Text as="span">Leftover slivers under 1 base unit that rounding leaves after an unstake and that usually cannot be cleared.</Text>
         </Flex>
       )}
       {a.unbonding.length > 0 && (

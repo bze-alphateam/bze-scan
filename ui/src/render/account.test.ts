@@ -26,8 +26,8 @@ import {
   originTag,
   parseModuleTab,
   parsePage,
-  isDustDelegation,
   parseTab,
+  stakedValidators,
   stakingRows,
   tokenRows,
   tokensTotalUsd,
@@ -221,8 +221,9 @@ describe("staking tab", () => {
       ["Honeycomb", true],
     ]);
     expect(stakingRows(a).some((r) => r.dust)).toBe(false);
-    expect(isDustDelegation("1")).toBe(false);
-    expect(isDustDelegation("0.4")).toBe(true);
+    const at = (amount: string) => stakingRows({ ...a, delegations: [{ ...a.delegations[0], amount }] })[0].dust;
+    expect([at("1"), at("0.4")]).toEqual([false, true]);
+    expect([stakedValidators(a), stakedValidators(dusty)]).toEqual([3, 2]);
   });
 
   it("chips a validator Active, Inactive or Jailed, with its uptime under 99%", () => {

@@ -317,7 +317,9 @@ describe("Staking tab", () => {
     const dusty = { ...plain, delegations: [{ ...plain.delegations[0], amount: "0" }, ...plain.delegations.slice(1)] };
     renderWithProviders(<AccountPage address={ADDR} initialTab="staking" />, { api: api(dusty) });
     expect(await screen.findAllByTestId("delegation-row")).toHaveLength(2);
-    expect(screen.getByTestId("dust-note")).toHaveTextContent("cannot be cleared");
+    expect(screen.getByTestId("staking-summary")).toHaveTextContent("with 2 validators");
+    expect(screen.getByRole("tab", { name: "Staking 2 validators" })).toBeInTheDocument();
+    expect(screen.getByTestId("dust-note")).toHaveTextContent("usually cannot be cleared");
     await userEvent.click(screen.getByRole("button", { name: "Show dust delegations (1)" }));
     const rows = screen.getAllByTestId("delegation-row");
     expect(rows).toHaveLength(3);
