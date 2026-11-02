@@ -328,8 +328,8 @@ describe("validators outside the active set", () => {
 
   it("words the last signed block of the page", () => {
     expect(lastSignedLine({ last_signed_height: 5, last_signed_time: "2026-11-01T11:00:00Z" }, { now })).toEqual({ height: 5, ago: "1 hour ago" });
-    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: null, last_signed_height: null }, { now })).toEqual({ height: 5, ago: null });
-    expect(lastSignedLine({ last_signed_height: null, last_signed_time: null, last_signed_height: null }, { now })).toBeNull();
+    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: null }, { now })).toEqual({ height: 5, ago: null });
+    expect(lastSignedLine({ last_signed_height: null, last_signed_time: null }, { now })).toBeNull();
   });
 
   it("measures a block without a time in blocks × the average block time", () => {
