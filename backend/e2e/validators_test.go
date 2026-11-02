@@ -445,8 +445,8 @@ func TestValidatorsOnlineFromTheirLastSignedBlock(t *testing.T) {
 	assert.Equal(t, int64(15), *detail.MissedInARow)
 }
 
-// A jailed validator carries the jail object of its latest slashed event
-// after its latest unjailed one; every other validator has none. The last
+// A jailed validator carries the jail object of its earliest slashed
+// event after its latest unjailed one; every other validator has none. The last
 // signed block is a top-level field, and uptime is null outside the active
 // set.
 func TestJailedValidatorsCarryTheirJail(t *testing.T) {
@@ -459,9 +459,9 @@ func TestJailedValidatorsCarryTheirJail(t *testing.T) {
 	}, "every bonded validator signed %d", restakeHeight)
 
 	ops := queryStrings(t, e.db, `SELECT operator_address FROM explorer.validators
-		WHERE status = 'bonded' AND NOT jailed ORDER BY tokens DESC, operator_address LIMIT 6`)
-	require.Len(t, ops, 6)
-	downtime, doubleSign, noEvent, again, unjailedAfter, free := ops[0], ops[1], ops[2], ops[3], ops[4], ops[5]
+		WHERE status = 'bonded' AND NOT jailed ORDER BY tokens DESC, operator_address LIMIT 7`)
+	require.Len(t, ops, 7)
+	downtime, doubleSign, noEvent, again, unjailedAfter, free, laterSlash := ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], ops[6]
 	jailedStatus := func(op string) {
 		_, err := e.db.Exec(`UPDATE explorer.validators SET jailed = true WHERE operator_address = $1`, op)
 		require.NoError(t, err)
@@ -477,7 +477,7 @@ func TestJailedValidatorsCarryTheirJail(t *testing.T) {
 		require.NoError(t, err)
 	}
 	h := restakeHeight
-	for _, op := range []string{downtime, doubleSign, noEvent, again, unjailedAfter} {
+	for _, op := range []string{downtime, doubleSign, noEvent, again, unjailedAfter, laterSlash} {
 		jailedStatus(op)
 	}
 	_, err := e.db.Exec(`UPDATE explorer.validators SET status = 'unbonding' WHERE operator_address = $1`, downtime)
@@ -492,6 +492,8 @@ func TestJailedValidatorsCarryTheirJail(t *testing.T) {
 	event(again, "slashed", h-10, 90005, "double_sign")
 	event(unjailedAfter, "slashed", h-20, 90006, "missing_signature")
 	event(unjailedAfter, "unjailed", h-10, 90007, "")
+	event(laterSlash, "slashed", h-10, 90009, "missing_signature")
+	event(laterSlash, "slashed", h-5, 90010, "double_sign")
 	event(free, "slashed", h-10, 90008, "missing_signature")
 
 	var blockTime time.Time
@@ -531,8 +533,13 @@ func TestJailedValidatorsCarryTheirJail(t *testing.T) {
 
 	v = byOp[again]
 	require.NotNil(t, v.Jail)
-	assert.Equal(t, h-10, *v.Jail.Height, "the latest slash wins")
+	assert.Equal(t, h-10, *v.Jail.Height, "the slash after its last unjail")
 	assert.Equal(t, "double_sign", reason(v))
+
+	v = byOp[laterSlash]
+	require.NotNil(t, v.Jail)
+	assert.Equal(t, h-10, *v.Jail.Height, "a later double-sign slash while jailed is not the jail block")
+	assert.Equal(t, "downtime", reason(v))
 
 	v = byOp[unjailedAfter]
 	require.NotNil(t, v.Jail)

@@ -317,38 +317,53 @@ describe("validators outside the active set", () => {
   });
 
   it("words the last cell of a row: jailed, last signed, or a dash", () => {
-    expect(lastActiveText({ jailed: true, jail, last_signed_time: null }, now)).toBe("jailed 2 days ago");
-    expect(lastActiveText({ jailed: true, jail: { ...jail, time: null }, last_signed_time: "2026-10-31T12:00:00Z" }, now)).toBe(
+    expect(lastActiveText({ jailed: true, jail, last_signed_time: null, last_signed_height: null }, { now })).toBe("jailed 2 days ago");
+    expect(lastActiveText({ jailed: true, jail: { ...jail, time: null }, last_signed_time: "2026-10-31T12:00:00Z", last_signed_height: 90 }, { now })).toBe(
       "last signed 1 day ago",
     );
-    expect(lastActiveText({ jailed: true, jail: { height: null, time: null, reason: null }, last_signed_time: null }, now)).toBe("—");
-    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: "2026-11-01T09:00:00Z" }, now)).toBe("3 hours ago");
-    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: null }, now)).toBe("—");
+    expect(lastActiveText({ jailed: true, jail: { height: null, time: null, reason: null }, last_signed_time: null, last_signed_height: null }, { now })).toBe("—");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: "2026-11-01T09:00:00Z", last_signed_height: 90 }, { now })).toBe("3 hours ago");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: null, last_signed_height: null }, { now })).toBe("—");
   });
 
   it("words the last signed block of the page", () => {
-    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: "2026-11-01T11:00:00Z" }, now)).toEqual({ height: 5, ago: "1 hour ago" });
-    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: null }, now)).toEqual({ height: 5, ago: null });
-    expect(lastSignedLine({ last_signed_height: null, last_signed_time: null }, now)).toBeNull();
+    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: "2026-11-01T11:00:00Z" }, { now })).toEqual({ height: 5, ago: "1 hour ago" });
+    expect(lastSignedLine({ last_signed_height: 5, last_signed_time: null, last_signed_height: null }, { now })).toEqual({ height: 5, ago: null });
+    expect(lastSignedLine({ last_signed_height: null, last_signed_time: null, last_signed_height: null }, { now })).toBeNull();
+  });
+
+  it("measures a block without a time in blocks × the average block time", () => {
+    const t = { now, headHeight: 1_000, avgBlockMs: 6_000 };
+    // 600 blocks at 6 s: an hour; the jail time wins over the height when both are known.
+    expect(lastActiveText({ jailed: true, jail: { height: 400, time: null, reason: null }, last_signed_time: null, last_signed_height: null }, t)).toBe(
+      "jailed about 1 hour ago",
+    );
+    expect(lastActiveText({ jailed: true, jail: null, last_signed_time: null, last_signed_height: 400 }, t)).toBe("last signed about 1 hour ago");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: null, last_signed_height: 400 }, t)).toBe("about 1 hour ago");
+    expect(lastActiveText({ jailed: false, jail: null, last_signed_time: null, last_signed_height: 400 }, { now })).toBe("—");
+    expect(lastSignedLine({ last_signed_height: 400, last_signed_time: null }, t)).toEqual({ height: 400, ago: "about 1 hour ago" });
+    expect(jailLines({ ...base, jail: { height: 400, time: null, reason: "downtime" } }, t)[0].text).toBe(
+      "Jailed at block 400, about 1 hour ago, for downtime.",
+    );
   });
 
   const base = { last_signed_height: null, last_signed_time: null, tombstoned: false, jailed_until: null };
 
   it("lines the Jailed card: the jail block, the last signed block, whether it can unjail", () => {
     expect(
-      jailLines({ ...base, jail, last_signed_height: 90, last_signed_time: "2026-10-30T11:00:00Z", jailed_until: "2026-11-02T00:00:00Z" }, now),
+      jailLines({ ...base, jail, last_signed_height: 90, last_signed_time: "2026-10-30T11:00:00Z", jailed_until: "2026-11-02T00:00:00Z" }, { now }),
     ).toEqual([
       { text: "Jailed at block 100, 2 days ago, for downtime.", height: 100 },
       { text: "Last signed block 90, 2 days ago.", height: 90 },
       { text: "Can unjail after Nov 2, 2026, 00:00:00 UTC." },
     ]);
-    expect(jailLines({ ...base, jail: { ...jail, reason: "double_sign" }, tombstoned: true }, now)).toEqual([
+    expect(jailLines({ ...base, jail: { ...jail, reason: "double_sign" }, tombstoned: true }, { now })).toEqual([
       { text: "Jailed at block 100, 2 days ago, for double signing.", height: 100 },
       { text: "Tombstoned: can never unjail." },
     ]);
-    expect(jailLines({ ...base, jail: { height: null, time: null, reason: null }, jailed_until: "2026-10-01T00:00:00Z" }, now)).toEqual([
+    expect(jailLines({ ...base, jail: { height: null, time: null, reason: null }, jailed_until: "2026-10-01T00:00:00Z" }, { now })).toEqual([
       { text: "Jailed before the explorer's indexed history." },
     ]);
-    expect(jailLines({ ...base, jail: null, last_signed_height: 7 }, now)).toEqual([{ text: "Last signed block 7.", height: 7 }]);
+    expect(jailLines({ ...base, jail: null, last_signed_height: 7 }, { now })).toEqual([{ text: "Last signed block 7.", height: 7 }]);
   });
 });

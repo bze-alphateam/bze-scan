@@ -125,11 +125,13 @@ function ValidatorRow({
   v,
   fame,
   avgBlockMs,
+  headHeight,
   changes,
 }: {
   v: Validator;
   fame: FameMarks | null;
   avgBlockMs: number | null;
+  headHeight: number | null;
   changes: StakeChanges | undefined;
 }) {
   const member = fame?.members.get(v.operator_address);
@@ -162,7 +164,7 @@ function ValidatorRow({
             )}
             {v.jailed && (
               <Text as="span" hideFrom="c3" ms="2" color="fg.muted" fontSize="12px" data-testid="jailed-ago">
-                {lastActiveText(v)}
+                {lastActiveText(v, { avgBlockMs, headHeight })}
               </Text>
             )}
             {v.status === "unbonding" && (
@@ -188,7 +190,7 @@ function ValidatorRow({
       </Text>
       <Flex hideBelow="c3" justify="flex-end" align="center" gap="1" fontFamily="mono" fontSize="13px">
         <Text as="span" color={tone === "bad" ? "neg.fg" : tone === "muted" ? "fg.muted" : "fg"}>
-          {inactive ? lastActiveText(v) : uptimeText(v.uptime)}
+          {inactive ? lastActiveText(v, { avgBlockMs, headHeight }) : uptimeText(v.uptime)}
         </Text>
         <OnlineDot v={v} avgBlockMs={avgBlockMs} />
       </Flex>
@@ -197,7 +199,9 @@ function ValidatorRow({
 }
 
 function ValidatorTable({ items, empty, fame, inactive = false }: { items: Validator[]; empty: string; fame: FameMarks | null; inactive?: boolean }) {
-  const avgBlockMs = useStats().data?.avg_block_time_ms ?? null;
+  const stats = useStats().data;
+  const avgBlockMs = stats?.avg_block_time_ms ?? null;
+  const headHeight = stats?.latest_height ?? null;
   // The change fills in when it answers; the table never waits for it.
   const changes = useStakeChanges().data;
   return (
@@ -215,12 +219,12 @@ function ValidatorTable({ items, empty, fame, inactive = false }: { items: Valid
           Commission
         </Text>
         <Text hideBelow="c3" textAlign="right">
-          {inactive ? "Last signed" : "Uptime"}
+          {inactive ? "Last active" : "Uptime"}
         </Text>
       </ListHead>
       <Box role="list" aria-label="Validators">
         {items.map((v) => (
-          <ValidatorRow key={v.operator_address} v={v} fame={fame} avgBlockMs={avgBlockMs} changes={changes} />
+          <ValidatorRow key={v.operator_address} v={v} fame={fame} avgBlockMs={avgBlockMs} headHeight={headHeight} changes={changes} />
         ))}
       </Box>
       {items.length === 0 && (

@@ -181,7 +181,9 @@ func TestTheValidatorPageAndProposerNames(t *testing.T) {
 	assert.Equal(t, "slashed", v.Events[0].Kind)
 	assert.Equal(t, hSlash, v.Events[0].Height)
 	assert.Nil(t, v.Events[0].TxHash)
-	assert.Equal(t, v.Status == "bonded" && !v.Jailed, v.Uptime != nil, "uptime only inside the active set")
+	assert.Equal(t, "unbonded", v.Status)
+	assert.True(t, v.Jailed)
+	assert.Nil(t, v.Uptime, "no uptime outside the active set")
 	assert.NotNil(t, v.Votes)
 
 	// BonyNode: two events, newest first, each with its transaction.

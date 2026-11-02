@@ -159,9 +159,17 @@ function BlockLine({ text, height }: { text: string; height?: number }) {
 }
 
 /** The validator page's red card for a jailed validator: the jail block, the last signed block, whether it can unjail. */
-export function JailedCallout({ v }: { v: Pick<ValidatorDetail, "jailed" | "jail" | "last_signed_height" | "last_signed_time" | "tombstoned" | "jailed_until" | "moniker"> }) {
+export function JailedCallout({
+  v,
+  avgBlockMs,
+  headHeight,
+}: {
+  avgBlockMs: number | null;
+  headHeight: number | null;
+  v: Pick<ValidatorDetail, "jailed" | "jail" | "last_signed_height" | "last_signed_time" | "tombstoned" | "jailed_until" | "moniker">;
+}) {
   if (!v.jailed) return null;
-  const lines = jailLines(v);
+  const lines = jailLines(v, { avgBlockMs, headHeight });
   return (
     <Callout tone="bad" title="Jailed: not producing blocks" mt="5" data-testid="jailed-callout">
       {lines.map((line, i) => (

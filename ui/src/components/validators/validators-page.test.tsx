@@ -324,7 +324,7 @@ describe("ValidatorsPage", () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     await userEvent.click(await screen.findByRole("tab", { name: "Inactive 2" }));
     await waitFor(() => expect(screen.getAllByTestId("validator-row")).toHaveLength(2));
-    expect(screen.getByText("Last signed")).toBeInTheDocument();
+    expect(screen.getByText("Last active")).toBeInTheDocument();
     expect(screen.queryByText("Uptime")).not.toBeInTheDocument();
     const [jailed, old] = screen.getAllByTestId("validator-row");
     // Sleepy Node: jailed, never "last signed"; the narrow-screen copy follows its tag.
@@ -339,7 +339,7 @@ describe("ValidatorsPage", () => {
     renderWithProviders(<ValidatorsPage />, { api: api() });
     await openActive();
     expect(screen.getByText("Uptime")).toBeInTheDocument();
-    expect(screen.queryByText("Last signed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Last active")).not.toBeInTheDocument();
   });
 
   it("shows each validator's picture, else its initials", async () => {

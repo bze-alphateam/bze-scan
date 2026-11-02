@@ -49,7 +49,7 @@ test.describe("validators list", () => {
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).first()).toContainText("Sleepy Node");
     await expect(rows(page).first()).toContainText("Jailed");
-    // A jailed row says when, an unbonded one when it last signed; the column is "Last signed", not "Uptime".
+    // A jailed row says when, an unbonded one when it last signed; the column is "Last active", not "Uptime".
     await expect(rows(page).first()).toContainText(/jailed .* ago/);
     await expect(rows(page).first()).not.toContainText("last signed");
     await expect(rows(page).nth(1)).toContainText(/ago/);

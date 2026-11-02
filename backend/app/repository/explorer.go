@@ -447,7 +447,7 @@ type ValidatorSummary struct {
 	// LastSignedTime is the time of the LastSignedHeight block, nil when
 	// either is unknown.
 	LastSignedTime *time.Time
-	// JailHeight, JailTime and JailReason are the latest slashed event of a
+	// JailHeight, JailTime and JailReason are the earliest slashed event after the latest unjailed one of a
 	// currently jailed validator, when no unjailed event is newer; nil
 	// otherwise (the jail happened below the indexed range, or the validator
 	// is not jailed). JailReason is the slash event's details.reason.
@@ -463,15 +463,16 @@ const OfflineMissedInARow = 10
 // signingCols are last_signed_height and the missed-in-a-row count of the
 // validators row aliased t (see ValidatorSummary).
 func signingCols(t string) string {
-	// The jail columns read the latest slashed event after the latest
-	// unjailed one (idx_validator_events_val serves both lookups).
+	// The jail columns read the earliest slashed event after the latest
+	// unjailed one (the block that jailed it: x/evidence still slashes an
+	// already jailed validator on a double sign, a later event) (idx_validator_events_val serves both lookups).
 	jail := func(col string) string {
 		return `CASE WHEN ` + t + `.jailed THEN (
 		  SELECT ` + col + ` FROM explorer.validator_events e
 		   WHERE e.operator_address = ` + t + `.operator_address AND e.kind = 'slashed'
 		     AND e.height > coalesce((SELECT max(u.height) FROM explorer.validator_events u
 		                               WHERE u.operator_address = ` + t + `.operator_address AND u.kind = 'unjailed'), 0)
-		   ORDER BY e.height DESC, e.tx_index DESC, e.seq DESC LIMIT 1) END`
+		   ORDER BY e.height, e.tx_index, e.seq LIMIT 1) END`
 	}
 	return t + `.last_signed_height,
 		CASE WHEN ` + t + `.status = 'bonded' AND NOT ` + t + `.jailed THEN (

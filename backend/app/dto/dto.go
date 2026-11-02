@@ -255,7 +255,7 @@ type Validator struct {
 }
 
 // Jail is how a currently jailed validator was jailed: the latest slashed
-// event, unless an unjailed event is newer. Height and Time are null when
+// event after the latest unjailed one (the block that jailed it). Height and Time are null when
 // that happened below the indexed range; Reason is downtime, double_sign or
 // null when unknown. Its last signed block is the validator's top-level
 // last_signed_height / last_signed_time.
