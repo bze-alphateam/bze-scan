@@ -87,6 +87,18 @@ test.describe("account page", () => {
     await noHorizontalScroll(page);
   });
 
+  test("hides dust delegations on the Staking tab until asked", async ({ page }) => {
+    const dusty = { ...plain, delegations: [{ ...plain.delegations[0], amount: "0" }, ...plain.delegations.slice(1)] };
+    await mockApi(page, { [`v1/accounts/${ADDR}`]: dusty });
+    await page.goto(`/accounts/${ADDR}?tab=staking`);
+    await expect(page.getByTestId("delegation-row")).toHaveCount(2);
+    await page.getByTestId("dust-toggle").click();
+    const rows = page.getByTestId("delegation-row");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(2)).toContainText("Honeycomb");
+    await noHorizontalScroll(page);
+  });
+
   test("opens the Tokens tab straight from ?tab=tokens", async ({ page }) => {
     await page.goto(`/accounts/${ADDR}?tab=tokens`);
     await expect(page.getByRole("tab", { name: "Tokens 5" })).toHaveAttribute("aria-selected", "true");

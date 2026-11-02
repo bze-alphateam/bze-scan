@@ -2,6 +2,7 @@
 
 import { Box, Flex, Link, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
+import { useState } from "react";
 
 import { AppLink } from "@/components/layout/app-link";
 import { useAllValidators } from "@/api/hooks";
@@ -78,6 +79,7 @@ function Row({ row, v }: { row: StakingRow; v: Validator | undefined }) {
 /** The Staking tab: the delegations with their validators' status, a total, and what is unstaking. */
 export function StakingTab({ a }: { a: Account }) {
   const validators = useAllValidators();
+  const [showDust, setShowDust] = useState(false);
   if (!validators.data && !validators.error) return <TableSkeleton rows={Math.max(a.delegations.length, 3)} columns={4} />;
   if (!a.live.available) {
     return (
@@ -87,8 +89,10 @@ export function StakingTab({ a }: { a: Account }) {
     );
   }
   const byOperator = new Map(validators.data?.items.map((v) => [v.operator_address, v]));
-  const rows = stakingRows(a);
-  const n = rows.length;
+  const all = stakingRows(a);
+  const dustCount = all.filter((r) => r.dust).length;
+  const rows = showDust ? all : all.filter((r) => !r.dust);
+  const n = all.length;
   const rewards = amountOf(a.total_rewards, BOND_DENOM);
   const period = unbondingText(validators.data?.summary?.unbonding_period);
   const now = new Date();
@@ -122,9 +126,9 @@ export function StakingTab({ a }: { a: Account }) {
             <Row key={row.validator} row={row} v={byOperator.get(row.validator)} />
           ))}
         </Box>
-        {n === 0 ? (
+        {rows.length === 0 ? (
           <Text px="4" py="22px" color="fg.muted" fontSize="13px" textAlign="center">
-            This account stakes with no validator.
+            {dustCount > 0 ? "This account stakes only dust delegations." : "This account stakes with no validator."}
           </Text>
         ) : (
           <ListRow
@@ -148,6 +152,21 @@ export function StakingTab({ a }: { a: Account }) {
           </ListRow>
         )}
       </ListPanel>
+      {dustCount > 0 && (
+        <Flex mt="3" gap="2" align="baseline" wrap="wrap" fontSize="13px" color="fg.muted" data-testid="dust-note">
+          <Link
+            as="button"
+            {...{ type: "button" }}
+            onClick={() => setShowDust((v) => !v)}
+            aria-pressed={showDust}
+            color="accent.fg"
+            data-testid="dust-toggle"
+          >
+            {showDust ? "Hide" : "Show"} dust delegations ({formatCount(dustCount)})
+          </Link>
+          <Text as="span">Leftover slivers under 1 base unit that rounding leaves after an unstake; they cannot be cleared.</Text>
+        </Flex>
+      )}
       {a.unbonding.length > 0 && (
         <ListPanel mt="5">
           <PanelHead id="unstaking-head" title={`Unstaking · ${formatCount(a.unbonding.length)}`} />
