@@ -1,6 +1,7 @@
 "use client";
 
 import { Box, Grid, HStack, Heading, Text } from "@chakra-ui/react";
+import { useMemo } from "react";
 
 import type { Message } from "@/api/types";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -13,7 +14,8 @@ interface Field {
 /**
  * One row per leaf of a message body: nested objects as `amount.denom`, arrays as `routes[0].pool_id`.
  * Values stay exactly as the chain sent them: strings verbatim, other scalars as their JSON text,
- * empty arrays and objects as `[]` and `{}`.
+ * empty arrays and objects as `[]` and `{}`. This is exact because the backend passes the chain's
+ * protojson through verbatim, and protojson already encodes 64-bit ints and Decs as strings.
  */
 function flatten(value: unknown, path: string, out: Field[]): Field[] {
   if (Array.isArray(value)) {
@@ -21,7 +23,7 @@ function flatten(value: unknown, path: string, out: Field[]): Field[] {
     value.forEach((v, i) => flatten(v, `${path}[${i}]`, out));
   } else if (value !== null && typeof value === "object") {
     const entries = Object.entries(value);
-    if (entries.length === 0) out.push({ path, value: "{}" });
+    if (entries.length === 0 && path) out.push({ path, value: "{}" });
     for (const [k, v] of entries) flatten(v, path ? `${path}.${k}` : k, out);
   } else {
     out.push({ path, value: typeof value === "string" ? value : JSON.stringify(value) ?? "null" });
@@ -45,7 +47,8 @@ function FieldTable({ fields }: { fields: Field[] }) {
       {fields.map((f, i) => {
         const line = i < fields.length - 1 ? { borderBottomWidth: "1px", borderColor: "border.panel" } : {};
         return (
-          <Box key={f.path || i} display="contents">
+          // Paths can collide (`{"a.b": 1, "a": {"b": 2}}`), so rows are keyed by position.
+          <Box key={i} display="contents">
             <Text as="dt" gridColumn={PATH_SPAN} pl="4" pt="10px" pb={PATH_PB} color="fg.muted" overflowWrap="anywhere" {...(i < fields.length - 1 ? { borderBottomWidth: PATH_LINE, borderColor: "border.panel" } : {})}>
               {f.path}
             </Text>
@@ -62,33 +65,44 @@ function FieldTable({ fields }: { fields: Field[] }) {
   );
 }
 
+function MessageBlock({ msg }: { msg: Message }) {
+  const fields = useMemo(() => (msg.body ? flatten(msg.body, "", []) : null), [msg.body]);
+  const n = msg.msg_index + 1;
+  return (
+    <Box as="section" aria-label={`Message ${n}`} borderTopWidth="1px" borderColor="border.panel">
+      <HStack px="4" py="10px" gap="2" wrap="wrap" borderBottomWidth="1px" borderColor="border.panel">
+        <Heading as="h3" fontSize="13px" fontWeight="500" whiteSpace="nowrap">
+          Message {n} · {shortType(msg.type_url)}
+        </Heading>
+        <Text as="span" fontFamily="mono" fontSize="12px" color="fg.muted" overflowWrap="anywhere" minW="0">
+          {msg.type_url}
+        </Text>
+      </HStack>
+      {fields === null ? (
+        <Note>The explorer cannot decode this message type, so its fields are not available.</Note>
+      ) : fields.length === 0 ? (
+        <Note>This message has no fields.</Note>
+      ) : (
+        <FieldTable fields={fields} />
+      )}
+    </Box>
+  );
+}
+
+const Note = ({ children }: { children: string }) => (
+  <Text px="4" py="10px" fontSize="sm" color="fg.muted">
+    {children}
+  </Text>
+);
+
 /** "More details": every message's fields as the chain has them, one block per message in message order. */
 export function MessageFields({ messages }: { messages: Message[] }) {
-  const ordered = [...messages].sort((a, b) => a.msg_index - b.msg_index);
+  const ordered = useMemo(() => [...messages].sort((a, b) => a.msg_index - b.msg_index), [messages]);
   return (
     <>
-      {ordered.map((m, i) => {
-        const fields = m.body ? flatten(m.body, "", []) : null;
-        return (
-          <Box as="section" key={m.msg_index} aria-label={`Message ${i + 1}`} borderTopWidth="1px" borderColor="border.panel">
-            <HStack px="4" py="10px" gap="2" wrap="wrap" borderBottomWidth="1px" borderColor="border.panel">
-              <Heading as="h3" fontSize="13px" fontWeight="500" whiteSpace="nowrap">
-                Message {i + 1} · {shortType(m.type_url)}
-              </Heading>
-              <Text as="span" fontFamily="mono" fontSize="12px" color="fg.muted" overflowWrap="anywhere" minW="0">
-                {m.type_url}
-              </Text>
-            </HStack>
-            {fields === null ? (
-              <Text px="4" py="10px" fontSize="sm" color="fg.muted">
-                The explorer cannot decode this message type, so its fields are not available.
-              </Text>
-            ) : (
-              <FieldTable fields={fields} />
-            )}
-          </Box>
-        );
-      })}
+      {ordered.map((m) => (
+        <MessageBlock key={m.msg_index} msg={m} />
+      ))}
     </>
   );
 }

@@ -333,6 +333,16 @@ describe("TxPage message fields", () => {
     expect(block.compareDocumentPosition(raw) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("copies a row's exact value", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderWithProviders(<TxPage hash={SEND} />, { api: api(sendTx) });
+    await user.click(await screen.findByRole("button", { name: /More details/ }));
+    await user.click(screen.getByRole("button", { name: "Copy amount[0].amount" }));
+    expect(writeText).toHaveBeenCalledWith("10000000");
+  });
+
   it("flattens nested objects and arrays", async () => {
     await openDetails(ibcTx);
     expect(value(1, "token.denom")).toHaveTextContent(/^ibc\/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2$/);
@@ -341,7 +351,7 @@ describe("TxPage message fields", () => {
   });
 
   it("shows one block per message in message order", async () => {
-    await openDetails(dexTx);
+    await openDetails({ ...dexTx, messages: [...dexTx.messages].reverse() });
     const headings = screen.getAllByRole("heading", { level: 3, name: /^Message \d/ });
     expect(headings.map((h) => h.textContent)).toEqual(["Message 1 · MsgCreateOrder", "Message 2 · MsgClaimStakingRewards"]);
     expect(value(1, "price")).toHaveTextContent(/^0\.0125$/);
@@ -363,8 +373,10 @@ describe("TxPage message fields", () => {
             options: {},
             memo: null,
             enabled: false,
-            count: 3,
+            count: 1234567,
             note: "line one\nline two",
+            quoted: 'say "hi"',
+            blank: "",
           },
         },
         { ...send, msg_index: 0, type_url: "/bze.v9.MsgFromTheFuture", body: null },
@@ -383,7 +395,26 @@ describe("TxPage message fields", () => {
     expect(value(2, "options")).toHaveTextContent(/^\{\}$/);
     expect(value(2, "memo")).toHaveTextContent(/^null$/);
     expect(value(2, "enabled")).toHaveTextContent(/^false$/);
-    expect(value(2, "count")).toHaveTextContent(/^3$/);
+    // Ungrouped, and strings verbatim (not JSON-quoted or escaped).
+    expect(value(2, "count")!.textContent).toBe("1234567");
+    expect(value(2, "quoted")!.textContent).toBe('say "hi"');
+    expect(value(2, "blank")!.textContent).toBe("");
     expect(value(2, "note")!.textContent).toBe("line one\nline two");
+  });
+
+  it("says a message with an empty body has no fields", async () => {
+    await openDetails({ ...sendTx, messages: [{ ...sendTx.messages[0], body: {} }] });
+    const block = screen.getByRole("region", { name: "Message 1" });
+    expect(within(block).getByText("This message has no fields.")).toBeInTheDocument();
+    expect(within(block).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("keeps both rows when two paths collide, without a duplicate React key", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    await openDetails({ ...sendTx, messages: [{ ...sendTx.messages[0], body: { "a.b": "flat", a: { b: "nested" } } }] });
+    const rows = within(screen.getByRole("region", { name: "Message 1" })).getAllByText("a.b", { selector: "dt" });
+    expect(rows.map((dt) => dt.nextElementSibling!.textContent)).toEqual(["flat", "nested"]);
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/);
+    errors.mockRestore();
   });
 });
