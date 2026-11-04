@@ -199,7 +199,7 @@ export function TxView({ tx }: { tx: Tx }) {
       </Section>
       <Overview tx={tx} ctx={ctx} />
       <Box mt="4">
-        <MoreDetails hint="gas, message types, raw JSON">
+        <MoreDetails hint="gas, message fields, raw JSON">
           <TxDetails tx={tx} />
         </MoreDetails>
       </Box>

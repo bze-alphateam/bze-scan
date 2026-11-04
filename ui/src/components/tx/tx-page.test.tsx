@@ -304,3 +304,86 @@ describe("TxPage app links", () => {
     expect(screen.queryByTestId("tx-apps")).not.toBeInTheDocument();
   });
 });
+
+describe("TxPage message fields", () => {
+  async function openDetails(tx: unknown) {
+    renderWithProviders(<TxPage hash={(tx as Tx).hash} />, { api: api(tx) });
+    await userEvent.click(await screen.findByRole("button", { name: /More details/ }));
+  }
+
+  /** The value cell of the row whose path is `path`, inside message block `n`. */
+  function value(n: number, path: string) {
+    const block = screen.getByRole("region", { name: `Message ${n}` });
+    return within(block).getByText(path, { selector: "dt" }).nextElementSibling;
+  }
+
+  it("lists a send's fields with the chain's exact values", async () => {
+    await openDetails(sendTx);
+
+    const block = screen.getByRole("region", { name: "Message 1" });
+    expect(within(block).getByRole("heading", { level: 3, name: "Message 1 · MsgSend" })).toBeInTheDocument();
+    expect(within(block).getByText("/cosmos.bank.v1beta1.MsgSend")).toBeInTheDocument();
+    expect(value(1, "from_address")).toHaveTextContent(/^bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw$/);
+    expect(value(1, "amount[0].denom")).toHaveTextContent(/^ubze$/);
+    // No unit conversion, no grouping.
+    expect(value(1, "amount[0].amount")).toHaveTextContent(/^10000000$/);
+    expect(within(block).getByRole("button", { name: "Copy amount[0].amount" })).toBeInTheDocument();
+    // Above the raw transaction.
+    const raw = screen.getByRole("heading", { level: 3, name: "Raw transaction" });
+    expect(block.compareDocumentPosition(raw) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("flattens nested objects and arrays", async () => {
+    await openDetails(ibcTx);
+    expect(value(1, "token.denom")).toHaveTextContent(/^ibc\/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2$/);
+    expect(value(1, "timeout_height.revision_height")).toHaveTextContent(/^0$/);
+    expect(value(1, "timeout_timestamp")).toHaveTextContent(/^1791000000000000000$/);
+  });
+
+  it("shows one block per message in message order", async () => {
+    await openDetails(dexTx);
+    const headings = screen.getAllByRole("heading", { level: 3, name: /^Message \d/ });
+    expect(headings.map((h) => h.textContent)).toEqual(["Message 1 · MsgCreateOrder", "Message 2 · MsgClaimStakingRewards"]);
+    expect(value(1, "price")).toHaveTextContent(/^0\.0125$/);
+    expect(value(1, "amount")).toHaveTextContent(/^1000000000$/);
+    expect(value(2, "reward_id")).toHaveTextContent(/^12$/);
+  });
+
+  it("keeps empty, null and non-string values as they are, sorts by msg_index and says when a body is undecodable", async () => {
+    const [send] = sendTx.messages;
+    const tx = {
+      ...sendTx,
+      msg_types: ["/bze.v9.MsgFromTheFuture", "/cosmos.bank.v1beta1.MsgSend"],
+      messages: [
+        {
+          ...send,
+          msg_index: 1,
+          body: {
+            routes: [{ pool_id: "ubze_uvdl", hops: [] }],
+            options: {},
+            memo: null,
+            enabled: false,
+            count: 3,
+            note: "line one\nline two",
+          },
+        },
+        { ...send, msg_index: 0, type_url: "/bze.v9.MsgFromTheFuture", body: null },
+      ],
+    };
+    await openDetails(tx);
+
+    const headings = screen.getAllByRole("heading", { level: 3, name: /^Message \d/ });
+    expect(headings.map((h) => h.textContent)).toEqual(["Message 1 · MsgFromTheFuture", "Message 2 · MsgSend"]);
+    const undecoded = screen.getByRole("region", { name: "Message 1" });
+    expect(within(undecoded).getByText(/cannot decode this message type/)).toBeInTheDocument();
+    expect(within(undecoded).queryByRole("term")).not.toBeInTheDocument();
+
+    expect(value(2, "routes[0].pool_id")).toHaveTextContent(/^ubze_uvdl$/);
+    expect(value(2, "routes[0].hops")).toHaveTextContent(/^\[\]$/);
+    expect(value(2, "options")).toHaveTextContent(/^\{\}$/);
+    expect(value(2, "memo")).toHaveTextContent(/^null$/);
+    expect(value(2, "enabled")).toHaveTextContent(/^false$/);
+    expect(value(2, "count")).toHaveTextContent(/^3$/);
+    expect(value(2, "note")!.textContent).toBe("line one\nline two");
+  });
+});
