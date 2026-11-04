@@ -22,6 +22,8 @@ import { externalLinks } from "@/lib/links";
 import { coinsText } from "@/render/messages/common";
 import type { RenderContext } from "@/render/messages/types";
 
+import { MessageFields } from "./message-fields";
+
 const blockHref = (height: number) => `/blocks/${height}`;
 
 export function pingPubTxUrl(hash: string): string {
@@ -185,7 +187,7 @@ function PingPubOpen({ hash, ...props }: { hash: string } & Omit<LinkProps, "hre
   );
 }
 
-/** The content of "More details": gas, message types, the raw transaction and Ping.pub. */
+/** The content of "More details": gas, message types, every message's fields, the raw transaction and Ping.pub. */
 export function TxDetails({ tx }: { tx: Tx }) {
   return (
     <ListPanel>
@@ -217,6 +219,7 @@ export function TxDetails({ tx }: { tx: Tx }) {
           ))}
         </DetailRow>
       </DetailList>
+      <MessageFields messages={tx.messages} />
       <HStack gap="0.5" px="2" borderTopWidth="1px" borderColor="border.panel">
         <Heading
           as="h3"

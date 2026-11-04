@@ -46,6 +46,9 @@ test.describe("transaction page", () => {
     await page.getByRole("button", { name: /More details/ }).click();
     await expect(page.locator("dt", { hasText: "Gas" }).locator("xpath=following-sibling::dd[1]")).toHaveText(/^81,234\s*of\s*200,000$/);
     await expect(page.getByText(/"gas_used": "81234"/)).toBeVisible();
+    const message = page.getByRole("region", { name: "Message 1" });
+    await expect(message.getByRole("heading", { name: "Message 1 · MsgSend" })).toBeVisible();
+    await expect(message.locator("dt", { hasText: "amount[0].amount" }).locator("xpath=following-sibling::dd[1]")).toHaveText("10000000");
     await expect(page.getByRole("link", { name: /Open on Ping.pub/ })).toHaveAttribute("href", `https://explorer.getbze.com/beezee/tx/${SEND}`);
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
