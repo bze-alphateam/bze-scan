@@ -518,6 +518,8 @@ export type ActivityCategory =
 
 export interface ActivityParams extends PageParams {
   category?: ActivityCategory;
+  /** Only the rows whose deltas hold this base denom (the fee included). */
+  denom?: string;
   /** A numbered page (1 = newest), `limit` rows each; the answer then carries `total`. */
   page?: number;
 }
