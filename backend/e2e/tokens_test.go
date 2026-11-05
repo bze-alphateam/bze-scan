@@ -347,6 +347,7 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 		swap     = "/bze.tradebin.MsgMultiSwap"
 		addLiq   = "/bze.tradebin.MsgAddLiquidity"
 		exec     = "/cosmos.authz.v1beta1.MsgExec"
+		send     = "/cosmos.bank.v1beta1.MsgSend"
 		execBody = `{"grantee":"bze1b","msgs":[{"@type":"/bze.tradebin.MsgMultiSwap"},{"@type":"/bze.tradebin.MsgMultiSwap"}]}`
 		mixed    = `{"grantee":"bze1b","msgs":[{"@type":"/bze.tradebin.MsgMultiSwap"},{"@type":"/cosmos.bank.v1beta1.MsgSend"}]}`
 	)
@@ -363,7 +364,15 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 			hOrders, m.txIndex, vdlDenom)
 		require.NoError(t, err)
 	}
-	_, err := e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
+	// A two-message transaction: each transfer takes its own message's type.
+	_, err := e.db.Exec(`INSERT INTO explorer.messages (height, tx_index, msg_index, type_url, sender, body)
+		VALUES ($1, 904, 0, $2, 'bze1a', '{}'), ($1, 904, 1, $3, 'bze1a', '{}')`, hOrders, send, swap)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
+		VALUES ($1, 904, 0, NULL, 'transfer', 'bze1a', 'bze1fee', $2, 1), ($1, 904, 1, 0, 'transfer', 'bze1a', 'bze1b', $2, 2),
+			($1, 904, 2, 1, 'transfer', 'bze1a', 'bze1b', $2, 3)`, hOrders, vdlDenom)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
 		VALUES ($1, -1, 9000, NULL, 'transfer', 'bze1a', 'bze1b', $2, 3)`, hOrders, vdlDenom)
 	require.NoError(t, err)
 
@@ -372,6 +381,7 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 		seq     int64
 	}
 	got := map[key]*string{}
+	rows := 0
 	next := base + "/api/v1/tokens/" + url.PathEscape(vdlDenom) + "/transfers?limit=100"
 	for {
 		r := fetch(t, next)
@@ -380,6 +390,7 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 		for _, x := range page.Items {
 			if x.TxIndex >= 900 || x.Seq == 9000 {
 				got[key{x.TxIndex, x.Seq}] = x.MsgType
+				rows++
 			}
 		}
 		if page.NextCursor == nil {
@@ -395,12 +406,14 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(r.body, &raw))
 	require.Len(t, raw.Items, 1)
-	assert.JSONEq(t, `"`+exec+`"`, string(raw.Items[0]["msg_type"]), "the newest row, tx 903's mixed MsgExec")
+	assert.JSONEq(t, `"`+swap+`"`, string(raw.Items[0]["msg_type"]), "the newest row, tx 904's second message")
 	assert.Equal(t, map[key]*string{
 		{900, 0}: nil, {900, 1}: strp(swap),
 		{901, 0}: nil, {901, 1}: strp(addLiq),
 		{902, 0}: nil, {902, 1}: strp(swap),
 		{903, 0}: nil, {903, 1}: strp(exec),
+		{904, 0}: nil, {904, 1}: strp(send), {904, 2}: strp(swap),
 		{-1, 9000}: nil,
 	}, got)
+	assert.Equal(t, 12, rows, "one row per transfer, the message join adds none")
 }
