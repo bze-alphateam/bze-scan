@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,8 +56,30 @@ func TestDenomHistoryPagesNewestFirst(t *testing.T) {
 	assert.Contains(t, db.sql[0], "ORDER BY e.height DESC, e.tx_index DESC, e.seq DESC")
 	assert.Equal(t, []any{"ubze", 21, int64(9), int64(-1), int64(2)}, db.args[0])
 	assert.NotContains(t, db.sql[1], "$3", "the first page has no keyset")
-	assert.Contains(t, db.sql[1], "WHERE x.denom = $1")
-	assert.Contains(t, db.sql[1], "ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC")
+	assert.Contains(t, db.sql[1], "WHERE x.denom = $1\n")
+	assert.Contains(t, db.sql[1], "ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC LIMIT $2) x")
+	assert.Contains(t, db.sql[1], "JOIN explorer.blocks b ON b.height = x.height\n\t\t\tWHERE", "a row without its block stays out of the page")
+	assert.Contains(t, db.sql[1], "LIMIT $2) x\n\t\tLEFT JOIN explorer.transactions t")
+	assert.Equal(t, []any{"ubze", 26}, db.args[1])
+
+	_, err = r.DenomTransfers(context.Background(), "ubze", before, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[2], "WHERE x.denom = $1 AND (x.height, x.tx_index, x.seq) < ($3, $4, $5)")
+	assert.Equal(t, []any{"ubze", 26, int64(9), int64(-1), int64(2)}, db.args[2])
+}
+
+// A denom's transfers look their message type up on the messages primary
+// key, inside the page: the row's own msg_index, null for the fee and the
+// block-level rows, which then probe nothing.
+func TestDenomTransfersProbeTheirMessageByPrimaryKey(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	_, err := repository.NewExplorer(db).DenomTransfers(context.Background(), "ubze", nil, 26)
+	assert.ErrorIs(t, err, errDB)
+	sql := db.sql[0]
+	assert.Contains(t, sql, "m.msg_type\n")
+	assert.Contains(t, sql, "FROM explorer.messages m\n\t\tWHERE m.height = x.height AND m.tx_index = x.tx_index AND m.msg_index = x.msg_index) m ON true")
+	assert.Contains(t, sql, "m.type_url = '/cosmos.authz.v1beta1.MsgExec'", "MsgExec unwraps to its inner type")
+	assert.Less(t, strings.Index(sql, "LIMIT $2) x"), strings.Index(sql, "explorer.messages"), "the page is cut before the lookup")
 }
 
 func TestBlockTransfersPageByIndexThenSeq(t *testing.T) {

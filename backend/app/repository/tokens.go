@@ -135,6 +135,10 @@ type DenomTransfer struct {
 	TxIndex int64
 	TxHash  *string
 	Time    time.Time
+	// MsgType is the type_url of the message the row belongs to (the inner
+	// type of an authz MsgExec whose messages all share one), nil for the fee
+	// and block-level rows.
+	MsgType *string
 }
 
 // kindRank is the SQL rank of a denoms row's kind.
@@ -245,7 +249,10 @@ func (r *Explorer) TokenEvents(ctx context.Context, denom string, before *EventK
 }
 
 // DenomTransfers returns up to limit transfers rows of denom, newest first,
-// before the key before (from the newest when nil).
+// before the key before (from the newest when nil), each with the type of
+// its message. The page is cut first on the (denom, height) index, so the
+// joins, the message lookup included (one primary-key probe of messages by
+// height, tx_index and msg_index), run only for its rows.
 func (r *Explorer) DenomTransfers(ctx context.Context, denom string, before *EventKey, limit int) ([]DenomTransfer, error) {
 	args := []any{denom, limit}
 	keyset := ""
@@ -253,16 +260,18 @@ func (r *Explorer) DenomTransfers(ctx context.Context, denom string, before *Eve
 		args = append(args, before.Height, before.TxIndex, before.Seq)
 		keyset = ` AND (x.height, x.tx_index, x.seq) < ($3, $4, $5)`
 	}
-	rows, err := r.db.Query(ctx, `SELECT x.height, x.tx_index, t.hash, b.time, x.seq, x.msg_index, x.kind,
-			x.sender, x.recipient, x.denom, x.amount::text, d.symbol, d.exponent, ls.name, ls.kind, lr.name, lr.kind
-		FROM explorer.transfers x
-		JOIN explorer.blocks b ON b.height = x.height
+	rows, err := r.db.Query(ctx, `SELECT x.height, x.tx_index, t.hash, x.time, x.seq, x.msg_index, x.kind,
+			x.sender, x.recipient, x.denom, x.amount::text, d.symbol, d.exponent, ls.name, ls.kind, lr.name, lr.kind,
+			m.msg_type
+		FROM (SELECT x.*, b.time FROM explorer.transfers x
+			JOIN explorer.blocks b ON b.height = x.height
+			WHERE x.denom = $1`+keyset+`
+			ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC LIMIT $2) x
 		LEFT JOIN explorer.transactions t ON t.height = x.height AND t.tx_index = x.tx_index
 		LEFT JOIN explorer.denoms d ON d.denom = x.denom
 		LEFT JOIN explorer.labels ls ON ls.address = x.sender
-		LEFT JOIN explorer.labels lr ON lr.address = x.recipient
-		WHERE x.denom = $1`+keyset+`
-		ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC LIMIT $2`, args...)
+		LEFT JOIN explorer.labels lr ON lr.address = x.recipient`+msgTypeJoin+`
+		ORDER BY x.height DESC, x.tx_index DESC, x.seq DESC`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("denom transfers %s: %w", denom, err)
 	}
@@ -271,7 +280,7 @@ func (r *Explorer) DenomTransfers(ctx context.Context, denom string, before *Eve
 		var senderName, senderKind, recipientName, recipientKind *string
 		err := row.Scan(&x.Height, &x.TxIndex, &x.TxHash, &x.Time, &x.Seq, &x.MsgIndex, &x.Kind,
 			&x.Sender, &x.Recipient, &x.Denom, &x.Amount, &x.Symbol, &x.Exponent,
-			&senderName, &senderKind, &recipientName, &recipientKind)
+			&senderName, &senderKind, &recipientName, &recipientKind, &x.MsgType)
 		x.SenderLabel = label(x.Sender, senderName, senderKind)
 		x.RecipientLabel = label(x.Recipient, recipientName, recipientKind)
 		return x, err
@@ -281,6 +290,23 @@ func (r *Explorer) DenomTransfers(ctx context.Context, denom string, before *Eve
 	}
 	return out, nil
 }
+
+// msgTypeJoin joins the type of the message of the transfers row x as
+// m.msg_type: one probe of the messages primary key, none for a row without
+// a message (the fee, block-level rows), whose msg_index is null. An authz
+// MsgExec reports the type of its inner messages when they all share one
+// (the stored body holds them with their @type), its own type otherwise: a
+// transfers row does not say which inner message moved it.
+const msgTypeJoin = ` LEFT JOIN LATERAL (
+		SELECT CASE WHEN m.type_url = '` + msgExecType + `' AND jsonb_typeof(m.body->'msgs') = 'array'
+			THEN coalesce((SELECT min(i->>'@type') FROM jsonb_array_elements(m.body->'msgs') i
+				HAVING count(DISTINCT i->>'@type') = 1 AND count(i->>'@type') = count(*)), m.type_url)
+			ELSE m.type_url END AS msg_type
+		FROM explorer.messages m
+		WHERE m.height = x.height AND m.tx_index = x.tx_index AND m.msg_index = x.msg_index) m ON true`
+
+// msgExecType is the type_url of an authz MsgExec.
+const msgExecType = "/cosmos.authz.v1beta1.MsgExec"
 
 // TokenHolders returns up to limit holders of denom from the last snapshot,
 // largest balance first, after the key after (from the largest when nil).

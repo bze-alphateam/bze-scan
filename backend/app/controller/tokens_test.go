@@ -200,7 +200,7 @@ func TestTokenCarriesTheNewestEventsAndACursor(t *testing.T) {
 
 func TestTokenTransfersPageNewestFirst(t *testing.T) {
 	f := &fakeTokens{token: honeyToken(), transfers: []repository.DenomTransfer{
-		{Height: 9, TxIndex: 0, TxHash: strp("AB"), Time: time.Unix(9, 0),
+		{Height: 9, TxIndex: 0, TxHash: strp("AB"), Time: time.Unix(9, 0), MsgType: strp("/bze.tradebin.MsgMultiSwap"),
 			Transfer: repository.Transfer{Seq: 1, Kind: "transfer", Sender: strp("bze1a"), Recipient: strp("bze1b"), Denom: honeyDenom, Amount: "5"}},
 		{Height: 8, TxIndex: -1, Time: time.Unix(8, 0),
 			Transfer: repository.Transfer{Seq: 0, Kind: "mint", Recipient: strp("bze1b"), Denom: honeyDenom, Amount: "7"}},
@@ -212,6 +212,7 @@ func TestTokenTransfersPageNewestFirst(t *testing.T) {
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "AB", *page.Items[0].TxHash)
 	assert.Equal(t, "5", page.Items[0].Amount)
+	assert.Equal(t, "/bze.tradebin.MsgMultiSwap", *page.Items[0].MsgType)
 	require.NotNil(t, page.NextCursor)
 
 	rec = get(t, e, "/api/v1/tokens/"+url.PathEscape(honeyDenom)+"/transfers?cursor="+*page.NextCursor)
@@ -219,6 +220,7 @@ func TestTokenTransfersPageNewestFirst(t *testing.T) {
 	assert.Equal(t, &repository.EventKey{Height: 9, TxIndex: 0, Seq: 1}, f.gotBefore)
 	page = decode[dto.List[dto.TokenTransfer]](t, rec)
 	assert.Nil(t, page.Items[1].TxHash, "a block-level mint")
+	assert.Nil(t, page.Items[1].MsgType, "a block-level row has no message")
 
 	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/tokens/ufoo/transfers").Code, "an unknown denom")
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/tokens/ubze/transfers?cursor=x").Code)
