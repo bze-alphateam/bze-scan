@@ -193,7 +193,7 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
 
     account: (address, signal) => get(`/accounts/${seg(address)}`, {}, signal),
     accountActivity: (address, params, signal) =>
-      get(`/accounts/${seg(address)}/activity`, { ...page(params), page: params.page, category: params.category }, signal),
+      get(`/accounts/${seg(address)}/activity`, { ...page(params), page: params.page, category: params.category, denom: params.denom }, signal),
     accountIbc: (address, params, signal) =>
       get(`/accounts/${seg(address)}/ibc`, { ...page(params), direction: params.direction }, signal),
     accountOpenOrders: (address, signal) => get(`/accounts/${seg(address)}/open-orders`, {}, signal),
