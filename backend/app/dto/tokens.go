@@ -142,6 +142,9 @@ type TokenTransfer struct {
 	TxIndex int64     `json:"tx_index"`
 	TxHash  *string   `json:"tx_hash"`
 	Time    time.Time `json:"time"`
+	// MsgType is the type_url of the transfer's message, null for the fee
+	// and block-level rows.
+	MsgType *string `json:"msg_type"`
 	Transfer
 }
 
@@ -271,7 +274,7 @@ func NewTokenEvent(e repository.TokenEvent) TokenEvent {
 // NewTokenTransfer maps a transfers row of one denom.
 func NewTokenTransfer(x repository.DenomTransfer) TokenTransfer {
 	return TokenTransfer{
-		Height: x.Height, TxIndex: x.TxIndex, TxHash: x.TxHash, Time: x.Time.UTC(),
+		Height: x.Height, TxIndex: x.TxIndex, TxHash: x.TxHash, Time: x.Time.UTC(), MsgType: x.MsgType,
 		Transfer: NewTransfers([]repository.Transfer{x.Transfer})[0],
 	}
 }

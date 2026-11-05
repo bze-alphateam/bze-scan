@@ -703,6 +703,8 @@ export interface TokenTransfer extends Transfer {
   tx_index: number;
   tx_hash: string | null;
   time: string;
+  /** type_url of the transfer's message (an authz MsgExec's inner type when its messages share one); null for the fee and block-level rows */
+  msg_type: string | null;
 }
 
 // Proposals
