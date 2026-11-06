@@ -284,6 +284,14 @@ func TestTokenHistoryAndTransfers(t *testing.T) {
 		if x.TxIndex == -1 {
 			assert.Nil(t, x.TxHash, "a block-level settlement")
 		}
+		if x.MsgIndex == nil {
+			assert.Nil(t, x.MsgType, "no message, no type")
+		} else {
+			want := queryStrings(t, e.db, `SELECT type_url FROM explorer.messages
+				WHERE height = $1 AND tx_index = $2 AND msg_index = $3`, x.Height, x.TxIndex, *x.MsgIndex)
+			require.Len(t, want, 1)
+			assert.Equal(t, want[0], *x.MsgType, "the type of the row's own message")
+		}
 	}
 
 	// transfers_24h: the only block is the latest, so all of its moves.
@@ -320,4 +328,92 @@ func TestTokenHistoryAndTransfers(t *testing.T) {
 		require.Equal(t, http.StatusOK, r.status, string(r.body))
 		return into[dto.Token](t, r).Transfers24h
 	}())
+}
+
+// Every transfer of a denom carries the type of its message, looked up at
+// read time: a swap, an add-liquidity and an authz MsgExec row get theirs,
+// the fee and the block-level rows none.
+func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
+	e := newSyncEnv(t)
+	base := e.serve(t, hOrders)
+	waitFor(t, 10*time.Second, func() bool {
+		return e.count(t, `SELECT count(*) FROM explorer.blocks WHERE height = $1`, hOrders) == 1 &&
+			e.count(t, `SELECT count(*) FROM explorer.denoms`) == recordedDenoms
+	}, "block %d and the denoms", hOrders)
+
+	// Transactions past the recorded ones, as the indexer writes them: each
+	// pays its fee (msg_index null) and moves vdl in its first message.
+	const (
+		swap     = "/bze.tradebin.MsgMultiSwap"
+		addLiq   = "/bze.tradebin.MsgAddLiquidity"
+		exec     = "/cosmos.authz.v1beta1.MsgExec"
+		send     = "/cosmos.bank.v1beta1.MsgSend"
+		execBody = `{"grantee":"bze1b","msgs":[{"@type":"/bze.tradebin.MsgMultiSwap"},{"@type":"/bze.tradebin.MsgMultiSwap"}]}`
+		mixed    = `{"grantee":"bze1b","msgs":[{"@type":"/bze.tradebin.MsgMultiSwap"},{"@type":"/cosmos.bank.v1beta1.MsgSend"}]}`
+	)
+	for _, m := range []struct {
+		txIndex int
+		typeURL string
+		body    string
+	}{{900, swap, `{}`}, {901, addLiq, `{}`}, {902, exec, execBody}, {903, exec, mixed}} {
+		_, err := e.db.Exec(`INSERT INTO explorer.messages (height, tx_index, msg_index, type_url, sender, body)
+			VALUES ($1, $2, 0, $3, 'bze1a', $4)`, hOrders, m.txIndex, m.typeURL, m.body)
+		require.NoError(t, err)
+		_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
+			VALUES ($1, $2, 0, NULL, 'transfer', 'bze1a', 'bze1fee', $3, 1), ($1, $2, 1, 0, 'transfer', 'bze1a', 'bze1b', $3, 2)`,
+			hOrders, m.txIndex, vdlDenom)
+		require.NoError(t, err)
+	}
+	// A two-message transaction: each transfer takes its own message's type.
+	_, err := e.db.Exec(`INSERT INTO explorer.messages (height, tx_index, msg_index, type_url, sender, body)
+		VALUES ($1, 904, 0, $2, 'bze1a', '{}'), ($1, 904, 1, $3, 'bze1a', '{}')`, hOrders, send, swap)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
+		VALUES ($1, 904, 0, NULL, 'transfer', 'bze1a', 'bze1fee', $2, 1), ($1, 904, 1, 0, 'transfer', 'bze1a', 'bze1b', $2, 2),
+			($1, 904, 2, 1, 'transfer', 'bze1a', 'bze1b', $2, 3)`, hOrders, vdlDenom)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.transfers (height, tx_index, seq, msg_index, kind, sender, recipient, denom, amount)
+		VALUES ($1, -1, 9000, NULL, 'transfer', 'bze1a', 'bze1b', $2, 3)`, hOrders, vdlDenom)
+	require.NoError(t, err)
+
+	type key struct {
+		txIndex int64
+		seq     int64
+	}
+	got := map[key]*string{}
+	rows := 0
+	next := base + "/api/v1/tokens/" + url.PathEscape(vdlDenom) + "/transfers?limit=100"
+	for {
+		r := fetch(t, next)
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		page := into[dto.List[dto.TokenTransfer]](t, r)
+		for _, x := range page.Items {
+			if x.TxIndex >= 900 || x.Seq == 9000 {
+				got[key{x.TxIndex, x.Seq}] = x.MsgType
+				rows++
+			}
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		next = fmt.Sprintf("%s/api/v1/token/transfers?denom=%s&limit=100&cursor=%s", base, url.QueryEscape(vdlDenom), *page.NextCursor)
+	}
+	// The query form answers the same, the field always present.
+	r := fetch(t, base+"/api/v1/token/transfers?limit=1&denom="+url.QueryEscape(vdlDenom))
+	require.Equal(t, http.StatusOK, r.status, string(r.body))
+	var raw struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(r.body, &raw))
+	require.Len(t, raw.Items, 1)
+	assert.JSONEq(t, `"`+swap+`"`, string(raw.Items[0]["msg_type"]), "the newest row, tx 904's second message")
+	assert.Equal(t, map[key]*string{
+		{900, 0}: nil, {900, 1}: strp(swap),
+		{901, 0}: nil, {901, 1}: strp(addLiq),
+		{902, 0}: nil, {902, 1}: strp(swap),
+		{903, 0}: nil, {903, 1}: strp(exec),
+		{904, 0}: nil, {904, 1}: strp(send), {904, 2}: strp(swap),
+		{-1, 9000}: nil,
+	}, got)
+	assert.Equal(t, 12, rows, "one row per transfer, the message join adds none")
 }
