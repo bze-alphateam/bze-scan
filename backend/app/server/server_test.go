@@ -48,7 +48,7 @@ func TestStatusRoute(t *testing.T) {
 	rec := serve(t, server.New(server.Deps{Status: pendingStatus{}}), http.MethodGet, "/api/v1/status")
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"node_height":null,"archive_height":null},
+	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"safe_height":null,"node_height":null,"archive_height":null},
 		"back_fill":{"status":"finished","oldest_height":null}}`, rec.Body.String())
 }
 

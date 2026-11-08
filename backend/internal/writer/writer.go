@@ -231,7 +231,7 @@ func upsertFailure(ctx context.Context, tx pgx.Tx, height int64, source string, 
 		VALUES ($1, $2, $3, $4, now())
 		ON CONFLICT (height, source) DO UPDATE
 		SET attempts = EXCLUDED.attempts, error = EXCLUDED.error, failed_at = now(), resolved_at = NULL`,
-		height, source, attempts, cause.Error()); err != nil {
+		height, source, attempts, storableText(cause.Error())); err != nil {
 		return fmt.Errorf("record failure %d: %w", height, err)
 	}
 	return nil
@@ -575,7 +575,7 @@ func jsonChunks[T any](top int64, label string, rows []T) ([][]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("write %d: %s: %w", top, label, err)
 		}
-		out = append(out, payload)
+		out = append(out, storableJSON(payload))
 	}
 	return out, nil
 }

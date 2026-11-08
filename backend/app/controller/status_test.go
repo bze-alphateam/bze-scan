@@ -34,7 +34,7 @@ func TestStatusBeforeTheFirstTick(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
 	assert.JSONEq(t, `{
-		"live_fill": {"healthy": false, "checked_at": null, "db_height": null, "node_height": null, "archive_height": null},
+		"live_fill": {"healthy": false, "checked_at": null, "db_height": null, "safe_height": null, "node_height": null, "archive_height": null},
 		"back_fill": {"status": "finished", "oldest_height": null}
 	}`, rec.Body.String())
 }
@@ -44,6 +44,7 @@ func TestStatusHealthy(t *testing.T) {
 		CheckedAt:     time.Date(2026, 10, 8, 14, 3, 5, 0, time.FixedZone("EEST", 3*3600)),
 		Healthy:       true,
 		DBHeight:      int64Ptr(25000894),
+		SafeHeight:    int64Ptr(25000890),
 		NodeHeight:    int64Ptr(25000895),
 		ArchiveHeight: int64Ptr(25000896),
 		BackFill:      status.BackFillFinished,
@@ -52,7 +53,7 @@ func TestStatusHealthy(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{
-		"live_fill": {"healthy": true, "checked_at": "2026-10-08T11:03:05Z", "db_height": 25000894,
+		"live_fill": {"healthy": true, "checked_at": "2026-10-08T11:03:05Z", "db_height": 25000894, "safe_height": 25000890,
 			"node_height": 25000895, "archive_height": 25000896},
 		"back_fill": {"status": "finished", "oldest_height": 24998316}
 	}`, rec.Body.String())
@@ -68,7 +69,7 @@ func TestStatusUnhealthyStillAnswers200(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{
-		"live_fill": {"healthy": false, "checked_at": "2026-10-08T11:00:00Z", "db_height": 100,
+		"live_fill": {"healthy": false, "checked_at": "2026-10-08T11:00:00Z", "db_height": 100, "safe_height": null,
 			"node_height": null, "archive_height": null},
 		"back_fill": {"status": "finished", "oldest_height": null}
 	}`, rec.Body.String())
