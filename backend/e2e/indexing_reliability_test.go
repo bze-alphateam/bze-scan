@@ -4,20 +4,29 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
+	"github.com/cosmos/cosmos-sdk/x/authz"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/status"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
+	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
 // The safe height stays below a height the live indexer gave up on while the
@@ -230,6 +239,76 @@ func TestAccountActivityIncomingFilter(t *testing.T) {
 	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, sender, "&incoming=true", 25), "the sender of a send")
 	assert.NotEmpty(t, positions(activityPages(t, base, restaked, "", 25)))
 	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, restaked, "&incoming=true", 25), "a restake's rewards are no transfer")
+	assert.Equal(t, []string{"1"}, queryStrings(t, e.db, `SELECT count(*) FROM explorer.messages
+		WHERE height = $1 AND type_url = $2 AND body->'msgs' @> jsonb_build_array(jsonb_build_object('@type', $3::text))`,
+		hExec, msgExec, msgDelegate), "the filter reads the inner messages of a recorded MsgExec by these keys")
 
 	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/accounts/"+chainToolsOwner+"/activity?incoming=yes").status)
+}
+
+// authzSendBlock is a height with two authz MsgExec transactions, one running
+// a bank send and one a multi-send, encoded and decoded by the chain's codec:
+// no recorded height has an authz-executed send.
+func authzSendBlock(t *testing.T, height int64, granter, grantee, sendTo, multiTo string) (*node.Block, *node.BlockResults, *node.Commit) {
+	t.Helper()
+	coins := sdk.NewCoins(sdk.NewInt64Coin("ubze", 7))
+	rawTx := func(inner sdk.Msg) string {
+		anyInner, err := codectypes.NewAnyWithValue(inner)
+		require.NoError(t, err)
+		anyExec, err := codectypes.NewAnyWithValue(&authz.MsgExec{Grantee: grantee, Msgs: []*codectypes.Any{anyInner}})
+		require.NoError(t, err)
+		body, err := (&sdktx.TxBody{Messages: []*codectypes.Any{anyExec}}).Marshal()
+		require.NoError(t, err)
+		auth, err := (&sdktx.AuthInfo{Fee: &sdktx.Fee{Amount: sdk.NewCoins(sdk.NewInt64Coin("ubze", 1))}}).Marshal()
+		require.NoError(t, err)
+		raw, err := (&sdktx.TxRaw{BodyBytes: body, AuthInfoBytes: auth}).Marshal()
+		require.NoError(t, err)
+		return base64.StdEncoding.EncodeToString(raw)
+	}
+	moved := func(to string) node.TxResult {
+		attr := func(k, v string) node.Attribute { return node.Attribute{Key: k, Value: v} }
+		return node.TxResult{Events: []node.Event{
+			{Type: "coin_spent", Attributes: []node.Attribute{attr("spender", granter), attr("amount", "7ubze"), attr("msg_index", "0")}},
+			{Type: "coin_received", Attributes: []node.Attribute{attr("receiver", to), attr("amount", "7ubze"), attr("msg_index", "0")}},
+		}}
+	}
+	b := &node.Block{Height: height, Time: time.Unix(1_800_000_000, 0).UTC(), Hash: "C0FFEE", Raw: json.RawMessage(`{}`), Txs: []string{
+		rawTx(&banktypes.MsgSend{FromAddress: granter, ToAddress: sendTo, Amount: coins}),
+		rawTx(&banktypes.MsgMultiSend{
+			Inputs:  []banktypes.Input{{Address: granter, Coins: coins}},
+			Outputs: []banktypes.Output{{Address: multiTo, Coins: coins}},
+		}),
+	}}
+	r := &node.BlockResults{Height: height, TxsResults: []node.TxResult{moved(sendTo), moved(multiTo)}}
+	return b, r, &node.Commit{Height: height}
+}
+
+// An authz-executed send, stored the way the indexer stores one, is found
+// for its recipient and for nobody else.
+func TestIncomingFilterFindsAuthzSendsAsTheCodecStoresThem(t *testing.T) {
+	const height int64 = 26_000_200
+	granter, grantee, sendTo, multiTo := swapTrader, swapBurner, chainToolsOwner, swapMaker
+	e := newSyncEnv(t)
+	code, _ := e.syncState(t)
+	require.Equal(t, 0, code)
+
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	b, r, c := authzSendBlock(t, height, granter, grantee, sendTo, multiTo)
+	ents, err := newTransformer(t).Transform(transform.Input{Block: b, Results: r, Commit: c})
+	require.NoError(t, err)
+	require.NoError(t, writer.NewLiveWriter(pool).WriteBlock(ctx, ents))
+
+	assert.Equal(t, []string{msgSend + " " + sendTo}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', body->'msgs'->0->>'@type', body->'msgs'->0->>'to_address')
+		   FROM explorer.messages WHERE height = $1 AND tx_index = 0`, height), "the stored shape the filter reads")
+
+	base := e.serveAPI(t)
+	want := []string{fmt.Sprintf("%d tx authz_exec other", height)}
+	assert.Equal(t, want, positions(activityPages(t, base, sendTo, "&incoming=true", 25)), "the recipient of the send")
+	assert.Equal(t, want, positions(activityPages(t, base, multiTo, "&incoming=true", 25)), "the recipient of the multi-send")
+	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, granter, "&incoming=true", 25), "the granter paid")
+	assert.Equal(t, [][]dto.Activity{{}}, activityPages(t, base, grantee, "&incoming=true", 25), "the grantee only signed")
 }
