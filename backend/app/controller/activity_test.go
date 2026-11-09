@@ -79,6 +79,30 @@ func TestActivityPage(t *testing.T) {
 	assert.Equal(t, controller.DefaultLimit+1, repo.gotLimit)
 }
 
+func TestActivityIncomingFilter(t *testing.T) {
+	cursor := dto.EncodeActivityCursor(repository.Activity{Height: 30, TxIndex: 2})
+	for _, q := range []string{"?incoming=true", "?incoming=true&cursor=" + cursor, "?incoming=true&page=2&limit=1",
+		"?incoming=true&category=received&denom=ubze"} {
+		repo := &fakeAccounts{activity: activityRows(), total: 3}
+		rec := get(t, newActivityAPI(repo), "/accounts/"+account+"/activity"+q)
+		require.Equal(t, http.StatusOK, rec.Code, q+" "+rec.Body.String())
+		assert.True(t, repo.gotIncoming, q)
+	}
+
+	// Without it, or empty, the list is what it always was.
+	for _, q := range []string{"", "?incoming=", "?category=received"} {
+		repo := &fakeAccounts{activity: activityRows(), gotIncoming: true}
+		require.Equal(t, http.StatusOK, get(t, newActivityAPI(repo), "/accounts/"+account+"/activity"+q).Code)
+		assert.False(t, repo.gotIncoming, q)
+	}
+
+	for _, q := range []string{"?incoming=false", "?incoming=1", "?incoming=TRUE"} {
+		rec := get(t, newActivityAPI(&fakeAccounts{}), "/accounts/"+account+"/activity"+q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, q)
+		assert.Contains(t, rec.Body.String(), "incoming must be true", q)
+	}
+}
+
 func TestActivityDenomFilter(t *testing.T) {
 	repo := &fakeAccounts{activity: activityRows(), total: 3}
 	for _, tc := range []struct{ query, denom string }{

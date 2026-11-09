@@ -463,6 +463,42 @@ func payload(t *testing.T, s statement) []map[string]any {
 	return rows
 }
 
+// PostgreSQL refuses a NUL in jsonb and text, which would cost the whole
+// block: the writer stores the replacement character instead.
+func TestATransactionWithANULInTheMemoIsWritten(t *testing.T) {
+	db := newMockDB(49)
+	w := writer.NewLiveWriter(db)
+	ents := blockWithTxs(100)
+	ents.Transactions[0].Memo = "pay\x00ment"
+	ents.Messages[0].Body = json.RawMessage(`{"note":"a\u0000b","path":"c:\\u0000d"}`)
+	ents.Messages[0].Events = []transform.Event{{Type: "x\x00y", Attrs: map[string]any{"k\x00": "v\x00"}}}
+
+	require.NoError(t, w.WriteBlock(context.Background(), ents))
+	require.Len(t, db.txs, 1)
+	tx := db.txs[0]
+	assert.True(t, tx.committed)
+	for _, st := range tx.stmts[:6] {
+		raw := st.args[0].([]byte)
+		assert.True(t, json.Valid(raw), st.sql)
+		assert.NotContains(t, strings.ReplaceAll(string(raw), `\\`, ""), `\u0000`, st.sql)
+	}
+
+	assert.Equal(t, "pay\uFFFDment", payload(t, tx.stmts[0])[0]["memo"])
+	msg := payload(t, tx.stmts[1])[0]
+	assert.Equal(t, map[string]any{"note": "a\uFFFDb", "path": `c:\u0000d`}, msg["body"],
+		"a backslash followed by the text u0000 is not a NUL and stays")
+	assert.Equal(t, []any{map[string]any{"type": "x\uFFFDy", "attrs": map[string]any{"k\uFFFD": "v\uFFFD"}}}, msg["events"])
+}
+
+// Recording a failure must not itself fail on the text of the cause.
+func TestRecordFailureStoresACauseHoldingANUL(t *testing.T) {
+	db := newMockDB(49)
+	w := writer.NewLiveWriter(db)
+
+	require.NoError(t, w.RecordFailure(context.Background(), 100, 3, errors.New("bad\x00 \xffvalue")))
+	assert.Equal(t, []any{int64(100), writer.FailureSourceLive, 3, "bad\uFFFD \uFFFDvalue"}, db.txs[0].stmts[0].args)
+}
+
 func TestTransactionsAndMessagesJoinTheBlockTransaction(t *testing.T) {
 	db := newMockDB(49)
 	w := writer.NewLiveWriter(db)

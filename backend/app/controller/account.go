@@ -25,16 +25,17 @@ type AccountReader interface {
 	// the explorer has never seen has neither, which is not an error.
 	Account(ctx context.Context, address string) (*repository.Account, error)
 	// Activity returns up to limit activity rows of address, newest first,
-	// of category when not nil, after before when not nil.
-	Activity(ctx context.Context, address string, category, denom *string, before *repository.ActivityKey,
-		limit int) ([]repository.Activity, error)
+	// of category when not nil, only the incoming transfers when incoming
+	// is set, after before when not nil.
+	Activity(ctx context.Context, address string, category, denom *string, incoming bool,
+		before *repository.ActivityKey, limit int) ([]repository.Activity, error)
 	// ActivityPage returns up to limit activity rows of address, newest
 	// first, of category when not nil, skipping the newest offset rows.
-	ActivityPage(ctx context.Context, address string, category, denom *string, offset int64,
+	ActivityPage(ctx context.Context, address string, category, denom *string, incoming bool, offset int64,
 		limit int) ([]repository.Activity, error)
 	// ActivityTotal returns the number of activity rows of address, of
 	// category when not nil.
-	ActivityTotal(ctx context.Context, address string, category, denom *string) (int64, error)
+	ActivityTotal(ctx context.Context, address string, category, denom *string, incoming bool) (int64, error)
 	// AccountOrders returns up to limit orders owned by owner, newest
 	// first, of status when not nil, after before when not nil.
 	AccountOrders(ctx context.Context, owner string, status *string, before *repository.OrderKey,
@@ -130,12 +131,13 @@ func (h *AccountController) Account(c *echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewAccount(acc, live, denoms, monikers))
 }
 
-// Activity serves GET /api/v1/accounts/{address}/activity?category&denom&cursor|page&limit:
+// Activity serves GET /api/v1/accounts/{address}/activity?category&denom&incoming&cursor|page&limit:
 // the address's activity rows, newest first, one per transaction or block
 // that touched it, optionally of one category and of one denom (a row whose
-// deltas, the fee included, hold it). Anything but a bze1 address, a known
-// category or a valid denom is a 400; an address without activity, or a denom
-// it never moved, is an empty list.
+// deltas, the fee included, hold it), or with incoming=true only the
+// transfers that paid it. Anything but a bze1 address, a known category, a
+// valid denom or incoming=true is a 400; an address without activity, or a
+// denom it never moved, is an empty list.
 func (h *AccountController) Activity(c *echo.Context) error {
 	hrp, address, ok := bech32Address(c.Param("address"))
 	if !ok || hrp != accountPrefix {
@@ -159,6 +161,13 @@ func (h *AccountController) Activity(c *echo.Context) error {
 		}
 		denom = &s
 	}
+	var incoming bool
+	if s := c.QueryParam("incoming"); s != "" {
+		if s != "true" {
+			return echo.NewHTTPError(http.StatusBadRequest, "incoming must be true")
+		}
+		incoming = true
+	}
 	var before *repository.ActivityKey
 	if s := c.QueryParam("cursor"); s != "" {
 		if before, err = dto.DecodeActivityCursor(s); err != nil {
@@ -177,16 +186,16 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	var rows []repository.Activity
 	var total *int64
 	if pageNo > 0 {
-		n, err := h.repo.ActivityTotal(ctx, address, category, denom)
+		n, err := h.repo.ActivityTotal(ctx, address, category, denom, incoming)
 		if err != nil {
 			return err
 		}
 		total = &n
-		rows, err = h.repo.ActivityPage(ctx, address, category, denom, (pageNo-1)*int64(limit), limit+1)
+		rows, err = h.repo.ActivityPage(ctx, address, category, denom, incoming, (pageNo-1)*int64(limit), limit+1)
 		if err != nil {
 			return err
 		}
-	} else if rows, err = h.repo.Activity(ctx, address, category, denom, before, limit+1); err != nil {
+	} else if rows, err = h.repo.Activity(ctx, address, category, denom, incoming, before, limit+1); err != nil {
 		return err
 	}
 	page := rows[:min(len(rows), limit)]

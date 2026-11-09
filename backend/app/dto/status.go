@@ -13,11 +13,13 @@ type Status struct {
 }
 
 // LiveFill is whether the explorer keeps up with the chain. CheckedAt is
-// null before the first check completed.
+// null before the first check completed. SafeHeight is the height a reader
+// may read up to: no height at or below it is waiting for a repair.
 type LiveFill struct {
 	Healthy       bool       `json:"healthy"`
 	CheckedAt     *time.Time `json:"checked_at"`
 	DBHeight      *int64     `json:"db_height"`
+	SafeHeight    *int64     `json:"safe_height"`
 	NodeHeight    *int64     `json:"node_height"`
 	ArchiveHeight *int64     `json:"archive_height"`
 }
@@ -35,6 +37,7 @@ func NewStatus(s status.Snapshot) Status {
 		LiveFill: LiveFill{
 			Healthy:       s.Healthy,
 			DBHeight:      s.DBHeight,
+			SafeHeight:    s.SafeHeight,
 			NodeHeight:    s.NodeHeight,
 			ArchiveHeight: s.ArchiveHeight,
 		},

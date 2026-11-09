@@ -48,7 +48,7 @@ func TestStatusRoute(t *testing.T) {
 	rec := serve(t, server.New(server.Deps{Status: pendingStatus{}}), http.MethodGet, "/api/v1/status")
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"node_height":null,"archive_height":null},
+	assert.JSONEq(t, `{"live_fill":{"healthy":false,"checked_at":null,"db_height":null,"safe_height":null,"node_height":null,"archive_height":null},
 		"back_fill":{"status":"finished","oldest_height":null}}`, rec.Body.String())
 }
 
@@ -83,15 +83,15 @@ func (noAccounts) Account(_ context.Context, address string) (*repository.Accoun
 	return &repository.Account{Address: address}, nil
 }
 
-func (noAccounts) Activity(context.Context, string, *string, *string, *repository.ActivityKey, int) ([]repository.Activity, error) {
+func (noAccounts) Activity(context.Context, string, *string, *string, bool, *repository.ActivityKey, int) ([]repository.Activity, error) {
 	return nil, nil
 }
 
-func (noAccounts) ActivityPage(context.Context, string, *string, *string, int64, int) ([]repository.Activity, error) {
+func (noAccounts) ActivityPage(context.Context, string, *string, *string, bool, int64, int) ([]repository.Activity, error) {
 	return nil, nil
 }
 
-func (noAccounts) ActivityTotal(context.Context, string, *string, *string) (int64, error) {
+func (noAccounts) ActivityTotal(context.Context, string, *string, *string, bool) (int64, error) {
 	return 0, nil
 }
 

@@ -33,6 +33,7 @@ type fakeAccounts struct {
 	activityErr error
 	gotCategory *string
 	gotDenom    *string
+	gotIncoming bool
 	gotBefore   *repository.ActivityKey
 	gotLimit    int
 	// total is what ActivityTotal answers; gotOffset records ActivityPage's
@@ -72,20 +73,20 @@ func (f *fakeAccounts) AccountFills(_ context.Context, _ string, before *reposit
 	return f.fills, f.dexErr
 }
 
-func (f *fakeAccounts) Activity(_ context.Context, _ string, category, denom *string, before *repository.ActivityKey,
+func (f *fakeAccounts) Activity(_ context.Context, _ string, category, denom *string, incoming bool, before *repository.ActivityKey,
 	limit int) ([]repository.Activity, error) {
-	f.gotCategory, f.gotDenom, f.gotBefore, f.gotLimit = category, denom, before, limit
+	f.gotCategory, f.gotDenom, f.gotIncoming, f.gotBefore, f.gotLimit = category, denom, incoming, before, limit
 	return f.activity, f.activityErr
 }
 
-func (f *fakeAccounts) ActivityPage(_ context.Context, _ string, category, denom *string, offset int64,
+func (f *fakeAccounts) ActivityPage(_ context.Context, _ string, category, denom *string, incoming bool, offset int64,
 	limit int) ([]repository.Activity, error) {
-	f.gotCategory, f.gotDenom, f.gotOffset, f.gotLimit = category, denom, offset, limit
+	f.gotCategory, f.gotDenom, f.gotIncoming, f.gotOffset, f.gotLimit = category, denom, incoming, offset, limit
 	return f.activity[min(int(offset), len(f.activity)):], f.activityErr
 }
 
-func (f *fakeAccounts) ActivityTotal(_ context.Context, _ string, category, denom *string) (int64, error) {
-	f.gotCategory, f.gotDenom = category, denom
+func (f *fakeAccounts) ActivityTotal(_ context.Context, _ string, category, denom *string, incoming bool) (int64, error) {
+	f.gotCategory, f.gotDenom, f.gotIncoming = category, denom, incoming
 	return f.total, f.totalErr
 }
 
