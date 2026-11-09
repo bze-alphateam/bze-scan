@@ -22,6 +22,7 @@ var errDown = errors.New("connection refused")
 type fakeStore struct {
 	mu       sync.Mutex
 	db       *int64
+	safe     *int64
 	oldest   *int64
 	err      error
 	backfill *string // main checkpoint status, nil: no checkpoint
@@ -50,6 +51,15 @@ func (s *fakeStore) LastIndexedHeight(context.Context) (int64, bool, error) {
 		return 0, false, s.err
 	}
 	return *s.db, true, nil
+}
+
+func (s *fakeStore) SafeHeight(context.Context) (int64, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil || s.safe == nil {
+		return 0, false, s.err
+	}
+	return *s.safe, true, nil
 }
 
 func (s *fakeStore) OldestHeight(context.Context) (int64, bool, error) {
@@ -177,6 +187,26 @@ func TestCheckStoresTheSnapshot(t *testing.T) {
 		ArchiveHeight: ptr(102), BackFill: status.BackFillFinished, OldestHeight: ptr(90)}
 	assert.Equal(t, want, got)
 	assert.Equal(t, want, c.Snapshot())
+}
+
+// The safe height is reported next to the explorer's height, which it does
+// not change.
+func TestCheckReportsTheSafeHeight(t *testing.T) {
+	store := &fakeStore{safe: ptr(95)}
+	store.set(100)
+	c := newChecker(store, &fakeNode{height: 101}, &fakeNode{height: 102}, nil, 5)
+
+	got := c.Check(context.Background())
+	assert.Equal(t, ptr(100), got.DBHeight)
+	assert.Equal(t, ptr(95), got.SafeHeight)
+}
+
+// A safe height that cannot be read is null, never the explorer's height.
+func TestSafeHeightIsNullWhenItCannotBeRead(t *testing.T) {
+	store := &fakeStore{safe: ptr(95), err: errors.New("database is down")}
+	c := newChecker(store, &fakeNode{height: 101}, &fakeNode{height: 102}, nil, 5)
+
+	assert.Nil(t, c.Check(context.Background()).SafeHeight)
 }
 
 func TestNothingIndexedYet(t *testing.T) {

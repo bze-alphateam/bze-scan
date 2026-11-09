@@ -66,7 +66,7 @@ func TestSearchEscapesTheLikeWildcards(t *testing.T) {
 // now, and only its rows are joined.
 func TestActivityPageIsCutBeforeTheJoins(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
-	_, err := repository.NewExplorer(db).ActivityPage(context.Background(), "bze1a", nil, nil, 75_000, 26)
+	_, err := repository.NewExplorer(db).ActivityPage(context.Background(), "bze1a", nil, nil, false, 75_000, 26)
 	assert.ErrorIs(t, err, errDB)
 	sql := db.sql[0]
 	page := strings.Index(sql, "LIMIT $5 OFFSET $6) a")
@@ -81,11 +81,33 @@ func TestActivityPageIsCutBeforeTheJoins(t *testing.T) {
 func TestActivityCursorPageKeepsTheKeyset(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
 	cat := "dex"
-	_, err := repository.NewExplorer(db).Activity(context.Background(), "bze1a", &cat, nil,
+	_, err := repository.NewExplorer(db).Activity(context.Background(), "bze1a", &cat, nil, false,
 		&repository.ActivityKey{Height: 9, TxIndex: 2}, 26)
 	assert.ErrorIs(t, err, errDB)
 	assert.Contains(t, db.sql[0], "($3::bigint IS NULL OR (height, tx_index) < ($3::bigint, $4::integer))")
 	assert.Contains(t, db.sql[0], "ORDER BY a.height DESC, a.tx_index DESC")
+}
+
+// The incoming filter is added to the text only when asked for, and with a
+// denom it binds one more parameter for the denom that has to rise.
+func TestActivityIncomingFilterIsOnlyAddedWhenAskedFor(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	ex := repository.NewExplorer(db)
+	_, err := ex.Activity(context.Background(), "bze1a", nil, nil, false, nil, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.NotContains(t, db.sql[0], "explorer.messages m")
+
+	_, err = ex.Activity(context.Background(), "bze1a", nil, nil, true, nil, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[1], "explorer.messages m")
+	assert.Len(t, db.args[1], 6)
+
+	denom := "ubze"
+	_, err = ex.Activity(context.Background(), "bze1a", nil, &denom, true, nil, 26)
+	assert.ErrorIs(t, err, errDB)
+	assert.Contains(t, db.sql[2], "jsonb_build_object('d', $8::text)")
+	assert.Len(t, db.args[2], 8)
+	assert.Equal(t, "ubze", db.args[2][7])
 }
 
 // The denom filter is added to the text only when a denom is given: the
@@ -93,12 +115,12 @@ func TestActivityCursorPageKeepsTheKeyset(t *testing.T) {
 func TestActivityDenomFilterIsOnlyAddedWithADenom(t *testing.T) {
 	db := &fakeDB{queryErr: errDB}
 	ex := repository.NewExplorer(db)
-	_, err := ex.Activity(context.Background(), "bze1a", nil, nil, nil, 26)
+	_, err := ex.Activity(context.Background(), "bze1a", nil, nil, false, nil, 26)
 	assert.ErrorIs(t, err, errDB)
 	assert.NotContains(t, db.sql[0], "deltas @>")
 
 	denom := "factory/bze1x/upage"
-	_, err = ex.Activity(context.Background(), "bze1a", nil, &denom, nil, 26)
+	_, err = ex.Activity(context.Background(), "bze1a", nil, &denom, false, nil, 26)
 	assert.ErrorIs(t, err, errDB)
 	assert.Contains(t, db.sql[1], "AND deltas @> $7::jsonb\n")
 	assert.Equal(t, []any{"bze1a", (*string)(nil), (*int64)(nil), (*int64)(nil), 26, int64(0),

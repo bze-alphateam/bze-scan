@@ -36,6 +36,10 @@ type Store interface {
 	// LastIndexedHeight is indexer_state.last_indexed_height; false when the
 	// live indexer has not written anything yet.
 	LastIndexedHeight(ctx context.Context) (int64, bool, error)
+	// SafeHeight is the highest height at or below the live cursor with no
+	// open live index failure at or below it; false when the live indexer
+	// has not written anything yet.
+	SafeHeight(ctx context.Context) (int64, bool, error)
 	// OldestHeight is the lowest height in explorer.blocks; false when the
 	// table is empty.
 	OldestHeight(ctx context.Context) (int64, bool, error)
@@ -81,11 +85,14 @@ type Deps struct {
 }
 
 // Snapshot is the result of one tick. Nil heights could not be read.
+// SafeHeight is DBHeight held below the lowest height the live indexer gave
+// up on and nothing has repaired yet.
 type Snapshot struct {
 	// CheckedAt is when the tick ran; zero before the first tick completed.
 	CheckedAt     time.Time
 	Healthy       bool
 	DBHeight      *int64
+	SafeHeight    *int64
 	NodeHeight    *int64
 	ArchiveHeight *int64
 	// BackFill is BackFillFinished or BackFillInProgress.
@@ -167,6 +174,7 @@ func (c *Checker) Run(ctx context.Context) error {
 func (c *Checker) Check(ctx context.Context) Snapshot {
 	s := Snapshot{BackFill: c.Snapshot().BackFill}
 	s.DBHeight = c.read(ctx, "explorer height", c.deps.Store.LastIndexedHeight)
+	s.SafeHeight = c.read(ctx, "safe height", c.deps.Store.SafeHeight)
 	s.OldestHeight = c.read(ctx, "oldest height", c.deps.Store.OldestHeight)
 	// A failed read keeps the previous verdict.
 	if cp, ok, err := c.deps.Store.BackfillStatus(ctx); err != nil {
