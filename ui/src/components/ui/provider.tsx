@@ -55,6 +55,11 @@ export const system = createSystem(defaultConfig, {
       lineHeight: "1.45",
     },
     "code, pre, kbd, samp": { fontFeatureSettings: '"zero"' },
+    // iOS Safari zooms the page when a focused field's text is under 16px and never zooms back.
+    // `!important` because this layer sits below the recipes and style props.
+    "input, textarea, select": {
+      "@media (hover: none) and (pointer: coarse)": { fontSize: "16px !important" },
+    },
   },
   // Mono text (numbers, hashes, addresses) gets the slashed zero.
   utilities: {
