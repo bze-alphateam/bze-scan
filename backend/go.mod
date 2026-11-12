@@ -2,7 +2,7 @@ module github.com/bze-alphateam/bze-scan/backend
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	cosmossdk.io/depinject v1.1.0
