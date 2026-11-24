@@ -200,6 +200,12 @@ func blockOrders(ents *Entities, b Block, events []node.Event) []outcome {
 // such fills in transaction, message and event order) and an
 // OrderCanceledEvent closes an order. They carry no message id.
 func txOrders(ents *Entities, b Block, txIndex int, txHash string, msgCount int, byIndex map[int][]node.Event) {
+	seq := TxFillSeqBase
+	for _, f := range ents.OrderFills {
+		if f.TxIndex != nil {
+			seq++
+		}
+	}
 	for j := range msgCount {
 		pos := StoredPositions(byIndex[j])
 		for k, ev := range byIndex[j] {
@@ -217,12 +223,6 @@ func txOrders(ents *Entities, b Block, txIndex int, txHash string, msgCount int,
 					Price: get("price"), Amount: get("amount"), Height: b.Height, Time: b.Time, CreatedTxHash: txHash,
 				})
 			case evOrderExecuted:
-				seq := TxFillSeqBase
-				for _, f := range ents.OrderFills {
-					if f.TxIndex != nil {
-						seq++
-					}
-				}
 				ti, mi, ei := txIndex, j, pos[k]
 				ents.OrderFills = append(ents.OrderFills, OrderFill{
 					Height: b.Height, Seq: seq, OrderID: get("id"), MarketID: get("market_id"), Side: get("order_type"),
@@ -230,6 +230,7 @@ func txOrders(ents *Entities, b Block, txIndex int, txHash string, msgCount int,
 					TakerTxHash: txHash, Time: b.Time, TxIndex: &ti, MsgIndex: &mi, MsgEventIndex: &ei,
 					TakerOrderID: get("order_id"),
 				})
+				seq++
 			case evOrderCanceled:
 				ents.OrderCancels = append(ents.OrderCancels, OrderCancel{OrderID: get("id"), Height: b.Height, Time: b.Time})
 				ents.OrderClosures = append(ents.OrderClosures, OrderClosure{

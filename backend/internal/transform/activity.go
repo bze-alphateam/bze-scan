@@ -304,7 +304,7 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 		addresses[addr] = true
 	}
 	escrows := escrowAccounts(events)
-	makerFills := fillsByMaker(msgs)
+	makerFills, makerMsgs := fillsByMaker(msgs)
 
 	for _, addr := range slices.Sorted(maps.Keys(addresses)) {
 		if moduleAccounts[addr] || escrows[addr] {
@@ -352,9 +352,10 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 		}
 		a.MsgTypes = distinct(a.MsgTypes)
 		a.Counterparty = counterparty(entry, msgs, involved, addr, a.IsSigner)
-		if fills := makerFills[addr]; len(fills) > 0 && !a.IsSigner {
-			// A maker named by the taker's transaction: its resting order was
-			// filled, whatever message did it.
+		if fills := makerFills[addr]; len(fills) > 0 && !a.IsSigner && onlyIn(involved, makerMsgs[addr]) {
+			// A maker named by the taker's transaction and by no other
+			// message of it: its resting order was filled, whatever message
+			// did it.
 			a.Kind, a.Category, a.Details = classify.KindDexMakerFill, classify.DEX, fills
 			a.Counterparty = ""
 			if takers := distinctTakers(fills); len(takers) == 1 && isAccount(takers[0]) {
@@ -368,19 +369,33 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 
 // fillsByMaker groups the OrderExecutedEvents of the transaction's messages
 // (chain v8.3.0) by their maker, in event order.
-func fillsByMaker(msgs []Message) map[string][]Event {
+func fillsByMaker(msgs []Message) (map[string][]Event, map[string][]int) {
 	out := map[string][]Event{}
-	for _, m := range msgs {
+	at := map[string][]int{}
+	for j, m := range msgs {
 		for _, ev := range m.Events {
 			if ev.Type != evOrderExecuted {
 				continue
 			}
 			if maker := anyString(ev.Attrs["maker"]); maker != "" {
 				out[maker] = append(out[maker], Event{Type: ev.Type, Attrs: ev.Attrs})
+				if !slices.Contains(at[maker], j) {
+					at[maker] = append(at[maker], j)
+				}
 			}
 		}
 	}
-	return out
+	return out, at
+}
+
+// onlyIn reports whether every index of involved is in allowed.
+func onlyIn(involved, allowed []int) bool {
+	for _, j := range involved {
+		if !slices.Contains(allowed, j) {
+			return false
+		}
+	}
+	return true
 }
 
 // distinctTakers returns the takers the fills name, first seen first.

@@ -3,6 +3,7 @@ package writer
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -379,7 +380,7 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 
 // swapStatements returns the pool swap writes of ents. The writers run them
 // after the blocks insert, which their time reads (swapTime).
-func swapStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
+func swapStatements(top int64, ents *transform.Entities, mode Mode, prune bool) ([]statement, error) {
 	swaps := make([]swapRow, 0, len(ents.Swaps))
 	for _, s := range ents.Swaps {
 		swaps = append(swaps, swapRow{
@@ -388,8 +389,41 @@ func swapStatements(top int64, ents *transform.Entities, mode Mode) ([]statement
 			TxHash: nullIfEmpty(s.TxHash), TxIndex: s.TxIndex, MsgIndex: s.MsgIndex, BlockSeq: s.BlockSeq,
 		})
 	}
-	return chunked(top, "swaps", swapsTable, mode, swaps, nil)
+	inserts, err := chunked(top, "swaps", swapsTable, mode, swaps, nil)
+	if err != nil || !prune {
+		return inserts, err
+	}
+	// Swaps are keyed by trade id, which moves when a fill of a transaction
+	// (chain v8.3.0) comes before them: a height written again drops the rows
+	// of its old numbering.
+	keys := make([]swapKeyRow, len(swaps))
+	for i, s := range swaps {
+		keys[i] = swapKeyRow{Height: s.Height, TradeID: s.TradeID}
+	}
+	if len(keys) == 0 {
+		return inserts, nil
+	}
+	// One statement: the rows are keys only, and a chunk must not see the
+	// other chunks' rows of its heights as stale.
+	payload, err := json.Marshal(keys)
+	if err != nil {
+		return nil, fmt.Errorf("write %d: stale swaps: %w", top, err)
+	}
+	stale := statement{table: "stale swaps", sql: staleSwapsSQL, args: []any{payload}}
+	return slices.Concat([]statement{stale}, inserts), nil
 }
+
+// swapKeyRow is the JSON shape of staleSwapsSQL.
+type swapKeyRow struct {
+	Height  int64 `json:"height"`
+	TradeID int64 `json:"trade_id"`
+}
+
+// staleSwapsSQL deletes the swaps of the written heights whose trade id is not
+// among the ones just numbered.
+const staleSwapsSQL = `WITH r AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(height bigint, trade_id bigint))
+	DELETE FROM explorer.swaps s WHERE s.height IN (SELECT height FROM r)
+	   AND NOT EXISTS (SELECT 1 FROM r WHERE r.height = s.height AND r.trade_id = s.trade_id)`
 
 // fillDeltas merges the fills of ents that were inserted per order, in
 // order id order.
@@ -468,7 +502,7 @@ type Execer interface {
 // ids of the fills (only Height, Seq and TradeID are read). top names the
 // write in errors.
 func WriteTrades(ctx context.Context, tx Execer, top int64, swaps []transform.Swap, fills []transform.OrderFill) error {
-	stmts, err := swapStatements(top, &transform.Entities{Swaps: swaps}, ModeInsert)
+	stmts, err := swapStatements(top, &transform.Entities{Swaps: swaps}, ModeInsert, true)
 	if err != nil {
 		return err
 	}

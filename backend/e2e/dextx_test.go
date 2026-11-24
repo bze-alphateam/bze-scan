@@ -187,6 +187,33 @@ func TestDexTxLevelOutcomesInEitherDirection(t *testing.T) {
 	assert.Equal(t, fills, v830Fills(t, down))
 	assert.Equal(t, swaps, swapRows(t, up))
 
+	// A row the previous build wrote has no position and no taker order id,
+	// the closure is missing and a swap sits under the numbering without the
+	// fills: a reindex fills the first, writes the closure, and moves the
+	// swap (one row, counted once).
+	for _, q := range []string{
+		`UPDATE explorer.order_fills SET tx_index = NULL, msg_index = NULL, msg_event_index = NULL, taker_order_id = NULL`,
+		`DELETE FROM explorer.order_closures`,
+		fmt.Sprintf(`UPDATE explorer.swaps SET trade_id = %d`, id(1)),
+	} {
+		_, err := e2eExec(down, q)
+		require.NoError(t, err)
+	}
+	require.NoError(t, w.Write(ctx, []*transform.Entities{v830Block(t)}, writer.ModeUpdate))
+	assert.Equal(t, fills, v830Fills(t, down), "positions and taker order ids filled again")
+	assert.Equal(t, swaps, swapRows(t, down), "the stale swap row is gone, its new one written")
+	assert.Equal(t, []string{"1"}, queryStrings(t, down.db, `SELECT count(*)::text FROM explorer.order_closures`))
+
+	// The renumbering of stored rows drops a stale swap row too.
+	_, err = e2eExec(up, fmt.Sprintf(`UPDATE explorer.swaps SET trade_id = %d`, id(1)))
+	require.NoError(t, err)
+	rtx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	_, err = trades.Range(ctx, rtx, dexH, dexH+1, candles.Default)
+	require.NoError(t, err)
+	require.NoError(t, rtx.Commit(ctx))
+	assert.Equal(t, swaps, swapRows(t, up))
+
 	// The stored block renumbers to the transformer's ids.
 	for _, q := range []string{`DELETE FROM explorer.swaps`, `UPDATE explorer.order_fills SET trade_id = NULL`} {
 		_, err := e2eExec(up, q)

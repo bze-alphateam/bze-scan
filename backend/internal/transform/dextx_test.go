@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -237,4 +238,25 @@ func TestMakerActivityOfTxLevelFills(t *testing.T) {
 	assert.Equal(t, msgID(900), maker.Details[0].Attrs["id"])
 	assert.Equal(t, "dex_order", signer.Kind)
 	assert.Empty(t, signer.Details)
+}
+
+// A maker that another message of the transaction names too keeps the kind
+// that message gives it: only a maker with no other role is a dex_maker_fill.
+func TestMakerWithAnotherRoleKeepsItsKind(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs = []string{encodedTx(t,
+		&tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "100", Price: "2", MarketId: market},
+		&banktypes.MsgSend{FromAddress: trader, ToAddress: maker1, Amount: sdk.NewCoins(sdk.NewInt64Coin("ubze", 5))},
+	)}
+	in.Results.TxsResults = []node.TxResult{{Events: one(txExecuted("0", msgID(900), msgID(1000), "100", "2"))}}
+	ents, err := realTransformer(t).Transform(in)
+	require.NoError(t, err)
+	for _, a := range ents.Activity {
+		if a.Address == maker1 {
+			assert.Equal(t, "dex_order", a.Kind, "the first message that names it classifies")
+			assert.Empty(t, a.Details)
+			return
+		}
+	}
+	t.Fatal("no row for the maker")
 }

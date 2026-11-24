@@ -200,7 +200,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	if mode == ModeUpdate {
 		stmts = append(stmts, statement{table: "failures", sql: resolveFailuresSQL, args: []any{heights}})
 	}
-	swaps, err := swapStatements(hi, &all, mode)
+	swaps, err := swapStatements(hi, &all, mode, mode == ModeUpdate)
 	if err != nil {
 		return err
 	}
