@@ -18,6 +18,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/group"
 	ratelimittypes "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	channeltypesv2 "github.com/cosmos/ibc-go/v10/modules/core/04-channel/v2/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -343,4 +344,36 @@ func TestTransferBodiesDoNotCarryAnEmptyEncoding(t *testing.T) {
 	body, err = c.MsgJSON(transfer)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), `"encoding":"application/x-protobuf"`)
+}
+
+// Only a MsgTransfer loses its empty encoding: a MsgExec holding a transfer
+// next to a message whose payload has an (empty) encoding of its own keeps
+// that one.
+func TestOnlyTheTransferLosesItsEmptyEncoding(t *testing.T) {
+	c := newCodec(t)
+	transfer := &ibctransfertypes.MsgTransfer{
+		SourcePort: "transfer", SourceChannel: "channel-0", Token: sdk.NewInt64Coin("ubze", 5),
+		Sender: addr1, Receiver: "osmo1x", TimeoutTimestamp: 1,
+	}
+	send := &channeltypesv2.MsgSendPacket{
+		SourceClient: "07-tendermint-0", Signer: addr1,
+		Payloads: []channeltypesv2.Payload{{SourcePort: "transfer", DestinationPort: "transfer", Version: "v1"}},
+	}
+	setEncoding := *transfer
+	setEncoding.Encoding = "application/x-protobuf"
+	exec := &authz.MsgExec{Grantee: addr1, Msgs: []*codectypes.Any{anyOf(t, send), anyOf(t, transfer), anyOf(t, &setEncoding)}}
+
+	body, err := c.MsgJSON(exec)
+	require.NoError(t, err)
+	var doc struct {
+		Msgs []map[string]json.RawMessage `json:"msgs"`
+	}
+	require.NoError(t, json.Unmarshal(body, &doc))
+	require.Len(t, doc.Msgs, 3)
+
+	var payloads []map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(doc.Msgs[0]["payloads"], &payloads))
+	assert.Contains(t, payloads[0], "encoding", "another message's empty encoding stays")
+	assert.NotContains(t, doc.Msgs[1], "encoding", "the transfer's empty encoding goes")
+	assert.JSONEq(t, `"application/x-protobuf"`, string(doc.Msgs[2]["encoding"]), "a set encoding stays")
 }

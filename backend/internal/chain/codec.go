@@ -127,15 +127,62 @@ var emptyTransferEncoding = []byte(`,"encoding":""`)
 // bodies (the message itself or nested in an authz MsgExec), so a transfer
 // keeps the body it had before ibc-go v10: the stored bodies of a re-indexed
 // height do not differ from the ones indexed before. A transfer that sets an
-// encoding keeps it.
+// encoding keeps it, and no other message is touched. "encoding" is the last
+// field of MsgTransfer, so it is the suffix of the transfer's object.
 func withoutEmptyTransferEncoding(msg sdk.Msg, doc []byte) []byte {
 	if !bytes.Contains(doc, emptyTransferEncoding) {
 		return doc
 	}
-	if _, ok := msg.(*ibctransfertypes.MsgTransfer); !ok && !bytes.Contains(doc, []byte(`"@type":"`+sdk.MsgTypeURL(&ibctransfertypes.MsgTransfer{})+`"`)) {
+	if _, ok := msg.(*ibctransfertypes.MsgTransfer); ok {
+		if bytes.HasSuffix(doc, append(slices.Clone(emptyTransferEncoding), '}')) {
+			return append(doc[:len(doc)-len(emptyTransferEncoding)-1], '}')
+		}
 		return doc
 	}
-	return bytes.ReplaceAll(doc, emptyTransferEncoding, nil)
+	marker := []byte(`"@type":"` + sdk.MsgTypeURL(&ibctransfertypes.MsgTransfer{}) + `"`)
+	var cuts []int // start of the suffix to drop, per transfer, ascending
+	for from := 0; ; {
+		i := bytes.Index(doc[from:], marker)
+		if i < 0 {
+			break
+		}
+		from += i + len(marker)
+		end := objectEnd(doc, from)
+		if end >= 0 && bytes.HasSuffix(doc[:end], emptyTransferEncoding) {
+			cuts = append(cuts, end-len(emptyTransferEncoding))
+		}
+	}
+	for i := len(cuts) - 1; i >= 0; i-- { // from the back, so earlier offsets stay valid
+		doc = append(doc[:cuts[i]], doc[cuts[i]+len(emptyTransferEncoding):]...)
+	}
+	return doc
+}
+
+// objectEnd returns the index of the "}" closing the JSON object a scan from
+// from (inside it, at depth one) is in; -1 when there is none.
+func objectEnd(doc []byte, from int) int {
+	depth, inString := 1, false
+	for i := from; i < len(doc); i++ {
+		c := doc[i]
+		switch {
+		case inString:
+			if c == '\\' {
+				i++
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // TypeURL is the message's type URL, e.g. "/cosmos.bank.v1beta1.MsgSend".
