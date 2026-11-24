@@ -193,6 +193,66 @@ describe("DEX outcome", () => {
     expect(outcomeOf(noIds, old)?.fills.map((f) => f.taker)).toEqual([A]);
   });
 
+  describe("chain v8.3.0 order book, in the message's own events", () => {
+    const TAKER = "000000000000000006714610";
+    const OTHER_TAKER = "000000000000000006714611";
+    const event = (type: string, attrs: Record<string, unknown>) => ({ type: `bze.tradebin.${type}`, attrs });
+    const ownFill = (extra: Partial<Fill> = {}) => fill({ taker_message_id: null, taker_order_id: TAKER, ...extra });
+    const msgOf = (base: RenderMessage, events: RenderMessage["events"]): RenderMessage => ({ ...base, events });
+    const mk = (over: Partial<Order> = {}) => order({ order_id: TAKER, message_id: null, ...over });
+
+    it("matches the placed order and the fills by order id, not by market and owner", () => {
+      const msg = msgOf(create, [
+        event("OrderExecutedEvent", { id: "998", order_id: TAKER }),
+        event("OrderSavedEvent", { id: TAKER, order_id: TAKER }),
+      ]);
+      // A second create of the same owner and market in the transaction: its own ids.
+      const dex: TxDex = {
+        placed: [mk(), mk({ order_id: OTHER_TAKER })],
+        fills: [ownFill(), ownFill({ taker_order_id: OTHER_TAKER, order_id: "999" }), ownFill({ taker_order_id: null })],
+        cancelled: [],
+        pending: false,
+      };
+      const out = outcomeOf(msg, dexCtx(dex));
+      expect(out?.placed.map((o) => o.order_id)).toEqual([TAKER]);
+      expect(out?.fills.map((f) => f.order_id)).toEqual(["998"]);
+      expect(out?.pending).toBe(false);
+    });
+
+    it("shows its fills and the remainder on the book", () => {
+      const msg = msgOf(create, [event("OrderExecutedEvent", { id: "998", order_id: TAKER }), event("OrderSavedEvent", { id: TAKER })]);
+      body(msg, dexCtx({ placed: [mk()], fills: [ownFill()], cancelled: [], pending: false }));
+      expect(screen.getByTestId("dex-fills")).toHaveTextContent("Filled right away: 600 BZE for 7.5 USDC");
+      expect(screen.getByTestId("dex-placed")).toHaveTextContent("400 BZE still waiting on the order book");
+      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+    });
+
+    it("a message filled in full has fills only", () => {
+      const msg = msgOf(create, [event("OrderExecutedEvent", { id: "998", order_id: TAKER })]);
+      const out = outcomeOf(msg, dexCtx({ placed: [], fills: [ownFill({ amount: "1000000000" })], cancelled: [], pending: false }));
+      expect(out?.placed).toEqual([]);
+      expect(out?.fills).toHaveLength(1);
+    });
+
+    it("matches a cancel by the order its own event names", () => {
+      const cancel = fixture("tradebin-cancel-order");
+      const msg = msgOf(cancel, [event("OrderCanceledEvent", { id: "1042", order_id: "1042" })]);
+      const out = outcomeOf(
+        msg,
+        dexCtx({ placed: [], fills: [], cancelled: [order({ order_id: "1042", status: "cancelled" }), order({ order_id: "7", status: "cancelled" })], pending: false }),
+      );
+      expect(out?.cancelled.map((o) => o.order_id)).toEqual(["1042"]);
+      body(msg, dexCtx({ placed: [], fills: [], cancelled: [order({ order_id: "1042", status: "cancelled" })], pending: false }));
+      expect(screen.getByTestId("dex-cancelled")).toHaveTextContent("Order #1042 cancelled, 5 USDC returned");
+    });
+
+    it("keeps the old paths for a message without these events", () => {
+      const out = outcomeOf(create, dexCtx({ placed: [order({})], fills: [fill({}), ownFill()], cancelled: [], pending: true }));
+      expect(out?.fills).toHaveLength(1);
+      expect(out?.pending).toBe(true);
+    });
+  });
+
   it("says a settled fill filled nothing, never that its orders were filled", () => {
     // Mainnet tx 775A6F91…: both orders were gone, v8.1.1 refunded the coins and emitted no DEX event (dex null).
     const fillMsg = fixture("tradebin-fill-orders");
