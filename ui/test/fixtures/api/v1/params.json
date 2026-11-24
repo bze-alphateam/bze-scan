@@ -107,12 +107,14 @@
       "makerFeeDestination": "burner",
       "takerFeeDestination": "burner",
       "native_denom": "ubze",
-      "orderBookExtraGasWindow": "100",
-      "orderBookQueueExtraGas": "25000",
+      "priceLevelOwnersWindow": "100",
+      "priceLevelExtraGas": "25000",
       "fillOrdersExtraGas": "5000",
       "minNativeLiquidityForModuleSwap": "100000000000",
-      "orderBookPerBlockMessages": "500",
-      "orderBookQueueMessageScanExtraGas": "5000"
+      "maxFillsPerOrder": "500",
+      "poolPriceHalfLifeBlocks": "0",
+      "feeMaxPriceDrift": "0.000000000000000000",
+      "moduleMaxPriceDrift": "0.000000000000000000"
     },
     "last_change": {
       "height": 20250000,
@@ -165,7 +167,9 @@
   },
   "burner": {
     "params": {
-      "periodic_burning_weeks": "4"
+      "periodic_burning_weeks": "4",
+      "ibc_move_max_reserve_ratio": "0.000000000000000000",
+      "ibc_move_cooldown_blocks": "0"
     },
     "last_change": null
   },

@@ -12,10 +12,9 @@ import (
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
-	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
-	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -151,7 +150,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec, a
 			TokenFactory: tokenfactorytypes.NewQueryClient(conn),
 			Tradebin:     tradebin,
 			Store:        denomStore,
-			Transfer:     ibctransfertypes.NewQueryClient(conn),
+			Transfer:     denoms.NewTransfer(conn),
 			Lookup:       denomStore,
 			Misses:       resyncs,
 			ChainID:      cfg.ChainID,

@@ -58,8 +58,8 @@ func TestIBCChannelConfirmation(t *testing.T) {
 	e.reg.SetREST("cosmoshub", hub.URL)
 	spoofed := denoms.IBCDenom("transfer/channel-8/uatom")
 	e.grpc.SetResponse("bank", "TotalSupply", "", withSupply(t, spoofed, "1000000"))
-	e.grpc.SetResponse("transfer", "DenomTrace", strings.TrimPrefix(spoofed, "ibc/"),
-		[]byte(`{"denom_trace":{"path":"transfer/channel-8","base_denom":"uatom"}}`))
+	e.grpc.SetResponse("transfer", "Denom", strings.TrimPrefix(spoofed, "ibc/"),
+		[]byte(`{"denom":{"base":"uatom","trace":[{"port_id":"transfer","channel_id":"channel-8"}]}}`))
 
 	// The first run meets the counterparties before the registry caches
 	// them; the channels' next run checks them.

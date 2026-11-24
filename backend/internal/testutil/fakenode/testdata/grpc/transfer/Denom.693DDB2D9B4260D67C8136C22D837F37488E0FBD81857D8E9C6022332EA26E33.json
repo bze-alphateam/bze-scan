@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "ulmn",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-10"
+      }
+    ]
+  }
+}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	connectiontypes "github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
 	"google.golang.org/grpc"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"

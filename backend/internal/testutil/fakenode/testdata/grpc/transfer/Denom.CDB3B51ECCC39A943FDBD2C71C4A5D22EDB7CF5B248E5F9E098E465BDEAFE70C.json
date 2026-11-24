@@ -1,0 +1,15 @@
+{
+  "denom": {
+    "base": "erc20:0xa00C59fF5a080D2b954d0c75e46E22a0c371235a",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-11"
+      },
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-220"
+      }
+    ]
+  }
+}

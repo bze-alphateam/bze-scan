@@ -8,14 +8,22 @@ import (
 	"sync"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
+	"cosmossdk.io/x/nft"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/cosmos-sdk/x/group"
+	ratelimittypes "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
+	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
+	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
@@ -228,4 +236,111 @@ func TestDecodeIsSafeForConcurrentUse(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+const (
+	addr1 = "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+)
+
+// govAuthority is the governance module account, the signer of authority
+// messages.
+var govAuthority = chain.ModuleAddress(chain.Gov)
+
+// signedTx is rawTx with a fee that names no payer or granter, which the
+// strict decoder also accepts.
+func signedTx(t *testing.T, msgs ...*codectypes.Any) []byte {
+	t.Helper()
+	body, err := (&tx.TxBody{Messages: msgs}).Marshal()
+	require.NoError(t, err)
+	auth, err := (&tx.AuthInfo{Fee: &tx.Fee{Amount: sdk.NewCoins(sdk.NewInt64Coin("ubze", 7))}}).Marshal()
+	require.NoError(t, err)
+	raw, err := (&tx.TxRaw{BodyBytes: body, AuthInfoBytes: auth}).Marshal()
+	require.NoError(t, err)
+	return raw
+}
+
+func anyOf(t *testing.T, msg sdk.Msg) *codectypes.Any {
+	t.Helper()
+	a, err := codectypes.NewAnyWithValue(msg)
+	require.NoError(t, err)
+	return a
+}
+
+// Messages of chain v8.3.0 decode with a body and their signer.
+func TestV830MessagesDecodeWithBodiesAndSigners(t *testing.T) {
+	c := newCodec(t)
+	for _, tc := range []struct {
+		msg    sdk.Msg
+		typ    string
+		signer string
+	}{
+		{&daotypes.MsgCreateDao{Creator: addr1, Name: "Team", Type: daotypes.DaoType_DAO_TYPE_STATIC_LIST, Members: []string{addr1}}, "/bze.dao.MsgCreateDao", addr1},
+		{&guardiantypes.MsgHaltChain{Signer: addr1, Reason: "incident"}, "/bze.guardian.v1.MsgHaltChain", addr1},
+		{&ratelimittypes.MsgAddRateLimit{
+			Authority: govAuthority, Denom: "ubze", ChannelOrClientId: "channel-0",
+			MaxPercentSend: sdkmath.NewInt(10), MaxPercentRecv: sdkmath.NewInt(10), DurationHours: 24,
+		}, "/ratelimit.v1.MsgAddRateLimit", govAuthority},
+		{&tradebintypes.MsgUpdatePools{Authority: govAuthority, Updates: []tradebintypes.PoolUpdate{{PoolId: "ulp_1"}}}, "/bze.tradebin.MsgUpdatePools", govAuthority},
+		{&tokenfactorytypes.MsgSetDenomAdmin{Authority: govAuthority, Denom: "factory/" + addr1 + "/utok", NewAdmin: addr1}, "/bze.tokenfactory.MsgSetDenomAdmin", govAuthority},
+		{&tokenfactorytypes.MsgDisableMinting{Creator: addr1, Denom: "factory/" + addr1 + "/utok"}, "/bze.tokenfactory.MsgDisableMinting", addr1},
+		{&tokenfactorytypes.MsgSetDenomConfig{
+			Creator: addr1, Denom: "factory/" + addr1 + "/utok",
+			TransferFee: sdkmath.LegacyNewDecWithPrec(1, 2), GasSurcharge: sdkmath.LegacyZeroDec(),
+		}, "/bze.tokenfactory.MsgSetDenomConfig", addr1},
+		// Retired from the chain, still in the history.
+		{&group.MsgCreateGroup{Admin: addr1, Members: []group.MemberRequest{{Address: addr1, Weight: "1"}}}, "/cosmos.group.v1.MsgCreateGroup", addr1},
+		{&nft.MsgSend{ClassId: "class", Id: "1", Sender: addr1, Receiver: addr1}, "/cosmos.nft.v1beta1.MsgSend", addr1},
+	} {
+		t.Run(tc.typ, func(t *testing.T) {
+			decoded, err := c.Decode(signedTx(t, anyOf(t, tc.msg)))
+			require.NoError(t, err)
+			require.Len(t, decoded.Msgs, 1)
+			m := decoded.Msgs[0]
+			assert.Equal(t, tc.typ, m.TypeURL)
+			assert.NoError(t, m.Err)
+			assert.NotEmpty(t, m.Body, "a body")
+			assert.Equal(t, tc.signer, m.Signer)
+			assert.Equal(t, []string{tc.signer}, decoded.Signers)
+		})
+	}
+}
+
+// ICS-29 fee messages left ibc-go with v10 and are not carried: the type URL
+// stays, the body is nil and the transaction is not dropped.
+func TestARetiredFeeMessageKeepsItsTypeURL(t *testing.T) {
+	c := newCodec(t)
+	fee := &codectypes.Any{TypeUrl: "/ibc.applications.fee.v1.MsgRegisterPayee", Value: []byte{0x0a, 0x06, 'p', 'o', 'r', 't', '-', '1'}}
+	decoded, err := c.Decode(rawTx(t, "m", fee, anyOf(t, &banktypes.MsgSend{
+		FromAddress: addr1, ToAddress: addr1, Amount: sdk.NewCoins(sdk.NewInt64Coin("ubze", 1)),
+	})))
+	require.NoError(t, err)
+	require.Len(t, decoded.Msgs, 2)
+	assert.Equal(t, "/ibc.applications.fee.v1.MsgRegisterPayee", decoded.Msgs[0].TypeURL)
+	assert.Nil(t, decoded.Msgs[0].Body)
+	assert.Error(t, decoded.Msgs[0].Err)
+	assert.NoError(t, decoded.Msgs[1].Err)
+}
+
+// ibc-go v10 renders an unset MsgTransfer encoding; the body keeps the shape
+// it had before, also nested in an authz MsgExec, and keeps a set encoding.
+func TestTransferBodiesDoNotCarryAnEmptyEncoding(t *testing.T) {
+	c := newCodec(t)
+	transfer := &ibctransfertypes.MsgTransfer{
+		SourcePort: "transfer", SourceChannel: "channel-0", Token: sdk.NewInt64Coin("ubze", 5),
+		Sender: addr1, Receiver: "osmo1x", TimeoutTimestamp: 1,
+	}
+	body, err := c.MsgJSON(transfer)
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), "encoding")
+
+	exec := &authz.MsgExec{Grantee: addr1, Msgs: []*codectypes.Any{anyOf(t, transfer)}}
+	body, err = c.MsgJSON(exec)
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), "encoding")
+	assert.Contains(t, string(body), "channel-0")
+
+	transfer.Encoding = "application/x-protobuf"
+	body, err = c.MsgJSON(transfer)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"encoding":"application/x-protobuf"`)
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
@@ -268,7 +268,7 @@ func packetRow(ev node.Event, direction, channelKey string, data ibctransfertype
 	}
 	denom := data.Denom
 	if direction == IBCOut {
-		denom = ibctransfertypes.ParseDenomTrace(data.Denom).IBCDenom()
+		denom = ibctransfertypes.ExtractDenomFromPath(data.Denom).IBCDenom()
 	}
 	row := &IBCTransfer{
 		ChannelID: channel, Sequence: seq, Direction: direction,

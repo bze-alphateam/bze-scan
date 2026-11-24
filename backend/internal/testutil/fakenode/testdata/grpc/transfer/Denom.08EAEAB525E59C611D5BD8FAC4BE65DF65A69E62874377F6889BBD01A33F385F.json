@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "factory/osmo1n6asrjy9754q8y9jsxqf557zmsv3s3xa5m9eg5/uspice",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-0"
+      }
+    ]
+  }
+}

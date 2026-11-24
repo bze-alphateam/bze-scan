@@ -65,7 +65,9 @@ func TestMainnetGenerations(t *testing.T) {
 		{22_551_809, "v8.0.0", archive.FormatCurrent},
 		{22_551_810, "v8.1.0", archive.FormatCurrent},
 		{23_855_000, "v8.1.1", archive.FormatCurrent},
-		{30_000_000, "v8.1.1", archive.FormatCurrent},
+		{25_263_599, "v8.1.1", archive.FormatCurrent},
+		{25_263_600, "v8.2.0", archive.FormatCurrent},
+		{30_000_000, "v8.2.0", archive.FormatCurrent},
 	}
 	for _, c := range cases {
 		g := archive.Mainnet.At(c.height)

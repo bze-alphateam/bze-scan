@@ -128,7 +128,7 @@ var messages = []MessageKind{
 	msg("/cosmos.feegrant.v1beta1.MsgRevokeAllowance", "feegrant_revoke", Other, Other, "revoke_feegrant.grantee"),
 	msg("/cosmos.feegrant.v1beta1.MsgPruneAllowances", "feegrant_prune", Other, Other, ""),
 
-	// Groups (x/group is wired but unused on BeeZee).
+	// Groups (x/group left the chain at v8.3.0 and was unused on BeeZee; the codec still decodes it for the history).
 	msg("/cosmos.group.v1.MsgCreateGroup", KindGroup, Other, Other, ""),
 	msg("/cosmos.group.v1.MsgCreateGroupPolicy", KindGroup, Other, Other, ""),
 	msg("/cosmos.group.v1.MsgCreateGroupWithPolicy", KindGroup, Other, Other, ""),
@@ -165,6 +165,12 @@ var messages = []MessageKind{
 	msg("/ibc.core.client.v1.MsgCreateClient", KindRelay, Other, Other, ""),
 	msg("/ibc.core.client.v1.MsgUpgradeClient", KindRelay, Other, Other, ""),
 	msg("/ibc.core.client.v1.MsgSubmitMisbehaviour", KindRelay, Other, Other, ""),
+	// IBC v2 (ibc-go v10): relayed like their v1 counterparts.
+	msg("/ibc.core.channel.v2.MsgSendPacket", KindRelay, Other, CrossChain, ""),
+	msg("/ibc.core.channel.v2.MsgRecvPacket", KindRelay, Other, CrossChain, ""),
+	msg("/ibc.core.channel.v2.MsgAcknowledgement", KindRelay, Other, CrossChain, ""),
+	msg("/ibc.core.channel.v2.MsgTimeout", KindRelay, Other, CrossChain, ""),
+	msg("/ibc.core.client.v2.MsgRegisterCounterparty", KindRelay, Other, Other, ""),
 	msg("/ibc.core.connection.v1.MsgConnectionOpenInit", KindRelay, Other, Other, ""),
 	msg("/ibc.core.connection.v1.MsgConnectionOpenTry", KindRelay, Other, Other, ""),
 	msg("/ibc.core.connection.v1.MsgConnectionOpenAck", KindRelay, Other, Other, ""),
@@ -267,10 +273,34 @@ var Unclassified = []string{
 	"/ibc.applications.interchain_accounts.host.v1.MsgUpdateParams",
 	"/ibc.applications.transfer.v1.MsgUpdateParams",
 	"/ibc.core.channel.v1.MsgUpdateParams",
+	"/ibc.core.client.v1.MsgDeleteClientCreator",
 	"/ibc.core.client.v1.MsgIBCSoftwareUpgrade",
 	"/ibc.core.client.v1.MsgRecoverClient",
 	"/ibc.core.client.v1.MsgUpdateParams",
+	"/ibc.core.client.v2.MsgUpdateClientConfig",
 	"/ibc.core.connection.v1.MsgUpdateParams",
+}
+
+// Retired are type URLs of the tables above that the chain no longer
+// registers: ICS-29 fee middleware and channel upgrades left ibc-go with v10
+// (chain v8.3.0), and the explorer's codec does not carry them. Their
+// entries stay, for a transaction of the history (a testnet one, or a
+// re-indexed height) keeps its type URL and is classified as before; the
+// registration check accepts them as absent.
+var Retired = []string{
+	"/ibc.applications.fee.v1.MsgPayPacketFee",
+	"/ibc.applications.fee.v1.MsgPayPacketFeeAsync",
+	"/ibc.applications.fee.v1.MsgRegisterCounterpartyPayee",
+	"/ibc.applications.fee.v1.MsgRegisterPayee",
+	"/ibc.core.channel.v1.MsgChannelUpgradeAck",
+	"/ibc.core.channel.v1.MsgChannelUpgradeCancel",
+	"/ibc.core.channel.v1.MsgChannelUpgradeConfirm",
+	"/ibc.core.channel.v1.MsgChannelUpgradeInit",
+	"/ibc.core.channel.v1.MsgChannelUpgradeOpen",
+	"/ibc.core.channel.v1.MsgChannelUpgradeTimeout",
+	"/ibc.core.channel.v1.MsgChannelUpgradeTry",
+	"/ibc.core.channel.v1.MsgPruneAcknowledgements",
+	"/ibc.core.channel.v1.MsgUpdateParams",
 }
 
 func event(eventType, kind, category string, addressAttrs ...string) BlockEventKind {

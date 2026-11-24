@@ -544,7 +544,7 @@ export const PARAMETERS: ParamDef[] = [
   {
     group: "dex",
     module: "tradebin",
-    paths: ["orderBookPerBlockMessages"],
+    paths: ["maxFillsPerOrder"],
     name: "Orders matched per block",
     format: "count",
     explain: (v) =>
@@ -561,7 +561,7 @@ export const PARAMETERS: ParamDef[] = [
   {
     group: "dex",
     module: "tradebin",
-    paths: ["orderBookExtraGasWindow", "orderBookQueueExtraGas", "fillOrdersExtraGas", "orderBookQueueMessageScanExtraGas"],
+    paths: ["priceLevelOwnersWindow", "priceLevelExtraGas", "fillOrdersExtraGas"],
     name: "Extra gas for order messages",
     format: "gas",
     advanced: true,

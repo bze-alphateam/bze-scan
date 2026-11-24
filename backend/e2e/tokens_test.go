@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -416,4 +417,27 @@ func TestTokenTransfersCarryTheirMessageType(t *testing.T) {
 		{-1, 9000}: nil,
 	}, got)
 	assert.Equal(t, 12, rows, "one row per transfer, the message join adds none")
+}
+
+// A node of a network that has not upgraded to chain v8.3.0 does not have the
+// transfer Denom query: the old DenomTrace gives the same stored trace.
+func TestAnOldNodeTracesIBCDenomsWithTheOldQuery(t *testing.T) {
+	const (
+		usherpa  = "ibc/02EE50AB3A4B7540FA001B24CB75E688016F65547CABE885EA184338440080B2"
+		cw20Juno = "ibc/12C0B8B561AFCFDA3C73DEE0F7F84AA2B860D48493C27E8E81A5D14724FAB08B"
+	)
+	e := newSyncEnv(t)
+	for _, d := range []string{usherpa, cw20Juno} {
+		e.grpc.SetResponse("transfer", "Denom", strings.TrimPrefix(d, "ibc/"), nil) // Unimplemented, as on an old node
+	}
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+
+	assert.Equal(t, []string{
+		cw20Juno + " transfer/channel-0/transfer/channel-169 cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l",
+		usherpa + " transfer/channel-0 factory/osmo1n6asrjy9754q8y9jsxqf557zmsv3s3xa5m9eg5/usherpa",
+	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, ibc_path, ibc_base_denom) FROM explorer.denoms
+		WHERE denom IN ($1, $2) ORDER BY denom`, usherpa, cw20Juno))
+	assert.Equal(t, 2, e.grpc.Requests("transfer", "DenomTrace"))
+	assert.Equal(t, 1, e.grpc.RequestsFor("transfer", "DenomTrace", strings.TrimPrefix(usherpa, "ibc/")))
 }

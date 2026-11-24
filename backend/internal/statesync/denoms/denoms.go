@@ -36,7 +36,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -46,6 +46,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chainregistry"
+	"github.com/bze-alphateam/bze-scan/backend/internal/legacytransfer"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 )
 
@@ -127,10 +128,30 @@ type Tradebin interface {
 	AllLiquidityPools(ctx context.Context, in *tradebintypes.QueryAllLiquidityPoolsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryAllLiquidityPoolsResponse, error)
 }
 
-// Transfer is the part of the IBC transfer query client the set uses;
-// ibctransfertypes.QueryClient satisfies it.
+// Transfer is the part of the IBC transfer query client the set uses: the
+// Denom query of ibc-go v10 (nodes on chain v8.3.0 and later) and, for a node
+// that has not upgraded yet and answers it Unimplemented, the old DenomTrace
+// query. NewTransfer builds both over one connection.
 type Transfer interface {
-	DenomTrace(ctx context.Context, in *ibctransfertypes.QueryDenomTraceRequest, opts ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error)
+	Denom(ctx context.Context, in *ibctransfertypes.QueryDenomRequest, opts ...grpc.CallOption) (*ibctransfertypes.QueryDenomResponse, error)
+	DenomTrace(ctx context.Context, in *legacytransfer.QueryDenomTraceRequest, opts ...grpc.CallOption) (*legacytransfer.QueryDenomTraceResponse, error)
+}
+
+type transfer struct {
+	ibctransfertypes.QueryClient
+	legacytransfer.Client
+}
+
+// NewTransfer returns the Transfer of a node connection.
+func NewTransfer(cc grpc.ClientConnInterface) Transfer {
+	return transfer{QueryClient: ibctransfertypes.NewQueryClient(cc), Client: legacytransfer.NewClient(cc)}
+}
+
+// denomTrace is an IBC denom's path of port/channel pairs
+// (transfer/channel-0/transfer/channel-169) and its base denom.
+type denomTrace struct {
+	Path string
+	Base string
 }
 
 // RegistryAsset is a cached chain-registry asset.
@@ -687,17 +708,14 @@ func (o *origins) publish(p statesync.Publisher) {
 // registry asset; true when the asset gave the exponent.
 func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) (bool, error) {
 	hash := strings.TrimPrefix(row.Denom, "ibc/")
-	resp, err := s.deps.Transfer.DenomTrace(ctx, &ibctransfertypes.QueryDenomTraceRequest{Hash: hash})
+	trace, err := s.trace(ctx, hash)
 	switch {
-	case status.Code(err) == codes.NotFound:
-		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("transfer DenomTrace %s: %w", row.Denom, err)
-	case resp.DenomTrace == nil:
+		return false, fmt.Errorf("transfer trace %s: %w", row.Denom, err)
+	case trace == nil:
 		return false, nil
 	}
-	trace := resp.DenomTrace
-	row.IBCPath, row.IBCBaseDenom = trace.Path, trace.BaseDenom
+	row.IBCPath, row.IBCBaseDenom = trace.Path, trace.Base
 	if o == nil {
 		return false, nil
 	}
@@ -738,9 +756,9 @@ func (s *Set) ibc(ctx context.Context, row *Denom, o *origins) (bool, error) {
 // hop chain's asset for the rest of the path leads, through its traces, to
 // the home chain, which then becomes the origin. nil when the cache has
 // none (and the missing chain is asked for).
-func (s *Set) originAsset(ctx context.Context, row *Denom, trace *ibctransfertypes.DenomTrace, first string, o *origins) (*RegistryAsset, error) {
+func (s *Set) originAsset(ctx context.Context, row *Denom, trace *denomTrace, first string, o *origins) (*RegistryAsset, error) {
 	if len(channels(trace.Path)) == 1 {
-		asset, err := o.lookup.Asset(ctx, first, trace.BaseDenom)
+		asset, err := o.lookup.Asset(ctx, first, trace.Base)
 		if asset == nil && err == nil {
 			o.miss(first)
 		}
@@ -748,7 +766,7 @@ func (s *Set) originAsset(ctx context.Context, row *Denom, trace *ibctransfertyp
 	}
 	_, rest, _ := strings.Cut(trace.Path, "/")
 	_, rest, _ = strings.Cut(rest, "/")
-	via, err := o.lookup.Asset(ctx, first, IBCDenom(rest+"/"+trace.BaseDenom))
+	via, err := o.lookup.Asset(ctx, first, IBCDenom(rest+"/"+trace.Base))
 	if err != nil {
 		return nil, err
 	}
@@ -778,6 +796,40 @@ func (s *Set) originAsset(ctx context.Context, row *Denom, trace *ibctransfertyp
 	}
 	row.OriginChainID, row.IBCBaseDenom = home, base
 	return asset, nil
+}
+
+// trace asks the node for the trace of an IBC denom's hash: Query/Denom,
+// and, on a node that does not have it yet (Unimplemented, before its network
+// upgrades to chain v8.3.0), the old Query/DenomTrace. nil when the node does
+// not know the hash.
+func (s *Set) trace(ctx context.Context, hash string) (*denomTrace, error) {
+	resp, err := s.deps.Transfer.Denom(ctx, &ibctransfertypes.QueryDenomRequest{Hash: hash})
+	switch status.Code(err) {
+	case codes.OK:
+		if resp.Denom == nil {
+			return nil, nil
+		}
+		hops := make([]string, 0, 2*len(resp.Denom.Trace))
+		for _, h := range resp.Denom.Trace {
+			hops = append(hops, h.PortId, h.ChannelId)
+		}
+		return &denomTrace{Path: strings.Join(hops, "/"), Base: resp.Denom.Base}, nil
+	case codes.NotFound:
+		return nil, nil
+	case codes.Unimplemented:
+	default:
+		return nil, err
+	}
+	old, err := s.deps.Transfer.DenomTrace(ctx, &legacytransfer.QueryDenomTraceRequest{Hash: hash})
+	switch {
+	case status.Code(err) == codes.NotFound:
+		return nil, nil
+	case err != nil:
+		return nil, err
+	case old.DenomTrace == nil:
+		return nil, nil
+	}
+	return &denomTrace{Path: old.DenomTrace.Path, Base: old.DenomTrace.BaseDenom}, nil
 }
 
 // channels returns the channel ids of an IBC path (port/channel pairs:

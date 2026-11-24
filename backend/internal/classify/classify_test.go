@@ -20,8 +20,49 @@ var categories = map[string]bool{
 	classify.CrossChain: true, classify.Other: true,
 }
 
+// pendingBFE348 are messages the chain registers (v8.3.0) that BFE-348
+// classifies; until then they are accepted unclassified.
+// TODO(BFE-348): classify them and delete this list.
+var pendingBFE348 = []string{
+	"/bze.dao.MsgAcceptAdminNomination",
+	"/bze.dao.MsgAdminExecute",
+	"/bze.dao.MsgCancelProposal",
+	"/bze.dao.MsgCleanupProposal",
+	"/bze.dao.MsgCreateDao",
+	"/bze.dao.MsgNominateAdmin",
+	"/bze.dao.MsgSettleProposal",
+	"/bze.dao.MsgSubmitProposal",
+	"/bze.dao.MsgUpdateDaoConfig",
+	"/bze.dao.MsgUpdateElectorate",
+	"/bze.dao.MsgUpdateMembers",
+	"/bze.dao.MsgUpdateMetadata",
+	"/bze.dao.MsgUpdateParams",
+	"/bze.dao.MsgVote",
+	"/bze.dao.MsgWithdrawAdminNomination",
+	"/bze.guardian.v1.MsgBlockDenom",
+	"/bze.guardian.v1.MsgCloseChannel",
+	"/bze.guardian.v1.MsgDisableMessages",
+	"/bze.guardian.v1.MsgHaltChain",
+	"/bze.guardian.v1.MsgHaltTradingDenoms",
+	"/bze.guardian.v1.MsgPauseAutomation",
+	"/bze.guardian.v1.MsgReopenChannel",
+	"/bze.guardian.v1.MsgResumeAutomation",
+	"/bze.guardian.v1.MsgTightenRateLimit",
+	"/bze.guardian.v1.MsgUnblockDenom",
+	"/bze.guardian.v1.MsgUpdateParams",
+	"/bze.tokenfactory.MsgDisableMinting",
+	"/bze.tokenfactory.MsgSetDenomAdmin",
+	"/bze.tokenfactory.MsgSetDenomConfig",
+	"/bze.tradebin.MsgUpdatePools",
+	"/ratelimit.v1.MsgAddRateLimit",
+	"/ratelimit.v1.MsgRemoveRateLimit",
+	"/ratelimit.v1.MsgResetRateLimit",
+	"/ratelimit.v1.MsgUpdateRateLimit",
+}
+
 // Every message type the chain accepts is either classified or deliberately
-// left out, and every entry names a type the chain really registers.
+// left out, and every entry names a type the chain really registers, except
+// the retired ones, which it no longer registers.
 func TestEveryRegisteredMessageIsClassifiedOrAllowListed(t *testing.T) {
 	codec, err := chain.NewCodec()
 	require.NoError(t, err)
@@ -29,20 +70,31 @@ func TestEveryRegisteredMessageIsClassifiedOrAllowListed(t *testing.T) {
 	for _, u := range codec.MsgTypeURLs() {
 		registered[u] = true
 	}
+	retired := map[string]bool{}
+	for _, u := range classify.Retired {
+		retired[u] = true
+		assert.False(t, registered[u], "%s is retired but the chain codec still registers it", u)
+	}
+	pending := map[string]bool{}
+	for _, u := range pendingBFE348 {
+		pending[u] = true
+		assert.True(t, registered[u], "%s is pending BFE-348 but not registered by the chain", u)
+	}
 
 	classified := map[string]bool{}
 	for _, m := range classify.Messages() {
 		classified[m.TypeURL] = true
-		assert.True(t, registered[m.TypeURL], "%s is classified but not registered by the chain", m.TypeURL)
+		assert.True(t, registered[m.TypeURL] || retired[m.TypeURL], "%s is classified but not registered by the chain", m.TypeURL)
+		assert.False(t, pending[m.TypeURL], "%s is classified: drop it from pendingBFE348", m.TypeURL)
 	}
 	allowed := map[string]bool{}
 	for _, u := range classify.Unclassified {
 		allowed[u] = true
-		assert.True(t, registered[u], "%s is allow-listed but not registered by the chain", u)
+		assert.True(t, registered[u] || retired[u], "%s is allow-listed but not registered by the chain", u)
 		assert.False(t, classified[u], "%s is both classified and allow-listed", u)
 	}
 	for u := range registered {
-		assert.True(t, classified[u] || allowed[u], "%s has no classification entry and is not allow-listed", u)
+		assert.True(t, classified[u] || allowed[u] || pending[u], "%s has no classification entry and is not allow-listed", u)
 	}
 }
 

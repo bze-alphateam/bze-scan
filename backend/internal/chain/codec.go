@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -8,6 +9,7 @@ import (
 
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
+	"cosmossdk.io/x/nft"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -17,7 +19,9 @@ import (
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/cosmos/cosmos-sdk/x/group"
 	gogoproto "github.com/cosmos/gogoproto/proto"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"google.golang.org/grpc/encoding"
 
 	bzeapp "github.com/bze-alphateam/bze/app"
@@ -79,6 +83,12 @@ func NewCodec() (*Codec, error) {
 		return nil, fmt.Errorf("chain codec: %w", err)
 	}
 	bzeapp.RegisterIBC(registry)
+	// x/group and x/nft are gone from the chain at v8.3.0 but their
+	// messages stay in the history (and a re-indexed height): keep decoding
+	// them. ICS-29 fee and the channel upgrade messages are not carried
+	// (never used on mainnet); their type URLs decode leniently.
+	group.RegisterInterfaces(registry)
+	nft.RegisterInterfaces(registry)
 	if err := registerLegacyTypeURLs(registry); err != nil {
 		return nil, fmt.Errorf("chain codec: %w", err)
 	}
@@ -106,7 +116,26 @@ func (c *Codec) MsgJSON(msg sdk.Msg) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return canonicalNestedTypes(out), nil
+	return withoutEmptyTransferEncoding(msg, canonicalNestedTypes(out)), nil
+}
+
+// emptyTransferEncoding is how ibc-go v10 renders the empty "encoding" it
+// added to MsgTransfer (the last field of the message).
+var emptyTransferEncoding = []byte(`,"encoding":""`)
+
+// withoutEmptyTransferEncoding drops the empty "encoding" of MsgTransfer
+// bodies (the message itself or nested in an authz MsgExec), so a transfer
+// keeps the body it had before ibc-go v10: the stored bodies of a re-indexed
+// height do not differ from the ones indexed before. A transfer that sets an
+// encoding keeps it.
+func withoutEmptyTransferEncoding(msg sdk.Msg, doc []byte) []byte {
+	if !bytes.Contains(doc, emptyTransferEncoding) {
+		return doc
+	}
+	if _, ok := msg.(*ibctransfertypes.MsgTransfer); !ok && !bytes.Contains(doc, []byte(`"@type":"`+sdk.MsgTypeURL(&ibctransfertypes.MsgTransfer{})+`"`)) {
+		return doc
+	}
+	return bytes.ReplaceAll(doc, emptyTransferEncoding, nil)
 }
 
 // TypeURL is the message's type URL, e.g. "/cosmos.bank.v1beta1.MsgSend".

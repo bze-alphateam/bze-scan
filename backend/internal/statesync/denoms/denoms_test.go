@@ -13,7 +13,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -23,6 +23,7 @@ import (
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/legacytransfer"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
@@ -377,14 +378,21 @@ func TestFailuresKeepTheRows(t *testing.T) {
 	assert.Equal(t, denoms.SeenKey(usdc), set.Canonical(denoms.SeenKey(usdc)), "a failed save teaches nothing")
 }
 
-// DenomTrace answers the recorded traces of the IBC denoms.
-func (n *fakeNode) DenomTrace(_ context.Context, in *ibctransfertypes.QueryDenomTraceRequest, _ ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
-	if err := n.count("DenomTrace"); err != nil {
+// Denom answers the recorded traces of the IBC denoms (chain v8.3.0).
+func (n *fakeNode) Denom(_ context.Context, in *ibctransfertypes.QueryDenomRequest, _ ...grpc.CallOption) (*ibctransfertypes.QueryDenomResponse, error) {
+	if err := n.count("Denom"); err != nil {
 		return nil, err
 	}
-	var resp ibctransfertypes.QueryDenomTraceResponse
-	fakenode.LoadGRPCFixture(n.t, "transfer", "DenomTrace", in.Hash, &resp)
+	var resp ibctransfertypes.QueryDenomResponse
+	fakenode.LoadGRPCFixture(n.t, "transfer", "Denom", in.Hash, &resp)
 	return &resp, nil
+}
+
+// DenomTrace is the old query: a v8.3.0 node does not answer it, and the
+// set only asks it after Denom was Unimplemented.
+func (n *fakeNode) DenomTrace(context.Context, *legacytransfer.QueryDenomTraceRequest, ...grpc.CallOption) (*legacytransfer.QueryDenomTraceResponse, error) {
+	n.t.Error("DenomTrace asked although Denom answered")
+	return nil, status.Error(codes.Unimplemented, "unknown method DenomTrace")
 }
 
 // fakeLookup answers the channels and the registry cache from maps.
@@ -534,16 +542,83 @@ func TestATraceTheNodeDoesNotKnowLeavesTheDenomUntraced(t *testing.T) {
 	require.Error(t, failing.ResyncOne(context.Background(), usdc))
 }
 
+// noTrace knows no trace on either query.
 type noTrace struct{}
 
-func (noTrace) DenomTrace(context.Context, *ibctransfertypes.QueryDenomTraceRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
+func (noTrace) Denom(context.Context, *ibctransfertypes.QueryDenomRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomResponse, error) {
+	return nil, status.Error(codes.NotFound, "no trace")
+}
+
+func (noTrace) DenomTrace(context.Context, *legacytransfer.QueryDenomTraceRequest, ...grpc.CallOption) (*legacytransfer.QueryDenomTraceResponse, error) {
 	return nil, status.Error(codes.NotFound, "no trace")
 }
 
 type brokenTrace struct{}
 
-func (brokenTrace) DenomTrace(context.Context, *ibctransfertypes.QueryDenomTraceRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomTraceResponse, error) {
+func (brokenTrace) Denom(context.Context, *ibctransfertypes.QueryDenomRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomResponse, error) {
 	return nil, errors.New("node down")
+}
+
+func (brokenTrace) DenomTrace(context.Context, *legacytransfer.QueryDenomTraceRequest, ...grpc.CallOption) (*legacytransfer.QueryDenomTraceResponse, error) {
+	return nil, errors.New("node down")
+}
+
+// oldNode is a node of a network before chain v8.3.0: no Denom query, the
+// recorded DenomTrace answers instead.
+type oldNode struct {
+	*fakeNode
+	denomCalls, traceCalls int
+}
+
+func (o *oldNode) Denom(context.Context, *ibctransfertypes.QueryDenomRequest, ...grpc.CallOption) (*ibctransfertypes.QueryDenomResponse, error) {
+	o.denomCalls++
+	return nil, status.Error(codes.Unimplemented, "unknown method Denom for service ibc.applications.transfer.v1.Query")
+}
+
+func (o *oldNode) DenomTrace(ctx context.Context, in *legacytransfer.QueryDenomTraceRequest, _ ...grpc.CallOption) (*legacytransfer.QueryDenomTraceResponse, error) {
+	o.traceCalls++
+	// The recorded traces are the Denom answers; the old answer is the same
+	// data as one path string.
+	d, err := o.fakeNode.Denom(ctx, &ibctransfertypes.QueryDenomRequest{Hash: in.Hash})
+	require.NoError(o.t, err)
+	hops := make([]string, 0, 2*len(d.Denom.Trace))
+	for _, h := range d.Denom.Trace {
+		hops = append(hops, h.PortId, h.ChannelId)
+	}
+	return &legacytransfer.QueryDenomTraceResponse{DenomTrace: &legacytransfer.DenomTrace{Path: strings.Join(hops, "/"), BaseDenom: d.Denom.Base}}, nil
+}
+
+// A node that has not upgraded to chain v8.3.0 answers Denom Unimplemented:
+// the old DenomTrace query gives every IBC denom the same stored trace.
+func TestAnOldNodeIsAskedForTheDenomTrace(t *testing.T) {
+	n, current := newFakeNode(t), &fakeStore{}
+	old, fallback := &oldNode{fakeNode: n}, &fakeStore{}
+	require.NoError(t, denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: current, Transfer: n}, 0).FullResync(context.Background()))
+	require.NoError(t, denoms.New(denoms.Deps{Bank: n, TokenFactory: n, Tradebin: n, Store: fallback, Transfer: old}, 0).FullResync(context.Background()))
+
+	want, got := byDenom(current.last(t)), byDenom(fallback.last(t))
+	traced := 0
+	for d, row := range want {
+		if row.IBCPath == "" {
+			continue
+		}
+		traced++
+		assert.Equal(t, row.IBCPath, got[d].IBCPath, d)
+		assert.Equal(t, row.IBCBaseDenom, got[d].IBCBaseDenom, d)
+	}
+	assert.Equal(t, 19, traced)
+	assert.Equal(t, 19, old.denomCalls)
+	assert.Equal(t, 19, old.traceCalls, "each Unimplemented Denom falls back once")
+}
+
+// The Denom answer maps to the stored path: the hops joined as
+// port/channel pairs, the base denom as is, a multi-hop path included.
+func TestTheDenomHopsBecomeThePath(t *testing.T) {
+	set, st, _ := ibcSet(t, &fakeLookup{})
+	require.NoError(t, set.FullResync(context.Background()))
+	row := byDenom(st.last(t))[cw20ViaJuno]
+	assert.Equal(t, "transfer/channel-0/transfer/channel-169", row.IBCPath)
+	assert.Equal(t, "cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l", row.IBCBaseDenom)
 }
 
 // withSupply is the recorded bank with coins added to the total supply.

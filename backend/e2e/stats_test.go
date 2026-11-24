@@ -147,7 +147,8 @@ func TestParamsSnapshotOnlyWhatChanged(t *testing.T) {
 
 	// A change seen after a passed upgrade's plan height is attributed to
 	// it: proposal 47 upgraded the chain at 23855000.
-	_, err = e.db.Exec(`UPDATE explorer.param_snapshots SET height = 23000000, params = '{"periodic_burning_weeks":"2"}'
+	_, err = e.db.Exec(`UPDATE explorer.param_snapshots SET height = 23000000, params = '{"periodic_burning_weeks":"2",
+		"ibc_move_max_reserve_ratio":"0.000000000000000000","ibc_move_cooldown_blocks":"0"}'
 		WHERE module = 'burner'`)
 	require.NoError(t, err)
 	code, _ = e.syncState(t)
@@ -155,6 +156,41 @@ func TestParamsSnapshotOnlyWhatChanged(t *testing.T) {
 	assert.Equal(t, []string{"burner 24998477 {periodic_burning_weeks} 47"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', module, height, changed_keys::text, coalesce(proposal_id::text, '-'))
 		   FROM explorer.param_snapshots WHERE module = 'burner' AND cardinality(changed_keys) > 0`))
+}
+
+// The snapshots a build on the v8.2.x types stored are rewritten by the
+// post-migration step into the shape of the v8.3.0 types, so the first run
+// after the deploy, against a node that has not upgraded, records no change.
+func TestV830DeployDoesNotRecordTheExplorersOwnTypesAsAChange(t *testing.T) {
+	e := newSyncEnv(t)
+	code, out := e.syncState(t)
+	require.Equal(t, 0, code, out)
+	first := e.count(t, `SELECT count(*) FROM explorer.param_snapshots`)
+
+	// What the previous build stored for the two modules: the node's answer
+	// under the v8.2.x names.
+	for module, fixture := range map[string]string{"tradebin": "tradebin", "burner": "burner"} {
+		var answer struct {
+			Params json.RawMessage `json:"params"`
+		}
+		require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, fixture, "Params", ""), &answer))
+		_, err := e.db.Exec(`UPDATE explorer.param_snapshots SET params = $2::jsonb WHERE module = $1`, module, string(answer.Params))
+		require.NoError(t, err)
+	}
+	e.node.SetStatusHeight(recordedStatusHeight + 100)
+	code, _ = e.syncState(t)
+	require.Equal(t, 0, code)
+	assert.Equal(t, first+2, e.count(t, `SELECT count(*) FROM explorer.param_snapshots`), "without the step the old shape reads as a change")
+
+	// The deploy: migrate up runs the step over the latest rows.
+	_, err := e.db.Exec(`DELETE FROM explorer.param_snapshots WHERE height > $1`, recordedStatusHeight)
+	require.NoError(t, err)
+	res := migrateUp(t, e.url)
+	assert.Contains(t, res.Steps, "params_v830")
+	e.node.SetStatusHeight(recordedStatusHeight + 200)
+	code, _ = e.syncState(t)
+	require.Equal(t, 0, code)
+	assert.Equal(t, first, e.count(t, `SELECT count(*) FROM explorer.param_snapshots`), "no new row")
 }
 
 func TestStatsWindowsAnchorOnTheLatestBlock(t *testing.T) {

@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "aarch",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-2"
+      }
+    ]
+  }
+}

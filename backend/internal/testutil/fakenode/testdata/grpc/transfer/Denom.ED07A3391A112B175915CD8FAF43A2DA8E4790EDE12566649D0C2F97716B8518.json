@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "uosmo",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-0"
+      }
+    ]
+  }
+}

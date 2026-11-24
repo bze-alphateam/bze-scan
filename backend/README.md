@@ -1,7 +1,8 @@
 # bze-scan backend
 
-Go module `github.com/bze-alphateam/bze-scan/backend`, Go 1.26 (the floor is set
-by the `bze` chain module it imports to decode message types).
+Go module `github.com/bze-alphateam/bze-scan/backend`, Go 1.26.11 (the floor is
+set by the `bze` chain module it imports to decode message types, v8.3.0-rc1:
+Cosmos SDK 0.53.8, ibc-go v10.7.0).
 
 One binary, `bze-scan`, with subcommands:
 
@@ -997,10 +998,18 @@ the longest repeated run wins. Transactions' own events are not affected.
 ### Transactions and messages
 
 Transactions are decoded with the chain's own Go types: the backend imports
-`github.com/bze-alphateam/bze` (pinned to the v8.2.0 release line, a superset
-of the messages mainnet accepts today) and builds its codec from the chain's
-app configuration without starting the app, plus the IBC modules the chain
-registers by hand. `go.mod` repeats the chain's `replace` directives.
+`github.com/bze-alphateam/bze` (pinned by commit to the v8.3.0-rc1 release
+line, Cosmos SDK 0.53 and ibc-go v10: a superset of the messages mainnet
+accepts today) and builds its codec from the chain's app configuration without
+starting the app, plus the IBC modules the chain registers by hand. `go.mod`
+repeats the chain's `replace` directives. The codec also registers `x/group`
+and `x/nft`, which left the chain at v8.3.0, so a historical message of
+either (a testnet one, or a re-indexed height) still gets a body. ICS-29 fee
+and channel upgrade messages are not carried (no mainnet transaction ever
+had one): their type URLs keep decoding leniently as below, and stay in the
+classification tables under `classify.Retired`. ibc-go v10 renders an unset
+`encoding` on `MsgTransfer`; `Codec.MsgJSON` leaves it out, so a transfer's
+stored body is the one it had before v10.
 
 - `hash` is the SHA-256 of the raw bytes, upper-case hex, as the node and the
   sink compute it.
@@ -1615,8 +1624,12 @@ A native or Factory denom whose bank metadata has no logo (none has one on
 mainnet) takes the logo of its asset in the registry of the explorer's own
 chain (`CHAIN_ID`), when the registry lists it.
 
-An IBC denom is traced with transfer `DenomTrace` (`ibc_path`,
-`ibc_base_denom`). Its `origin_chain_id` is the counterparty chain of the
+An IBC denom is traced with transfer `Denom` (`ibc_path` = the hops as
+`port/channel/port/channel`, `ibc_base_denom` = `base`). A node whose network
+has not upgraded to chain v8.3.0 answers `Denom` Unimplemented; the set then
+asks the old `DenomTrace` through hand-coded messages
+(`internal/legacytransfer`, never registered, since ibc-go v10 has none), so
+one build serves both generations of a network without a redeploy. Its `origin_chain_id` is the counterparty chain of the
 path's first channel in `explorer.ibc_channels` (null until the IBC channels
 sync fills it). Its symbol, name, exponent and logo then come from the
 registry asset `(origin chain, base denom)` and win over the bank metadata,
@@ -1899,6 +1912,19 @@ previous snapshot and this one (an upgrade's handler runs at its plan
 height, after the proposal passed), else to none. A module the node fails
 to answer is skipped and the others are written. The rows only explain
 changes: `/api/v1/params` shows the live values.
+
+Parameters follow the explorer's own Go types: each module's answer is decoded
+into the chain types the build uses and rendered again, so a build on the
+v8.3.0 types shows even a v8.2.x node in the v8.3.0 shape (tradebin's fields
+7, 8 and 11 as `priceLevelOwnersWindow`, `priceLevelExtraGas` and
+`maxFillsPerOrder`, field 12 gone, and the fields v8.3.0 added with zero
+values until the network upgrades). So the set does not record that as a
+parameter change, the post-migration step `params_v830` rewrites the latest
+stored tradebin and burner snapshot to exactly that shape
+(`params.UpgradeStoredToV830`, no row added); the values arriving at the
+network's upgrade are then a genuine change, attributed to the upgrade by the
+rule above. The step and `params.UpgradeStoredToV830` are transition code,
+removed once both networks run v8.3.0.
 
 **Chain state.** Every minute `explorer.chain_state` gets one row per key,
 overwritten in place with the height the node answered at (every gRPC read
@@ -2236,7 +2262,9 @@ the first two by default), so adding an account does not re-record the
 validators. `make grpc-fixtures SETS=denoms DENOMS="ubze factory/… ibc/…"`
 records the denoms set: bank `TotalSupply` and `DenomsMetadata`, tradebin
 `AllMarkets`, every factory denom's `DenomAuthority`, every IBC denom's
-transfer `DenomTrace` (19 recorded 2026-10-09, three of them multi-hop),
+transfer `Denom` (19 recorded 2026-10-09 as `DenomTrace` and converted by hand
+to the `Denom` shape, three of them multi-hop; two `DenomTrace` files stay for
+the old-node fallback),
 and for each denom in
 `DENOMS` its `DenomMetadataByQueryString` (a 404 for `ubze`) and `SupplyOf`.
 tokenfactory `AllDenomBranding` and tradebin `HaltedDenoms` are recorded only
