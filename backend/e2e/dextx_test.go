@@ -116,7 +116,7 @@ func v830Heights(t *testing.T) []*transform.Entities {
 func v830State(t *testing.T, e *syncEnv) []string {
 	t.Helper()
 	return queryStrings(t, e.db, `SELECT concat_ws(' ', order_id, status, filled_amount, coalesce(closed_height::text, '-'),
-			coalesce(created_tx_hash, '-') <> '-') FROM explorer.orders ORDER BY order_id`)
+			(coalesce(created_tx_hash, '-') <> '-')::text) FROM explorer.orders ORDER BY order_id`)
 }
 
 func v830Fills(t *testing.T, e *syncEnv) []string {
