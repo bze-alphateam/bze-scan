@@ -17,8 +17,6 @@ import (
 // Chain v8.3.0 runs the order book inside the message: the outcomes are the
 // transaction's own events and nothing is queued.
 
-const taker2 = "bze1swapper"
-
 // txExecuted is an OrderExecutedEvent of a message: the maker order, the
 // taker's own order id (order_id).
 func txExecuted(msgIndex, makerOrder, takerOrder, amount, price string) node.Event {
