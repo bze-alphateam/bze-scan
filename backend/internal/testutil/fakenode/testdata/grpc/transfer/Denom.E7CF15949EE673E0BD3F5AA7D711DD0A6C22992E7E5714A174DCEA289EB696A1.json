@@ -1,0 +1,15 @@
+{
+  "denom": {
+    "base": "uatone",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-0"
+      },
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-94814"
+      }
+    ]
+  }
+}

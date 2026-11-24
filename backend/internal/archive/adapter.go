@@ -139,7 +139,7 @@ func message(j int, msg chain.Msg, seg []node.Event) error {
 		return fmt.Errorf("%w: action %q for a %s", ErrUnknownGeneration, action, msg.TypeURL)
 	}
 
-	// The leading event as SDK 0.50 builds it (baseapp createEvents).
+	// The leading event as SDK 0.50+ builds it (baseapp createEvents).
 	lead := []node.Attribute{{Key: "action", Value: msg.TypeURL}}
 	if msg.Signer != "" {
 		lead = append(lead, node.Attribute{Key: "sender", Value: msg.Signer})
@@ -225,7 +225,7 @@ func flatten(typeURL string, body map[string]any) []actor {
 	return out
 }
 
-// fillFacts adds the attributes SDK 0.50 and ibc-go 8 emit and the legacy
+// fillFacts adds the attributes SDK 0.50 and later and ibc-go 8 and later emit and the legacy
 // generation lacks, taken from the messages that emitted the events.
 func fillFacts(msg chain.Msg, events []node.Event) error {
 	var votes, deposits, submits, transfers []*node.Event

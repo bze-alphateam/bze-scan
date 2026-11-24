@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "inj",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-13"
+      }
+    ]
+  }
+}

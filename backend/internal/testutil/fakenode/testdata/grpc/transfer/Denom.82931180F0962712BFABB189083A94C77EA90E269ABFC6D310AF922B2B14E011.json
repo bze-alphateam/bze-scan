@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "uphoton",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-6"
+      }
+    ]
+  }
+}

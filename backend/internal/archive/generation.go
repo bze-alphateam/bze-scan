@@ -1,7 +1,7 @@
 // Package archive normalises what an archive node answers for an old height
 // into the shape the transformer expects: the event format of the current
-// chain generation (Cosmos SDK 0.50, CometBFT 0.38). It runs on the archive
-// path only, before the transformer: the backfill and the reindex of old
+// chain generation (the finalize-block layout of Cosmos SDK 0.50 and later,
+// CometBFT 0.38). It runs on the archive path only, before the transformer: the backfill and the reindex of old
 // heights. The live path never calls it.
 //
 // The height tables are per chain: the same height is a different release on
@@ -25,12 +25,14 @@
 //	v8.0.0   20,237,800   0.50.14     CometBFT 0.38.17          8.7.0   current
 //	v8.1.0   22,551,810   0.50.15     CometBFT 0.38.21          8.7.0   current
 //	v8.1.1   23,855,000   0.50.15     CometBFT 0.38.23          8.8.0   current
+//	v8.2.0   25,263,600   0.50.15     CometBFT 0.38.26          8.8.0   current
 //
-// How it was verified (2026-10-08): the upgrade names are the handlers in
+// How it was verified (2026-10-08; the v8.2.0 row 2026-11): the upgrade names are the handlers in
 // the chain's app/upgrades; each height is the chain's own record of the
 // applied plan (/cosmos/upgrade/v1beta1/applied_plan/<name> on mainnet REST);
-// the library versions are the go.mod of each release tag. v8.2.0 had not
-// been applied yet: when it is, add its row (same event format as v8.0.0).
+// the library versions are the go.mod of each release tag. The v8.3.0 rows
+// (SDK 0.53, ibc-go 10) come with the upgrade heights of each network: the
+// event format of the finalize-block layout does not change with SDK 0.53.
 // Note that v7 stayed on SDK 0.45 and CometBFT 0.34: there is no 0.47
 // generation on mainnet, and the only format break is v8.0.0.
 //
@@ -206,6 +208,7 @@ var Mainnet = Chain{ID: "beezee-1", Generations: []Generation{
 	{Release: "v8.0.0", From: 20_237_800, SDK: "0.50.14", Consensus: "CometBFT 0.38.17", IBC: "8.7.0", Format: FormatCurrent, DoubledEvents: true},
 	{Release: "v8.1.0", From: 22_551_810, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
 	{Release: "v8.1.1", From: 23_855_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
+	{Release: "v8.2.0", From: 25_263_600, SDK: "0.50.15", Consensus: "CometBFT 0.38.26", IBC: "8.8.0", Format: FormatCurrent},
 }}
 
 // Testnet3 is bzetestnet-3 (see the package documentation).

@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/cosmos/gogoproto/proto"
-	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
-	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
 	"google.golang.org/grpc"
 
 	"github.com/cosmos/cosmos-sdk/types/query"

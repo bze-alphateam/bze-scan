@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
 	"github.com/bze-alphateam/bze-scan/backend/internal/labels"
+	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 )
 
 // Execer runs a statement; *pgxpool.Pool and pgx.Tx satisfy it.
@@ -38,6 +40,7 @@ var postMigrate = []Step{
 	{Name: "classification", Run: mirrorClassification},
 	{Name: "labels", Run: seedLabels},
 	{Name: "message_events", Run: rewriteMessageEvents},
+	{Name: "params_v830", Run: rewriteParamSnapshotsV830},
 }
 
 // ensurePartitions creates the history-table partitions for
@@ -84,4 +87,51 @@ func rewriteMessageEvents(ctx context.Context, db DB) error {
 	}
 	_, err := db.Exec(ctx, `DELETE FROM explorer.pending_rewrites WHERE name = 'message_events'`)
 	return err
+}
+
+// rewriteParamSnapshotsV830 rewrites the latest stored tradebin and burner
+// parameter snapshots into the shape the v8.3.0 types render (see
+// params.UpgradeStoredToV830), so the params set does not record the
+// explorer's own change of types as a parameter change. Only the latest row
+// of each module is rewritten (no row is added); a row already in the new
+// shape is left alone.
+func rewriteParamSnapshotsV830(ctx context.Context, db DB) error {
+	rows, err := db.Query(ctx, `SELECT DISTINCT ON (module) module, height, params::text
+		FROM explorer.param_snapshots WHERE module IN ('tradebin', 'burner')
+		ORDER BY module, height DESC`)
+	if err != nil {
+		return err
+	}
+	type latest struct {
+		module string
+		height int64
+		params string
+	}
+	var found []latest
+	for rows.Next() {
+		var l latest
+		if err := rows.Scan(&l.module, &l.height, &l.params); err != nil {
+			rows.Close()
+			return err
+		}
+		found = append(found, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, l := range found {
+		out, changed, err := params.UpgradeStoredToV830(l.module, json.RawMessage(l.params))
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
+		if _, err := db.Exec(ctx, `UPDATE explorer.param_snapshots SET params = $3::jsonb
+			WHERE module = $1 AND height = $2`, l.module, l.height, string(out)); err != nil {
+			return fmt.Errorf("%s params snapshot at %d: %w", l.module, l.height, err)
+		}
+	}
+	return nil
 }

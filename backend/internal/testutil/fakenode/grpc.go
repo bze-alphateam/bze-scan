@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/legacytransfer"
 )
 
 // Services maps the short names of the query services the fake gRPC server
@@ -195,6 +196,9 @@ func (g *GRPC) handle(_ any, stream grpc.ServerStream) error {
 	if short == "" {
 		return status.Errorf(codes.Unimplemented, "unknown service %s", svcName)
 	}
+	if full == legacytransfer.DenomTraceMethod {
+		return g.handleDenomTrace(stream)
+	}
 	md, err := methodDescriptor(svcName, method)
 	if err != nil {
 		return status.Error(codes.Unimplemented, err.Error())
@@ -234,6 +238,10 @@ func (g *GRPC) handle(_ any, stream grpc.ServerStream) error {
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
+	body, err = dropRetiredFields(body)
+	if err != nil {
+		return status.Errorf(codes.Internal, "fakenode: %s/%s %q: %v", short, method, key, err)
+	}
 	if err := g.codec.ParseProtoJSON(body, resp); err != nil {
 		return status.Errorf(codes.Internal, "fakenode: %s/%s %q: %v", short, method, key, err)
 	}
@@ -242,6 +250,104 @@ func (g *GRPC) handle(_ any, stream grpc.ServerStream) error {
 		return status.Error(codes.Internal, err.Error())
 	}
 	return stream.SendMsg(&out)
+}
+
+// handleDenomTrace answers the old transfer DenomTrace query (chain before
+// v8.3.0), which ibc-go v10 no longer describes, from transfer/DenomTrace
+// fixtures. A node that has moved on answers it Unimplemented: a hash
+// without a DenomTrace fixture does, as every method without a file.
+func (g *GRPC) handleDenomTrace(stream grpc.ServerStream) error {
+	var in []byte
+	if err := stream.RecvMsg(&in); err != nil {
+		return err
+	}
+	var req legacytransfer.QueryDenomTraceRequest
+	if err := req.Unmarshal(in); err != nil {
+		return status.Errorf(codes.InvalidArgument, "request: %v", err)
+	}
+	g.mu.Lock()
+	g.counts["transfer/DenomTrace"]++
+	g.counts["transfer/DenomTrace."+url.PathEscape(req.Hash)]++
+	g.mu.Unlock()
+
+	body, ok := g.answer("transfer", "DenomTrace", url.PathEscape(req.Hash))
+	if !ok {
+		return status.Errorf(codes.Unimplemented, "fakenode: no fixture for transfer/DenomTrace %q", req.Hash)
+	}
+	if st, ok := gatewayError(body); ok {
+		return st.Err()
+	}
+	var doc struct {
+		DenomTrace *struct {
+			Path      string `json:"path"`
+			BaseDenom string `json:"base_denom"`
+		} `json:"denom_trace"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return status.Errorf(codes.Internal, "fakenode: transfer/DenomTrace %q: %v", req.Hash, err)
+	}
+	resp := legacytransfer.QueryDenomTraceResponse{}
+	if doc.DenomTrace != nil {
+		resp.DenomTrace = &legacytransfer.DenomTrace{Path: doc.DenomTrace.Path, BaseDenom: doc.DenomTrace.BaseDenom}
+	}
+	out, err := resp.Marshal()
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	return stream.SendMsg(&out)
+}
+
+// retiredFields are fields of the recorded answers that the chain libraries
+// the explorer is built on no longer have (channel upgrades left ibc-go v10;
+// tradebin's field 12 left chain v8.3.0). The proto JSON parser refuses an
+// unknown field, while a binary gRPC answer from an older node simply has
+// the field skipped by the decoder, so the fake drops them to answer as that
+// node would.
+var retiredFields = map[string]bool{"upgrade_sequence": true, "orderBookQueueMessageScanExtraGas": true}
+
+// renamedFields are fields of the recorded answers that chain v8.3.0 names
+// differently under the same field number (tradebin's 7, 8 and 11): a binary
+// answer of an older node carries only the numbers, so the fake renames them
+// to answer as that node would.
+var renamedFields = map[string]string{
+	"orderBookExtraGasWindow":   "priceLevelOwnersWindow",
+	"orderBookQueueExtraGas":    "priceLevelExtraGas",
+	"orderBookPerBlockMessages": "maxFillsPerOrder",
+}
+
+// dropRetiredFields removes the retiredFields from a recorded JSON answer
+// and renames the renamedFields.
+func dropRetiredFields(body []byte) ([]byte, error) {
+	if !bytes.Contains(body, []byte(`"upgrade_sequence"`)) && !bytes.Contains(body, []byte(`"orderBook`)) {
+		return body, nil
+	}
+	var doc any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, err
+	}
+	var strip func(v any)
+	strip = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, child := range x {
+				if retiredFields[k] {
+					delete(x, k)
+					continue
+				}
+				if to, ok := renamedFields[k]; ok {
+					delete(x, k)
+					x[to] = child
+				}
+				strip(child)
+			}
+		case []any:
+			for _, child := range x {
+				strip(child)
+			}
+		}
+	}
+	strip(doc)
+	return json.Marshal(doc)
 }
 
 // answer returns the body for key, falling back to the keyless file.

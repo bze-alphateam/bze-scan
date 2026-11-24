@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "ujkl",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-4"
+      }
+    ]
+  }
+}

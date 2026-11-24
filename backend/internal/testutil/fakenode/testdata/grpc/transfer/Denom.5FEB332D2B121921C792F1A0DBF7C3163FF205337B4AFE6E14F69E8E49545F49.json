@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "uatom",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-11"
+      }
+    ]
+  }
+}

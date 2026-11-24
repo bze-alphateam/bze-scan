@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "uflix",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-5"
+      }
+    ]
+  }
+}

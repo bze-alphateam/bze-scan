@@ -120,10 +120,9 @@ describe("the dictionary", () => {
       marketMakerFee: "0.001 BZE per order",
       marketTakerFee: "0.1 BZE per order",
       "makerFeeDestination · takerFeeDestination": "Burner module",
-      orderBookPerBlockMessages: "500",
+      maxFillsPerOrder: "500",
       minNativeLiquidityForModuleSwap: "100,000 BZE",
-      "orderBookExtraGasWindow · orderBookQueueExtraGas · fillOrdersExtraGas · orderBookQueueMessageScanExtraGas":
-        "100 · 25,000 · 5,000 · 5,000",
+      "priceLevelOwnersWindow · priceLevelExtraGas · fillOrdersExtraGas": "100 · 25,000 · 5,000",
       create_denom_fee: "25,000 BZE",
       createStakingRewardFee: "25,000 BZE",
       createTradingRewardFee: "50,000 BZE",
@@ -189,10 +188,14 @@ describe("the dictionary", () => {
       ["periodic_burning_weeks", "every 4 weeks", false],
       ["brand_new", '{"a":1}', true],
     ]);
-    // A row the dictionary flags as advanced covers its keys.
+    // A row the dictionary flags as advanced covers its keys; the keys v8.3.0
+    // added (zero until the network upgrades) show raw until their rows exist.
     expect(rowsOf(groups, "dex").filter((r) => r.advanced).map((r) => r.chainName)).toEqual([
-      "orderBookExtraGasWindow · orderBookQueueExtraGas · fillOrdersExtraGas · orderBookQueueMessageScanExtraGas",
+      "priceLevelOwnersWindow · priceLevelExtraGas · fillOrdersExtraGas",
       "native_denom",
+      "poolPriceHalfLifeBlocks",
+      "feeMaxPriceDrift",
+      "moduleMaxPriceDrift",
     ]);
   });
 

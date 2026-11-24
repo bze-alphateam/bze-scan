@@ -1,0 +1,11 @@
+{
+  "denom": {
+    "base": "udgn",
+    "trace": [
+      {
+        "port_id": "transfer",
+        "channel_id": "channel-12"
+      }
+    ]
+  }
+}

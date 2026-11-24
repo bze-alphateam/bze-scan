@@ -35,7 +35,9 @@
 #     three legacy ulp_ pools (the third tests the fallback) and one hashed
 #     ulp/<hash> pool (chain v8.2.0+).
 #   Denoms in file names are path-escaped (factory%2Fbze1…%2Fuvdl).
-#     per ibc denom: transfer/DenomTrace.<hash>.json (path and base denom)
+#     per ibc denom: transfer/Denom.<hash>.json (base denom and trace hops, chain v8.3.0
+#     and later; the two transfer/DenomTrace files, the answer of a node before v8.3.0,
+#     are kept by hand)
 #   holders (the holders snapshot):
 #     bank/DenomOwners.json, the answer for a denom nobody holds (the fake's
 #     fallback for every other denom)
@@ -185,7 +187,7 @@ if has denoms; then
 
   for d in $( (jq -r '.supply[].denom' "${OUT}/bank/TotalSupply.json"; jq -r '.metadatas[].base' "${OUT}/bank/DenomsMetadata.json") \
       | grep '^ibc/' | sort -u); do
-    fetch "ibc/apps/transfer/v1/denom_traces/${d#ibc/}" "transfer/DenomTrace.${d#ibc/}.json"
+    fetch "ibc/apps/transfer/v1/denoms/${d#ibc/}" "transfer/Denom.${d#ibc/}.json"
   done
 
   for d in ${DENOMS}; do
