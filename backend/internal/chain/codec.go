@@ -166,9 +166,10 @@ func objectEnd(doc []byte, from int) int {
 		c := doc[i]
 		switch {
 		case inString:
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++
-			} else if c == '"' {
+			case '"':
 				inString = false
 			}
 		case c == '"':
