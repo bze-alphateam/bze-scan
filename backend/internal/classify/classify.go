@@ -35,6 +35,10 @@ const (
 	// refunded after a rejection or a timeout.
 	KindIBCIn     = "ibc_in"
 	KindIBCRefund = "ibc_refund"
+	// KindDexMakerFill is the participant row of a maker whose resting
+	// order a transaction filled (chain v8.3.0 names the maker in the
+	// taker's transaction); its details are the fills.
+	KindDexMakerFill = "dex_maker_fill"
 )
 
 // Type URLs the activity rules single out.

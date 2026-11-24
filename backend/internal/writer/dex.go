@@ -57,6 +57,22 @@ var (
 			{name: "taker_tx_hash", typ: "text", expr: fillTakerTxHash},
 			{name: "time", typ: "timestamptz"},
 			{name: "trade_id", typ: "bigint"},
+			{name: "tx_index", typ: "integer"},
+			{name: "msg_index", typ: "integer"},
+			{name: "msg_event_index", typ: "integer"},
+			{name: "taker_order_id", typ: "text"},
+		},
+	}
+	orderClosuresTable = table{
+		name: "explorer.order_closures",
+		keys: []string{"order_id"},
+		cols: []column{
+			{name: "order_id", typ: "text"},
+			{name: "height", typ: "bigint"},
+			{name: "time", typ: "timestamptz"},
+			{name: "tx_hash", typ: "text"},
+			{name: "reason", typ: "text"},
+			{name: "merged_into", typ: "text"},
 		},
 	}
 	swapsTable = table{
@@ -139,6 +155,18 @@ type (
 		TakerTxHash    *string   `json:"taker_tx_hash"`
 		Time           time.Time `json:"time"`
 		TradeID        int64     `json:"trade_id"`
+		TxIndex        *int      `json:"tx_index"`
+		MsgIndex       *int      `json:"msg_index"`
+		MsgEventIndex  *int      `json:"msg_event_index"`
+		TakerOrderID   *string   `json:"taker_order_id"`
+	}
+	orderClosureRow struct {
+		OrderID    string    `json:"order_id"`
+		Height     int64     `json:"height"`
+		Time       time.Time `json:"time"`
+		TxHash     string    `json:"tx_hash"`
+		Reason     string    `json:"reason"`
+		MergedInto *string   `json:"merged_into"`
 	}
 	// fillDeltaRow is what the fills a flush inserted add to one order: the
 	// amount, and the last of them, which closes the order once it is
@@ -177,7 +205,8 @@ const orderRecordset = `jsonb_to_recordset($1::jsonb) AS r(order_id text, market
 		price numeric, amount numeric, height bigint, time timestamptz, message_id text, created_tx_hash text)`
 
 // ordersSQL inserts the saved orders. The fills and the cancel already
-// stored (the backfill writes them first) set filled_amount, the status and
+// stored (the backfill writes them first; a cancel is a block event, or since
+// chain v8.3.0 an order_closures row) set filled_amount, the status and
 // closed_*; the closing block's time is unknown until its blocks row is
 // written, and the cancel of the same flush, applied after this insert, sets
 // it. The chain never saves an order id twice.
@@ -194,10 +223,14 @@ const ordersSQL = `INSERT INTO explorer.orders (order_id, market_id, owner, side
 	                       FROM explorer.order_fills f WHERE f.order_id = r.order_id) s
 	  LEFT JOIN LATERAL (SELECT f.height, f.time FROM explorer.order_fills f
 	                      WHERE f.order_id = r.order_id ORDER BY f.height DESC, f.seq DESC LIMIT 1) lf ON true
-	  LEFT JOIN LATERAL (SELECT e.height, b.time FROM explorer.block_events e
-	                       LEFT JOIN explorer.blocks b ON b.height = e.height
-	                      WHERE e.type = 'bze.tradebin.OrderCanceledEvent' AND e.attrs->>'id' = r.order_id
-	                      ORDER BY e.height DESC LIMIT 1) c ON true
+	  LEFT JOIN LATERAL (SELECT x.height, x.time FROM (
+	                       SELECT e.height, b.time FROM explorer.block_events e
+	                         LEFT JOIN explorer.blocks b ON b.height = e.height
+	                        WHERE e.type = 'bze.tradebin.OrderCanceledEvent' AND e.attrs->>'id' = r.order_id
+	                       UNION ALL
+	                       SELECT k.height, k.time FROM explorer.order_closures k
+	                        WHERE k.order_id = r.order_id AND k.reason = 'cancelled') x
+	                      ORDER BY x.height DESC LIMIT 1) c ON true
 	 ORDER BY r.order_id
 	ON CONFLICT (order_id) DO NOTHING`
 
@@ -281,8 +314,17 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 			Height: f.Height, Seq: f.Seq, OrderID: f.OrderID, MarketID: f.MarketID, Side: f.Side, Price: f.Price,
 			Amount: f.Amount, Maker: f.Maker, Taker: f.Taker, TakerMessageID: nullIfEmpty(f.TakerMessageID),
 			TakerTxHash: nullIfEmpty(f.TakerTxHash), Time: f.Time, TradeID: f.TradeID,
+			TxIndex: f.TxIndex, MsgIndex: f.MsgIndex, MsgEventIndex: f.MsgEventIndex,
+			TakerOrderID: nullIfEmpty(f.TakerOrderID),
 		})
 	}
+	closureRows := make([]orderClosureRow, 0, len(ents.OrderClosures))
+	for _, c := range ents.OrderClosures {
+		closureRows = append(closureRows, orderClosureRow{
+			OrderID: c.OrderID, Height: c.Height, Time: c.Time, TxHash: c.TxHash, Reason: c.Reason,
+		})
+	}
+	slices.SortFunc(closureRows, func(a, b orderClosureRow) int { return cmp.Compare(a.OrderID, b.OrderID) })
 	// One cancel per order: the chain cancels an order once.
 	cancels := mergeDeltas(ents.OrderCancels, func(c transform.OrderCancel) string { return c.OrderID },
 		func(a, b transform.OrderCancel) transform.OrderCancel {
@@ -297,6 +339,10 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	}
 
 	msgs, err := chunked(top, "order_messages", orderMessagesTable, mode, messages, nil)
+	if err != nil {
+		return nil, err
+	}
+	closures, err := chunked(top, "order_closures", orderClosuresTable, mode, closureRows, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +374,7 @@ func dexStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(msgs, ords, inserts, makers, fillStmts, cancelStmts), nil
+	return slices.Concat(msgs, closures, ords, inserts, makers, fillStmts, cancelStmts), nil
 }
 
 // swapStatements returns the pool swap writes of ents. The writers run them

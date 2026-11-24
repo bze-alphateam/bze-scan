@@ -265,9 +265,10 @@ func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 	at := time.Unix(100, 0).UTC()
 	swap := `{"creator":"bze1c","in":{"denom":"ubze","amount":"5"},"out":{"denom":"uatom","amount":"2"},"pool_id":"uatom_ubze"}`
 	d := &db{cursor: int64(500), top: int64p(499), results: map[string][][]any{
-		"trade_id IS NULL":                             {{int64(70)}},
-		"FROM explorer.block_events":                   {{int64(70), 3, at, []byte(swap)}},
-		"SELECT height, seq FROM explorer.order_fills": {{int64(70), 1}, {int64(70), 5}},
+		"trade_id IS NULL":           {{int64(70)}},
+		"FROM explorer.block_events": {{int64(70), 3, at, []byte(swap)}},
+		"msg_event_index FROM explorer.order_fills": {
+			{int64(70), 1, (*int)(nil), (*int)(nil), (*int)(nil)}, {int64(70), 5, (*int)(nil), (*int)(nil), (*int)(nil)}},
 	}}
 	res, err := trades.CatchUp(context.Background(), d, nil)
 	require.NoError(t, err)

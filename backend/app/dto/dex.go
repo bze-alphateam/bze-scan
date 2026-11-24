@@ -48,6 +48,9 @@ type Fill struct {
 	Taker          string    `json:"taker"`
 	TakerTxHash    *string   `json:"taker_tx_hash"`
 	TakerMessageID *string   `json:"taker_message_id"`
+	// TakerOrderID is the id of the taker's order (chain v8.3.0); absent
+	// before.
+	TakerOrderID *string `json:"taker_order_id,omitempty"`
 }
 
 // OrderDetail is GET /api/v1/orders/{id}: the order, its number of fills
@@ -127,6 +130,7 @@ func NewFill(f repository.OrderFill) Fill {
 	return Fill{
 		Height: f.Height, Time: f.Time.UTC(), OrderID: f.OrderID, MarketID: f.MarketID, Side: f.Side, Price: f.Price,
 		Amount: f.Amount, Maker: f.Maker, Taker: f.Taker, TakerTxHash: f.TakerTxHash, TakerMessageID: f.TakerMessageID,
+		TakerOrderID: f.TakerOrderID,
 	}
 }
 

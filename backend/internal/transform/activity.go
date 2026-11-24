@@ -41,8 +41,8 @@ type Activity struct {
 	// one first (explorer.reclassify_unknown() reads it); every message of
 	// the transaction for a signer.
 	MsgTypes []string `json:"msg_types"`
-	// Details are the typed events naming the address; block-level rows
-	// only.
+	// Details are the typed events naming the address: those of a block-level
+	// row, and the fills of a maker row (chain v8.3.0).
 	Details []Event `json:"details"`
 }
 
@@ -304,6 +304,7 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 		addresses[addr] = true
 	}
 	escrows := escrowAccounts(events)
+	makerFills := fillsByMaker(msgs)
 
 	for _, addr := range slices.Sorted(maps.Keys(addresses)) {
 		if moduleAccounts[addr] || escrows[addr] {
@@ -351,9 +352,46 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 		}
 		a.MsgTypes = distinct(a.MsgTypes)
 		a.Counterparty = counterparty(entry, msgs, involved, addr, a.IsSigner)
+		if fills := makerFills[addr]; len(fills) > 0 && !a.IsSigner {
+			// A maker named by the taker's transaction: its resting order was
+			// filled, whatever message did it.
+			a.Kind, a.Category, a.Details = classify.KindDexMakerFill, classify.DEX, fills
+			a.Counterparty = ""
+			if takers := distinctTakers(fills); len(takers) == 1 && isAccount(takers[0]) {
+				a.Counterparty = takers[0]
+			}
+		}
 		ents.Activity = append(ents.Activity, a)
 	}
 	return nil
+}
+
+// fillsByMaker groups the OrderExecutedEvents of the transaction's messages
+// (chain v8.3.0) by their maker, in event order.
+func fillsByMaker(msgs []Message) map[string][]Event {
+	out := map[string][]Event{}
+	for _, m := range msgs {
+		for _, ev := range m.Events {
+			if ev.Type != evOrderExecuted {
+				continue
+			}
+			if maker := anyString(ev.Attrs["maker"]); maker != "" {
+				out[maker] = append(out[maker], Event{Type: ev.Type, Attrs: ev.Attrs})
+			}
+		}
+	}
+	return out
+}
+
+// distinctTakers returns the takers the fills name, first seen first.
+func distinctTakers(fills []Event) []string {
+	var out []string
+	for _, f := range fills {
+		if t := anyString(f.Attrs["taker"]); t != "" && !slices.Contains(out, t) {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // counterparty resolves the entry's counterparty attribute over the

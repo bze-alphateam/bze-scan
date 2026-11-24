@@ -68,6 +68,9 @@ type Entities struct {
 	Orders        []Order
 	OrderFills    []OrderFill
 	OrderCancels  []OrderCancel
+	// OrderClosures are the order_closures rows of the heights' cancels made
+	// by transactions (chain v8.3.0).
+	OrderClosures []OrderClosure
 	// Swaps are the swaps rows of the heights' liquidity-pool swaps; they
 	// and OrderFills carry the trades' ids.
 	Swaps []Swap
@@ -377,6 +380,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i in
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		txOrders(ents, b, i, tx.Hash, len(decoded.Msgs), byIndex)
 		if err := txSwaps(ents, b, i, tx.Hash, len(decoded.Msgs), byIndex); err != nil {
 			return err
 		}

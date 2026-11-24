@@ -225,8 +225,10 @@ func Range(ctx context.Context, tx Tx, lo, hi int64, hook Hook) (int, error) {
 		return byHeight[h]
 	}
 
-	// The transactions' swaps, in numbering order.
-	rows, err := tx.Query(ctx, `SELECT m.height, m.tx_index, m.msg_index, coalesce(t.hash, ''), b.time, e.ev->'attrs'
+	// The transactions' swaps, with the event's position among the message's
+	// stored events (the ordinality is 1-based, the stored position 0-based).
+	rows, err := tx.Query(ctx, `SELECT m.height, m.tx_index, m.msg_index, coalesce(t.hash, ''), b.time, e.ev->'attrs',
+			e.k - 1
 		  FROM explorer.messages m
 		  CROSS JOIN LATERAL jsonb_array_elements(m.events) WITH ORDINALITY AS e(ev, k)
 		  JOIN explorer.blocks b ON b.height = m.height
@@ -244,14 +246,15 @@ func Range(ctx context.Context, tx Tx, lo, hi int64, hook Hook) (int, error) {
 		hash            string
 		blockTime       time.Time
 		raw             []byte
+		eventIdx        int64
 	)
-	_, err = pgx.ForEachRow(rows, []any{&h, &txIndex, &msgIdx, &hash, &blockTime, &raw}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&h, &txIndex, &msgIdx, &hash, &blockTime, &raw, &eventIdx}, func() error {
 		s, err := swapOf(h, blockTime, raw)
 		if err != nil {
 			return fmt.Errorf("height %d tx %d msg %d: %w", h, txIndex, msgIdx, err)
 		}
-		ti, mi := txIndex, msgIdx
-		s.TxHash, s.TxIndex, s.MsgIndex = hash, &ti, &mi
+		ti, mi, ei := txIndex, msgIdx, int(eventIdx)
+		s.TxHash, s.TxIndex, s.MsgIndex, s.MsgEventIndex = hash, &ti, &mi, &ei
 		at(h).txSwaps = append(at(h).txSwaps, s)
 		return nil
 	})
@@ -283,13 +286,16 @@ func Range(ctx context.Context, tx Tx, lo, hi int64, hook Hook) (int, error) {
 	}
 
 	// The fills.
-	rows, err = tx.Query(ctx, `SELECT height, seq FROM explorer.order_fills
+	rows, err = tx.Query(ctx, `SELECT height, seq, tx_index, msg_index, msg_event_index FROM explorer.order_fills
 		 WHERE height >= $1 AND height < $2 ORDER BY height, seq`, lo, hi)
 	if err != nil {
 		return fail("fills", err)
 	}
-	_, err = pgx.ForEachRow(rows, []any{&h, &seq}, func() error {
-		at(h).fills = append(at(h).fills, transform.OrderFill{Height: h, Seq: seq})
+	var fillTx, fillMsg, fillEvent *int
+	_, err = pgx.ForEachRow(rows, []any{&h, &seq, &fillTx, &fillMsg, &fillEvent}, func() error {
+		at(h).fills = append(at(h).fills, transform.OrderFill{Height: h, Seq: seq,
+			TxIndex: fillTx, MsgIndex: fillMsg, MsgEventIndex: fillEvent})
+		fillTx, fillMsg, fillEvent = nil, nil, nil
 		return nil
 	})
 	if err != nil {
