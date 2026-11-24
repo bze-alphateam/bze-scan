@@ -434,8 +434,8 @@ func TestAnOldNodeTracesIBCDenomsWithTheOldQuery(t *testing.T) {
 	require.Equal(t, 0, code, out)
 
 	assert.Equal(t, []string{
-		cw20Juno + " transfer/channel-0/transfer/channel-169 cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l",
 		usherpa + " transfer/channel-0 factory/osmo1n6asrjy9754q8y9jsxqf557zmsv3s3xa5m9eg5/usherpa",
+		cw20Juno + " transfer/channel-0/transfer/channel-169 cw20:juno1rws84uz7969aaa7pej303udhlkt3j9ca0l3egpcae98jwak9quzq8szn2l",
 	}, queryStrings(t, e.db, `SELECT concat_ws(' ', denom, ibc_path, ibc_base_denom) FROM explorer.denoms
 		WHERE denom IN ($1, $2) ORDER BY denom`, usherpa, cw20Juno))
 	assert.Equal(t, 2, e.grpc.Requests("transfer", "DenomTrace"))
