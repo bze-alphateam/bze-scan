@@ -620,10 +620,12 @@ func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 	// An upgrade is decided once its recovery is computed, or once the
 	// commits read reach a block HallOfFameMaxSecondsBack after the halt:
 	// whoever comes back later is too late anyway.
+	// Governance upgrades only: an emergency halt is no planned upgrade the
+	// validators could prepare for.
 	err := r.db.QueryRow(ctx, `SELECT u.height, u.name FROM explorer.upgrades u
-		WHERE u.computed_at IS NOT NULL
+		WHERE u.kind = 'governance' AND (u.computed_at IS NOT NULL
 		   OR (u.halt_time IS NOT NULL AND EXISTS (SELECT 1 FROM explorer.blocks b
-		       WHERE b.height = u.window_end_height AND b.time >= u.halt_time + make_interval(secs => $1)))
+		       WHERE b.height = u.window_end_height AND b.time >= u.halt_time + make_interval(secs => $1))))
 		ORDER BY u.height DESC LIMIT 1`, HallOfFameMaxSecondsBack).Scan(&up.Height, &up.Name)
 	switch {
 	case err == nil:

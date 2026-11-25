@@ -412,9 +412,8 @@ function EmergencyRow({ h }: { h: Halted }) {
           at block{" "}
           <Text as="span" fontFamily="mono">
             {formatCount(h.height)}
-          </Text>{" "}
-          · scheduled by {haltScheduler(h.scheduled_by)}
-          {reason ? `: ${reason}` : ""} · the chain is paused
+          </Text>
+          {` · scheduled by ${haltScheduler(h.scheduled_by)}${reason ? `: ${reason}` : ""} · the chain is paused`}
         </Text>
       </Box>
     </HStack>

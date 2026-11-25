@@ -64,11 +64,11 @@ func upgradeBlockEvents() []node.Event {
 	// The retired burner fee collector empties into the burner.
 	evs = append(evs, send(feeBurner, burner, "1200ubze,30"+honey)...)
 	// The account migration.
-	evs = append(evs, send(distribution, migratedTo, "40254684ubze")...)
+	evs = append(evs, send(distribution, migratedTo, "25000000ubze")...)
 	evs = append(evs,
-		bankEvent("withdraw_rewards", "amount", "40254684ubze", "validator", "bzevaloper1te6l2dn6d5uzuf0fvwa392gnuauyqjczyxq84h",
+		bankEvent("withdraw_rewards", "amount", "25000000ubze", "validator", "bzevaloper1first",
 			"delegator", migratedFrom),
-		bankEvent("withdraw_rewards", "amount", "0stake", "validator", "bzevaloper138xqs3nhepmjs3pk6d9eprkvp78ye9elje4825",
+		bankEvent("withdraw_rewards", "amount", "0stake", "validator", "bzevaloper1second",
 			"delegator", migratedFrom),
 	)
 	evs = append(evs, send(notBonded, migratedTo, "7000ubze")...)
@@ -79,11 +79,11 @@ func upgradeBlockEvents() []node.Event {
 			"granter", `"`+migratedTo+`"`, "grantee", `"`+grantee+`"`),
 		bankEvent("set_withdraw_address", "withdraw_address", migratedTo),
 	)
-	evs = append(evs, send(migratedFrom, migratedTo, "965105382489"+migratedLP+",10305686071ubze")...)
+	evs = append(evs, send(migratedFrom, migratedTo, "123456789000"+migratedLP+",7000000000ubze")...)
 	// The routine BeginBlock that follows, with its mode.
 	evs = append(evs,
-		bankEvent("coinbase", "minter", chain.ModuleAddress(chain.Mint), "amount", "428397ubze", "mode", "BeginBlock"),
-		bankEvent("mint", "amount", "428397", "inflation", "0.2", "mode", "BeginBlock"),
+		bankEvent("coinbase", "minter", chain.ModuleAddress(chain.Mint), "amount", "400000ubze", "mode", "BeginBlock"),
+		bankEvent("mint", "amount", "400000", "inflation", "0.2", "mode", "BeginBlock"),
 	)
 	return evs
 }
@@ -119,10 +119,10 @@ func TestV830UpgradeBlockIsIndexed(t *testing.T) {
 		"DEX > " + refundOwner + " 500 ubze",
 		"Burner fee collector (retired in v8.3.0) > Burner 1200 ubze",
 		"Burner fee collector (retired in v8.3.0) > Burner 30 " + honey,
-		"Distribution > " + migratedTo + " 40254684 ubze",
+		"Distribution > " + migratedTo + " 25000000 ubze",
 		"Unbonding tokens pool > " + migratedTo + " 7000 ubze",
-		migratedFrom + " > " + migratedTo + " 965105382489 " + migratedLP,
-		migratedFrom + " > " + migratedTo + " 10305686071 ubze",
+		migratedFrom + " > " + migratedTo + " 123456789000 " + migratedLP,
+		migratedFrom + " > " + migratedTo + " 7000000000 ubze",
 	}, moved)
 
 	// Both sides of the migration and the refunded owner have a block row.
@@ -140,11 +140,11 @@ func TestV830UpgradeBlockIsIndexed(t *testing.T) {
 	assert.Equal(t, "sent", from.Category)
 	assert.Equal(t, migratedTo, from.Counterparty)
 	assert.False(t, from.IsSigner)
-	assert.Equal(t, []chain.Coin{{Denom: migratedLP, Amount: "-965105382489"}, {Denom: "ubze", Amount: "-10305686071"}}, from.Deltas)
+	assert.Equal(t, []chain.Coin{{Denom: migratedLP, Amount: "-123456789000"}, {Denom: "ubze", Amount: "-7000000000"}}, from.Deltas)
 	assert.Equal(t, "chain_transfer", to.Kind)
 	assert.Equal(t, "received", to.Category)
 	assert.Equal(t, migratedFrom, to.Counterparty)
-	assert.Equal(t, []chain.Coin{{Denom: migratedLP, Amount: "965105382489"}, {Denom: "ubze", Amount: "10345947755"}}, to.Deltas,
+	assert.Equal(t, []chain.Coin{{Denom: migratedLP, Amount: "123456789000"}, {Denom: "ubze", Amount: "7025007000"}}, to.Deltas,
 		"the balances, the rewards and the unbonding")
 	assert.Len(t, rows, 3, "the module accounts have none")
 }

@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -31,7 +32,7 @@ import (
 const (
 	emergencyHeight int64 = upgradePlan
 	emergencyReason       = "pool drain under way"
-	emergencySigner       = "bze1z3mkcr2jz424w6m49frgjmy9uhlrx69phqwg3l"
+	emergencySigner       = "bze1guardian"
 )
 
 // The migration keeps the governance upgrades as they were, and its down
@@ -66,7 +67,7 @@ func TestMigrateEmergencyHaltsKeepsTheGovernanceUpgrades(t *testing.T) {
 func indexSynthetic(t *testing.T, pool *pgxpool.Pool, h int64, events ...node.Event) {
 	t.Helper()
 	in := transform.Input{
-		Block: &node.Block{Height: h, Time: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC), Hash: "AB",
+		Block: &node.Block{Height: h, Time: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC), Hash: fmt.Sprintf("%064X", h),
 			ProposerAddress: "AA", Raw: json.RawMessage(`{}`)},
 		Results: &node.BlockResults{Height: h, FinalizeBlockEvents: events},
 		Commit:  &node.Commit{Height: h},
@@ -199,6 +200,12 @@ func TestEmergencyHaltIsWatchedAndSupersedesTheGovernancePlan(t *testing.T) {
 	assert.Equal(t, "emergency", b.Upgrade.Kind)
 	require.NotNil(t, b.Upgrade.Reason)
 	assert.Equal(t, emergencyReason, *b.Upgrade.Reason)
+
+	// A decided emergency halt is no upgrade of the Hall of Fame rule.
+	_, err = e.db.Exec(`UPDATE explorer.upgrades SET computed_at = now() WHERE height = $1`, emergencyHeight)
+	require.NoError(t, err)
+	hof := into[dto.HallOfFame](t, fetch(t, base+"/validators/hall-of-fame"))
+	assert.Nil(t, hof.Rules.Upgrade)
 
 	// A later proposal plans 30000000 again: it is watched again.
 	after := emergencyHeight + 100

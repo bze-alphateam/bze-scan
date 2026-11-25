@@ -1207,7 +1207,8 @@ bank `transfer` sent by an account (not a module account: the routine
 moves all start at one) gives the sender (`sent`) and an account recipient
 (`received`) not named that way a row of kind `chain_transfer`, the other
 side as counterparty: an upgrade handler moving an account's coins (the
-v8.3.0 account migration).
+v8.3.0 account migration), or a DAO's funds sent when governance runs its
+messages in the EndBlocker.
 
 The insert returns the keys it wrote, so `activity_count` moves only for new
 rows, and the reindex overwrites rows like any other table.
