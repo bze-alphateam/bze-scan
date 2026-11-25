@@ -393,8 +393,10 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 	// The same id queued twice before the upgrade: the later message holds it
 	// when the upgrade block refunds it.
 	twiceFirst, twiceLater := txHash(34), txHash(35)
-	c := dexBlock(upgrade-3, transform.Transaction{Hash: twiceFirst, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
-	c.OrderMessages = []transform.OrderMessage{{Height: upgrade - 3, MessageID: oid(5), TxIndex: 0, TxHash: twiceFirst, Kind: "create"}}
+	a.Transactions = append(a.Transactions, a.Transactions[0])
+	a.Transactions[1].Hash, a.Transactions[1].TxIndex = twiceFirst, 1
+	a.Blocks[0].TxCount = 2
+	a.OrderMessages = append(a.OrderMessages, transform.OrderMessage{Height: upgrade - 3, MessageID: oid(5), TxIndex: 1, TxHash: twiceFirst, Kind: "create"})
 	d := dexBlock(upgrade-2, transform.Transaction{Hash: twiceLater, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
 	d.OrderMessages = []transform.OrderMessage{{Height: upgrade - 2, MessageID: oid(5), TxIndex: 0, TxHash: twiceLater, Kind: "create"}}
 	block.BlockEvents = append(block.BlockEvents, outcomeEvent(upgrade, 2, "OrderMessageRefundedEvent", map[string]any{
@@ -415,7 +417,7 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 		return into[dto.Tx](t, r).Dex
 	}
 
-	require.NoError(t, w.Write(ctx, []*transform.Entities{a, c, d, b}, writer.ModeInsert))
+	require.NoError(t, w.Write(ctx, []*transform.Entities{a, d, b}, writer.ModeInsert))
 	assert.True(t, tx(queuedA).Pending, "queued, no outcome yet")
 	assert.True(t, tx(queuedB).Pending)
 
