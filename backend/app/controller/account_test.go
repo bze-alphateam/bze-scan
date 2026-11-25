@@ -36,6 +36,9 @@ type fakeAccounts struct {
 	gotIncoming bool
 	gotBefore   *repository.ActivityKey
 	gotLimit    int
+	// gotStart records ActivityAsc's start; ascCalls counts its calls.
+	gotStart *repository.ActivityStart
+	ascCalls int
 	// total is what ActivityTotal answers; gotOffset records ActivityPage's
 	// offset.
 	total     int64
@@ -76,6 +79,13 @@ func (f *fakeAccounts) AccountFills(_ context.Context, _ string, before *reposit
 func (f *fakeAccounts) Activity(_ context.Context, _ string, category, denom *string, incoming bool, before *repository.ActivityKey,
 	limit int) ([]repository.Activity, error) {
 	f.gotCategory, f.gotDenom, f.gotIncoming, f.gotBefore, f.gotLimit = category, denom, incoming, before, limit
+	return f.activity, f.activityErr
+}
+
+func (f *fakeAccounts) ActivityAsc(_ context.Context, _ string, category, denom *string, incoming bool,
+	start repository.ActivityStart, limit int) ([]repository.Activity, error) {
+	f.gotCategory, f.gotDenom, f.gotIncoming, f.gotStart, f.gotLimit = category, denom, incoming, &start, limit
+	f.ascCalls++
 	return f.activity, f.activityErr
 }
 
