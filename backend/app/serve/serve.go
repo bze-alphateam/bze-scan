@@ -158,6 +158,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		liveParams, haltedDenoms = lp, lp
 	}
 
+	// The IBC rate limits route (and the tokens' rate_limits) read them
+	// live; without a gRPC address they are left out.
+	var rateLimits controller.RateLimitReader
+	if cfg.NodeGRPCAddr != "" {
+		rl, closeRateLimits, err := NewRateLimits(cfg, codec)
+		if err != nil {
+			return err
+		}
+		defer closeRateLimits()
+		rateLimits = rl
+	}
+
 	// The open orders route reads the orders table when its history is
 	// complete (checked by a component of its own) and the nodes otherwise.
 	var openOrders controller.OpenOrdersReader
@@ -258,6 +270,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Stats:           explorerRepo,
 		Daily:           explorerRepo,
 		Params:          liveParams,
+		RateLimits:      rateLimits,
+		RateLimitNames:  explorerRepo,
 		ParamChanges:    explorerRepo,
 		HaltedDenoms:    haltedDenoms,
 		AccountState:    accountState,

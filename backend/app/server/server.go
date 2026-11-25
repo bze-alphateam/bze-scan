@@ -55,6 +55,11 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// RateLimits reads the live IBC rate limits and RateLimitNames names
+	// their denoms and channels; nil RateLimits leaves
+	// /api/v1/ibc/rate-limits out and the tokens' rate_limits empty.
+	RateLimits     controller.RateLimitReader
+	RateLimitNames controller.RateLimitCatalog
 	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
 	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
@@ -167,6 +172,11 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
 	api.GET("/ibc/channels", explorer.IBCChannels)
+	var rateLimits *controller.RateLimitController
+	if deps.RateLimits != nil && deps.RateLimitNames != nil {
+		rateLimits = controller.NewRateLimitController(deps.RateLimits, deps.RateLimitNames)
+		api.GET("/ibc/rate-limits", rateLimits.RateLimits)
+	}
 	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/hall-of-fame", explorer.HallOfFame)
@@ -192,7 +202,7 @@ func New(deps Deps) *echo.Echo {
 		}
 	}
 	if deps.Tokens != nil {
-		tokens := controller.NewTokenController(deps.Tokens)
+		tokens := controller.NewTokenController(deps.Tokens).WithRateLimits(rateLimits)
 		api.GET("/tokens", tokens.Tokens)
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)

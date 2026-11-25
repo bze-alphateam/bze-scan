@@ -1,0 +1,19 @@
+{
+  "rate_limits": [
+    {
+      "path": {"denom": "ubze", "channel_or_client_id": "channel-0"},
+      "quota": {"max_percent_send": "2", "max_percent_recv": "2", "duration_hours": "24"},
+      "flow": {"inflow": "1000000000", "outflow": "2500000000", "channel_value": "10000000000000"}
+    },
+    {
+      "path": {"denom": "ubze", "channel_or_client_id": "channel-3"},
+      "quota": {"max_percent_send": "2", "max_percent_recv": "2", "duration_hours": "24"},
+      "flow": {"inflow": "0", "outflow": "0", "channel_value": "10000000000000"}
+    },
+    {
+      "path": {"denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4", "channel_or_client_id": "channel-3"},
+      "quota": {"max_percent_send": "100", "max_percent_recv": "0", "duration_hours": "24"},
+      "flow": {"inflow": "0", "outflow": "5000000", "channel_value": "20000000"}
+    }
+  ]
+}

@@ -112,6 +112,9 @@ type Token struct {
 	// Transfers24h is what moved in the 24 hours before the latest indexed
 	// block.
 	Transfers24h TransferVolume `json:"transfers_24h"`
+	// RateLimits are the denom's IBC rate limits (chain v8.3.0), empty when
+	// it has none; see ratelimits.go.
+	RateLimits []RateLimit `json:"rate_limits"`
 }
 
 // TransferVolume counts the transfers of a denom in a window; Amount is
