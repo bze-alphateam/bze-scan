@@ -20,7 +20,7 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
     proposals: byStatus,
     proposal: () => Promise.resolve(p48 as Proposal),
-    params: () => Promise.resolve(params as unknown as ChainParams),
+    params: () => Promise.resolve(params as ChainParams),
     ...extra,
   });
 }

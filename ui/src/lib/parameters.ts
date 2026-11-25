@@ -1,6 +1,6 @@
 import BigNumber from "bignumber.js";
 
-import type { ChainParams, Stats } from "@/api/types";
+import type { ChainParams, ParamModule, Stats } from "@/api/types";
 
 import { formatAmount, formatCount, formatPct, shortAddress } from "./format";
 import { externalLinks } from "./links";
@@ -48,7 +48,7 @@ export interface ParamValues {
 export interface ParamDef {
   group: ParamGroup;
   /** The key of the `/params` answer. */
-  module: string;
+  module: ParamModule;
   /** Dotted paths inside the module's params; several for a combined row. */
   paths: string[];
   name: string;
@@ -68,7 +68,7 @@ export interface ParamDef {
 export interface GroupDef {
   group: ParamGroup;
   label: string;
-  modules: string[];
+  modules: ParamModule[];
   description: string;
   see?: { label: string; href: string };
   /** Exists from chain v8.3.0 on: hidden while the node runs an older chain. */
@@ -136,8 +136,7 @@ export const PARAM_GROUPS: GroupDef[] = [
 
 /** Whether the node the explorer reads runs chain v8.3.0 or later; false when the answer does not say. */
 export function chainV830(params: ChainParams): boolean {
-  const chain = (params as Record<string, unknown>).chain;
-  return !!chain && typeof chain === "object" && (chain as { v830?: unknown }).v830 === true;
+  return params.chain?.v830 === true;
 }
 
 /** The module accounts a parameter can name (tradebin's fee destinations). */
@@ -988,7 +987,7 @@ export function parameterGroups(params: ChainParams, stats: Stats | null): Param
 
 /** The group of a module on the parameters page (`dex` for tradebin). */
 export function groupOfModule(module: string): ParamGroup | null {
-  return PARAM_GROUPS.find((g) => g.modules.includes(module))?.group ?? null;
+  return PARAM_GROUPS.find((g) => (g.modules as string[]).includes(module))?.group ?? null;
 }
 
 /**

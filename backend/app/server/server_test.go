@@ -432,6 +432,8 @@ func (oneModule) Params(context.Context) (map[string]json.RawMessage, error) {
 
 func (oneModule) HaltedDenoms(context.Context) ([]string, error) { return nil, nil }
 
+func (oneModule) V830(context.Context) (bool, error) { return true, nil }
+
 func TestStatsAndParamsRoutes(t *testing.T) {
 	e := server.New(server.Deps{Stats: noStats{}, Params: oneModule{}, ParamChanges: noStats{}, HaltedDenoms: oneModule{}})
 	for _, path := range []string{"/api/v1/stats", "/api/v1/params", "/api/v1/params/halted-denoms"} {

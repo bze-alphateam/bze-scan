@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const api = (over: Partial<Parameters<typeof fakeApi>[0]> = {}) =>
   fakeApi({
-    params: () => Promise.resolve(params as unknown as ChainParams),
+    params: () => Promise.resolve(params as ChainParams),
     stats: () => Promise.resolve(stats as Stats),
     modules: () => Promise.resolve({ items: modules.items as ModuleAccount[] }),
     haltedDenoms: () => Promise.resolve(halted),
@@ -156,7 +156,7 @@ describe("ParametersPage", () => {
   });
 
   it("says not available for a module the chain did not answer", async () => {
-    const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as unknown as ChainParams;
+    const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as ChainParams;
     renderWithProviders(<ParametersPage group="dex" />, { api: api({ params: () => Promise.resolve(rest) }) });
     expect(await screen.findAllByText("not available")).toHaveLength(11);
     expect(screen.queryByTestId("parameters-skeleton")).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("ParametersPage", () => {
   });
 
   it("says nobody holds the emergency key when the guardian is empty", async () => {
-    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as unknown as ChainParams;
+    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as ChainParams;
     renderWithProviders(<ParametersPage group="emergency" />, { api: api({ params: () => Promise.resolve(empty) }) });
     await shown();
     expect(row("Emergency key holder")).toHaveTextContent("Nobody");
@@ -196,7 +196,7 @@ describe("ParametersPage", () => {
   });
 
   it("hides the v8.3.0 rows and groups on a v8.2.x node and never says the chain did not answer", async () => {
-    const v82 = () => Promise.resolve(paramsV82 as unknown as ChainParams);
+    const v82 = () => Promise.resolve(paramsV82 as ChainParams);
     renderWithProviders(<ParametersPage group="dex" />, { api: api({ params: v82 }) });
     await shown();
     expect(screen.queryByText("not available")).not.toBeInTheDocument();
@@ -213,7 +213,7 @@ describe("ParametersPage", () => {
   });
 
   it("falls back to the first group when ?group= names one a v8.2.x node does not have", async () => {
-    renderWithProviders(<ParametersPage group="dao" />, { api: api({ params: () => Promise.resolve(paramsV82 as unknown as ChainParams) }) });
+    renderWithProviders(<ParametersPage group="dao" />, { api: api({ params: () => Promise.resolve(paramsV82 as ChainParams) }) });
     expect(await shown()).toBe("fees");
     expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
   });

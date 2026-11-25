@@ -23,7 +23,7 @@ import {
   rawText,
 } from "./parameters";
 
-const params = fixture as unknown as ChainParams;
+const params = fixture as ChainParams;
 const stats = statsFixture as Stats;
 const rowsOf = (groups: ReturnType<typeof parameterGroups>, group: string) => groups.find((g) => g.group === group)!.rows;
 const row = (groups: ReturnType<typeof parameterGroups>, chainName: string) =>
@@ -194,15 +194,15 @@ describe("the dictionary", () => {
       "Paid once by whoever creates a DAO. It is sent to the Burner and destroyed.",
     );
     expect(row(groups, "guardian").explain).toMatch(/^Emergency key holder: bze1jx4…dd55\. It can tighten IBC limits.*only governance can undo\.$/);
-    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as unknown as ChainParams;
+    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as ChainParams;
     expect(row(parameterGroups(empty, stats), "guardian").value).toBe("Nobody");
     expect(row(parameterGroups(empty, stats), "guardian").explain).toBe("Nobody: only governance can use the emergency switches.");
-    const free = { ...params, dao: { params: { ...params.dao?.params, dao_creation_fee: { denom: "ubze", amount: "0" } }, last_change: null } } as unknown as ChainParams;
+    const free = { ...params, dao: { params: { ...params.dao?.params, dao_creation_fee: { denom: "ubze", amount: "0" } }, last_change: null } } as ChainParams;
     expect(row(parameterGroups(free, stats), "dao_creation_fee · dao_creation_fee_destination").value).toBe("Free");
   });
 
   it("hides every v8.3.0-only row and group while the node runs an older chain", () => {
-    const old = parameterGroups(fixtureV82 as unknown as ChainParams, stats);
+    const old = parameterGroups(fixtureV82 as ChainParams, stats);
     expect(old.map((g) => g.group)).not.toContain("dao");
     expect(old.map((g) => g.group)).not.toContain("emergency");
     const rows = old.flatMap((g) => g.rows);
@@ -213,9 +213,9 @@ describe("the dictionary", () => {
     }
     expect(rowsOf(old, "dex").filter((r) => r.advanced).map((r) => r.chainName)).toEqual(["fillOrdersExtraGas", "native_denom"]);
     expect(rowsOf(old, "burner").map((r) => r.chainName)).toEqual(["periodic_burning_weeks"]);
-    expect(chainV830(fixtureV82 as unknown as ChainParams)).toBe(false);
+    expect(chainV830(fixtureV82 as ChainParams)).toBe(false);
     expect(chainV830(params)).toBe(true);
-    expect(chainV830({} as unknown as ChainParams)).toBe(false);
+    expect(chainV830({} as ChainParams)).toBe(false);
   });
 
   it("drops the sentences that need /stats when it is missing", () => {
@@ -256,7 +256,7 @@ describe("the dictionary", () => {
   });
 
   it("renders a module the chain did not answer as not available", () => {
-    const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as unknown as ChainParams;
+    const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as ChainParams;
     const dex = rowsOf(parameterGroups(rest, stats), "dex");
     expect(dex).toHaveLength(11);
     expect(dex.every((r) => r.value === null && r.explain === "The chain did not answer for this value right now.")).toBe(true);

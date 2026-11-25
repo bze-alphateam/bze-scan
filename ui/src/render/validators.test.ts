@@ -202,7 +202,7 @@ describe("hall of fame", () => {
 });
 
 describe("online status", () => {
-  const p = params as unknown as ChainParams;
+  const p = params as ChainParams;
 
   it("is unknown outside the active set", () => {
     expect(onlineState({ offline: null })).toBeNull();

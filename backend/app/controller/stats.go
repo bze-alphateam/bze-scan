@@ -12,7 +12,6 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
-	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
@@ -132,6 +131,8 @@ func validatorsSummary(ctx context.Context, repo StatsReader) (*dto.ValidatorsSu
 // others. Implemented by params.Cached.
 type LiveParams interface {
 	Params(ctx context.Context) (map[string]json.RawMessage, error)
+	// V830 is false only when the node does not have chain v8.3.0's modules.
+	V830(ctx context.Context) (bool, error)
 }
 
 // ParamChangeReader reads each module's latest parameter change.
@@ -172,8 +173,8 @@ const ChainKey = "chain"
 
 // ChainInfo says what the node the explorer reads runs.
 type ChainInfo struct {
-	// V830 is true when the node answers the guardian params query, which
-	// exists from chain v8.3.0 on.
+	// V830 is false only when the node answers the guardian params query,
+	// which exists from chain v8.3.0 on, Unimplemented.
 	V830 bool `json:"v830"`
 }
 
@@ -202,7 +203,10 @@ func (h *ParamsController) Params(c *echo.Context) error {
 		}
 		out[m] = mp
 	}
-	_, v830 := live[params.V830Probe]
+	v830, err := h.live.V830(ctx)
+	if err != nil {
+		return err
+	}
 	out[ChainKey] = ChainInfo{V830: v830}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, out)

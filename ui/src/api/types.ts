@@ -979,12 +979,28 @@ export interface ModuleParams {
   last_change: { height: number; time: string; proposal_id: number | null } | null;
 }
 
+/** The modules `GET /params` answers. */
+export type ParamModule =
+  | "txfeecollector"
+  | "staking"
+  | "mint"
+  | "distribution"
+  | "slashing"
+  | "gov"
+  | "tradebin"
+  | "tokenfactory"
+  | "rewards"
+  | "burner"
+  | "cointrunk"
+  | "dao"
+  | "guardian";
+
 /**
  * `GET /params`: by module name; a module the node failed to answer is absent.
- * Beside the modules the answer holds `chain: { v830: boolean }` (true when the
- * node runs chain v8.3.0), read with `chainV830` of `lib/parameters`.
+ * Beside the modules the answer holds `chain: { v830: boolean }` (false only
+ * when the node runs a chain older than v8.3.0).
  */
-export type ChainParams = Partial<Record<string, ModuleParams>>;
+export type ChainParams = Partial<Record<ParamModule, ModuleParams>> & { chain?: { v830: boolean } };
 
 // Raw JSON proxied from archive nodes
 

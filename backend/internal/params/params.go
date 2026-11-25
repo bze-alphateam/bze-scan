@@ -43,10 +43,6 @@ var Modules = []string{
 	"tradebin", "tokenfactory", "rewards", "burner", "cointrunk", "dao", "guardian",
 }
 
-// V830Probe is the module whose answer tells a node runs chain v8.3.0: it
-// exists from that release on, so a v8.2.x node answers it Unimplemented.
-const V830Probe = "guardian"
-
 // Reader reads the live parameters by module. A module that fails is left
 // out of the map and its error is joined into the returned one, so a
 // caller can use what answered. A module the node does not have (it answers
@@ -197,6 +193,28 @@ func (g *GRPC) Params(ctx context.Context) (map[string]json.RawMessage, error) {
 	return out, errors.Join(errs...)
 }
 
+// ChainReader tells which chain the node runs.
+type ChainReader interface {
+	// V830 is false only when the node answers the guardian params query
+	// (it exists from chain v8.3.0 on) Unimplemented; any other failure is
+	// an error.
+	V830(ctx context.Context) (bool, error)
+}
+
+var _ ChainReader = (*GRPC)(nil)
+
+// V830 asks the node for the guardian params.
+func (g *GRPC) V830(ctx context.Context) (bool, error) {
+	_, err := g.read(ctx, "guardian")
+	if status.Code(err) == codes.Unimplemented {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("guardian params: %w", err)
+	}
+	return true, nil
+}
+
 // HaltReader reads the denoms governance halted on the DEX. They are not a
 // parameter (tradebin keeps them in a store of their own) but the
 // parameters page lists them.
@@ -234,6 +252,7 @@ const DefaultTTL = 30 * time.Second
 type Live interface {
 	Reader
 	HaltReader
+	ChainReader
 }
 
 // Cached serves a Live reader's answers for a TTL; concurrent misses share
@@ -243,6 +262,11 @@ type Cached struct {
 	from   Live
 	params ttlCache[map[string]json.RawMessage]
 	halted ttlCache[[]string]
+	chain  ttlCache[bool]
+
+	mu    sync.Mutex
+	known bool // the last answer of V830
+	have  bool
 }
 
 // NewCached caches from for ttl (zero is DefaultTTL); now nil is the wall
@@ -258,6 +282,7 @@ func NewCached(from Live, ttl time.Duration, now func() time.Time) *Cached {
 		from:   from,
 		params: ttlCache[map[string]json.RawMessage]{ttl: ttl, now: now},
 		halted: ttlCache[[]string]{ttl: ttl, now: now},
+		chain:  ttlCache[bool]{ttl: ttl, now: now},
 	}
 }
 
@@ -272,6 +297,23 @@ func (c *Cached) Params(ctx context.Context) (map[string]json.RawMessage, error)
 // reads.
 func (c *Cached) HaltedDenoms(ctx context.Context) ([]string, error) {
 	return c.halted.get(ctx, c.from.HaltedDenoms)
+}
+
+// V830 returns the cached answer while it is fresh, else reads. When the
+// read fails the last known answer stands (true before there is one): a
+// timeout is no sign of an older chain.
+func (c *Cached) V830(ctx context.Context) (bool, error) {
+	v, err := c.chain.get(ctx, c.from.V830)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil {
+		c.known, c.have = v, true
+		return v, nil
+	}
+	if c.have {
+		return c.known, nil
+	}
+	return true, nil
 }
 
 // ttlCache holds one answer for a TTL.

@@ -195,7 +195,10 @@ func TestValidatorsCarryTheSummary(t *testing.T) {
 type fakeLive struct {
 	params map[string]json.RawMessage
 	err    error
+	old    bool // the node does not have v8.3.0
 }
+
+func (f fakeLive) V830(context.Context) (bool, error) { return !f.old, nil }
 
 func (f fakeLive) Params(context.Context) (map[string]json.RawMessage, error) { return f.params, f.err }
 
@@ -223,6 +226,7 @@ func TestParamsRoute(t *testing.T) {
 			"burner":   json.RawMessage(`{"periodic_burning_weeks":"4"}`),
 		},
 		err: errors.New("gov params: unavailable"),
+		old: true,
 	}
 	changes := fakeChanges{changes: map[string]repository.ParamChange{
 		"tradebin": {Height: 20237800, Time: time.Date(2025, 11, 24, 10, 0, 0, 0, time.FixedZone("x", 7200)), ProposalID: &p44},
@@ -237,6 +241,13 @@ func TestParamsRoute(t *testing.T) {
 		"burner": {"params": {"periodic_burning_weeks":"4"}, "last_change": null},
 		"chain": {"v830": false}
 	}`, rec.Body.String(), "a module the node did not answer is left out; no guardian answer is a v8.2.x node")
+}
+
+func TestParamsRouteKeepsV830WhenTheGuardianIsOnlyMissingFromTheAnswer(t *testing.T) {
+	live := fakeLive{params: map[string]json.RawMessage{"burner": json.RawMessage(`{}`)}}
+	rec := get(t, paramsAPI(live, fakeChanges{}), "/params")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"chain":{"v830":true}`)
 }
 
 func TestParamsRouteTellsAV830NodeByTheGuardianAnswer(t *testing.T) {

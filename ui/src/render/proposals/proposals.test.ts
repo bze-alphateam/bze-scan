@@ -37,7 +37,7 @@ const p45 = p45Json as Proposal;
 const items = (list as Page<ProposalSummary>).items;
 const votes = (votes48Json as Page<ProposalVote>).items;
 const validators = (validatorsJson as ValidatorList).items as Validator[];
-const chain = params as unknown as ChainParams;
+const chain = params as ChainParams;
 const now = new Date("2099-10-11T10:00:00Z");
 const GOV = "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy";
 const legacy = (content: Record<string, unknown>) => ({ "@type": "/cosmos.gov.v1.MsgExecLegacyContent", content, authority: GOV });

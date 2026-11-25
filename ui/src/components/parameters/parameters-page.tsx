@@ -8,7 +8,7 @@ import { LuChevronDown, LuCircleCheck, LuTriangleAlert } from "react-icons/lu";
 
 import { ExternalLink } from "@/components/ui/external-link";
 import { useDenoms, useHaltedDenoms, useModules, useParams, useStats } from "@/api/hooks";
-import type { ChainParams, ModuleAccount, TokenSummary } from "@/api/types";
+import type { ChainParams, ModuleAccount, ParamModule, TokenSummary } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Chip } from "@/components/ui/chip";
@@ -259,7 +259,7 @@ function ValueCell({ row }: { row: ParamRow }) {
 }
 
 /** The module a row reads: its dictionary entry's, or the prefix of an advanced row's key. */
-const moduleOf = (row: ParamRow) => row.def?.module ?? row.key.split(":")[0];
+const moduleOf = (row: ParamRow) => row.def?.module ?? (row.key.split(":")[0] as ParamModule);
 
 function Info({ row, id, proposalId }: { row: ParamRow; id: string; proposalId: number | null }) {
   const stored = row.raw || row.value || "";
