@@ -1,0 +1,26 @@
+{
+  "type_url": "/bze.dao.MsgUpdateDaoConfig",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "config": {
+      "min_quorum": "0.3",
+      "threshold": "0.5",
+      "voting_period": "259200s"
+    }
+  },
+  "events": [
+    {
+      "type": "bze.dao.EventDaoConfigUpdated",
+      "attrs": {
+        "id": "3",
+        "fields": [
+          "min_quorum",
+          "threshold"
+        ]
+      }
+    }
+  ]
+}

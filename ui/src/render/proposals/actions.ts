@@ -23,6 +23,8 @@ export type Action =
   | { type: "publisher"; add: boolean; name: string | null; address: string | null }
   | { type: "domain"; add: boolean; domain: string | null }
   | { type: "ibc_client"; subject: string | null; substitute: string | null }
+  /** A message with a plain-word renderer (`messages/registry`): the page draws it with that renderer. */
+  | { type: "message"; typeUrl: string; body: Body }
   | { type: "text" }
   | { type: "other"; title: string; typeUrl: string; entries: Entry[] };
 

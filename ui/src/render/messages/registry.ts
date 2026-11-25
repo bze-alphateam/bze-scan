@@ -4,10 +4,13 @@ import { authzRenderers } from "./authz";
 import { bankRenderers } from "./bank";
 import { burnerRenderers } from "./burner";
 import { cointrunkRenderers } from "./cointrunk";
+import { daoRenderers } from "./dao";
 import { distributionRenderers } from "./distribution";
 import { fallbackRenderer } from "./fallback";
 import { govRenderers } from "./gov";
+import { guardianRenderers } from "./guardian";
 import { ibcRenderers } from "./ibc";
+import { ratelimitRenderers } from "./ratelimit";
 import { rewardsRenderers } from "./rewards";
 import { stakingRenderers } from "./staking";
 import { tokenfactoryRenderers } from "./tokenfactory";
@@ -28,6 +31,9 @@ export const registry: ReadonlyMap<string, MessageRenderer> = new Map(
     ...tokenfactoryRenderers,
     ...rewardsRenderers,
     ...cointrunkRenderers,
+    ...daoRenderers,
+    ...guardianRenderers,
+    ...ratelimitRenderers,
   }),
 );
 

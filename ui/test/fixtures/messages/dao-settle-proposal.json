@@ -1,0 +1,29 @@
+{
+  "type_url": "/bze.dao.MsgSettleProposal",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "proposal_id": "12"
+  },
+  "events": [
+    {
+      "type": "bze.dao.EventProposalSettled",
+      "attrs": {
+        "id": "12",
+        "status": "EXECUTED",
+        "yes": "7",
+        "no": "1",
+        "abstain": "0"
+      }
+    },
+    {
+      "type": "bze.dao.EventProposalExecuted",
+      "attrs": {
+        "id": "12",
+        "success": "true",
+        "error": ""
+      }
+    }
+  ]
+}

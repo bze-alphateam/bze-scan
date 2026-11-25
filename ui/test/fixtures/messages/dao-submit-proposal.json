@@ -1,0 +1,26 @@
+{
+  "type_url": "/bze.dao.MsgSubmitProposal",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "title": "Fund the market maker",
+    "summary": "Pay 5 BZE to the market maker",
+    "msgs": [
+      {
+        "@type": "/cosmos.bank.v1beta1.MsgSend",
+        "from_address": "bze1daoaccount",
+        "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "5000000"
+          }
+        ]
+      }
+    ],
+    "expedited": false
+  },
+  "events": []
+}
