@@ -45,6 +45,8 @@ var Services = map[string]string{
 	"txfeecollector": "bze.txfeecollector.Query",
 	"dao":            "bze.dao.Query",
 	"guardian":       "bze.guardian.v1.Query",
+	"circuit":        "cosmos.circuit.v1.Query",
+	"upgrade":        "cosmos.upgrade.v1beta1.Query",
 	"ratelimit":      "ratelimit.v1.Query",
 }
 
