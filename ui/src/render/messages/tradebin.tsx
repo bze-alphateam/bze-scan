@@ -730,9 +730,9 @@ function feeText(fee: unknown, dest: unknown): string {
 }
 
 /** The pools the proposal's message listed, `{pool_id, fee}` each. */
-function poolUpdates(msg: RenderMessage): { pool_id: string; fee: string | null }[] {
+function poolUpdates(msg: RenderMessage): { pool_id: string; fee: string | null; fee_dest: unknown }[] {
   const list = msg.body?.updates;
-  return Array.isArray(list) ? list.map(obj).filter((u) => u !== null).map((u) => ({ pool_id: String(u.pool_id ?? ""), fee: typeof u.fee === "string" ? u.fee : null })) : [];
+  return Array.isArray(list) ? list.map(obj).filter((u) => u !== null).map((u) => ({ pool_id: String(u.pool_id ?? ""), fee: typeof u.fee === "string" ? u.fee : null, fee_dest: u.fee_dest })) : [];
 }
 
 const updatePools = renderer({
@@ -748,7 +748,7 @@ const updatePools = renderer({
       const e = changed.find((c) => String(c.pool_id) === u.pool_id);
       return {
         label: `${poolName(u.pool_id, ctx)} pool`,
-        value: e ? `${feeText(e.old_fee, e.old_fee_dest)} → ${feeText(e.new_fee, e.new_fee_dest)}` : changed.length > 0 ? "unchanged" : `new fee ${feeText(u.fee, null)}`,
+        value: e ? `${feeText(e.old_fee, e.old_fee_dest)} → ${feeText(e.new_fee, e.new_fee_dest)}` : changed.length > 0 ? "unchanged" : `new fee ${feeText(u.fee, u.fee_dest)}`,
       };
     });
     return <Fields rows={[{ label: "Decided by", value: <Account address={str(msg, "authority")} ctx={ctx} /> }, ...rows]} />;

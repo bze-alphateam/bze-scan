@@ -55,11 +55,32 @@ describe("activity sentences of chain v8.3.0", () => {
     ["guardian", ["/bze.guardian.v1.MsgHaltChain"], "Emergency: scheduled a chain halt"],
     ["guardian", ["/bze.guardian.v1.MsgBlockDenom"], "Emergency: blocked a token from crossing chains"],
     ["guardian", ["/bze.guardian.v1.MsgReopenChannel"], "Reopened a channel"],
+    ["guardian", ["/bze.guardian.v1.MsgTightenRateLimit"], "Emergency: lowered an IBC limit"],
+    ["guardian", ["/bze.guardian.v1.MsgDisableMessages"], "Emergency: switched off some kinds of actions"],
+    ["guardian", ["/bze.guardian.v1.MsgHaltTradingDenoms"], "Emergency: halted trading of tokens"],
+    ["guardian", ["/bze.guardian.v1.MsgPauseAutomation"], "Emergency: paused fee conversion and burning"],
+    ["guardian", ["/bze.guardian.v1.MsgCloseChannel"], "Emergency: closed a channel"],
+    ["guardian", ["/bze.guardian.v1.MsgUnblockDenom"], "Unblocked a token for crossing chains"],
+    ["guardian", ["/bze.guardian.v1.MsgResumeAutomation"], "Resumed fee conversion and burning"],
     ["guardian", [], "An emergency measure changed"],
     ["token_admin", ["/bze.tokenfactory.MsgDisableMinting"], "Turned off minting of a token for good"],
     ["token_update", ["/bze.tokenfactory.MsgSetDenomConfig"], "Changed a token's community pool, transfer fee and gas surcharge"],
     ["token_update", ["/bze.tokenfactory.MsgSetDenomBranding"], "Updated a token's branding"],
   ])("%s %j → %s", (kind, msg_types, want) => {
     expect(text({ kind, msg_types })).toBe(want);
+  });
+
+  it("marks the guardian's own actions with an Emergency chip, not governance's undo", () => {
+    const chips = (r: Partial<Activity>) => activityLine({ ...base, ...r }, { address: ADDR, ctx }).chips.map((c) => c.label);
+    expect(chips({ kind: "guardian", msg_types: ["/bze.guardian.v1.MsgHaltChain"] })).toEqual(["Emergency"]);
+    expect(chips({ kind: "guardian", msg_types: ["/bze.guardian.v1.MsgHaltChain"], success: false })).toEqual(["Emergency", "Failed"]);
+    expect(chips({ kind: "guardian", msg_types: ["/bze.guardian.v1.MsgReopenChannel"] })).toEqual([]);
+    expect(chips({ kind: "dao_vote" })).toEqual([]);
+  });
+
+  it("reads a block-level guardian row from its event", () => {
+    const row = { kind: "guardian", tx_hash: null, msg_types: [], details: [{ type: "bze.guardian.v1.ChannelClosedEvent", attrs: {} }] } as Partial<Activity>;
+    expect(text(row)).toBe("Emergency: closed a channel");
+    expect(activityLine({ ...base, ...row }, { address: ADDR, ctx }).chips.map((c) => c.label)).toEqual(["Emergency"]);
   });
 });

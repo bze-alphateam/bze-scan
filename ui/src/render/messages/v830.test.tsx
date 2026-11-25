@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import { renderWithProviders } from "@/test/render";
 
-import { settleOutcome } from "./dao";
 import { createRenderContext, rendererFor } from "./registry";
 import type { RenderMessage } from "./types";
 
@@ -45,18 +44,73 @@ describe("DAO messages", () => {
     expect(screen.getByText("Pay 5 BZE to the market maker")).toBeInTheDocument();
   });
 
-  it("reads the settle outcomes from the message's events", () => {
-    expect(settleOutcome(fixture("dao-settle-proposal"))).toBe("passed and executed");
-    expect(settleOutcome(fixture("dao-settle-proposal-rejected"))).toBe("rejected");
-    expect(settleOutcome(fixture("dao-settle-proposal-failed"))).toBe("passed, but its actions failed");
-    expect(settleOutcome({ ...fixture("dao-settle-proposal"), events: [] })).toBeNull();
+  it("reads the settle outcomes from the message's events, in the title", () => {
+    const title = (m: RenderMessage) => rendererFor(m.type_url).title(m, ctx);
+    expect(title(fixture("dao-settle-proposal"))).toBe("Settled DAO proposal #12 · passed and executed");
+    expect(title(fixture("dao-settle-proposal-rejected"))).toBe("Settled DAO proposal #12 · rejected");
+    expect(title(fixture("dao-settle-proposal-failed"))).toBe("Settled DAO proposal #12 · passed, but its actions failed");
+    expect(title({ ...fixture("dao-settle-proposal"), events: [] })).toBe("Settled DAO proposal #12");
     const expired = { ...fixture("dao-settle-proposal"), events: [{ type: "bze.dao.EventProposalSettled", attrs: { status: 4 } }] };
-    expect(settleOutcome(expired)).toBe("expired");
+    expect(title(expired)).toBe("Settled DAO proposal #12 · expired");
   });
 
   it("explains why the actions of a settled proposal failed", () => {
     show("dao-settle-proposal-failed");
     expect(screen.getByText("insufficient funds")).toBeInTheDocument();
+  });
+
+  it("reads each nested message's own events, and none when they cannot be told apart", () => {
+    const pool = (id: string) => ({ pool_id: id, fee: "0.005", fee_dest: { treasury: "1", burner: "0" } });
+    const event = (id: string) => ({
+      type: "bze.tradebin.PoolFeesUpdatedEvent",
+      attrs: { pool_id: id, old_fee: "0.003", new_fee: "0.005", old_fee_dest: { treasury: "1", burner: "0" }, new_fee_dest: { treasury: "1", burner: "0" } },
+    });
+    const nested = (id: string) => ({ "@type": "/bze.tradebin.MsgUpdatePools", authority: A, updates: [pool(id)] });
+    const run = (msgs: object[]) => ({ ...fixture("dao-admin-execute"), body: { admin: A, dao_id: "3", msgs }, events: [event("p1"), event("p2")] });
+    const render = (m: RenderMessage) => {
+      const r = rendererFor(m.type_url);
+      renderWithProviders(<r.Body msg={m} ctx={ctx} />);
+    };
+    // Two siblings of one type: the transaction's events cannot be attributed, so neither shows an outcome from them.
+    render(run([nested("p1"), nested("p2")]));
+    expect(screen.queryByText(/→/)).toBeNull();
+    expect(screen.getAllByText(/new fee 0\.5%/)).toHaveLength(2);
+  });
+
+  it("shows a single nested message's events", () => {
+    const nested = { "@type": "/bze.tradebin.MsgUpdatePools", authority: A, updates: [{ pool_id: "p1", fee: "0.005" }] };
+    const event = { type: "bze.tradebin.PoolFeesUpdatedEvent", attrs: { pool_id: "p1", old_fee: "0.003", new_fee: "0.005" } };
+    const m = { ...fixture("dao-admin-execute"), body: { admin: A, dao_id: "3", msgs: [nested] }, events: [event] };
+    const r = rendererFor(m.type_url);
+    renderWithProviders(<r.Body msg={m} ctx={ctx} />);
+    expect(screen.getByText("0.3% → 0.5%")).toBeInTheDocument();
+  });
+
+  it("shows a DAO's voting period as a duration", () => {
+    show("dao-create-dao");
+    expect(screen.getByText("3 days")).toBeInTheDocument();
+  });
+
+  it("words the DAO module's parameters from the parameters dictionary", () => {
+    const msg = {
+      ...fixture("dao-update-params"),
+      body: { authority: A, params: { dao_creation_fee: { denom: "ubze", amount: "1000000000" }, dao_creation_fee_destination: "burner", max_open_proposals: "20" } },
+    };
+    const r = rendererFor(msg.type_url);
+    renderWithProviders(<r.Body msg={msg} ctx={ctx} />);
+    expect(screen.getByText("Fee to create a DAO")).toBeInTheDocument();
+    expect(screen.getByText("1,000 BZE, burned")).toBeInTheDocument();
+    expect(screen.queryByText(/"denom"/)).toBeNull();
+  });
+
+  it("words the emergency key holder from the dictionary, a chip for the address, Nobody for none", () => {
+    show("guardian-update-params");
+    expect(screen.getByText("Emergency key holder")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "bze1m3k…9ds4" })).toBeInTheDocument();
+    const none = { ...fixture("guardian-update-params"), body: { authority: A, params: { guardian: "" } } };
+    const r = rendererFor(none.type_url);
+    renderWithProviders(<r.Body msg={none} ctx={ctx} />);
+    expect(screen.getByText("Nobody")).toBeInTheDocument();
   });
 
   it("lists the rules a config change touched, from the event", () => {
@@ -126,6 +180,11 @@ describe("guardian messages", () => {
 });
 
 describe("token and pool messages", () => {
+  it("keeps the precision of a fee ratio", () => {
+    const msg = { ...fixture("tokenfactory-set-denom-config"), body: { denom: HONEY, community_pool: "", transfer_fee: "0.00125", gas_surcharge: "0.010000000000000000" } };
+    expect(rendererFor(msg.type_url).title(msg, ctx)).toBe("Set HONEY's community pool to none, transfer fee 0.125%, gas surcharge 1%");
+  });
+
   it("reads zero ratios as none", () => {
     const msg = { ...fixture("tokenfactory-set-denom-config"), body: { denom: HONEY, community_pool: "", transfer_fee: "0", gas_surcharge: "0" } };
     expect(rendererFor(msg.type_url).title(msg, ctx)).toBe("Set HONEY's community pool to none, transfer fee none, gas surcharge none");
@@ -141,6 +200,7 @@ describe("token and pool messages", () => {
     const msg = { ...fixture("tradebin-update-pools"), events: null };
     const r = rendererFor(msg.type_url);
     renderWithProviders(<r.Body msg={msg} ctx={ctx} />);
-    expect(screen.getByText("new fee 0.5%")).toBeInTheDocument();
+    expect(screen.getByText("new fee 0.5% (50% to the treasury, 50% burned)")).toBeInTheDocument();
+    expect(screen.getByText("new fee 0.3% (100% to the treasury, 0% burned)")).toBeInTheDocument();
   });
 });

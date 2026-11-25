@@ -51,8 +51,9 @@ const DAO: Record<number, string> = {
   1135: "This admin nomination is out of date: control of the nominating DAO changed since it was made.",
 };
 
-// x/circuit refuses a disabled message type in the ante handler with a plain error (no registered code).
-const CIRCUIT_LOG = /tx type not allowed/;
+// x/circuit refuses a disabled message type with a plain error (no registered code): the ante handler's
+// text for a transaction's own messages, the message router's for those run by MsgExec or a DAO.
+const CIRCUIT_LOG = /tx type not allowed|circuit breaker disables execution of this message/;
 const CIRCUIT_WORDS = "This action is switched off by an emergency measure.";
 
 function moduleWords(tx: FailedTx): string | undefined {

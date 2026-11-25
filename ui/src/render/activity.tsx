@@ -225,6 +225,43 @@ const amounts = (list: (Coin & Partial<Pick<Balance, "symbol" | "exponent">>)[],
 const firstType = (row: Activity, ...names: string[]): string | null =>
   row.msg_types.map((t) => t.split(".").pop() ?? t).find((n) => names.includes(n)) ?? null;
 
+/** The guardian messages only the emergency key can send (governance undoes them), by message name. */
+const EMERGENCY_ACTIONS = [
+  "MsgTightenRateLimit",
+  "MsgBlockDenom",
+  "MsgDisableMessages",
+  "MsgHaltTradingDenoms",
+  "MsgHaltChain",
+  "MsgPauseAutomation",
+  "MsgCloseChannel",
+];
+
+/** The block events a governance-run guardian message leaves, by the message they belong to. */
+const GUARDIAN_EVENTS: Record<string, string> = {
+  TightenRateLimitEvent: "MsgTightenRateLimit",
+  DenomBlockedEvent: "MsgBlockDenom",
+  DenomUnblockedEvent: "MsgUnblockDenom",
+  MessagesDisabledEvent: "MsgDisableMessages",
+  TradingDenomsHaltedEvent: "MsgHaltTradingDenoms",
+  ChainHaltScheduledEvent: "MsgHaltChain",
+  AutomationPausedEvent: "MsgPauseAutomation",
+  AutomationResumedEvent: "MsgResumeAutomation",
+  ChannelClosedEvent: "MsgCloseChannel",
+  ChannelReopenedEvent: "MsgReopenChannel",
+};
+
+/** The guardian message a row is about: its message type, else its block event. */
+function guardianAction(row: Activity): string | null {
+  const fromType = row.msg_types.map((t) => t.split(".").pop() ?? t).find((n) => n in EMERGENCY_NAMES);
+  if (fromType) return fromType;
+  const event = (row.details ?? []).map((d) => d.type.split(".").pop() ?? d.type).find((n) => n in GUARDIAN_EVENTS);
+  return event ? GUARDIAN_EVENTS[event] : null;
+}
+
+const EMERGENCY_NAMES: Record<string, true> = Object.fromEntries(
+  [...EMERGENCY_ACTIONS, "MsgUnblockDenom", "MsgResumeAutomation", "MsgReopenChannel"].map((n) => [n, true] as const),
+);
+
 const SENTENCES: Record<string, Sentence> = {
   send: by(
     (i) => withParty(i, "Sent to", "Sent tokens to several accounts"),
@@ -459,7 +496,7 @@ const SENTENCES: Record<string, Sentence> = {
       MsgResumeAutomation: "Resumed fee conversion and burning",
       MsgReopenChannel: "Reopened a channel",
     };
-    const name = firstType(row, ...Object.keys(words));
+    const name = guardianAction(row);
     return [name ? words[name] : "An emergency measure changed"];
   },
 
@@ -535,6 +572,7 @@ export function activityLine(
   const parts = (known ? SENTENCES[row.kind] : otherSentence)(input).filter((p) => p !== "");
   const chips: StatusChip[] = [];
   if (ibc) chips.push(ibcChip(ibc));
+  if (row.kind === "guardian" && EMERGENCY_ACTIONS.includes(guardianAction(row) ?? "")) chips.unshift({ label: "Emergency", palette: "orange" });
   if (!row.success) chips.push({ label: "Failed", palette: "red" });
   return { parts, chips, fallback: !known };
 }

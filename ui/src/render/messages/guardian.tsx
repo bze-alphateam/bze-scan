@@ -1,10 +1,10 @@
 import { Stack, Text } from "@chakra-ui/react";
 import type { ReactNode } from "react";
 
-import { Account, accountName, Fields, humanise, str } from "./common";
+import { Account, accountName, Fields, humanise, obj, str } from "./common";
 import { tokenName } from "./tokenfactory";
 import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
-import { AddressOrText, EmergencyBadge, eventsOf, under, wholePct } from "./v830-common";
+import { EmergencyBadge, eventsOf, ParamsRows, under, wholePct } from "./v830-common";
 
 // x/guardian: the emergency powers of the guardian key (every title starts
 // with "Emergency:") and the governance-only messages that undo them. The
@@ -190,12 +190,10 @@ const updateParams = renderer({
     return holder ? `Changed the emergency key holder to ${accountName(holder, ctx)}` : "Removed the emergency key holder";
   },
   Body: ({ msg, ctx }: BodyProps) => (
-    <Fields
-      rows={[
-        { label: "Decided by", value: <Account address={str(msg, "authority")} ctx={ctx} /> },
-        { label: "New key holder", value: <AddressOrText value={keyHolder(msg)} ctx={ctx} /> },
-      ]}
-    />
+    <Stack gap="3">
+      <Fields rows={[{ label: "Decided by", value: <Account address={str(msg, "authority")} ctx={ctx} /> }]} />
+      <ParamsRows module="guardian" params={obj(msg.body?.params) ?? {}} ctx={ctx} />
+    </Stack>
   ),
 });
 

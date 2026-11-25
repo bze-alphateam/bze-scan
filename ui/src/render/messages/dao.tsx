@@ -2,7 +2,9 @@ import { Stack, Text } from "@chakra-ui/react";
 
 import { Account, accountName, Fields, humanise, obj, str } from "./common";
 import { renderer, type BodyProps, type MessageRenderer, type RenderMessage } from "./types";
-import { eventsOf, listAttr, nestedMessages, NestedList, under } from "./v830-common";
+import { durationSeconds, formatDuration } from "@/lib/parameters";
+
+import { eventsOf, listAttr, nestedMessages, NestedList, ParamsRows, under } from "./v830-common";
 
 // x/dao: DAOs with a member list or a staking electorate, their proposals and
 // the admin's direct execution. A DAO reads as its name when the message
@@ -34,7 +36,7 @@ function voteWord(msg: RenderMessage): string | null {
 }
 
 /** How a settled proposal ended, from its events; null when the message has none (pending or failed). */
-export function settleOutcome(msg: RenderMessage): string | null {
+function settleOutcome(msg: RenderMessage): string | null {
   const executed = eventsOf(msg, "bze.dao.EventProposalExecuted")[0];
   if (executed) {
     const ok = executed.success === true || executed.success === "true";
@@ -63,12 +65,19 @@ function typeWords(msg: RenderMessage): string {
   return type === "STAKE" || type === "DAO_TYPE_STAKE" ? "staking vote" : "member list";
 }
 
+/** A proto duration ("259200s") as "3 days". */
+function votingPeriod(value: unknown): string | null {
+  const seconds = durationSeconds(value);
+  return seconds === null ? null : formatDuration(seconds);
+}
+
 const createDao = renderer({
   category: "governance",
   title: (msg) => {
     const members = Array.isArray(msg.body?.members) ? msg.body.members.length : 0;
     const kind = typeWords(msg) === "member list" ? `member list, ${plural(members, "member")}` : "staking vote";
-    return `Created DAO ${quoted(str(msg, "name"))} (${kind})`.replace("DAO  (", "DAO (");
+    const name = quoted(str(msg, "name"));
+    return `Created DAO ${name ? `${name} ` : ""}(${kind})`;
   },
   reasonFor: () => "DAO creation fee",
   Body: function CreateDaoBody({ msg, ctx }: BodyProps) {
@@ -80,7 +89,7 @@ const createDao = renderer({
           { label: "Admin", value: <Account address={str(msg, "admin")} ctx={ctx} /> },
           { label: "Description", value: str(msg, "description") },
           { label: "Who votes", value: typeWords(msg) === "member list" ? "A fixed list of members" : "Stakers of the chosen tokens" },
-          { label: "Voting period", value: typeof config?.voting_period === "string" ? config.voting_period : null },
+          { label: "Voting period", value: votingPeriod(config?.voting_period) },
         ]}
       />
     );
@@ -165,6 +174,13 @@ const cleanup = renderer({
   Body: ({ msg, ctx }: BodyProps) => <Fields rows={[{ label: "Cleaned by", value: <Account address={str(msg, "sender")} ctx={ctx} /> }]} />,
 });
 
+/**
+ * The events of the nested messages: all of them for a single nested message,
+ * none for several (the events of the transaction are not tagged per nested
+ * message, so a sibling of the same type would read the wrong one).
+ */
+const nestedEvents = (msg: RenderMessage) => (nestedMessages(msg).length === 1 ? msg.events : null);
+
 const adminExecute = renderer({
   category: "governance",
   title: (msg) => `Ran ${plural(nestedMessages(msg).length, "action")} as ${daoRef(msg)}`,
@@ -172,7 +188,7 @@ const adminExecute = renderer({
     return (
       <Stack gap="4">
         <Fields rows={[{ label: "Run by", value: <Account address={str(msg, "admin")} ctx={ctx} /> }]} />
-        <NestedList list={nestedMessages(msg, msg.events)} ctx={ctx} />
+        <NestedList list={nestedMessages(msg, nestedEvents(msg))} ctx={ctx} />
       </Stack>
     );
   },
@@ -295,17 +311,7 @@ const updateMembers = renderer({
 const updateParams = renderer({
   category: "governance",
   title: () => "Changed the settings of the DAO module",
-  Body: function DaoParamsBody({ msg }: BodyProps) {
-    const params = obj(msg.body?.params) ?? {};
-    return (
-      <Fields
-        rows={Object.entries(params).map(([k, v]) => ({
-          label: humanise(k),
-          value: typeof v === "string" || typeof v === "number" ? String(v) : JSON.stringify(v),
-        }))}
-      />
-    );
-  },
+  Body: ({ msg, ctx }: BodyProps) => <ParamsRows module="dao" params={obj(msg.body?.params) ?? {}} ctx={ctx} />,
 });
 
 /** The DAO module's messages by type URL; the proposal page reuses `/bze.dao.MsgUpdateParams`. */

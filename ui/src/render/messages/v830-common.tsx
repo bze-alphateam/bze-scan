@@ -1,7 +1,9 @@
 import { Badge, Box, Stack, Text } from "@chakra-ui/react";
 import BigNumber from "bignumber.js";
 
-import { Account, obj } from "./common";
+import { paramAt, paramRow, PARAMETERS, plainKey, rawText, type ExplainContext } from "@/lib/parameters";
+
+import { Account, Fields, obj } from "./common";
 import type { MessageRenderer, RenderContext, RenderMessage } from "./types";
 
 // Helpers the chain v8.3.0 renderers (dao, guardian, ratelimit, tokenfactory,
@@ -10,8 +12,9 @@ import type { MessageRenderer, RenderContext, RenderMessage } from "./types";
 /** A ratio (`0.05`) as a percentage without trailing zeros: `5%`. */
 export function ratioPct(ratio: string | number | null | undefined): string | null {
   if (ratio == null || ratio === "") return null;
+  // Full precision, trailing zeros trimmed: 0.00125 reads 0.125%.
   const v = new BigNumber(ratio).times(100);
-  return v.isFinite() ? `${v.decimalPlaces(2).toFixed()}%` : null;
+  return v.isFinite() ? `${v.toFixed()}%` : null;
 }
 
 /** A whole percentage the chain stores as an integer (`2`): `2%`. */
@@ -80,13 +83,28 @@ export function EmergencyBadge() {
   );
 }
 
-/** An account chip when the value is an address. */
-export function AddressOrText({ value, ctx }: { value: string | null; ctx: RenderContext }) {
-  if (!value) return null;
-  return value.startsWith("bze1") ? <Account address={value} ctx={ctx} /> : <Text as="span">{value}</Text>;
-}
-
 /** Register a renderer table's entries under a prefix. */
 export function under(prefix: string, table: Record<string, MessageRenderer>): Record<string, MessageRenderer> {
   return Object.fromEntries(Object.entries(table).map(([k, v]) => [`${prefix}${k}`, v]));
+}
+
+/**
+ * A module's `MsgUpdateParams` as rows, the way the parameters page shows
+ * them (BFE-114 dictionary: names, formatted values); a key the dictionary
+ * lacks keeps its own name and raw value. A lone address is a chip.
+ */
+export function ParamsRows({ module, params, ctx }: { module: string; params: Record<string, unknown>; ctx: RenderContext }) {
+  const explain = { stats: null, params: { [module]: { params } } } as unknown as ExplainContext;
+  const defs = PARAMETERS.filter((d) => d.module === module && !d.fromStats && d.paths.every((p) => paramAt(params, p) !== undefined));
+  const covered = new Set(defs.flatMap((d) => d.paths.map((p) => p.split(".")[0])));
+  const rows = defs.map((def) => {
+    const row = paramRow(def, explain);
+    const only = def.paths.length === 1 ? row.values[0] : null;
+    const address = typeof only === "string" && only.startsWith("bze1") ? only : null;
+    return { label: row.name, value: address ? <Account address={address} ctx={ctx} /> : (row.value ?? row.raw) };
+  });
+  const rest = Object.entries(params)
+    .filter(([key]) => !covered.has(key))
+    .map(([key, value]) => ({ label: plainKey(key), value: rawText(value) }));
+  return <Fields rows={[...rows, ...rest]} />;
 }

@@ -8,6 +8,7 @@ describe("failureReason of chain v8.3.0", () => {
   it.each([
     ["tokenfactory", 1112, "Minting of this token is turned off for good."],
     ["tradebin", 4018, "The pool's price moved too far from its recent average; try again in a few blocks."],
+    ["dao", 1129, "One of the DAO's actions failed unexpectedly."],
     ["dao", 1133, "This kind of action is not allowed in a DAO execution."],
     ["dao", 1134, "The DAO's actions are nested too deep."],
     ["dao", 1135, "This admin nomination is out of date: control of the nominating DAO changed since it was made."],
@@ -17,6 +18,12 @@ describe("failureReason of chain v8.3.0", () => {
 
   it("explains a message type the circuit breaker switched off", () => {
     expect(fail("undefined", 1, "tx type not allowed")).toBe("This action is switched off by an emergency measure.");
+  });
+
+  it("explains a nested message the circuit breaker switched off (MsgExec, DAO execution)", () => {
+    const log = "failed to execute message; message index: 0: circuit breaker disables execution of this message: /bze.tradebin.MsgCreateOrder";
+    expect(fail("sdk", 4, log)).toBe("This action is switched off by an emergency measure.");
+    expect(fail("dao", 1129, log)).toBe("One of the DAO's actions failed unexpectedly.");
   });
 
   it("shows the log for a code it does not know", () => {
