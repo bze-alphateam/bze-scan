@@ -18,9 +18,7 @@ import (
 	circuittypes "cosmossdk.io/x/circuit/types"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
-	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 	grpctypes "github.com/cosmos/cosmos-sdk/types/grpc"
-	"github.com/cosmos/cosmos-sdk/types/query"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
@@ -33,10 +31,6 @@ import (
 
 // DefaultTTL is how long a state is served from the cache.
 const DefaultTTL = 15 * time.Second
-
-// HaltedLimit caps the halted denoms read; governance and the guardian halt
-// a few.
-const HaltedLimit = 1000
 
 // EmergencyPlanPrefix starts the name of the upgrade plan x/guardian
 // schedules for an immediate halt: emergency-halt-<height>.
@@ -57,10 +51,10 @@ type Circuit interface {
 	DisabledList(ctx context.Context, in *circuittypes.QueryDisabledListRequest, opts ...grpc.CallOption) (*circuittypes.DisabledListResponse, error)
 }
 
-// Tradebin is the part of the tradebin query client the reader uses;
-// tradebintypes.QueryClient satisfies it.
-type Tradebin interface {
-	HaltedDenoms(ctx context.Context, in *tradebintypes.QueryHaltedDenomsRequest, opts ...grpc.CallOption) (*tradebintypes.QueryHaltedDenomsResponse, error)
+// Halted reads tradebin's halted denoms; *params.GRPC satisfies it (the
+// read the parameters page uses).
+type Halted interface {
+	HaltedDenoms(ctx context.Context) ([]string, error)
 }
 
 // Upgrade is the part of the upgrade query client the reader uses;
@@ -79,7 +73,7 @@ type Deps struct {
 	Node     StatusNode
 	Guardian Guardian
 	Circuit  Circuit
-	Tradebin Tradebin
+	Halted   Halted
 	Upgrade  Upgrade
 }
 
@@ -242,13 +236,11 @@ func (r *Reader) read(ctx context.Context) (*State, error) {
 		return nil
 	})
 	g.Go(func() error {
-		resp, err := r.deps.Tradebin.HaltedDenoms(gctx, &tradebintypes.QueryHaltedDenomsRequest{
-			Pagination: &query.PageRequest{Limit: HaltedLimit},
-		})
+		denoms, err := r.deps.Halted.HaltedDenoms(gctx)
 		if err != nil {
-			return fmt.Errorf("tradebin halted denoms: %w", err)
+			return fmt.Errorf("halted denoms: %w", err)
 		}
-		s.HaltedDenoms = nonNil(resp.Denoms)
+		s.HaltedDenoms = nonNil(denoms)
 		return nil
 	})
 	g.Go(func() error {

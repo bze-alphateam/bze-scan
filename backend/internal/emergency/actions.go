@@ -79,3 +79,18 @@ func keys(m map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// govOnly are the message types only governance can run: they never appear
+// as transaction messages (the governance module cannot sign) and their
+// events are not stored as block events, so the index knows them only as
+// the messages of a passed proposal.
+var govOnly = []string{
+	"/bze.tradebin.MsgHaltDenoms",
+	"/bze.tradebin.MsgUnhaltDenoms",
+	"/cosmos.circuit.v1.MsgResetCircuitBreaker",
+	"/bze.guardian.v1.MsgUpdateParams",
+}
+
+// GovernanceMessageTypes are the type URLs read from the messages of passed
+// proposals.
+func GovernanceMessageTypes() []string { return append([]string{}, govOnly...) }

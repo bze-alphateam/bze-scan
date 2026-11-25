@@ -104,11 +104,11 @@ func TestEmergencyActionsMapRowsAndPage(t *testing.T) {
 	tm := time.Date(2026, 11, 25, 10, 0, 0, 0, time.UTC)
 	gov := chain.ModuleAddress("gov")
 	idx := &fakeEmergencyIndex{rows: []repository.EmergencyAction{
-		{Height: 30, Order: 1_000_000_000_002, Time: tm, Kind: "bze.guardian.v1.DenomUnblockedEvent", BlockLevel: true,
+		{Height: 30, Order: 1_000_000_000_002, Time: tm, Kind: "bze.guardian.v1.DenomUnblockedEvent", Source: repository.EmergencyFromEvent,
 			Details: []byte(`{"authority":"` + gov + `","denom":"ibc/AAA"}`)},
 		{Height: 20, Order: 10_001, Time: tm, TxHash: "AB12", Kind: "/bze.guardian.v1.MsgBlockDenom", Signer: "bze1guardian",
 			Details: []byte(`{"denom":"ibc/AAA"}`)},
-		{Height: 10, Order: 0, Time: tm, TxHash: "CD34", Kind: "/bze.tradebin.MsgUnhaltDenoms", Signer: gov, Details: []byte(`{}`)},
+		{Height: 10, Order: 0, Time: tm, TxHash: "CD34", Kind: "/bze.guardian.v1.MsgCloseChannel", Signer: "bze1guardian", Details: []byte(`{}`)},
 	}}
 	rec := serveEmergency(t, fakeEmergencyState{}, idx, "/api/v1/emergency/actions?limit=2")
 
@@ -118,9 +118,9 @@ func TestEmergencyActionsMapRowsAndPage(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"next_cursor":"MjA6MTAwMDE"`) // 20:10001
 	assert.JSONEq(t, `{"items": [
 		{"height": 30, "time": "2026-11-25T10:00:00Z", "tx_hash": null, "action": "unblock_denom", "by": "governance",
-		 "signer": "`+gov+`", "details": {"authority": "`+gov+`", "denom": "ibc/AAA"}},
+		 "signer": "`+gov+`", "details": {"authority": "`+gov+`", "denom": "ibc/AAA"}, "proposal_id": null},
 		{"height": 20, "time": "2026-11-25T10:00:00Z", "tx_hash": "AB12", "action": "block_denom", "by": "guardian",
-		 "signer": "bze1guardian", "details": {"denom": "ibc/AAA"}}
+		 "signer": "bze1guardian", "details": {"denom": "ibc/AAA"}, "proposal_id": null}
 	], "next_cursor": "MjA6MTAwMDE"}`, rec.Body.String())
 }
 
@@ -142,4 +142,17 @@ func TestEmergencyActionsOfAGovernanceMessageSignerAreGovernance(t *testing.T) {
 	}}
 	rec := serveEmergency(t, fakeEmergencyState{}, idx, "/api/v1/emergency/actions")
 	assert.Contains(t, rec.Body.String(), `"action":"enable_messages","by":"governance"`)
+}
+
+func TestEmergencyActionOfAPassedProposalIsGovernancesWithoutATxHash(t *testing.T) {
+	gov := chain.ModuleAddress("gov")
+	id := int64(48)
+	idx := &fakeEmergencyIndex{rows: []repository.EmergencyAction{
+		{Height: 5, Order: 2_000_000_048_000, Time: time.Unix(0, 0), Kind: "/bze.tradebin.MsgUnhaltDenoms",
+			Source: repository.EmergencyFromProposal, ProposalID: &id, Details: []byte(`{"denoms":["x"],"proposal_id":48}`)},
+	}}
+	rec := serveEmergency(t, fakeEmergencyState{}, idx, "/api/v1/emergency/actions")
+	assert.JSONEq(t, `{"items": [{"height": 5, "time": "1970-01-01T00:00:00Z", "tx_hash": null, "action": "unhalt_trading",
+		"by": "governance", "signer": "`+gov+`", "details": {"denoms": ["x"], "proposal_id": 48}, "proposal_id": 48}],
+		"next_cursor": null}`, rec.Body.String())
 }

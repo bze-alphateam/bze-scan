@@ -112,14 +112,20 @@ type EmergencyAction struct {
 	By      string          `json:"by"`
 	Signer  *string         `json:"signer"`
 	Details json.RawMessage `json:"details"`
+	// ProposalID is the passed proposal that executed the action; null for
+	// the others.
+	ProposalID *int64 `json:"proposal_id"`
 }
 
 // NewEmergencyAction maps a stored row; ok is false for a row of a kind the
-// action names do not cover.
+// action names do not cover. A block-level row and a passed proposal's
+// message are governance's (the proposal's signer is the governance
+// module); a transaction's message is the guardian's unless the governance
+// module signed it.
 func NewEmergencyAction(a repository.EmergencyAction) (EmergencyAction, bool) {
 	var action string
 	var ok bool
-	if a.BlockLevel {
+	if a.Source == repository.EmergencyFromEvent {
 		action, ok = emergency.EventAction(a.Kind)
 	} else {
 		action, ok = emergency.MessageAction(a.Kind)
@@ -127,12 +133,17 @@ func NewEmergencyAction(a repository.EmergencyAction) (EmergencyAction, bool) {
 	if !ok {
 		return EmergencyAction{}, false
 	}
-	out := EmergencyAction{Height: a.Height, Time: a.Time.UTC(), Action: action, By: "guardian", Details: jsonOr(a.Details, "{}")}
+	out := EmergencyAction{Height: a.Height, Time: a.Time.UTC(), Action: action, By: "guardian",
+		Details: jsonOr(a.Details, "{}"), ProposalID: a.ProposalID}
 	signer := a.Signer
-	if a.BlockLevel {
+	switch a.Source {
+	case repository.EmergencyFromEvent:
 		out.By = "governance"
 		signer = eventSigner(a.Details)
-	} else {
+	case repository.EmergencyFromProposal:
+		out.By = "governance"
+		signer = govAddress
+	default:
 		t := a.TxHash
 		out.TxHash = &t
 	}

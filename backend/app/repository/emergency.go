@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,70 +20,100 @@ type EmergencyKey struct {
 	Order  int64
 }
 
-// blockOrderBase puts every block-level row after the transactions of its
-// block: governance executes its messages in the end block.
-const blockOrderBase = int64(1_000_000_000_000)
+// The order keys of the rows of one block, ascending: the transactions'
+// messages, then the block events, then the messages of the proposals that
+// passed in it (governance executes in the end block). Every key is unique,
+// so the (height, order) keyset pages without skipping or repeating a row.
+const (
+	// msgOrderStride spaces the transactions of a block: tx_index * stride +
+	// msg_index.
+	msgOrderStride = int64(10_000)
+	// blockOrderBase + seq orders the block events.
+	blockOrderBase = int64(1_000_000_000_000)
+	// proposalOrderBase + proposal id * proposalOrderStride + message index
+	// orders the messages of passed proposals.
+	proposalOrderBase   = int64(2_000_000_000_000)
+	proposalOrderStride = int64(1_000)
+)
 
-// msgOrderStride spaces the transactions of a block in the order key:
-// tx_index * stride + msg_index.
-const msgOrderStride = int64(10_000)
+// The sources of an EmergencyAction.
+const (
+	EmergencyFromTx       = "tx"
+	EmergencyFromEvent    = "event"
+	EmergencyFromProposal = "proposal"
+)
 
 // EmergencyAction is a stored message or block event that pulled an
-// emergency switch or released one.
+// emergency switch or released one, or a message a passed proposal executed.
 type EmergencyAction struct {
 	Height int64
-	// Order is the position inside the block: tx_index*10,000 + msg_index
-	// for a message, 1,000,000,000,000 + seq for a block event.
+	// Order is the position inside the block (see the order bases).
 	Order int64
 	Time  time.Time
-	// TxHash is empty for a block-level row.
+	// TxHash is empty unless Source is tx.
 	TxHash string
 	// Kind is the message type URL or the event type.
 	Kind string
-	// BlockLevel is true for a block event.
-	BlockLevel bool
-	// Signer is the message's first signer; empty for a block event, whose
-	// signer or authority is in Details.
+	// Source is EmergencyFromTx, EmergencyFromEvent or EmergencyFromProposal.
+	Source string
+	// Signer is the message's first signer; empty for an event, whose
+	// signer or authority is in Details, and for a proposal's message.
 	Signer  string
 	Details json.RawMessage
+	// ProposalID is set when Source is proposal.
+	ProposalID *int64
 }
 
 // EmergencyActions returns up to limit emergency actions, newest first
-// (height, then position, descending), after before when it is not nil:
-// the successful messages of the guardian module, the circuit breaker's
-// reset and tradebin's halt and unhalt, plus the guardian events of the
-// blocks. Each branch reads its own index ((type_url, height) and (type,
-// height)) with the keyset bound on the height.
+// (height, then position, descending), after before when it is not nil,
+// from three sources: the successful messages of the guardian module and
+// the circuit breaker's reset and tradebin's halt and unhalt, signed in a
+// transaction; the guardian events of the blocks (guardian messages
+// governance executed); and the messages of passed proposals, for the types
+// only governance can run (which are never transactions' messages). Each
+// branch reads its own index and carries the keyset bound on the height, so
+// the partitions above the cursor are pruned.
 func (r *Explorer) EmergencyActions(ctx context.Context, before *EmergencyKey, limit int) ([]EmergencyAction, error) {
-	var bh, bo *int64
+	bh, bo := int64(math.MaxInt64), int64(math.MaxInt64)
 	if before != nil {
-		bh, bo = &before.Height, &before.Order
+		bh, bo = before.Height, before.Order
 	}
 	rows, err := r.db.Query(ctx, `
 		(SELECT m.height, m.tx_index::bigint * $6 + m.msg_index AS ord, t.time, t.hash, m.type_url,
-				false AS block_level, coalesce(m.sender, ''), coalesce(m.body, '{}'::jsonb)
+				'tx' AS src, coalesce(m.sender, ''), coalesce(m.body, '{}'::jsonb), NULL::bigint AS proposal_id
 		 FROM explorer.messages m
 		 JOIN explorer.transactions t ON t.height = m.height AND t.tx_index = m.tx_index
 		 WHERE m.type_url = ANY($1) AND t.success
-		   AND ($2::bigint IS NULL OR (m.height <= $2::bigint
-		        AND (m.height, m.tx_index::bigint * $6 + m.msg_index) < ($2::bigint, $3::bigint)))
+		   AND m.height <= $2 AND (m.height, m.tx_index::bigint * $6 + m.msg_index) < ($2, $3)
 		 ORDER BY m.height DESC, ord DESC LIMIT $4)
 		UNION ALL
-		(SELECT e.height, $7::bigint + e.seq AS ord, b.time, '', e.type, true, '', e.attrs
+		(SELECT e.height, $7::bigint + e.seq AS ord, b.time, '', e.type, 'event', '', e.attrs, NULL::bigint
 		 FROM explorer.block_events e
 		 JOIN explorer.blocks b ON b.height = e.height
 		 WHERE e.type = ANY($5)
-		   AND ($2::bigint IS NULL OR (e.height <= $2::bigint
-		        AND (e.height, $7::bigint + e.seq) < ($2::bigint, $3::bigint)))
+		   AND e.height <= $2 AND (e.height, $7::bigint + e.seq) < ($2, $3)
 		 ORDER BY e.height DESC, e.seq DESC LIMIT $4)
+		UNION ALL
+		(SELECT p.resolved_height, $8::bigint + p.id * $9 + (x.idx - 1) AS ord,
+				coalesce(b.time, p.voting_end_time, p.updated_at), '', x.msg ->> '@type', 'proposal', '',
+				x.msg || jsonb_build_object('proposal_id', p.id), p.id
+		 FROM explorer.proposals p
+		 CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.messages) = 'array' THEN p.messages ELSE '[]'::jsonb END)
+				WITH ORDINALITY AS x(msg, idx)
+		 LEFT JOIN explorer.blocks b ON b.height = p.resolved_height
+		 WHERE p.status = 'passed' AND p.resolved_height IS NOT NULL AND p.message_types && $10
+		   AND x.msg ->> '@type' = ANY($10)
+		   AND p.resolved_height <= $2 AND (p.resolved_height, $8::bigint + p.id * $9 + (x.idx - 1)) < ($2, $3)
+		 ORDER BY p.resolved_height DESC, ord DESC LIMIT $4)
 		ORDER BY 1 DESC, 2 DESC LIMIT $4`,
-		emergency.MessageTypes(), bh, bo, limit, emergency.EventTypes(), msgOrderStride, blockOrderBase)
+		emergency.MessageTypes(), bh, bo, limit, emergency.EventTypes(), msgOrderStride, blockOrderBase,
+		proposalOrderBase, proposalOrderStride, emergency.GovernanceMessageTypes())
 	if err != nil {
 		return nil, fmt.Errorf("emergency actions: %w", err)
 	}
 	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (EmergencyAction, error) {
 		var a EmergencyAction
-		err := row.Scan(&a.Height, &a.Order, &a.Time, &a.TxHash, &a.Kind, &a.BlockLevel, &a.Signer, &a.Details)
+		err := row.Scan(&a.Height, &a.Order, &a.Time, &a.TxHash, &a.Kind, &a.Source, &a.Signer, &a.Details, &a.ProposalID)
 		return a, err
 	})
 	if err != nil {

@@ -81,7 +81,8 @@ type Deps struct {
 	// leaves /api/v1/params/halted-denoms out.
 	HaltedDenoms controller.HaltedDenomsReader
 	// Emergency reads the emergency switches live and EmergencyIndex their
-	// stored actions; both nil leaves /api/v1/emergency out.
+	// stored actions. Without EmergencyIndex both routes are left out; without
+	// Emergency (no gRPC address) only /api/v1/emergency is.
 	Emergency      controller.EmergencyState
 	EmergencyIndex controller.EmergencyIndex
 	// StakeFlows serves the validators' stake movements of the last 7 days
@@ -231,10 +232,12 @@ func New(deps Deps) *echo.Echo {
 	if deps.HaltedDenoms != nil {
 		api.GET("/params/halted-denoms", controller.NewHaltedDenomsController(deps.HaltedDenoms).HaltedDenoms)
 	}
-	if deps.Emergency != nil && deps.EmergencyIndex != nil {
+	if deps.EmergencyIndex != nil {
 		emergency := controller.NewEmergencyController(deps.Emergency, deps.EmergencyIndex)
-		api.GET("/emergency", emergency.State)
 		api.GET("/emergency/actions", emergency.Actions)
+		if deps.Emergency != nil {
+			api.GET("/emergency", emergency.State)
+		}
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

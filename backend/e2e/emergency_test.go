@@ -106,8 +106,10 @@ func TestEmergencyStateOfOlderAndBrokenNodes(t *testing.T) {
 	assert.Equal(t, http.StatusBadGateway, r.status)
 }
 
-// The actions list merges messages and block events, newest first, skips
-// failed transactions and other message types, and pages.
+// The actions list merges transactions' messages, block events and the
+// messages of passed proposals, newest first, skips failed transactions,
+// other message types and proposals that did not pass, and pages without
+// skipping or repeating a row, also across rows of one height.
 func TestEmergencyActions(t *testing.T) {
 	e := newSyncEnv(t)
 	gov := chain.ModuleAddress("gov")
@@ -124,38 +126,71 @@ func TestEmergencyActions(t *testing.T) {
 			VALUES ($1, $2, 0, $3, $4, $5::jsonb)`, h, idx, typeURL, sender, body)
 		require.NoError(t, err)
 	}
+	proposal := func(id int64, status string, resolved int64, typeURL string) {
+		t.Helper()
+		_, err := e.db.Exec(`INSERT INTO explorer.proposals (id, title, kind, message_types, messages, status, submit_time, resolved_height, updated_at)
+			VALUES ($1, 'p', 'other', ARRAY[$3::text], jsonb_build_array(jsonb_build_object('@type', $3::text, 'authority', $4::text)),
+			        $2, '2026-11-25T09:00:00Z', $5, now())`, id, status, typeURL, gov, resolved)
+		require.NoError(t, err)
+	}
 	tx(100, 0, "T100", true, "/bze.guardian.v1.MsgCloseChannel", "bze1guardian", `{"channel_id":"channel-3"}`)
-	tx(150, 1, "T150", true, "/bze.tradebin.MsgUnhaltDenoms", gov, `{"denoms":["factory/bze1x/utok"]}`)
 	tx(160, 0, "T160", false, "/bze.guardian.v1.MsgPauseAutomation", "bze1guardian", `{}`)
 	tx(200, 0, "T200", true, "/bze.guardian.v1.MsgBlockDenom", "bze1guardian", `{"denom":"ibc/AAA"}`)
 	tx(200, 1, "T200B", true, "/cosmos.bank.v1beta1.MsgSend", "bze1guardian", `{}`)
+	proposal(7, "passed", 150, "/bze.tradebin.MsgUnhaltDenoms")
+	proposal(8, "failed", 160, "/bze.tradebin.MsgUnhaltDenoms") // did not execute
+	proposal(9, "passed", 250, "/cosmos.circuit.v1.MsgResetCircuitBreaker")
+	proposal(10, "passed", 300, "/cosmos.bank.v1beta1.MsgSend") // not an emergency message
 	_, err := e.db.Exec(`INSERT INTO explorer.block_events (height, seq, type, attrs)
 		VALUES (250, 3, 'bze.guardian.v1.DenomUnblockedEvent', jsonb_build_object('authority', $1::text, 'denom', 'ibc/AAA')),
 		       (250, 4, 'bze.burner.v1.SomethingElse', '{}'::jsonb)`, gov)
 	require.NoError(t, err)
 
 	base := e.serveEmergency(t)
-	first := fetch(t, base+"/emergency/actions?limit=2")
-	require.Equal(t, http.StatusOK, first.status, string(first.body))
-	assert.Equal(t, "no-store", first.header.Get("Cache-Control"))
-	page := into[dto.List[dto.EmergencyAction]](t, first)
-	require.Len(t, page.Items, 2)
-	require.NotNil(t, page.NextCursor)
-	// A gov-executed block-level action, then the guardian's transaction.
-	assert.Equal(t, int64(250), page.Items[0].Height)
-	assert.Equal(t, "unblock_denom", page.Items[0].Action)
-	assert.Equal(t, "governance", page.Items[0].By)
-	assert.Nil(t, page.Items[0].TxHash)
-	assert.Equal(t, gov, *page.Items[0].Signer)
-	assert.Equal(t, int64(200), page.Items[1].Height)
-	assert.Equal(t, "block_denom", page.Items[1].Action)
-	assert.Equal(t, "guardian", page.Items[1].By)
-	assert.Equal(t, "T200", *page.Items[1].TxHash)
+	all := fetch(t, base+"/emergency/actions")
+	require.Equal(t, http.StatusOK, all.status, string(all.body))
+	assert.Equal(t, "no-store", all.header.Get("Cache-Control"))
+	list := into[dto.List[dto.EmergencyAction]](t, all)
+	require.Nil(t, list.NextCursor)
+	type row struct {
+		height     int64
+		action, by string
+		tx         string
+	}
+	var got []row
+	for _, a := range list.Items {
+		tx := ""
+		if a.TxHash != nil {
+			tx = *a.TxHash
+		}
+		got = append(got, row{a.Height, a.Action, a.By, tx})
+	}
+	// Two rows at height 250: the proposal's message, then the block event.
+	assert.Equal(t, []row{
+		{250, "enable_messages", "governance", ""},
+		{250, "unblock_denom", "governance", ""},
+		{200, "block_denom", "guardian", "T200"},
+		{150, "unhalt_trading", "governance", ""},
+		{100, "close_channel", "guardian", "T100"},
+	}, got)
+	assert.Equal(t, gov, *list.Items[0].Signer)
+	require.NotNil(t, list.Items[0].ProposalID)
+	assert.Equal(t, int64(9), *list.Items[0].ProposalID)
+	assert.JSONEq(t, `{"@type":"/cosmos.circuit.v1.MsgResetCircuitBreaker","authority":"`+gov+`","proposal_id":9}`, string(list.Items[0].Details))
+	assert.Nil(t, list.Items[1].ProposalID)
+	assert.Equal(t, int64(7), *list.Items[3].ProposalID)
 
-	second := into[dto.List[dto.EmergencyAction]](t, fetch(t, base+"/emergency/actions?limit=2&cursor="+*page.NextCursor))
-	require.Len(t, second.Items, 2, "the failed transaction at 160 is skipped")
-	assert.Equal(t, "unhalt_trading", second.Items[0].Action)
-	assert.Equal(t, "governance", second.Items[0].By)
-	assert.Equal(t, "close_channel", second.Items[1].Action)
-	assert.Nil(t, second.NextCursor)
+	// One row per page: every page boundary, the one inside height 250 too.
+	var paged []dto.EmergencyAction
+	url := base + "/emergency/actions?limit=1"
+	for range 10 {
+		page := into[dto.List[dto.EmergencyAction]](t, fetch(t, url))
+		require.LessOrEqual(t, len(page.Items), 1)
+		paged = append(paged, page.Items...)
+		if page.NextCursor == nil {
+			break
+		}
+		url = base + "/emergency/actions?limit=1&cursor=" + *page.NextCursor
+	}
+	assert.Equal(t, list.Items, paged)
 }

@@ -6,13 +6,13 @@ import (
 	circuittypes "cosmossdk.io/x/circuit/types"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
-	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/emergency"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 )
 
 // EmergencyTimeout bounds each emergency state query.
@@ -34,7 +34,7 @@ func NewEmergency(cfg *config.Config, codec *chain.Codec) (reader *emergency.Rea
 		Node:     node.New(cfg.NodeRPCURL),
 		Guardian: guardiantypes.NewQueryClient(conn),
 		Circuit:  circuittypes.NewQueryClient(conn),
-		Tradebin: tradebintypes.NewQueryClient(conn),
+		Halted:   params.NewGRPC(conn, codec),
 		Upgrade:  upgradetypes.NewQueryClient(conn),
 	})
 	return reader, func() { _ = conn.Close() }, nil

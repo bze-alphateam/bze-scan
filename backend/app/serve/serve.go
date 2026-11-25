@@ -228,15 +228,16 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	// The emergency status reads the switches live from the node's gRPC.
 	var emergencyState controller.EmergencyState
-	var emergencyIndex controller.EmergencyIndex
 	if cfg.NodeGRPCAddr != "" {
 		reader, closeEmergency, err := NewEmergency(cfg, codec)
 		if err != nil {
 			return err
 		}
 		defer closeEmergency()
-		emergencyState, emergencyIndex = reader, explorerRepo
+		emergencyState = reader
 	}
+	// The stored actions need only the database.
+	var emergencyIndex controller.EmergencyIndex = explorerRepo
 
 	// The dapps' asset list lives in memory: built at start from the
 	// tables by a component of its own, then rebuilt by the state sync
