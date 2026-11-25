@@ -6,11 +6,12 @@ import type { ReactNode } from "react";
 import { LuClock, LuPause } from "react-icons/lu";
 
 import { useLiveHalt, useStatus } from "@/api/hooks";
-import { backLine, behindLine, haltedFor, haltProgress } from "@/render/halt";
+import { backLine, behindLine, emergencyLine, haltedFor, haltProgress } from "@/render/halt";
 
 /**
- * The strip under the header: the chain paused for a software upgrade (with
- * how much voting power is back), or else the explorer behind the chain. A
+ * The strip under the header: the chain paused for a software upgrade or an
+ * emergency halt (with how much voting power is back), or else the explorer
+ * behind the chain. A
  * stall that is not an upgrade's halt only ever reads as the explorer being
  * behind, so nobody takes it for the chain stopping. Nothing while all is well.
  */
@@ -18,6 +19,20 @@ export function ChainBanner() {
   const halt = useLiveHalt().data;
   const status = useStatus().data;
 
+  if (halt?.halted && halt.kind === "emergency") {
+    const p = haltProgress(halt);
+    return (
+      <Strip tone="warn" icon={<LuPause size={16} />} testId="halt-banner">
+        <Text as="span" fontWeight="600">
+          {emergencyLine(halt)}.
+        </Text>{" "}
+        The chain is paused (for {haltedFor(halt, new Date())}). {backLine(p)}.{" "}
+        <Link asChild color="accent.fg" fontWeight="600">
+          <NextLink href={`/blocks/${halt.height}`}>See who is missing</NextLink>
+        </Link>
+      </Strip>
+    );
+  }
   if (halt?.halted) {
     const p = haltProgress(halt);
     return (

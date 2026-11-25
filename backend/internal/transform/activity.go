@@ -531,13 +531,6 @@ func blockActivity(ents *Entities, b Block, events []node.Event) error {
 	return nil
 }
 
-// KindChainTransfer is the block-level row of an account the chain moved
-// coins out of by itself, and of the account it moved them to: an upgrade
-// handler's migration (chain v8.3.0 moved an account's balances to a new
-// address). The routine block-level moves start at a module account and
-// get no such row.
-const KindChainTransfer = "chain_transfer"
-
 // blockSends adds the rows of the block-level bank transfers sent by an
 // account (not a module account) to the addresses no classified event
 // named: the sender's (sent), and the recipient's when it is an account
@@ -553,7 +546,7 @@ func blockSends(rows map[string]*Activity, order *[]string, b Block, book balanc
 		if !ok {
 			a = &Activity{
 				Address: addr, Height: b.Height, TxIndex: BlockTxIndex, Time: b.Time,
-				Kind: KindChainTransfer, Category: category, Success: true, Counterparty: other,
+				Kind: classify.KindChainTransfer, Category: category, Success: true, Counterparty: other,
 				Deltas: book.of(addr), MsgTypes: []string{}, Details: []Event{},
 			}
 			rows[addr] = a

@@ -18,6 +18,9 @@ const halted: Halted = {
   halt_height: 25263601,
   proposal_id: 48,
   name: "v8.2.0",
+  kind: "governance",
+  reason: null,
+  scheduled_by: null,
   round: 0,
   halted_since: new Date(Date.now() - 5 * 60_000).toISOString(),
   checked_at: new Date().toISOString(),
@@ -44,6 +47,24 @@ describe("ChainBanner", () => {
     expect(banner).toHaveTextContent("58.0% of the voting power is back, 8.7% more is needed on the new version.");
     expect(screen.getByRole("link", { name: "See who is missing" })).toHaveAttribute("href", "/proposals/48");
     expect(screen.queryByTestId("behind-banner")).toBeNull();
+  });
+
+  it("names an emergency halt, who scheduled it why, and links to its block", async () => {
+    const emergency: Halted = {
+      ...halted,
+      height: 5000000,
+      halt_height: 5000001,
+      proposal_id: null,
+      name: "emergency-halt-5000000",
+      kind: "emergency",
+      reason: "pool drain under way",
+      scheduled_by: "bze1guardian",
+    };
+    renderWithProviders(<ChainBanner />, { api: fakeApi({ liveHalt: async () => emergency, status: async () => behind }) });
+    const banner = await screen.findByTestId("halt-banner");
+    expect(banner).toHaveTextContent("Emergency halt scheduled by the guardian at block 5,000,000: pool drain under way.");
+    expect(banner).toHaveTextContent("The chain is paused (for 5 min). 58.0% of the voting power is back, 8.7% more is needed.");
+    expect(screen.getByRole("link", { name: "See who is missing" })).toHaveAttribute("href", "/blocks/5000000");
   });
 
   it("says the explorer is behind when no upgrade halted the chain", async () => {

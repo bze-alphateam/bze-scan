@@ -9,6 +9,7 @@ import { ExternalLink } from "@/components/ui/external-link";
 import { isNotFound } from "@/api/client";
 import {
   useBlock,
+  useLiveHalt,
   useRawBlock,
   useRawBlockResults,
   useRawCommit,
@@ -39,6 +40,8 @@ import { txOneLine } from "@/render/txs";
 import { coinsText } from "@/render/messages/common";
 import { createRenderContext } from "@/render/messages/registry";
 import type { RenderContext } from "@/render/messages/types";
+
+import { EmergencyHaltNote } from "@/components/upgrades/emergency-halt";
 
 import { BlockFlow, FlowSkeleton } from "./block-flow";
 import { FutureBlockEstimator } from "./future-block";
@@ -343,6 +346,7 @@ export function BlockView({ block, tip }: { block: Block; tip: number | null }) 
   return (
     <Box>
       <Header block={block} tip={tip} />
+      {block.upgrade?.kind === "emergency" && <EmergencyHaltNote height={block.height} upgrade={block.upgrade} indexed />}
       <Overview block={block} ctx={ctx} />
       <Transactions block={block} ctx={ctx} />
       {block.transfers_count > 0 && <BlockFlow height={block.height} count={block.transfers_count} />}
@@ -438,8 +442,20 @@ function NotFound(props: { height: number; kind: BlockNotFound; oldest: number |
   );
 }
 
-/** A height above the chain's: the Future block estimator in place, while the page keeps asking for the block. */
+/**
+ * A height above the chain's: the Future block estimator in place, while the page keeps asking for the block. The
+ * height an emergency halt stopped the chain at is not indexed during the halt: its note shows instead.
+ */
 function NotProduced({ height, expired }: { height: number; expired: boolean }) {
+  const halt = useLiveHalt().data;
+  if (halt?.halted && halt.kind === "emergency" && halt.height === height) {
+    return (
+      <Box data-testid="block-not_produced">
+        <Head height={height} tag={<Tag tone="warn">Chain paused</Tag>} />
+        <EmergencyHaltNote height={height} upgrade={halt} indexed={false} />
+      </Box>
+    );
+  }
   return (
     <Box data-testid="block-not_produced">
       <Head
