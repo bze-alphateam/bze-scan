@@ -3,11 +3,12 @@ import type { Proposal } from "@/api/types";
 import { entriesOf, humanise, obj, type Action, type Body, type Reader } from "./actions";
 import { readCointrunk } from "./cointrunk";
 import { readIbc } from "./ibc";
+import { readMessage } from "./messages";
 import { readParams } from "./params";
 import { readSpend } from "./spend";
 import { readUpgrade } from "./upgrade";
 
-const READERS: Reader[] = [readUpgrade, readSpend, readParams, readCointrunk, readIbc];
+const READERS: Reader[] = [readUpgrade, readSpend, readMessage, readParams, readCointrunk, readIbc];
 
 const LEGACY = "/cosmos.gov.v1.MsgExecLegacyContent";
 
