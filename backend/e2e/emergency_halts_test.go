@@ -206,6 +206,17 @@ func TestEmergencyHaltIsWatchedAndSupersedesTheGovernancePlan(t *testing.T) {
 	require.NotNil(t, b.Upgrade.Reason)
 	assert.Equal(t, emergencyReason, *b.Upgrade.Reason)
 
+	// The block of a governance upgrade names it; the height of a superseded
+	// plan names none.
+	indexSynthetic(t, pool, 22_000_000)
+	indexSynthetic(t, pool, 30_000_000)
+	gb := into[dto.Block](t, fetch(t, base+"/blocks/22000000"))
+	require.NotNil(t, gb.Upgrade)
+	assert.Equal(t, "governance", gb.Upgrade.Kind)
+	require.NotNil(t, gb.Upgrade.ProposalID)
+	assert.Equal(t, int64(50), *gb.Upgrade.ProposalID)
+	assert.Nil(t, into[dto.Block](t, fetch(t, base+"/blocks/30000000")).Upgrade)
+
 	// A decided emergency halt is no upgrade of the Hall of Fame rule.
 	_, err = e.db.Exec(`UPDATE explorer.upgrades SET computed_at = now() WHERE height = $1`, emergencyHeight)
 	require.NoError(t, err)
@@ -218,4 +229,71 @@ func TestEmergencyHaltIsWatchedAndSupersedesTheGovernancePlan(t *testing.T) {
 	require.NoError(t, store.Discover(ctx))
 	assert.Equal(t, []string{"53 -"}, queryStrings(t, e.db, `SELECT concat_ws(' ', proposal_id, coalesce(superseded_by_height::text, '-'))
 		FROM explorer.upgrades WHERE height = 30000000`))
+}
+
+// The supersede rule's edges: a proposal executed in the halt's own
+// scheduling block (H-1) planned after the halt and is kept; one executed at
+// H-2 was replaced; a computed upgrade is never marked.
+func TestSupersedeBoundaries(t *testing.T) {
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	store := upgrades.NewPGStore(pool)
+
+	sameBlock, before := emergencyHeight-1, emergencyHeight-2
+	e.passProposal(t, 60, 33_000_000, &sameBlock)
+	e.passProposal(t, 61, 34_000_000, &before)
+	e.passProposal(t, 62, 35_000_000, &before)
+	require.NoError(t, store.Discover(ctx))
+	_, err = e.db.Exec(`UPDATE explorer.upgrades SET computed_at = now() WHERE height = 35000000`)
+	require.NoError(t, err)
+
+	scheduleHalt(t, pool, emergencyHeight-1)
+	require.NoError(t, store.Discover(ctx))
+	assert.Equal(t, []string{"33000000 -", "34000000 22551810", "35000000 -"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', height, coalesce(superseded_by_height::text, '-')) FROM explorer.upgrades WHERE kind = 'governance'`))
+}
+
+// What Discover never overwrites: an emergency halt (written over a
+// governance row, it keeps that proposal), a computed upgrade, a row of a
+// higher proposal.
+func TestDiscoverKeepsEmergencyComputedAndNewerRows(t *testing.T) {
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	store := upgrades.NewPGStore(pool)
+
+	resolved := emergencyHeight - 500
+	e.passProposal(t, 70, emergencyHeight, &resolved)
+	e.passProposal(t, 71, 36_000_000, &resolved)
+	require.NoError(t, store.Discover(ctx))
+	_, err = e.db.Exec(`UPDATE explorer.upgrades SET computed_at = now() WHERE height = 36000000`)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.upgrades (height, proposal_id, name) VALUES (37000000, 90, 'v90')`)
+	require.NoError(t, err)
+
+	// The emergency halt lands at the governance plan's height: it takes
+	// the row over and keeps the proposal.
+	scheduleHalt(t, pool, emergencyHeight-1)
+	rows := func() []string {
+		return queryStrings(t, e.db, `SELECT concat_ws(' ', height, proposal_id, name, kind) FROM explorer.upgrades`)
+	}
+	want := []string{
+		"22551810 70 emergency-halt-22551810 emergency",
+		"36000000 71 v71 governance",
+		"37000000 90 v90 governance",
+	}
+	assert.Equal(t, want, rows())
+
+	// Newer proposals for the emergency and the computed heights, an older
+	// one for 37000000: nothing changes.
+	e.passProposal(t, 72, emergencyHeight, &resolved)
+	e.passProposal(t, 73, 36_000_000, &resolved)
+	e.passProposal(t, 74, 37_000_000, &resolved)
+	require.NoError(t, store.Discover(ctx))
+	assert.Equal(t, want, rows())
 }

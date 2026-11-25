@@ -185,3 +185,53 @@ func TestBlockTransferFromAnUnlabelledAccountGivesBothSidesARow(t *testing.T) {
 	}
 	assert.Equal(t, map[string]string{refundOwner: "sent", migratedTo: "received"}, category)
 }
+
+// The recipient of such a transfer gets no row when it is a module account.
+func TestBlockTransferToAModuleAccountGivesTheSenderARowOnly(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs, in.Results.TxsResults = nil, nil
+	in.Results.FinalizeBlockEvents = send(refundOwner, chain.ModuleAddress("burner"), "5ubze")
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	require.Len(t, ents.Activity, 1)
+	assert.Equal(t, refundOwner, ents.Activity[0].Address)
+	assert.Equal(t, "chain_transfer", ents.Activity[0].Kind)
+	assert.Equal(t, chain.ModuleAddress("burner"), ents.Activity[0].Counterparty)
+}
+
+// An address a classified block event already names keeps that row: one row
+// per address and block.
+func TestBlockTransferKeepsTheRowOfAClassifiedEvent(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs, in.Results.TxsResults = nil, nil
+	in.Results.FinalizeBlockEvents = append(send(refundOwner, migratedTo, "5ubze"), node.Event{
+		Type: "bze.tradebin.OrderMessageRefundedEvent", Attributes: []node.Attribute{
+			attr("order_id", `"7"`), attr("owner", `"`+refundOwner+`"`), attr("reason", `"upgrade"`),
+		}})
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	kinds := map[string]string{}
+	for _, a := range ents.Activity {
+		_, dup := kinds[a.Address]
+		assert.False(t, dup, "one row for %s", a.Address)
+		kinds[a.Address] = a.Kind
+	}
+	assert.Equal(t, map[string]string{refundOwner: "dex_refund", migratedTo: "chain_transfer"}, kinds)
+}
+
+// A sender that sends to several accounts has no single counterparty.
+func TestBlockTransfersToSeveralAccountsLeaveNoCounterparty(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs, in.Results.TxsResults = nil, nil
+	in.Results.FinalizeBlockEvents = append(send(migratedFrom, migratedTo, "5ubze"), send(migratedFrom, refundOwner, "3ubze")...)
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	parties := map[string]string{}
+	for _, a := range ents.Activity {
+		parties[a.Address] = a.Counterparty
+	}
+	assert.Equal(t, map[string]string{migratedFrom: "", migratedTo: migratedFrom, refundOwner: migratedFrom}, parties)
+}

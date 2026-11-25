@@ -498,3 +498,38 @@ func TestQueuedCancelStopsBeingPendingAfterAnUpgrade(t *testing.T) {
 		})
 	}
 }
+
+// An emergency halt and a governance plan it superseded are no upgrade the
+// queue was emptied by: the cancel stays pending until a governance upgrade
+// that happened.
+func TestQueuedCancelIgnoresEmergencyAndSupersededUpgrades(t *testing.T) {
+	const cancelHeight = dexH - 1
+	cancel := txHash(42)
+	at := dexBlock(cancelHeight, transform.Transaction{Hash: cancel, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCancelOrder"}})
+	at.Messages = []transform.Message{{Height: cancelHeight, TxIndex: 0, MsgIndex: 0, TypeURL: "/bze.tradebin.MsgCancelOrder",
+		Events: []transform.Event{{Type: "bze.tradebin.OrderCancelMessageEvent", Attrs: map[string]any{"orderId": oid(31), "message_id": oid(1)}}}}}
+	at.OrderMessages = []transform.OrderMessage{{Height: cancelHeight, MessageID: oid(1), TxIndex: 0, TxHash: cancel, Kind: "cancel"}}
+	at.Orders = []transform.Order{savedOrder(cancelHeight-1, 31, dexOwner, "10", 0, "")}
+	tip := dexBlock(dexH + 3)
+
+	e := newSyncEnv(t)
+	w := batchWriter(t, e.url)
+	require.NoError(t, w.Write(context.Background(), []*transform.Entities{at, tip}, writer.ModeInsert))
+	base := e.serveAPI(t)
+	pending := func() bool {
+		r := fetch(t, base+"/txs/"+cancel)
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		d := into[dto.Tx](t, r).Dex
+		return d != nil && d.Pending
+	}
+	exec := func(q string, args ...any) {
+		_, err := e.db.Exec(q, args...)
+		require.NoError(t, err)
+	}
+	exec(`INSERT INTO explorer.upgrades (height, name, kind) VALUES ($1, 'emergency-halt', 'emergency')`, dexH)
+	assert.True(t, pending(), "an emergency halt does not empty the queue")
+	exec(`INSERT INTO explorer.upgrades (height, proposal_id, name, superseded_by_height) VALUES ($1, 1, 'v8.3.0', $2)`, dexH+1, dexH)
+	assert.True(t, pending(), "a superseded plan never happened")
+	exec(`INSERT INTO explorer.upgrades (height, proposal_id, name) VALUES ($1, 2, 'v8.3.0')`, dexH+2)
+	assert.False(t, pending(), "a governance upgrade did")
+}

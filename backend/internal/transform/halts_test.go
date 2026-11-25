@@ -3,6 +3,9 @@ package transform_test
 import (
 	"testing"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/authz"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -65,4 +68,23 @@ func TestChainHaltScheduledWithoutAHeightOrInAFailedTxIsSkipped(t *testing.T) {
 	ents, err := tr.Transform(in)
 	require.NoError(t, err)
 	assert.Empty(t, ents.EmergencyHalts)
+}
+
+// A halt run through authz (the guardian's key granted to another) emits the
+// same event inside the MsgExec: it is recorded too.
+func TestChainHaltScheduledInsideAnAuthzExecIsAnEmergencyHalt(t *testing.T) {
+	exec := authz.NewMsgExec(sdk.MustAccAddressFromBech32(newAdmin), []sdk.Msg{&guardiantypes.MsgHaltChain{Signer: creator, Reason: "exploit"}})
+	in := baseInput()
+	in.Block.Txs = []string{encodedTx(t, &exec)}
+	in.Results.TxsResults = []node.TxResult{{Events: []node.Event{
+		typed("bze.guardian.v1.ChainHaltScheduledEvent", "0",
+			"signer", creator, "name", "emergency-halt-11", "height", "11", "reason", "exploit"),
+	}}}
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	require.Len(t, ents.Transactions, 1)
+	assert.Equal(t, []string{"/cosmos.authz.v1beta1.MsgExec"}, ents.Transactions[0].MsgTypes)
+	assert.Equal(t, []transform.EmergencyHalt{{Height: 11, Name: "emergency-halt-11", Reason: "exploit",
+		ScheduledBy: creator, ScheduledHeight: 10, TxHash: ents.Transactions[0].Hash}}, ents.EmergencyHalts)
 }
