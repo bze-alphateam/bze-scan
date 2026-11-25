@@ -252,3 +252,53 @@ func TestAuthzExecGovSubmission(t *testing.T) {
 	assert.Equal(t, "voting_period", p.Status)
 	assert.Contains(t, ents.Dirty.Keys(statesync.Proposals), "51")
 }
+
+// Token and validator rows of one proposal each count from the proposal's
+// base, like the transaction's own rows.
+func TestNestedActionsNumberTokenAndValidatorRowsApart(t *testing.T) {
+	dao := daoAddress(t, 4)
+	h := "factory/" + dao + "/uhoney"
+	msgs := proposalMsgs(t,
+		&tokenfactorytypes.MsgSetDenomBranding{Creator: dao, Denom: h},
+		&stakingtypes.MsgEditValidator{ValidatorAddress: operator, CommissionRate: nil, Description: stakingtypes.Description{
+			Moniker: "DAO node", Identity: "[do-not-modify]", Website: "[do-not-modify]",
+			SecurityContact: "[do-not-modify]", Details: "[do-not-modify]"}},
+	)
+	nested := transform.NestedActions(msgs, 12, 0, time.Unix(1, 0).UTC(), 0)
+	require.Len(t, nested.TokenEvents, 1)
+	require.Len(t, nested.ValidatorEvents, 1)
+	assert.Equal(t, 1000, nested.TokenEvents[0].Seq)
+	assert.Equal(t, 1000, nested.ValidatorEvents[0].Seq)
+}
+
+// The typed token events of an admin execution name the DAO, derived from
+// the body's dao_id, not the admin who signed.
+func TestAdminExecuteTypedEventsNameTheDao(t *testing.T) {
+	dao := daoAddress(t, 3)
+	h := "factory/" + dao + "/uhoney"
+	raw := encodedTx(t, &daotypes.MsgAdminExecute{Admin: creator, DaoId: 3,
+		Msgs: anys(t, &tokenfactorytypes.MsgSetDenomConfig{Creator: dao, Denom: h})})
+	ents := transformDaoTx(t, []node.Event{typedRaw("bze.tokenfactory.DenomConfigChangeEvent", "0",
+		"denom", `"`+h+`"`, "community_pool", `"0"`, "transfer_fee", `"0"`, "gas_surcharge", `"0"`)}, raw)
+	require.Len(t, ents.TokenEvents, 1)
+	assert.Equal(t, "config_changed", ents.TokenEvents[0].Kind)
+	assert.Equal(t, dao, ents.TokenEvents[0].Actor)
+}
+
+// A settle that refunds the proposer's deposit: the proposer received; the
+// settler who signed keeps the wrapper's own category.
+func TestSettleDepositRefundIsReceived(t *testing.T) {
+	raw := encodedTx(t, &daotypes.MsgSettleProposal{Sender: creator, ProposalId: 6})
+	ents := transformDaoTx(t, []node.Event{
+		withIndex(coinReceived(newAdmin, "1000ubze"), "0"),
+		withIndex(transfer(chain.ModuleAddress(daotypes.ModuleName), newAdmin, "1000ubze"), "0"),
+		typedRaw("bze.dao.EventDepositReleased", "0", "id", `"6"`, "refunded", "true", "destination", `"`+newAdmin+`"`, "amount", `"1000ubze"`),
+		settled("0", "6", "REJECTED", "1", "9", "0", false),
+	}, raw)
+	byAddr := map[string]transform.Activity{}
+	for _, a := range ents.Activity {
+		byAddr[a.Address] = a
+	}
+	assert.Equal(t, "received", byAddr[newAdmin].Category)
+	assert.Equal(t, "governance", byAddr[creator].Category, "the settler signs: unchanged")
+}

@@ -71,7 +71,7 @@ func TestSettledProposalActionsWhenTheSubmissionComesLater(t *testing.T) {
 	require.NoError(t, w.Write(context.Background(), []*transform.Entities{submit}, writer.ModeInsert))
 	want := []string{
 		"token 25300001 0 1000 metadata_changed " + daoTwo,
-		"validator 25300001 0 1001 description_changed bzevaloper1daonodedaonodedaonodedaonodedaonod",
+		"validator 25300001 0 1000 description_changed bzevaloper1daonodedaonodedaonodedaonodedaonod",
 	}
 	assert.Equal(t, want, queryStrings(t, e.db, nestedRowsSQL))
 
@@ -94,6 +94,6 @@ func TestSettledProposalActionsOnTheLivePath(t *testing.T) {
 	require.NoError(t, w.WriteBlock(context.Background(), settle))
 	assert.Equal(t, []string{
 		"token 25300101 0 1000 metadata_changed " + daoTwo,
-		"validator 25300101 0 1001 description_changed bzevaloper1daonodedaonodedaonodedaonodedaonod",
+		"validator 25300101 0 1000 description_changed bzevaloper1daonodedaonodedaonodedaonodedaonod",
 	}, queryStrings(t, e.db, nestedRowsSQL))
 }
