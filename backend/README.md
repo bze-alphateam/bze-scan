@@ -1319,7 +1319,8 @@ the queue message id (24 zero-filled digits, unique within a block).
   block-level `OrderMessageRefundedEvent`s with reason `upgrade` whose
   `order_id` is the old queue message id. They are stored as `block_events`
   (kind `dex_refund`) and linked to the transaction when it is read, below.
-  A queued cancel refunds nothing and its order stays on the book. The queue
+  A queued cancel refunds nothing and its order stays on the book, so a cancel transaction
+  stops being `pending` once an `explorer.upgrades` row above its height is at or below the tip. The queue
   is normally empty or nearly empty at that height.
 
 ### Trades and trade ids
@@ -1377,7 +1378,7 @@ a cursor still at 0 starts with no hole.
 
 A transaction's `dex.pending` is true while one of its create or fill
 messages (chain v8.2.0) has no attributed fill or order, or one of its
-cancels names an order still open. It resolves when the cross-block
+cancels names an order still open (unless an upgrade at or below the indexed tip came after the cancel: the v8.3.0 upgrade drops queued cancels). It resolves when the cross-block
 attribution links the outcome. Before chain v8.3.0 a fill message whose
 orders were gone is refunded without any event, so it stays pending (the UI
 treats a settled fill as final). The v8.3.0 upgrade block refunds what was

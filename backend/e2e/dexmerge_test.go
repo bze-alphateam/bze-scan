@@ -390,6 +390,16 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 		outcomeEvent(upgrade, 1, "OrderMessageRefundedEvent", map[string]any{"order_id": oid(2), "market_id": dexMarket,
 			"order_type": "sell", "owner": dexOwner, "amount": "7", "refund": "", "reason": "upgrade"}),
 	}
+	// The same id queued twice before the upgrade: the later message holds it
+	// when the upgrade block refunds it.
+	twiceFirst, twiceLater := txHash(34), txHash(35)
+	c := dexBlock(upgrade-3, transform.Transaction{Hash: twiceFirst, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
+	c.OrderMessages = []transform.OrderMessage{{Height: upgrade - 3, MessageID: oid(5), TxIndex: 0, TxHash: twiceFirst, Kind: "create"}}
+	d := dexBlock(upgrade-2, transform.Transaction{Hash: twiceLater, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
+	d.OrderMessages = []transform.OrderMessage{{Height: upgrade - 2, MessageID: oid(5), TxIndex: 0, TxHash: twiceLater, Kind: "create"}}
+	block.BlockEvents = append(block.BlockEvents, outcomeEvent(upgrade, 2, "OrderMessageRefundedEvent", map[string]any{
+		"order_id": oid(5), "market_id": dexMarket, "order_type": "buy", "owner": dexOwner, "amount": "3", "refund": "6ubze",
+		"reason": "upgrade"}))
 	// After the upgrade a new, unrelated message takes id 1 again.
 	reused := txHash(33)
 	after := dexBlock(upgrade+1, transform.Transaction{Hash: reused, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCreateOrder"}})
@@ -405,12 +415,12 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 		return into[dto.Tx](t, r).Dex
 	}
 
-	require.NoError(t, w.Write(ctx, []*transform.Entities{a, b}, writer.ModeInsert))
+	require.NoError(t, w.Write(ctx, []*transform.Entities{a, c, d, b}, writer.ModeInsert))
 	assert.True(t, tx(queuedA).Pending, "queued, no outcome yet")
 	assert.True(t, tx(queuedB).Pending)
 
 	require.NoError(t, w.Write(ctx, []*transform.Entities{block, after}, writer.ModeInsert))
-	require.NoError(t, w.Write(ctx, []*transform.Entities{a, b, block, after}, writer.ModeUpdate), "a reindex")
+	require.NoError(t, w.Write(ctx, []*transform.Entities{a, c, d, b, block, after}, writer.ModeUpdate), "a reindex")
 
 	first := tx(queuedA)
 	require.NotNil(t, first)
@@ -426,8 +436,63 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 	assert.Equal(t, oid(2), second.Refunds[0].OrderID)
 	assert.Nil(t, second.Refunds[0].Refund, "rounded to zero: dust")
 
+	earlier := tx(twiceFirst)
+	require.NotNil(t, earlier)
+	assert.Empty(t, earlier.Refunds, "a later message held id 5 when the refund came")
+	assert.True(t, earlier.Pending, "its own state: no outcome")
+	held := tx(twiceLater)
+	require.NotNil(t, held)
+	require.Len(t, held.Refunds, 1)
+	assert.Equal(t, "upgrade", held.Refunds[0].Reason)
+	assert.False(t, held.Pending)
+
 	later := tx(reused)
 	require.NotNil(t, later)
 	assert.True(t, later.Pending, "the refund was before this message took id 1")
 	assert.Empty(t, later.Refunds)
+}
+
+// A v8.2.x cancel still queued when the chain upgraded is never processed:
+// the upgrade refunds no cancel and its order stays open. The transaction is
+// pending until an upgrade at or below the tip came after it.
+func TestQueuedCancelStopsBeingPendingAfterAnUpgrade(t *testing.T) {
+	const cancelHeight = dexH - 1
+	cancel := txHash(41)
+	at := dexBlock(cancelHeight, transform.Transaction{Hash: cancel, MsgCount: 1, MsgTypes: []string{"/bze.tradebin.MsgCancelOrder"}})
+	at.Messages = []transform.Message{{Height: cancelHeight, TxIndex: 0, MsgIndex: 0, TypeURL: "/bze.tradebin.MsgCancelOrder",
+		Events: []transform.Event{{Type: "bze.tradebin.OrderCancelMessageEvent", Attrs: map[string]any{"orderId": oid(30), "message_id": oid(1)}}}}}
+	at.OrderMessages = []transform.OrderMessage{{Height: cancelHeight, MessageID: oid(1), TxIndex: 0, TxHash: cancel, Kind: "cancel"}}
+	at.Orders = []transform.Order{savedOrder(cancelHeight-1, 30, dexOwner, "10", 0, "")}
+	tip := dexBlock(dexH + 3)
+
+	upgrade := func(e *syncEnv, h int64) {
+		_, err := e.db.Exec(`INSERT INTO explorer.upgrades (height, proposal_id, name) VALUES ($1, 1, 'v8.3.0')`, h)
+		require.NoError(t, err)
+	}
+	pending := func(e *syncEnv) bool {
+		r := fetch(t, e.serveAPI(t)+"/txs/"+cancel)
+		require.Equal(t, http.StatusOK, r.status, string(r.body))
+		d := into[dto.Tx](t, r).Dex
+		return d != nil && d.Pending
+	}
+	ctx := context.Background()
+	heights := []*transform.Entities{at, tip}
+	for _, dir := range []string{"up", "down"} {
+		t.Run(dir, func(t *testing.T) {
+			e := newSyncEnv(t)
+			w := batchWriter(t, e.url)
+			ordered := slices.Clone(heights)
+			if dir == "down" {
+				slices.Reverse(ordered)
+			}
+			for _, ents := range ordered {
+				require.NoError(t, w.Write(ctx, []*transform.Entities{ents}, writer.ModeInsert))
+			}
+			assert.True(t, pending(e), "no upgrade yet: the cancel may still be queued")
+			upgrade(e, dexH+100)
+			assert.True(t, pending(e), "a planned upgrade above the tip changes nothing")
+			upgrade(e, dexH)
+			assert.False(t, pending(e), "an upgrade came after it and the order was never cancelled")
+		})
+	}
 }

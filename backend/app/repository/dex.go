@@ -249,7 +249,8 @@ const settledByEvent = `EXISTS (SELECT 1 FROM explorer.block_events e
 // txPendingSQL is true when an order message of the transaction has no
 // outcome indexed: a create or fill message (chain v8.2.0) with no fill, no
 // order and no refund attributed to it, or a cancel whose order is still
-// open. Chain v8.3.0 queues nothing: its transactions never have order
+// open. A queued cancel that an upgrade came after is final: the v8.3.0
+// upgrade refunds no cancel and its order stays on the book. Chain v8.3.0 queues nothing: its transactions never have order
 // messages.
 const txPendingSQL = `SELECT EXISTS (
 		SELECT 1 FROM explorer.order_messages om
@@ -259,7 +260,9 @@ const txPendingSQL = `SELECT EXISTS (
 		   AND NOT EXISTS (SELECT 1 FROM explorer.orders o
 		                    WHERE o.created_tx_hash = $3 AND o.message_id = om.message_id)
 		   AND NOT ` + settledByEvent + `)
-	OR EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))`
+	OR (EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))
+	    AND NOT EXISTS (SELECT 1 FROM explorer.upgrades u
+	                     WHERE u.height > $1 AND u.height <= (SELECT max(height) FROM explorer.blocks)))`
 
 // txRefundsSQL reads the refunds of the transaction: the OrderMessageRefundedEvents
 // of its own messages (message_id empty), then the block-level ones its order
