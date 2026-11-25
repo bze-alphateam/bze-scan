@@ -87,6 +87,10 @@ func (noAccounts) Activity(context.Context, string, *string, *string, bool, *rep
 	return nil, nil
 }
 
+func (noAccounts) ActivityAsc(context.Context, string, *string, *string, bool, repository.ActivityStart, int) ([]repository.Activity, error) {
+	return nil, nil
+}
+
 func (noAccounts) ActivityPage(context.Context, string, *string, *string, bool, int64, int) ([]repository.Activity, error) {
 	return nil, nil
 }

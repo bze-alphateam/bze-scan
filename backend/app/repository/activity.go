@@ -53,6 +53,61 @@ func (r *Explorer) Activity(ctx context.Context, address string, category, denom
 	return r.activity(ctx, address, category, denom, incoming, before, 0, limit)
 }
 
+// ActivityStart is where an oldest-first activity list starts: after a
+// keyset position (exclusive) or at a block time (inclusive). Exactly one is
+// set.
+type ActivityStart struct {
+	After *ActivityKey
+	Since *time.Time
+}
+
+// errActivityStart is a start with none or both of its fields set.
+var errActivityStart = errors.New("activity start needs exactly one of after or since")
+
+// ActivityAsc returns up to limit account_activity rows of address, oldest
+// first (height, then tx_index, ascending), from start on, with the filters
+// of Activity. The keyset is part of the statement's text, never behind an
+// IS NULL OR, so a generic plan still starts the index walk at the position:
+// the walk runs the same indexes as Activity, backward. A time start has no
+// keyset and walks from the address's oldest row; later pages pass the
+// cursor of the last row.
+func (r *Explorer) ActivityAsc(ctx context.Context, address string, category, denom *string, incoming bool,
+	start ActivityStart, limit int) ([]Activity, error) {
+	args := []any{address, category, limit}
+	var from string
+	switch {
+	case start.After != nil && start.Since == nil:
+		from = `
+			  AND height >= $4::bigint
+			  AND (height, tx_index) > ($4::bigint, $5::integer)`
+		args = append(args, start.After.Height, start.After.TxIndex)
+	case start.Since != nil && start.After == nil:
+		from = `
+			  AND time >= $4::timestamptz`
+		args = append(args, *start.Since)
+	default:
+		return nil, errActivityStart
+	}
+	filter, filterArgs := activityFilter(denom, incoming, len(args)+1)
+	rows, err := r.db.Query(ctx, `SELECT a.height, a.tx_index, a.time, t.hash, a.kind, a.category,
+			a.is_signer, a.success, a.counterparty, l.name, l.kind, v.moniker, a.deltas, a.msg_types, a.details,
+			CASE WHEN a.is_signer OR t.fee_payer = a.address THEN t.fee END
+		FROM (SELECT * FROM explorer.account_activity
+			WHERE address = $1
+			  AND ($2::text IS NULL OR category = $2)`+from+filter+`
+			ORDER BY height ASC, tx_index ASC
+			LIMIT $3) a
+		LEFT JOIN explorer.transactions t ON t.height = a.height AND t.tx_index = a.tx_index
+		LEFT JOIN explorer.labels l ON l.address = a.counterparty
+		LEFT JOIN explorer.validators v ON v.operator_address = a.counterparty
+		ORDER BY a.height ASC, a.tx_index ASC`,
+		append(args, filterArgs...)...)
+	if err != nil {
+		return nil, fmt.Errorf("activity %s: %w", address, err)
+	}
+	return collectActivity(address, rows)
+}
+
 // ActivityPage returns up to limit account_activity rows of address, newest
 // first, only of category and denom when they are not nil and only the
 // incoming transfers when incoming is set, skipping the
@@ -183,6 +238,11 @@ func (r *Explorer) activity(ctx context.Context, address string, category, denom
 	if err != nil {
 		return nil, fmt.Errorf("activity %s: %w", address, err)
 	}
+	return collectActivity(address, rows)
+}
+
+// collectActivity scans the rows of an activity statement.
+func collectActivity(address string, rows pgx.Rows) ([]Activity, error) {
 	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Activity, error) {
 		var a Activity
 		var labelName, labelKind *string
