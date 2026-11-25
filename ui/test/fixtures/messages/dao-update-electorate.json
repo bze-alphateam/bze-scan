@@ -1,0 +1,17 @@
+{
+  "type_url": "/bze.dao.MsgUpdateElectorate",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "electorate": {
+      "sr_ids": [
+        "4",
+        "7"
+      ],
+      "dr_denom": "ubze"
+    }
+  },
+  "events": []
+}

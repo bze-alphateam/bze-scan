@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.guardian.v1.MsgReopenChannel",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "channel_id": "channel-3"
+  },
+  "events": []
+}

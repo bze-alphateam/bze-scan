@@ -45,6 +45,7 @@ var Services = map[string]string{
 	"txfeecollector": "bze.txfeecollector.Query",
 	"dao":            "bze.dao.Query",
 	"guardian":       "bze.guardian.v1.Query",
+	"ratelimit":      "ratelimit.v1.Query",
 }
 
 // GRPC is a stand-in for the node's gRPC server: a real grpc.Server on a free

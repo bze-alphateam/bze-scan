@@ -57,6 +57,11 @@ type Deps struct {
 	Tokens controller.TokenReader
 	// PoolPrices adds the pool price state to LP token pages; nil leaves it out.
 	PoolPrices controller.PoolPriceReader
+	// RateLimits reads the live IBC rate limits and RateLimitNames names
+	// their denoms and channels; nil RateLimits leaves
+	// /api/v1/ibc/rate-limits out and the tokens' rate_limits empty.
+	RateLimits     controller.RateLimitReader
+	RateLimitNames controller.RateLimitCatalog
 	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
 	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
@@ -169,6 +174,11 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
 	api.GET("/ibc/channels", explorer.IBCChannels)
+	var rateLimits *controller.RateLimitController
+	if deps.RateLimits != nil && deps.RateLimitNames != nil {
+		rateLimits = controller.NewRateLimitController(deps.RateLimits, deps.RateLimitNames)
+		api.GET("/ibc/rate-limits", rateLimits.RateLimits)
+	}
 	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/hall-of-fame", explorer.HallOfFame)
@@ -196,6 +206,9 @@ func New(deps Deps) *echo.Echo {
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)
 		tokens.Pools = deps.PoolPrices
+		if rateLimits != nil {
+			tokens.WithRateLimits(rateLimits)
+		}
 		api.GET("/tokens", tokens.Tokens)
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)

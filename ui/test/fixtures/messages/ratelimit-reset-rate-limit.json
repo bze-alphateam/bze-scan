@@ -1,0 +1,11 @@
+{
+  "type_url": "/ratelimit.v1.MsgResetRateLimit",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "ratelimit",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "channel_or_client_id": "channel-0"
+  },
+  "events": []
+}

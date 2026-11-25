@@ -44,7 +44,8 @@ type TokenReader interface {
 // (factory%2Fbze1…%2Fuhoney) and the /token routes take it as ?denom=, the
 // chain's own convention.
 type TokenController struct {
-	repo TokenReader
+	repo  TokenReader
+	rates TokenRateLimits
 	// Pools adds the pool price state to an LP denom's page; nil leaves it out.
 	Pools PoolPriceReader
 }
@@ -119,9 +120,10 @@ func (h *TokenController) Token(c *echo.Context) error {
 		return err
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	tok := dto.NewToken(t, events, next, *volume)
-	tok.Pool = h.poolPrice(ctx, t)
-	return c.JSON(http.StatusOK, tok)
+	resp := dto.NewToken(t, events, next, *volume)
+	resp.RateLimits = h.rateLimits(ctx, denom)
+	resp.Pool = h.poolPrice(ctx, t)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // TokenEvents serves GET /api/v1/tokens/{denom}/events?cursor&limit and
