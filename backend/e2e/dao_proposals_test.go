@@ -147,7 +147,7 @@ func (e *syncEnv) daoProposalRows(t *testing.T) []string {
 
 func (e *syncEnv) daoVoteRows(t *testing.T) []string {
 	t.Helper()
-	return queryStrings(t, e.db, `SELECT concat_ws(' ', proposal_id, voter = $1, option, weight, height, tx_index)
+	return queryStrings(t, e.db, `SELECT concat_ws(' ', proposal_id, (voter = $1)::int, option, weight, height, tx_index)
 		FROM explorer.dao_votes ORDER BY proposal_id, voter`, daoAdmin)
 }
 
@@ -170,9 +170,9 @@ func TestDaoProposalsAreIndexedSyncedAndServed(t *testing.T) {
 	}, rows)
 	votes := e.daoVoteRows(t)
 	assert.Equal(t, []string{
-		"1 false yes 300000 25100004 1", // the member's revote replaced their no
-		"1 true yes 600000 25100003 0",  // never lowered by the reduction
-		"2 true yes 1 25100003 2",
+		"1 0 yes 300000 25100004 1", // the member's revote replaced their no
+		"1 1 yes 600000 25100003 0", // never lowered by the reduction
+		"2 1 yes 1 25100003 2",
 	}, votes)
 	assert.Equal(t, []string{"1 100000"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', proposal_id, amount) FROM explorer.dao_ballot_reductions`))
