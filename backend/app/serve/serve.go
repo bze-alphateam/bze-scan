@@ -226,6 +226,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	explorerRepo := repository.NewExplorer(apiPool)
 
+	// The emergency status reads the switches live from the node's gRPC.
+	var emergencyState controller.EmergencyState
+	var emergencyIndex controller.EmergencyIndex
+	if cfg.NodeGRPCAddr != "" {
+		reader, closeEmergency, err := NewEmergency(cfg, codec)
+		if err != nil {
+			return err
+		}
+		defer closeEmergency()
+		emergencyState, emergencyIndex = reader, explorerRepo
+	}
+
 	// The dapps' asset list lives in memory: built at start from the
 	// tables by a component of its own, then rebuilt by the state sync
 	// after the denoms, channels and chain registry sets write.
@@ -260,6 +272,8 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Params:          liveParams,
 		ParamChanges:    explorerRepo,
 		HaltedDenoms:    haltedDenoms,
+		Emergency:       emergencyState,
+		EmergencyIndex:  emergencyIndex,
 		AccountState:    accountState,
 		OpenOrders:      openOrders,
 		StakeFlows:      flows,
