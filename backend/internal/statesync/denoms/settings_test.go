@@ -66,3 +66,15 @@ func TestNonFactoryDenomsAskForNoSettings(t *testing.T) {
 	assert.Nil(t, d.Config)
 	assert.Zero(t, n.callsOf("DenomConfig"))
 }
+
+func TestADenomWithoutAnAuthorityKeepsItsRowAndAsksForNoConfig(t *testing.T) {
+	set, n, st := newSet(t)
+	n.noAuthority = true
+	require.NoError(t, set.ResyncOne(context.Background(), factoryWithAdmin))
+	d := st.last(t).Denoms[0]
+	assert.Empty(t, d.Admin)
+	assert.Nil(t, d.Mintable)
+	assert.Nil(t, d.Config)
+	assert.Equal(t, 1, n.callsOf("DenomAuthority"))
+	assert.Zero(t, n.callsOf("DenomConfig"), "NotFound authority: DenomConfig is never asked")
+}

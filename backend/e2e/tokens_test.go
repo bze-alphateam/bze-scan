@@ -104,7 +104,7 @@ func TestServeSyncsTheDenomsAndListsTheTokens(t *testing.T) {
 		assert.False(t, *tok.Mintable)
 		require.NotNil(t, tok.Config)
 		assert.Equal(t, "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw", *tok.Config.CommunityPool)
-		assert.Equal(t, "0.01", tok.Config.TransferFee)
+		assert.Equal(t, "0.01", tok.Config.TransferFee, "trailing zeros trimmed")
 		assert.Equal(t, "0.5", tok.Config.GasSurcharge)
 		assert.Contains(t, tok.Markets, vdlDenom+"/ubze")
 		assert.False(t, tok.Halted, "chain v8.1.1 has no halt")

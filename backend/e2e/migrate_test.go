@@ -402,3 +402,29 @@ func TestMigrationMergedOrders(t *testing.T) {
 	assert.Equal(t, []string{"added_amount", "merged_from"}, cols())
 	assert.Equal(t, []string{"idx_block_events_order_refund"}, indexes())
 }
+
+// Migration 000033 adds the factory token settings to denoms; the down
+// migration drops them, and a later up brings them back empty.
+func TestMigrationTokenSettings(t *testing.T) {
+	dbURL := freshDatabase(t, true)
+	db := connect(t, dbURL)
+	migrateUp(t, dbURL)
+	cols := func() []string {
+		return queryStrings(t, db, `SELECT column_name FROM information_schema.columns
+			WHERE table_schema = 'explorer' AND table_name = 'denoms'
+			  AND column_name IN ('mintable', 'community_pool', 'transfer_fee', 'gas_surcharge') ORDER BY column_name`)
+	}
+	assert.Equal(t, []string{"community_pool", "gas_surcharge", "mintable", "transfer_fee"}, cols())
+	_, err := db.Exec(`INSERT INTO explorer.denoms (denom, kind, exponent, supply, mintable, transfer_fee, gas_surcharge, updated_at)
+		VALUES ('factory/bze1x/uz', 'factory', 6, 0, true, 0.010000000000000000, 0, now())`)
+	require.NoError(t, err)
+
+	_, err = openMigrator(t, dbURL).Down(latestVersion - 32) // back to before 000033
+	require.NoError(t, err)
+	assert.Empty(t, cols())
+	assert.Equal(t, []string{"factory/bze1x/uz"}, queryStrings(t, db, `SELECT denom FROM explorer.denoms`), "the denom stays")
+
+	migrateUp(t, dbURL)
+	assert.Equal(t, []string{"community_pool", "gas_surcharge", "mintable", "transfer_fee"}, cols())
+	assert.Equal(t, []string{"<nil>"}, queryStrings(t, db, `SELECT coalesce(mintable::text, '<nil>') FROM explorer.denoms`), "settings come back unknown")
+}

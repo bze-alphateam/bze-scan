@@ -1,6 +1,6 @@
 import BigNumber from "bignumber.js";
 
-import type { Token, TokenConfig, TokenEvent } from "@/api/types";
+import type { TokenConfig, TokenEvent } from "@/api/types";
 
 import type { EventLine } from "./tokens";
 
@@ -11,11 +11,6 @@ export function ratioPct(ratio: string): string {
 }
 
 const positive = (ratio: string) => new BigNumber(ratio).gt(0);
-
-/** Whether a factory token's minting was turned off for good while someone still manages it. */
-export function isLocked(t: Pick<Token, "kind" | "admin" | "mintable">): boolean {
-  return t.kind === "factory" && t.mintable === false && !!t.admin;
-}
 
 /** The fee sentences of the settings card, each with where the money goes. */
 export interface SettingLine {

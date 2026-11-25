@@ -16,7 +16,8 @@ type TokenSettings struct {
 	Config   *TokenConfig
 }
 
-// TokenConfig is a denom's DenomConfig. CommunityPool is nil for none,
+// TokenConfig is a denom's DenomConfig, the ratios as decimal strings
+// without trailing zeros (0.01, 0.5, 0). CommunityPool is nil for none,
 // including an address that is a module account (the chain blocks those
 // from receiving, so they count as none).
 type TokenConfig struct {
@@ -31,7 +32,7 @@ type TokenConfig struct {
 func (r *Explorer) TokenSettings(ctx context.Context, denom string) (*TokenSettings, error) {
 	var s TokenSettings
 	var pool, name, kind, fee, gas *string
-	err := r.db.QueryRow(ctx, `SELECT d.mintable, d.community_pool, d.transfer_fee::text, d.gas_surcharge::text, l.name, l.kind
+	err := r.db.QueryRow(ctx, `SELECT d.mintable, d.community_pool, trim_scale(d.transfer_fee)::text, trim_scale(d.gas_surcharge)::text, l.name, l.kind
 		FROM explorer.denoms d
 		LEFT JOIN explorer.labels l ON l.address = d.community_pool
 		WHERE d.denom = $1`, denom).Scan(&s.Mintable, &pool, &fee, &gas, &name, &kind)

@@ -82,6 +82,8 @@ type fakeNode struct {
 	configs  map[string]tokenfactorytypes.DenomConfig
 	mintable map[string]bool
 	noConfig bool
+	// noAuthority answers DenomAuthority NotFound.
+	noAuthority bool
 }
 
 func newFakeNode(t *testing.T) *fakeNode { return &fakeNode{t: t, calls: map[string]int{}} }
@@ -152,6 +154,9 @@ func (n *fakeNode) DenomMetadataByQueryString(_ context.Context, in *banktypes.Q
 func (n *fakeNode) DenomAuthority(_ context.Context, in *tokenfactorytypes.QueryDenomAuthorityRequest, _ ...grpc.CallOption) (*tokenfactorytypes.QueryDenomAuthorityResponse, error) {
 	if err := n.count("DenomAuthority"); err != nil {
 		return nil, err
+	}
+	if n.noAuthority {
+		return nil, status.Error(codes.NotFound, "not a factory denom")
 	}
 	var resp tokenfactorytypes.QueryDenomAuthorityResponse
 	fakenode.LoadGRPCFixture(n.t, "tokenfactory", "DenomAuthority", url.PathEscape(in.Denom), &resp)
