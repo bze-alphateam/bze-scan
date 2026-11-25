@@ -1,5 +1,7 @@
 {
   "params": {
-    "periodic_burning_weeks": "4"
+    "periodic_burning_weeks": "1",
+    "ibc_move_max_reserve_ratio": "0.030000000000000000",
+    "ibc_move_cooldown_blocks": "1000"
   }
 }

@@ -979,7 +979,11 @@ export interface ModuleParams {
   last_change: { height: number; time: string; proposal_id: number | null } | null;
 }
 
-/** `GET /params`: by module name; a module the node failed to answer is absent. */
+/**
+ * `GET /params`: by module name; a module the node failed to answer is absent.
+ * Beside the modules the answer holds `chain: { v830: boolean }` (true when the
+ * node runs chain v8.3.0), read with `chainV830` of `lib/parameters`.
+ */
 export type ChainParams = Partial<Record<string, ModuleParams>>;
 
 // Raw JSON proxied from archive nodes

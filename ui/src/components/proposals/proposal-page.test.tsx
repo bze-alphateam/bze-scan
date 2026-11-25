@@ -74,7 +74,7 @@ function api(p: Proposal = p48, extra: Partial<ExplorerApi> = {}): ExplorerApi {
     proposalDeposits: (id) => Promise.resolve(DEPOSITS[id]),
     proposalNonVoters: () => Promise.resolve(nonVoters45 as Page<ProposalNonVoter>),
     upgrade: (height) => Promise.resolve(UPGRADES[height]),
-    params: () => Promise.resolve(params as ChainParams),
+    params: () => Promise.resolve(params as unknown as ChainParams),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     validators: () => Promise.resolve(validators as ValidatorList),
     stats: () => Promise.resolve(stats as Stats),

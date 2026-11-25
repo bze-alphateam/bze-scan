@@ -26,7 +26,7 @@ function api(v: unknown = detail, extra: Partial<ExplorerApi> = {}): ExplorerApi
   return fakeApi({
     validator: () => Promise.resolve(v as ValidatorDetail),
     validators: () => Promise.resolve(list as ValidatorList),
-    params: () => Promise.resolve(params as ChainParams),
+    params: () => Promise.resolve(params as unknown as ChainParams),
     hallOfFame: () => Promise.resolve(fame as HallOfFame),
     stakeChanges: () => Promise.resolve(changes as StakeChanges),
     validatorMovements: (_op, { page, limit }) => Promise.resolve(movementsPage(page, limit)),

@@ -27,6 +27,7 @@ type fakeConn struct {
 	mu        sync.Mutex
 	methods   []string
 	fail      map[string]bool
+	missing   map[string]bool // methods the node does not have
 	halted    []string
 	haltErr   error
 	haltedReq *tradebintypes.QueryHaltedDenomsRequest
@@ -38,6 +39,9 @@ func (c *fakeConn) Invoke(_ context.Context, method string, args, reply any, _ .
 	c.methods = append(c.methods, method)
 	if c.fail[method] {
 		return errors.New("unavailable")
+	}
+	if c.missing[method] {
+		return status.Error(codes.Unimplemented, "unknown service")
 	}
 	if method == "/bze.tradebin.Query/HaltedDenoms" {
 		c.haltedReq, _ = args.(*tradebintypes.QueryHaltedDenomsRequest)
@@ -72,12 +76,42 @@ func TestEveryModuleIsReadAndAFailureLeavesOnlyItOut(t *testing.T) {
 		"/cosmos.distribution.v1beta1.Query/Params", "/cosmos.slashing.v1beta1.Query/Params",
 		"/cosmos.gov.v1.Query/Params", "/bze.tradebin.Query/Params", "/bze.tokenfactory.Query/Params",
 		"/bze.rewards.Query/Params", "/bze.burner.Query/Params", "/bze.cointrunk.Query/Params",
-		"/bze.txfeecollector.Query/Params",
+		"/bze.txfeecollector.Query/Params", "/bze.dao.Query/Params", "/bze.guardian.v1.Query/Params",
 	}, conn.methods)
 	assert.Len(t, got, len(params.Modules)-2, "burner failed; gov's empty answer carries no params")
 	assert.NotContains(t, got, "burner")
 	assert.JSONEq(t, `{"type":"cosmos.staking.v1beta1.Params"}`, string(got["staking"]))
 	assert.JSONEq(t, `{"type":"bze.txfeecollector.Params"}`, string(got["txfeecollector"]))
+}
+
+func TestDaoAndGuardianAreReadAndMapped(t *testing.T) {
+	got, err := params.NewGRPC(&fakeConn{}, fakeJSON{}).Params(context.Background())
+	require.ErrorContains(t, err, "gov params", "only gov's empty answer fails")
+	assert.JSONEq(t, `{"type":"bze.dao.Params"}`, string(got["dao"]))
+	assert.JSONEq(t, `{"type":"bze.guardian.v1.Params"}`, string(got["guardian"]))
+}
+
+// A v8.2.x node answers Unimplemented for the modules v8.3.0 added: they are
+// left out and nothing is reported, so the API stays 200 and the log quiet.
+func TestAModuleTheNodeDoesNotHaveIsLeftOutWithoutAnError(t *testing.T) {
+	conn := &fakeConn{
+		missing: map[string]bool{"/bze.dao.Query/Params": true, "/bze.guardian.v1.Query/Params": true},
+		fail:    map[string]bool{"/cosmos.gov.v1.Query/Params": true},
+	}
+	got, err := params.NewGRPC(conn, fakeJSON{}).Params(context.Background())
+	require.ErrorContains(t, err, "gov params: unavailable")
+	assert.NotContains(t, err.Error(), "dao")
+	assert.NotContains(t, err.Error(), "guardian")
+	assert.NotContains(t, got, "dao")
+	assert.NotContains(t, got, "guardian")
+	assert.Contains(t, got, "tradebin")
+
+	conn = &fakeConn{
+		missing: map[string]bool{"/bze.dao.Query/Params": true, "/bze.guardian.v1.Query/Params": true},
+	}
+	_, err = params.NewGRPC(conn, fakeJSON{}).Params(context.Background())
+	assert.ErrorContains(t, err, "gov params: no params in the answer")
+	assert.NotContains(t, err.Error(), "Unimplemented")
 }
 
 func TestGovWithoutParamsIsAFailure(t *testing.T) {

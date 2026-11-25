@@ -73,12 +73,15 @@ const GROUP_ACCOUNTS: Record<ParamGroup, string[]> = {
   rewards: ["rewards"],
   burner: ["burner", "burner_black_hole", "burner_raffle"],
   cointrunk: [],
+  dao: ["dao"],
+  emergency: [],
 };
 
 /** Why a group lists no module account. */
 const NO_ACCOUNT: Partial<Record<ParamGroup, string>> = {
   penalties: "Slashing has no module account: penalties are taken straight from the validator's stake.",
   cointrunk: "CoinTrunk has no module account: article fees go straight to the community pool.",
+  emergency: "The emergency switches have no module account: the key holder is an ordinary address, and governance can always use them too.",
 };
 
 /** The halted denoms: not a parameter (tradebin keeps them in a store of their own), but listed as a group of their own. */
@@ -612,7 +615,8 @@ export function ParametersPage({ group: initial = null }: { group?: string | nul
   // Rows reading `/stats` wait for it, unless it fails: then they say "not available".
   const ready = data && (stats.data || stats.error);
   const groups = ready ? parameterGroups(data, stats.data ?? null) : null;
-  const shown = groups?.find((g) => g.group === group);
+  // A group a v8.2.x node does not have (DAOs, Emergency) falls back to the first one.
+  const shown = groups?.find((g) => g.group === group) ?? (group !== HALTED ? groups?.[0] : undefined);
   const halted = useHaltedDenoms();
   const nav = navDefs(
     groups?.map((g) => ({ ...g, count: g.rows.length })) ?? PARAM_GROUPS,
@@ -623,7 +627,7 @@ export function ParametersPage({ group: initial = null }: { group?: string | nul
     <Box>
       <PageTitle title="Chain parameters" intro={INTRO} />
       <Grid templateColumns={LAYOUT} gap={LAYOUT_GAP} alignItems="start" pb="10">
-        <GroupNav groups={nav} current={group} onPick={pick} />
+        <GroupNav groups={nav} current={group === HALTED ? group : (shown?.group ?? group)} onPick={pick} />
         {group === HALTED ? (
           <HaltedView halted={halted} onRetry={() => void halted.refetch()} />
         ) : groups && shown ? (

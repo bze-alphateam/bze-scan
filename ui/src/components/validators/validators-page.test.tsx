@@ -18,7 +18,7 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
     validators: () => Promise.resolve(list as ValidatorList),
     hallOfFame: () => Promise.resolve(fame as HallOfFame),
-    params: () => Promise.resolve(params as ChainParams),
+    params: () => Promise.resolve(params as unknown as ChainParams),
     stakeChanges: () => Promise.resolve(changes as StakeChanges),
     ...extra,
   });

@@ -12,6 +12,7 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
+	"github.com/bze-alphateam/bze-scan/backend/internal/params"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
 )
 
@@ -165,8 +166,19 @@ type LastChange struct {
 	ProposalID *int64    `json:"proposal_id"`
 }
 
+// ChainKey is the key of GET /api/v1/params that holds ChainInfo beside the
+// modules (no module has that name).
+const ChainKey = "chain"
+
+// ChainInfo says what the node the explorer reads runs.
+type ChainInfo struct {
+	// V830 is true when the node answers the guardian params query, which
+	// exists from chain v8.3.0 on.
+	V830 bool `json:"v830"`
+}
+
 // Params serves every module's live parameters, keyed by module, with its
-// last change. A module the node failed to answer is left out; when none
+// last change, and a "chain" object next to them (ChainInfo). A module the node failed to answer is left out; when none
 // answered it is a 502.
 func (h *ParamsController) Params(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -182,7 +194,7 @@ func (h *ParamsController) Params(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	out := make(map[string]ModuleParams, len(live))
+	out := make(map[string]any, len(live)+1)
 	for m, raw := range live {
 		mp := ModuleParams{Params: raw}
 		if ch, ok := changes[m]; ok {
@@ -190,6 +202,8 @@ func (h *ParamsController) Params(c *echo.Context) error {
 		}
 		out[m] = mp
 	}
+	_, v830 := live[params.V830Probe]
+	out[ChainKey] = ChainInfo{V830: v830}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, out)
 }

@@ -234,8 +234,23 @@ func TestParamsRoute(t *testing.T) {
 	assert.JSONEq(t, `{
 		"tradebin": {"params": {"marketTakerFee":{"denom":"ubze","amount":"100000"}},
 		             "last_change": {"height":20237800,"time":"2025-11-24T08:00:00Z","proposal_id":44}},
-		"burner": {"params": {"periodic_burning_weeks":"4"}, "last_change": null}
-	}`, rec.Body.String(), "a module the node did not answer is left out")
+		"burner": {"params": {"periodic_burning_weeks":"4"}, "last_change": null},
+		"chain": {"v830": false}
+	}`, rec.Body.String(), "a module the node did not answer is left out; no guardian answer is a v8.2.x node")
+}
+
+func TestParamsRouteTellsAV830NodeByTheGuardianAnswer(t *testing.T) {
+	live := fakeLive{params: map[string]json.RawMessage{
+		"burner":   json.RawMessage(`{"periodic_burning_weeks":"1"}`),
+		"guardian": json.RawMessage(`{"guardian":"bze1abc"}`),
+	}}
+	rec := get(t, paramsAPI(live, fakeChanges{}), "/params")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{
+		"burner": {"params": {"periodic_burning_weeks":"1"}, "last_change": null},
+		"guardian": {"params": {"guardian":"bze1abc"}, "last_change": null},
+		"chain": {"v830": true}
+	}`, rec.Body.String())
 }
 
 func TestParamsRouteFailures(t *testing.T) {

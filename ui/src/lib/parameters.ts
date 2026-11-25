@@ -21,7 +21,9 @@ export type ParamGroup =
   | "factory"
   | "rewards"
   | "burner"
-  | "cointrunk";
+  | "cointrunk"
+  | "dao"
+  | "emergency";
 
 /**
  * How a stored value reads: `duration` "1814400s" → "21 days", `ubze` a coin
@@ -59,6 +61,8 @@ export interface ParamDef {
   advanced?: boolean;
   /** Read from `/stats` (as a decimal) instead of the module's params. */
   fromStats?: (stats: Stats) => string | null;
+  /** Exists from chain v8.3.0 on: hidden while the node runs an older chain (its zero values mean nothing). */
+  v830?: boolean;
 }
 
 export interface GroupDef {
@@ -67,6 +71,8 @@ export interface GroupDef {
   modules: string[];
   description: string;
   see?: { label: string; href: string };
+  /** Exists from chain v8.3.0 on: hidden while the node runs an older chain. */
+  v830?: boolean;
 }
 
 export const PARAM_GROUPS: GroupDef[] = [
@@ -112,7 +118,27 @@ export const PARAM_GROUPS: GroupDef[] = [
     see: { label: new URL(externalLinks.burner).host, href: externalLinks.burner },
   },
   { group: "cointrunk", label: "CoinTrunk", modules: ["cointrunk"], description: "Rules of the CoinTrunk news app at app.cointrunk.io." },
+  {
+    group: "dao",
+    label: "DAOs",
+    modules: ["dao"],
+    description: "The limits every DAO created on BZE lives within. Each DAO sets its own rules inside them.",
+    v830: true,
+  },
+  {
+    group: "emergency",
+    label: "Emergency",
+    modules: ["guardian"],
+    description: "Who can pull the emergency switches, and what they do.",
+    v830: true,
+  },
 ];
+
+/** Whether the node the explorer reads runs chain v8.3.0 or later; false when the answer does not say. */
+export function chainV830(params: ChainParams): boolean {
+  const chain = (params as Record<string, unknown>).chain;
+  return !!chain && typeof chain === "object" && (chain as { v830?: unknown }).v830 === true;
+}
 
 /** The module accounts a parameter can name (tradebin's fee destinations). */
 export const MODULE_ACCOUNTS: Record<string, { name: string; address: string }> = {
@@ -545,10 +571,11 @@ export const PARAMETERS: ParamDef[] = [
     group: "dex",
     module: "tradebin",
     paths: ["maxFillsPerOrder"],
-    name: "Orders matched per block",
+    name: "Most fills per order",
     format: "count",
+    show: (v) => `${first(v)} orders`,
     explain: (v) =>
-      `Orders are matched by the chain itself at the end of each block, at most ${first(v)} per block. In busy moments orders queue for the next block.`,
+      `One order matches at most ${first(v)} resting orders; the rest is sent back and can be sent again.`,
   },
   {
     group: "dex",
@@ -561,11 +588,55 @@ export const PARAMETERS: ParamDef[] = [
   {
     group: "dex",
     module: "tradebin",
-    paths: ["priceLevelOwnersWindow", "priceLevelExtraGas", "fillOrdersExtraGas"],
+    paths: ["priceLevelOwnersWindow", "priceLevelExtraGas"],
+    name: "Price level crowding",
+    format: ["count", "gas"],
+    show: (v) => `above ${v.text[0]} traders: ${v.text[1]} gas each`,
+    explain: (v) =>
+      `A new trader joining a price where more than ${v.text[0]} traders already wait pays ${v.text[1]} extra gas per trader above ${v.text[0]}. Adding to your own order costs nothing extra.`,
+  },
+  {
+    group: "dex",
+    module: "tradebin",
+    paths: ["fillOrdersExtraGas"],
     name: "Extra gas for order messages",
     format: "gas",
     advanced: true,
     explain: () => "Gas added to order transactions to pay for the matching work the chain does later, outside your transaction.",
+  },
+  {
+    group: "dex",
+    module: "tradebin",
+    paths: ["poolPriceHalfLifeBlocks"],
+    name: "Pool price average",
+    format: "count",
+    show: (v) => `${first(v)} blocks`,
+    explain: (v, { stats }) => {
+      const blocks = Number(v.raw[0]);
+      const span = stats?.avg_block_time_ms && blocks > 0 ? `, ${aboutDuration((blocks * stats.avg_block_time_ms) / 1000)}` : "";
+      return `The chain keeps a moving average of every pool's price, with a half-life of ${first(v)} blocks${span}. The two price guards below compare a pool with it.`;
+    },
+    v830: true,
+  },
+  {
+    group: "dex",
+    module: "tradebin",
+    paths: ["feeMaxPriceDrift"],
+    name: "Fee price guard",
+    format: "decimal_pct",
+    explain: (v) =>
+      `When the pool between BZE and the fee token is more than ${first(v)} away from its average price, a protocol fee the payer would pay in that token is charged in BZE instead.`,
+    v830: true,
+  },
+  {
+    group: "dex",
+    module: "tradebin",
+    paths: ["moduleMaxPriceDrift"],
+    name: "Automatic swap price guard",
+    format: "decimal_pct",
+    explain: (v) =>
+      `Beyond ${first(v)} away from its average price, the fee collector's conversion swaps and the burner's IBC moves through that pool are refused and retried later.`,
+    v830: true,
   },
   // Factory
   {
@@ -612,6 +683,29 @@ export const PARAMETERS: ParamDef[] = [
     explain: (v) =>
       `The Burner destroys everything it collected, ${first(v) === "1" ? "every week" : `every ${first(v)} weeks`}, by itself. The next burn is shown on the Burner app.`,
   },
+  {
+    group: "burner",
+    module: "burner",
+    paths: ["ibc_move_max_reserve_ratio"],
+    name: "Locked IBC coins: most moved at once",
+    format: "decimal_pct",
+    explain: (v) => `One move of locked cross-chain coins takes at most ${first(v)} of the pool's reserve.`,
+    v830: true,
+  },
+  {
+    group: "burner",
+    module: "burner",
+    paths: ["ibc_move_cooldown_blocks"],
+    name: "Locked IBC coins: wait between moves",
+    format: "count",
+    show: (v) => `${first(v)} blocks`,
+    explain: (v, { stats }) => {
+      const blocks = Number(v.raw[0]);
+      const span = stats?.avg_block_time_ms && blocks > 0 ? ` (${aboutDuration((blocks * stats.avg_block_time_ms) / 1000)})` : "";
+      return `After one move of locked cross-chain coins the Burner waits ${first(v)} blocks${span} before it moves more.`;
+    },
+    v830: true,
+  },
   // CoinTrunk
   {
     group: "cointrunk",
@@ -639,6 +733,134 @@ export const PARAMETERS: ParamDef[] = [
     show: (v) => `${v.text[0]}, in ${v.raw[1] === "ubze" ? "BZE" : v.text[1]}`,
     explain: (v) =>
       `When a reader pays respect to a publisher, ${v.text[0]} goes to the community pool and the rest to the publisher.`,
+  },
+  // DAOs
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["dao_creation_fee", "dao_creation_fee_destination"],
+    name: "Fee to create a DAO",
+    format: ["ubze", "address"],
+    show: (v) => {
+      if (new BigNumber(String(coinOf(v.raw[0])?.amount ?? NaN)).isZero()) return "Free";
+      return v.raw[1] === "burner" ? `${v.text[0]}, burned` : `${v.text[0]} to the ${v.text[1]}`;
+    },
+    explain: (v) =>
+      new BigNumber(String(coinOf(v.raw[0])?.amount ?? NaN)).isZero()
+        ? "Creating a DAO is free."
+        : `Paid once by whoever creates a DAO. ${v.raw[1] === "burner" ? "It is sent to the Burner and destroyed." : `It is sent to the ${v.text[1]}.`}`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["min_voting_period", "max_voting_period"],
+    name: "Voting period a DAO may choose",
+    format: ["duration", "duration"],
+    show: (v) => `${v.text[0]} to ${v.text[1]}`,
+    explain: (v) => `Each DAO sets how long its proposals are voted on, anywhere from ${v.text[0]} to ${v.text[1]}. The same limits hold for its expedited period.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["execution_window"],
+    name: "Time to retry a failed execution",
+    format: "duration",
+    explain: (v) => `A passed proposal whose execution failed can be retried for ${first(v)} after its vote ended. After that it expires.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["min_expedite_delay"],
+    name: "Earliest early finish",
+    format: "duration",
+    explain: (v) =>
+      `An expedited proposal of a stake DAO that already meets the expedited bars can only finish early after ${first(v)}, so voters have time to react. Fixed-list DAOs are exempt.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["max_open_proposals"],
+    name: "Proposals open at once",
+    format: "count",
+    show: (v) => `${first(v)} per DAO`,
+    explain: (v) => `A DAO can have at most ${first(v)} proposals being voted on at the same time.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["max_msgs_per_proposal", "max_proposal_bytes"],
+    name: "Size of a proposal",
+    format: ["count", "count"],
+    show: (v) => `${v.text[0]} messages · ${v.text[1]} bytes`,
+    explain: (v) => `A proposal, or an admin execution, carries at most ${v.text[0]} messages, and ${v.text[1]} bytes in all.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["max_title_len", "max_summary_len"],
+    name: "Title and summary length",
+    format: ["count", "count"],
+    show: (v) => `${v.text[0]} · ${v.text[1]} bytes`,
+    explain: (v) => `A proposal title can be ${v.text[0]} bytes long and its summary ${v.text[1]}.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["max_static_members"],
+    name: "Members of a fixed-list DAO",
+    format: "count",
+    explain: (v) => `A DAO whose voters are a fixed list of addresses can have at most ${first(v)} of them.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["max_sr_per_dao"],
+    name: "Staking rewards per stake DAO",
+    format: "count",
+    explain: (v) => `A stake DAO takes its voters from at most ${first(v)} staking rewards programs.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["min_electorate_lock_days"],
+    name: "Shortest lock to join a stake DAO",
+    format: "count",
+    show: (v) => `${first(v)} days`,
+    explain: (v) => `Tokens locked in a staking reward vote in a stake DAO only when they stay locked for at least ${first(v)} days after unstaking.`,
+    v830: true,
+  },
+  {
+    group: "dao",
+    module: "dao",
+    paths: ["cleanup_batch_size"],
+    name: "Votes cleaned per call",
+    format: "count",
+    advanced: true,
+    explain: (v) => `Clearing the votes of a finished proposal deletes at most ${first(v)} of them per call.`,
+    v830: true,
+  },
+  // Emergency
+  {
+    group: "emergency",
+    module: "guardian",
+    paths: ["guardian"],
+    name: "Emergency key holder",
+    format: "address",
+    show: (v) => (v.raw[0] === "" ? "Nobody" : v.text[0]),
+    explain: (v) =>
+      v.raw[0] === ""
+        ? "Nobody: only governance can use the emergency switches."
+        : `Emergency key holder: ${v.text[0]}. It can tighten IBC limits, block a token from crossing chains, halt trading of tokens, switch off kinds of actions, pause fee conversion and burning, close a channel or halt the chain; only governance can undo.`,
+    v830: true,
   },
 ];
 
@@ -749,9 +971,10 @@ export function plainKey(key: string): string {
 /** Every group with its rows: the dictionary's, then the advanced ones. */
 export function parameterGroups(params: ChainParams, stats: Stats | null): ParamGroupView[] {
   const ctx = { params, stats };
-  return PARAM_GROUPS.map((g) => {
+  const v830 = chainV830(params);
+  return PARAM_GROUPS.filter((g) => v830 || !g.v830).map((g) => {
     const rows = [
-      ...PARAMETERS.filter((d) => d.group === g.group).map((d) => paramRow(d, ctx)),
+      ...PARAMETERS.filter((d) => d.group === g.group && (v830 || !d.v830)).map((d) => paramRow(d, ctx)),
       ...g.modules.flatMap((m) => advancedRows(m, params[m]?.params)),
     ];
     const changes = g.modules

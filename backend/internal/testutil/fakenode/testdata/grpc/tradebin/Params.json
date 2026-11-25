@@ -15,11 +15,13 @@
     "makerFeeDestination": "burner",
     "takerFeeDestination": "burner",
     "native_denom": "ubze",
-    "orderBookExtraGasWindow": "100",
-    "orderBookQueueExtraGas": "25000",
+    "priceLevelOwnersWindow": "500",
+    "priceLevelExtraGas": "25000",
     "fillOrdersExtraGas": "5000",
     "minNativeLiquidityForModuleSwap": "100000000000",
-    "orderBookPerBlockMessages": "500",
-    "orderBookQueueMessageScanExtraGas": "5000"
+    "maxFillsPerOrder": "500",
+    "poolPriceHalfLifeBlocks": "20",
+    "feeMaxPriceDrift": "0.100000000000000000",
+    "moduleMaxPriceDrift": "0.030000000000000000"
   }
 }

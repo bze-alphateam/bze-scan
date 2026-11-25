@@ -28,6 +28,8 @@ import (
 
 	burnertypes "github.com/bze-alphateam/bze/x/burner/types"
 	cointrunktypes "github.com/bze-alphateam/bze/x/cointrunk/types"
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
+	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
 	rewardstypes "github.com/bze-alphateam/bze/x/rewards/types"
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
@@ -38,12 +40,18 @@ import (
 // parameters page.
 var Modules = []string{
 	"txfeecollector", "staking", "mint", "distribution", "slashing", "gov",
-	"tradebin", "tokenfactory", "rewards", "burner", "cointrunk",
+	"tradebin", "tokenfactory", "rewards", "burner", "cointrunk", "dao", "guardian",
 }
+
+// V830Probe is the module whose answer tells a node runs chain v8.3.0: it
+// exists from that release on, so a v8.2.x node answers it Unimplemented.
+const V830Probe = "guardian"
 
 // Reader reads the live parameters by module. A module that fails is left
 // out of the map and its error is joined into the returned one, so a
-// caller can use what answered.
+// caller can use what answered. A module the node does not have (it answers
+// Unimplemented: x/dao and x/guardian on a v8.2.x node) is left out without
+// an error.
 type Reader interface {
 	Params(ctx context.Context) (map[string]json.RawMessage, error)
 }
@@ -132,6 +140,18 @@ func (g *GRPC) read(ctx context.Context, module string) (gogoproto.Message, erro
 			return nil, err
 		}
 		return &r.Params, nil
+	case "dao":
+		r, err := daotypes.NewQueryClient(g.conn).Params(ctx, &daotypes.QueryParamsRequest{})
+		if err != nil {
+			return nil, err
+		}
+		return &r.Params, nil
+	case "guardian":
+		r, err := guardiantypes.NewQueryClient(g.conn).Params(ctx, &guardiantypes.QueryParamsRequest{})
+		if err != nil {
+			return nil, err
+		}
+		return &r.Params, nil
 	case "txfeecollector":
 		r, err := txfeecollectortypes.NewQueryClient(g.conn).Params(ctx, &txfeecollectortypes.QueryParamsRequest{})
 		if err != nil {
@@ -165,6 +185,9 @@ func (g *GRPC) Params(ctx context.Context) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage, len(Modules))
 	var errs []error
 	for _, r := range results {
+		if status.Code(r.err) == codes.Unimplemented {
+			continue // the node does not have the module (yet)
+		}
 		if r.err != nil {
 			errs = append(errs, fmt.Errorf("%s params: %w", r.module, r.err))
 			continue
