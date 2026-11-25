@@ -112,6 +112,7 @@ type Token struct {
 	// Transfers24h is what moved in the 24 hours before the latest indexed
 	// block.
 	Transfers24h TransferVolume `json:"transfers_24h"`
+	Pool         *PoolPrice     `json:"pool"` // LP denoms only, see pool_price.go
 }
 
 // TransferVolume counts the transfers of a denom in a window; Amount is

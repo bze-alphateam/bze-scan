@@ -45,6 +45,8 @@ type TokenReader interface {
 // chain's own convention.
 type TokenController struct {
 	repo TokenReader
+	// Pools adds the pool price state to an LP denom's page; nil leaves it out.
+	Pools PoolPriceReader
 }
 
 // NewTokenController returns a controller over repo.
@@ -117,7 +119,9 @@ func (h *TokenController) Token(c *echo.Context) error {
 		return err
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewToken(t, events, next, *volume))
+	tok := dto.NewToken(t, events, next, *volume)
+	tok.Pool = h.poolPrice(ctx, t)
+	return c.JSON(http.StatusOK, tok)
 }
 
 // TokenEvents serves GET /api/v1/tokens/{denom}/events?cursor&limit and

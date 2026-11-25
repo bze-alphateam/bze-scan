@@ -224,6 +224,17 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		compatTickers = tk
 	}
 
+	// The LP token page's pool price state needs the node and the live params.
+	var poolPrices controller.PoolPriceReader
+	if cfg.NodeGRPCAddr != "" {
+		pp, closePools, err := NewPoolPrices(cfg, codec, apiPool, liveParams)
+		if err != nil {
+			return err
+		}
+		defer closePools()
+		poolPrices = pp
+	}
+
 	explorerRepo := repository.NewExplorer(apiPool)
 
 	// The dapps' asset list lives in memory: built at start from the
@@ -252,6 +263,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Explorer:        explorerRepo,
 		Accounts:        explorerRepo,
 		Tokens:          explorerRepo,
+		PoolPrices:      poolPrices,
 		Prices:          explorerRepo,
 		Proposals:       explorerRepo,
 		Upgrades:        explorerRepo,

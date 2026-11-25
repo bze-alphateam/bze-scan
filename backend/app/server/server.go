@@ -55,6 +55,8 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// PoolPrices adds the pool price state to LP token pages; nil leaves it out.
+	PoolPrices controller.PoolPriceReader
 	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
 	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
@@ -193,6 +195,7 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)
+		tokens.Pools = deps.PoolPrices
 		api.GET("/tokens", tokens.Tokens)
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)

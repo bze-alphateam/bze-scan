@@ -9,6 +9,7 @@ import { isNotFound } from "@/api/client";
 import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import { useApi } from "@/api/provider";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { PoolPriceCard } from "@/components/tokens/pool-price-card";
 import { ExportButton } from "@/components/export/export-modal";
 import { AppLink } from "@/components/layout/app-link";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -809,6 +810,7 @@ export function TokenView({ t }: { t: Token }) {
       <Header t={t} />
       <Warnings t={t} />
       <Tiles t={t} />
+      <PoolPriceCard t={t} />
       <SupplyCallout t={t} events={events} complete={complete} />
       {route && <Route t={t} route={route} />}
       <About t={t} route={route} />
