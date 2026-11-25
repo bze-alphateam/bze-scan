@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "voter": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+      "voter_label": null,
+      "option": "no",
+      "weight": "1",
+      "effective_weight": "1",
+      "height": 25101700,
+      "tx_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "time": "2099-11-02T09:00:00Z"
+    }
+  ],
+  "next_cursor": null,
+  "weight_denom": null
+}

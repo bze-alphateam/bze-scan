@@ -9,6 +9,11 @@ import type {
   DaoEvent,
   DaoList,
   DaoListParams,
+  DaoProposal,
+  DaoProposalListParams,
+  DaoProposalSummary,
+  DaoVoteList,
+  DaoVoteListParams,
   BlockEvent,
   BlockSummary,
   BlockTransfer,
@@ -99,6 +104,9 @@ export interface ExplorerApi {
   daos(params: DaoListParams, signal?: AbortSignal): Promise<DaoList>;
   dao(id: number, signal?: AbortSignal): Promise<Dao>;
   daoHistory(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<DaoEvent>>;
+  daoProposals(daoId: number, params: DaoProposalListParams, signal?: AbortSignal): Promise<Page<DaoProposalSummary>>;
+  daoProposal(id: number, signal?: AbortSignal): Promise<DaoProposal>;
+  daoProposalVotes(id: number, params: DaoVoteListParams, signal?: AbortSignal): Promise<DaoVoteList>;
   /** The emergency switches in force (chain v8.3.0). */
   emergency(signal?: AbortSignal): Promise<Emergency>;
   emergencyActions(params: PageParams, signal?: AbortSignal): Promise<Page<EmergencyAction>>;
@@ -234,6 +242,9 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     daos: (params, signal) => get("/daos", { ...page(params), type: params.type, admin: params.admin }, signal),
     dao: (id, signal) => get(`/daos/${seg(String(id))}`, {}, signal),
     daoHistory: (id, params, signal) => get(`/daos/${seg(String(id))}/history`, page(params), signal),
+    daoProposals: (daoId, params, signal) => get(`/daos/${seg(String(daoId))}/proposals`, { ...page(params), status: params.status }, signal),
+    daoProposal: (id, signal) => get(`/dao-proposals/${seg(String(id))}`, {}, signal),
+    daoProposalVotes: (id, params, signal) => get(`/dao-proposals/${seg(String(id))}/votes`, { ...page(params), option: params.option }, signal),
     emergency: (signal) => get("/emergency", {}, signal),
     emergencyActions: (params, signal) => get("/emergency/actions", page(params), signal),
 

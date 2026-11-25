@@ -63,6 +63,9 @@ describe("createHttpApi", () => {
     await api.proposalVotes(48, { option: "no_with_veto", cursor: "v" });
     await api.proposalDeposits(48, { limit: 100 });
     await api.proposalNonVoters(45, { limit: 100, cursor: "n" });
+    await api.daoProposals(2, { status: "execution_failed", limit: 20 });
+    await api.daoProposal(7);
+    await api.daoProposalVotes(7, { option: "no", cursor: "c", limit: 25 });
     await api.stats();
     await api.params();
     await api.haltedDenoms();
@@ -101,6 +104,9 @@ describe("createHttpApi", () => {
       "/v1/proposals/48/votes?cursor=v&option=no_with_veto",
       "/v1/proposals/48/deposits?limit=100",
       "/v1/proposals/45/non-voters?cursor=n&limit=100",
+      "/v1/daos/2/proposals?limit=20&status=execution_failed",
+      "/v1/dao-proposals/7",
+      "/v1/dao-proposals/7/votes?cursor=c&limit=25&option=no",
       "/v1/stats",
       "/v1/params",
       "/v1/params/halted-denoms",

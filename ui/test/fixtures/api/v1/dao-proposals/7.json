@@ -1,0 +1,80 @@
+{
+  "id": 7,
+  "dao_id": 2,
+  "title": "Fund the hive festival",
+  "status": "voting",
+  "proposer": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+  "proposer_label": null,
+  "expedited": true,
+  "submit_time": "2099-11-28T10:00:00Z",
+  "voting_end": "2099-12-01T10:00:00Z",
+  "yes": "4200000000",
+  "no": "600000000",
+  "abstain": "400000000",
+  "denominator": "10000000000",
+  "settled_height": null,
+  "message_types": [
+    "/cosmos.bank.v1beta1.MsgSend"
+  ],
+  "dao": {
+    "id": 2,
+    "name": "Hive Stakers",
+    "type": "stake"
+  },
+  "summary": "Pay the festival crew and the stage.\n\nTwo lines on purpose: <b>this is not HTML</b>.",
+  "msgs": [
+    {
+      "@type": "/cosmos.bank.v1beta1.MsgSend",
+      "from_address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+      "to_address": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "250000000"
+        }
+      ]
+    }
+  ],
+  "submit_height": 25103000,
+  "submit_tx_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "pinned_config": {
+    "min_quorum": "0.400000000000000000",
+    "threshold": "0.500000000000000000",
+    "voting_period_seconds": 259200,
+    "allow_expedite": true,
+    "expedited_period_seconds": 86400,
+    "expedite_quorum": "0.600000000000000000",
+    "expedite_threshold": "0.660000000000000000"
+  },
+  "tally_updated_at": "2099-11-29T10:00:00Z",
+  "voting_ended": false,
+  "expedite_settleable": false,
+  "retry_deadline": null,
+  "settled_tx_hash": null,
+  "expedited_early": null,
+  "executed": null,
+  "execution_error": null,
+  "deposit_refunded": null,
+  "deposit_destination": null,
+  "deposit_amount": null,
+  "cancelled_height": null,
+  "cleaned_height": null,
+  "votes_count": 4,
+  "weight_denom": {
+    "denom": "ubze",
+    "symbol": "BZE",
+    "exponent": 6
+  },
+  "checks": {
+    "regular": {
+      "quorum_met": true,
+      "threshold_met": true,
+      "passes": true
+    },
+    "expedite": {
+      "quorum_met": false,
+      "yes_met": false,
+      "passes": false
+    }
+  }
+}
