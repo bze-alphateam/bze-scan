@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -13,9 +14,11 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 )
 
+const usdcLPDenom = "ulp_" + usdcDenom + "_ubze"
+
 // The LP token page carries the pool's price state: the recorded VDL/BZE
 // pool holds 1000 VDL and 2000 BZE (spot 2) against a recorded average of
-// 1.8, 11.1% away, past both limits (10% and 3%). The COREY/BZE pool has no
+// 1.8, 11.1% away, past both limits (10% and 3%). The USDC.n/BZE pool has no
 // recorded average, as on a node before v8.3.0.
 func TestTheLPTokenPageCarriesThePoolPrice(t *testing.T) {
 	e := newSyncEnv(t)
@@ -24,7 +27,9 @@ func TestTheLPTokenPageCarriesThePoolPrice(t *testing.T) {
 		return e.count(t, `SELECT count(*) FROM explorer.denoms`) == recordedDenoms
 	}, "the denoms")
 
-	lp := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(vdlLPDenom)))
+	vdl := fetch(t, base+"/api/v1/tokens/"+url.PathEscape(vdlLPDenom))
+	require.Equal(t, http.StatusOK, vdl.status)
+	lp := into[dto.Token](t, vdl)
 	require.NotNil(t, lp.Pool)
 	assert.Equal(t, vdlDenom+"_ubze", lp.Pool.PoolID)
 	assert.Equal(t, "1000000000", lp.Pool.Reserves.Base.Reserve)
@@ -43,11 +48,13 @@ func TestTheLPTokenPageCarriesThePoolPrice(t *testing.T) {
 	require.NotNil(t, lp.Pool.ModuleSwapsHeld)
 	assert.True(t, *lp.Pool.ModuleSwapsHeld)
 
-	corey := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(coreyLPDenom)))
-	require.NotNil(t, corey.Pool)
-	assert.Nil(t, corey.Pool.AvgPrice, "no average on the node")
-	assert.Nil(t, corey.Pool.FeesInBZE)
-	assert.Nil(t, corey.Pool.ModuleSwapsHeld)
+	res := fetch(t, base+"/api/v1/tokens/"+url.PathEscape(usdcLPDenom))
+	require.Equal(t, http.StatusOK, res.status)
+	usdc := into[dto.Token](t, res)
+	require.NotNil(t, usdc.Pool)
+	assert.Nil(t, usdc.Pool.AvgPrice, "no average on the node")
+	assert.Nil(t, usdc.Pool.FeesInBZE)
+	assert.Nil(t, usdc.Pool.ModuleSwapsHeld)
 
 	// Other denoms have no pool object.
 	native := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/ubze"))
