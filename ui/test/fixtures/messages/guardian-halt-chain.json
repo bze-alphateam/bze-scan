@@ -1,0 +1,20 @@
+{
+  "type_url": "/bze.guardian.v1.MsgHaltChain",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "reason": "Critical bug <b>in</b> the DEX, validators stand by"
+  },
+  "events": [
+    {
+      "type": "bze.guardian.v1.ChainHaltScheduledEvent",
+      "attrs": {
+        "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "name": "emergency-halt",
+        "height": "25200000",
+        "reason": "Critical bug"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.tokenfactory.MsgDisableMinting",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney"
+  },
+  "events": []
+}
