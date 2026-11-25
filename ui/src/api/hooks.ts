@@ -57,6 +57,8 @@ export const queryKeys = {
   denoms: () => ["tokens", "all-pages"] as const,
   allTokens: () => ["tokens", "all-pages", "live"] as const,
   token: (denom: string) => ["token", denom] as const,
+  ibcChannels: () => ["ibc-channels"] as const,
+  rateLimits: () => ["rate-limits"] as const,
   tokenEventsAfter: (denom: string, cursor: string) => ["token-events", denom, cursor] as const,
   tokenHolders: (denom: string) => ["token-holders", denom] as const,
   tokenTransfers: (denom: string) => ["token-transfers", denom] as const,
@@ -727,4 +729,16 @@ export function useLiveHalt() {
     refetchInterval: (q) => (halted(q.state.data) ? live.refetchInterval : slow.refetchInterval),
     staleTime: (q) => (halted(q.state.data) ? live.staleTime : slow.staleTime),
   });
+}
+
+/** Every IBC channel with its counterparty and client status. */
+export function useIbcChannels() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.ibcChannels(), queryFn: ({ signal }) => api.ibcChannels(signal), ...live });
+}
+
+/** Every IBC rate limit with its usage in the current window (one answer: there are few). */
+export function useRateLimits() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.rateLimits(), queryFn: ({ signal }) => api.rateLimits(signal), ...live });
 }

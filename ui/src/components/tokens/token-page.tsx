@@ -63,6 +63,7 @@ import {
   type SupplyState,
 } from "@/render/tokens";
 
+import { TokenLimits } from "./token-limits";
 import { TokenLogo } from "./tokens-page";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -811,6 +812,7 @@ export function TokenView({ t }: { t: Token }) {
       <Tiles t={t} />
       <SupplyCallout t={t} events={events} complete={complete} />
       {route && <Route t={t} route={route} />}
+      <TokenLimits t={t} />
       <About t={t} route={route} />
       <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />
