@@ -1,0 +1,105 @@
+{
+  "id": 2,
+  "name": "Hive Stakers",
+  "type": "stake",
+  "address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+  "admin": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+  "admin_label": {
+    "name": "DAO #1 \u00b7 Honey Council",
+    "kind": "dao"
+  },
+  "self_governed": false,
+  "created_time": "2099-10-05T12:00:00Z",
+  "address_label": {
+    "name": "DAO #2 \u00b7 Hive Stakers",
+    "kind": "dao"
+  },
+  "created_height": 25101000,
+  "created_tx_hash": "CDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD",
+  "creator": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+  "creator_label": null,
+  "updated_height": 25101000,
+  "live": {
+    "available": true,
+    "id": 2,
+    "address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+    "type": "stake",
+    "name": "Hive Stakers",
+    "admin_seq": 1,
+    "pending_admin_seq": 0,
+    "admin": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+    "pending_admin": "bze1t5lr34ka3w2evm6r2p8yegksh42sj7ykxzcul4",
+    "description": "",
+    "config": {
+      "min_quorum": "0.400000000000000000",
+      "threshold": "0.500000000000000000",
+      "voting_period_seconds": 259200,
+      "allow_expedite": false,
+      "expedited_period_seconds": 86400,
+      "expedite_quorum": "0.600000000000000000",
+      "expedite_threshold": "0.660000000000000000",
+      "open_submission": true,
+      "proposal_cost": null,
+      "proposal_deposit": null,
+      "deposit_refund_policy": "ONLY_PASSED",
+      "cost_destination": "BURN",
+      "kept_deposit_destination": "TREASURY"
+    },
+    "electorate": {
+      "sr_ids": [
+        "3"
+      ],
+      "dr_denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney"
+    },
+    "created_at": "2099-10-05T12:00:00Z",
+    "electorate_stake": {
+      "sources": [
+        {
+          "sr_id": "3",
+          "dr_denom": null,
+          "staking_denom": "ubze",
+          "staked_amount": {
+            "denom": "ubze",
+            "amount": "9000000000000",
+            "symbol": "BZE",
+            "exponent": 6
+          }
+        },
+        {
+          "sr_id": null,
+          "dr_denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+          "staking_denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+          "staked_amount": {
+            "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+            "amount": "400000000000",
+            "symbol": "HONEY",
+            "exponent": 6
+          }
+        }
+      ],
+      "voting_stake": {
+        "denom": "ubze",
+        "amount": "9000000000000",
+        "symbol": "BZE",
+        "exponent": 6
+      }
+    }
+  },
+  "controller": {
+    "address": "bze1a56qzxq6qc55a58h8c5uk84srvysktt5dej0vg",
+    "label": null,
+    "end_reason": "account",
+    "path": [
+      "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+      "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc"
+    ]
+  },
+  "treasury": [
+    {
+      "denom": "ubze",
+      "amount": "5000000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ]
+}

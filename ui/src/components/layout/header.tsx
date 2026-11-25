@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { LuMenu, LuSearch } from "react-icons/lu";
 
-import { appLinks, navLinks } from "@/lib/links";
+import { useDaosSupport } from "@/api/hooks";
+import { appLinks, navLinks as allNavLinks } from "@/lib/links";
 
 import { AppIcon } from "./app-icon";
 import { AppsMenu } from "./apps-menu";
@@ -26,6 +27,9 @@ function isActive(pathname: string, href: string): boolean {
  */
 export function Header() {
   const pathname = usePathname();
+  // Before chain v8.3.0 there are no DAOs: the entry hides once the API says so (it shows while that is unknown).
+  const daos = useDaosSupport();
+  const navLinks = allNavLinks.filter((l) => l.href !== "/daos" || daos.data !== false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 

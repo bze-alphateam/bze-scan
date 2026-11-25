@@ -18,6 +18,29 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("DAO app links", () => {
+  it("point at the mainnet DAO app by default, one route per page", async () => {
+    const { daoAppLinks } = await load();
+    expect(daoAppLinks.home).toBe("https://dao.getbze.com");
+    expect(daoAppLinks.create).toBe("https://dao.getbze.com/create");
+    expect(daoAppLinks.dao(7)).toBe("https://dao.getbze.com/dao/7");
+    expect(daoAppLinks.proposal(12)).toBe("https://dao.getbze.com/proposal/12");
+  });
+
+  it("pick the testnet app on a testnet chain", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CHAIN_ID", "bzetestnet-3");
+    const { daoAppLinks } = await load();
+    expect(daoAppLinks.home).toBe("https://testnet-dao.getbze.com");
+    expect(daoAppLinks.dao(7)).toBe("https://testnet-dao.getbze.com/dao/7");
+  });
+
+  it("follow NEXT_PUBLIC_DAO_URL when it is set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DAO_URL", "https://dao.example.test/");
+    const { daoAppLinks } = await load();
+    expect(daoAppLinks.create).toBe("https://dao.example.test/create");
+  });
+});
+
 describe("app links", () => {
   it("point at the mainnet apps by default", async () => {
     const { appLinks, externalLinks, stakeHref } = await load();

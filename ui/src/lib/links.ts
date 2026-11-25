@@ -12,6 +12,7 @@ export const navLinks: NavLink[] = [
   { label: "Validators", href: "/validators" },
   { label: "Tokens", href: "/tokens" },
   { label: "Proposals", href: "/proposals" },
+  { label: "DAOs", href: "/daos" },
   { label: "Parameters", href: "/parameters" },
 ];
 
@@ -129,3 +130,13 @@ export function burnerHomeHref(): string {
 export function pingPubProposal(id: number): string {
   return `${env.pingPubUrl}/gov/${id}`;
 }
+
+/** The DAO app of the same network (new tab): the explorer is read-only, so creating and voting happen there. */
+const DAO_APP_URL = env.daoApp;
+
+export const daoAppLinks = {
+  home: DAO_APP_URL,
+  create: `${DAO_APP_URL}/create`,
+  dao: (id: number) => `${DAO_APP_URL}/dao/${id}`,
+  proposal: (id: number) => `${DAO_APP_URL}/proposal/${id}`,
+};

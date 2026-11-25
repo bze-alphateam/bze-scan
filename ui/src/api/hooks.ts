@@ -11,6 +11,7 @@ import type {
   ActivityCategory,
   BlockListParams,
   BlockTransfer,
+  DaoType,
   HallOfFame,
   Page,
   PageParams,
@@ -68,6 +69,11 @@ export const queryKeys = {
   proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
   upgrade: (height: number) => ["upgrade", height] as const,
   liveHalt: () => ["upgrade", "live"] as const,
+  daos: (type: DaoType | null) => ["daos", type] as const,
+  daosSupport: () => ["daos", "support"] as const,
+  daosByAdmin: (admin: string) => ["daos", "admin", admin] as const,
+  dao: (id: number) => ["dao", id] as const,
+  daoHistory: (id: number) => ["dao-history", id] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
@@ -496,6 +502,58 @@ export function useTokenTransfers(denom: string) {
   return useInfiniteQuery({
     queryKey: queryKeys.tokenTransfers(denom),
     queryFn: ({ pageParam, signal }) => api.tokenTransfers(denom, pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...live,
+  });
+}
+
+/** The DAOs, newest first, of one type (every type for null): 20 a page, the loaded pages polled. */
+export function useDaos(type: DaoType | null) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daos(type),
+    queryFn: ({ pageParam, signal }) => api.daos({ ...pageParam, type: type ?? undefined }, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...live,
+  });
+}
+
+/** The first page of the DAOs: `supported` says whether the chain runs them (the nav entry hides when it does not). */
+export function useDaosSupport() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.daosSupport(),
+    queryFn: ({ signal }) => api.daos({ limit: 1 }, signal),
+    ...reference,
+    select: (list) => list.supported,
+  });
+}
+
+/** The DAOs an address runs (an account page's "Admin of" list). The mock API ignores the filter, so the rows are checked again. */
+export function useDaosByAdmin(admin: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.daosByAdmin(admin),
+    queryFn: ({ signal }) => api.daos({ admin, limit: 20 }, signal),
+    ...live,
+    select: (list) => list.items.filter((d) => d.admin === admin),
+  });
+}
+
+/** A DAO: polled, its treasury and rules are live chain state. */
+export function useDao(id: number) {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.dao(id), queryFn: ({ signal }) => api.dao(id, signal), ...live });
+}
+
+/** A DAO's changes, newest first: 20 a page. */
+export function useDaoHistory(id: number) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daoHistory(id),
+    queryFn: ({ pageParam, signal }) => api.daoHistory(id, pageParam, signal),
     initialPageParam: firstPage(20),
     getNextPageParam: nextPage(20),
     ...live,
