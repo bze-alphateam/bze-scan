@@ -112,7 +112,7 @@ func TestEmergencyActions(t *testing.T) {
 	e := newSyncEnv(t)
 	gov := chain.ModuleAddress("gov")
 	for _, h := range []int64{100, 150, 160, 200, 250, 300} {
-		_, err := e.db.Exec(`INSERT INTO explorer.blocks (height, time, hash) VALUES ($1, '2026-11-25T10:00:00Z'::timestamptz + $1 * interval '1 second', 'H')`, h)
+		_, err := e.db.Exec(`INSERT INTO explorer.blocks (height, time, hash) VALUES ($1, '2026-11-25T10:00:00Z'::timestamptz + $1::bigint * interval '1 second', 'H')`, h)
 		require.NoError(t, err)
 	}
 	tx := func(h int64, idx int, hash string, success bool, typeURL, sender, body string) {
