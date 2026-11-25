@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -125,4 +126,54 @@ func TestActivityDenomFilterIsOnlyAddedWithADenom(t *testing.T) {
 	assert.Contains(t, db.sql[1], "AND deltas @> $7::jsonb\n")
 	assert.Equal(t, []any{"bze1a", (*string)(nil), (*int64)(nil), (*int64)(nil), 26, int64(0),
 		`[{"denom":"factory/bze1x/upage"}]`}, db.args[1])
+}
+
+// The oldest-first list has its own statement: the keyset is written into the
+// text (never behind an IS NULL OR), both orders are ascending, and the desc
+// statement is left as it was.
+func TestActivityAscKeepsTheKeysetInTheText(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	ex := repository.NewExplorer(db)
+	_, err := ex.ActivityAsc(context.Background(), "bze1a", nil, nil, true,
+		repository.ActivityStart{After: &repository.ActivityKey{Height: 9, TxIndex: 2}}, 26)
+	assert.ErrorIs(t, err, errDB)
+	sql := db.sql[0]
+	assert.Contains(t, sql, "AND (height, tx_index) > ($4::bigint, $5::integer)")
+	assert.Contains(t, sql, "AND height >= $4::bigint\n\t\t\t  AND (height", "a plain bound the partitions are pruned by")
+	assert.NotContains(t, sql, "IS NULL OR (height")
+	assert.NotContains(t, sql, "$4::bigint IS NULL")
+	assert.NotContains(t, sql, "time >=")
+	assert.Contains(t, sql, "ORDER BY height ASC, tx_index ASC\n\t\t\tLIMIT $3) a")
+	assert.Contains(t, sql, "ORDER BY a.height ASC, a.tx_index ASC")
+	assert.NotContains(t, sql, "DESC")
+	assert.NotContains(t, sql, "OFFSET")
+	assert.Contains(t, sql, "explorer.messages m", "the incoming filter")
+	assert.Equal(t, []any{"bze1a", (*string)(nil), 26, int64(9), int64(2)}, db.args[0])
+}
+
+func TestActivityAscFromATimeHasNoKeyset(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	ex := repository.NewExplorer(db)
+	since := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	denom, cat := "ubze", "received"
+	_, err := ex.ActivityAsc(context.Background(), "bze1a", &cat, &denom, true, repository.ActivityStart{Since: &since}, 26)
+	assert.ErrorIs(t, err, errDB)
+	sql := db.sql[0]
+	assert.Contains(t, sql, "AND time >= $4::timestamptz")
+	assert.NotContains(t, sql, "(height, tx_index) >")
+	assert.Contains(t, sql, "AND deltas @> $5::jsonb", "the filters number on from the start's parameters")
+	assert.Contains(t, sql, "jsonb_build_object('d', $6::text)")
+	assert.Equal(t, []any{"bze1a", &cat, 26, since, `[{"denom":"ubze"}]`, "ubze"}, db.args[0])
+}
+
+func TestActivityAscNeedsExactlyOneStart(t *testing.T) {
+	db := &fakeDB{queryErr: errDB}
+	ex := repository.NewExplorer(db)
+	since := time.Now()
+	for _, s := range []repository.ActivityStart{{}, {After: &repository.ActivityKey{}, Since: &since}} {
+		_, err := ex.ActivityAsc(context.Background(), "bze1a", nil, nil, false, s, 26)
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, errDB)
+	}
+	assert.Empty(t, db.sql, "nothing is queried")
 }

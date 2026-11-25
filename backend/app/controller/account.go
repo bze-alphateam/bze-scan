@@ -3,9 +3,12 @@ package controller
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
@@ -29,6 +32,10 @@ type AccountReader interface {
 	// is set, after before when not nil.
 	Activity(ctx context.Context, address string, category, denom *string, incoming bool,
 		before *repository.ActivityKey, limit int) ([]repository.Activity, error)
+	// ActivityAsc returns up to limit activity rows of address, oldest
+	// first, from start on, with the filters of Activity.
+	ActivityAsc(ctx context.Context, address string, category, denom *string, incoming bool,
+		start repository.ActivityStart, limit int) ([]repository.Activity, error)
 	// ActivityPage returns up to limit activity rows of address, newest
 	// first, of category when not nil, skipping the newest offset rows.
 	ActivityPage(ctx context.Context, address string, category, denom *string, incoming bool, offset int64,
@@ -138,6 +145,12 @@ func (h *AccountController) Account(c *echo.Context) error {
 // transfers that paid it. Anything but a bze1 address, a known category, a
 // valid denom or incoming=true is a 400; an address without activity, or a
 // denom it never moved, is an empty list.
+//
+// order=asc lists the rows oldest first instead, from exactly one start:
+// after_height (the rows above that height), after_time (the rows at or after
+// that RFC 3339 time) or the cursor of the previous page. It pages by cursor
+// only: with page, without a start or with two starts it is a 400, as is an
+// after_* without order=asc and any order but asc or desc.
 func (h *AccountController) Activity(c *echo.Context) error {
 	hrp, address, ok := bech32Address(c.Param("address"))
 	if !ok || hrp != accountPrefix {
@@ -178,6 +191,21 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	asc, err := parseActivityOrder(c)
+	if err != nil {
+		return err
+	}
+	var start repository.ActivityStart
+	if asc {
+		if pageNo > 0 {
+			return echo.NewHTTPError(http.StatusBadRequest, "page is not available with order=asc")
+		}
+		if start, err = parseActivityStart(c, before); err != nil {
+			return err
+		}
+	} else if c.QueryParam("after_height") != "" || c.QueryParam("after_time") != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "after_height and after_time need order=asc")
+	}
 	if pageNo > 0 && before != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
 	}
@@ -185,7 +213,11 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var rows []repository.Activity
 	var total *int64
-	if pageNo > 0 {
+	if asc {
+		if rows, err = h.repo.ActivityAsc(ctx, address, category, denom, incoming, start, limit+1); err != nil {
+			return err
+		}
+	} else if pageNo > 0 {
 		n, err := h.repo.ActivityTotal(ctx, address, category, denom, incoming)
 		if err != nil {
 			return err
@@ -214,6 +246,53 @@ func (h *AccountController) Activity(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
+}
+
+// parseActivityOrder reads order: asc is true, desc or none is false,
+// anything else is a 400.
+func parseActivityOrder(c *echo.Context) (bool, error) {
+	switch c.QueryParam("order") {
+	case "", "desc":
+		return false, nil
+	case "asc":
+		return true, nil
+	}
+	return false, echo.NewHTTPError(http.StatusBadRequest, "order must be asc or desc")
+}
+
+// parseActivityStart reads the one start of an oldest-first page:
+// after_height h is the keyset position after every row of h, after_time a
+// time, cursor the position after the previous page's last row.
+func parseActivityStart(c *echo.Context, cursor *repository.ActivityKey) (repository.ActivityStart, error) {
+	var start repository.ActivityStart
+	h, t := c.QueryParam("after_height"), c.QueryParam("after_time")
+	given := 0
+	for _, set := range []bool{h != "", t != "", cursor != nil} {
+		if set {
+			given++
+		}
+	}
+	if given != 1 {
+		return start, echo.NewHTTPError(http.StatusBadRequest,
+			"order=asc needs exactly one of after_height, after_time or cursor")
+	}
+	switch {
+	case h != "":
+		n, err := strconv.ParseInt(h, 10, 64)
+		if err != nil || !isDigits(h) {
+			return start, echo.NewHTTPError(http.StatusBadRequest, "after_height must be a non-negative integer")
+		}
+		start.After = &repository.ActivityKey{Height: n, TxIndex: math.MaxInt32}
+	case t != "":
+		at, err := time.Parse(time.RFC3339, t)
+		if err != nil {
+			return start, echo.NewHTTPError(http.StatusBadRequest, "after_time must be an RFC 3339 time")
+		}
+		start.Since = &at
+	default:
+		start.After = cursor
+	}
+	return start, nil
 }
 
 // OpenOrders serves GET /api/v1/accounts/{address}/open-orders: what the
