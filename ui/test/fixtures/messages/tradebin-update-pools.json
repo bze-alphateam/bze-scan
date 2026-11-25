@@ -1,0 +1,52 @@
+{
+  "type_url": "/bze.tradebin.MsgUpdatePools",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tradebin",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "updates": [
+      {
+        "pool_id": "ubze_ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "fee": "0.005",
+        "fee_dest": {
+          "treasury": "0.5",
+          "burner": "0.5"
+        }
+      },
+      {
+        "pool_id": "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2_ubze",
+        "fee": "0.003",
+        "fee_dest": {
+          "treasury": "1",
+          "burner": "0"
+        }
+      },
+      {
+        "pool_id": "p3",
+        "fee": "0.01",
+        "fee_dest": {
+          "treasury": "1",
+          "burner": "0"
+        }
+      }
+    ]
+  },
+  "events": [
+    {
+      "type": "bze.tradebin.PoolFeesUpdatedEvent",
+      "attrs": {
+        "pool_id": "ubze_ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "old_fee": "0.003",
+        "new_fee": "0.005",
+        "old_fee_dest": {
+          "treasury": "1",
+          "burner": "0"
+        },
+        "new_fee_dest": {
+          "treasury": "0.5",
+          "burner": "0.5"
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { Text } from "@chakra-ui/react";
 
 import { Account, accountName, coinsText, Coins, Fields, obj, parseCoins, str } from "./common";
+import { ratioPct } from "./v830-common";
 import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 /** A factory token's symbol, else its subdenom (`factory/<creator>/<subdenom>`), else the denom. */
@@ -197,6 +198,67 @@ const setBranding = renderer({
   },
 });
 
+const disableMinting = renderer({
+  category: "tokens",
+  title: (msg, ctx) => `Turned off minting of ${tokenName(str(msg, "denom"), ctx)} for good`,
+  Body: function DisableMintingBody({ msg, ctx }: BodyProps) {
+    return (
+      <Fields
+        rows={[
+          { label: "Turned off by", value: <Account address={str(msg, "creator")} ctx={ctx} /> },
+          { label: "Token", value: <Denom denom={str(msg, "denom")} /> },
+          { label: "Can it be undone", value: "No: no new coins of this token can ever be made" },
+        ]}
+      />
+    );
+  },
+});
+
+/** A ratio as "1%", "none" for zero or missing. */
+const ratioOrNone = (ratio: string | null) => {
+  const text = ratioPct(ratio);
+  return text === null || text === "0%" ? "none" : text;
+};
+
+const setDenomConfig = renderer({
+  category: "tokens",
+  title: (msg, ctx) => {
+    const pool = str(msg, "community_pool");
+    const pools = pool ? `community pool to ${accountName(pool, ctx)}` : "community pool to none";
+    return `Set ${tokenName(str(msg, "denom"), ctx)}'s ${pools}, transfer fee ${ratioOrNone(str(msg, "transfer_fee"))}, gas surcharge ${ratioOrNone(str(msg, "gas_surcharge"))}`;
+  },
+  Body: function SetDenomConfigBody({ msg, ctx }: BodyProps) {
+    const pool = str(msg, "community_pool");
+    return (
+      <Fields
+        rows={[
+          { label: "Set by", value: <Account address={str(msg, "creator")} ctx={ctx} /> },
+          { label: "Token", value: <Denom denom={str(msg, "denom")} /> },
+          { label: "Community pool", value: pool ? <Account address={pool} ctx={ctx} /> : "none" },
+          { label: "Transfer fee", value: ratioOrNone(str(msg, "transfer_fee")) },
+          { label: "Gas surcharge", value: ratioOrNone(str(msg, "gas_surcharge")) },
+        ]}
+      />
+    );
+  },
+});
+
+const setDenomAdmin = renderer({
+  category: "tokens",
+  title: (msg, ctx) => `Governance gave control of ${tokenName(str(msg, "denom"), ctx)} to ${accountName(newAdmin(msg), ctx)}`,
+  counterparty: (msg) => (newAdmin(msg) ? { kind: "account", address: newAdmin(msg) as string } : null),
+  Body: function SetDenomAdminBody({ msg, ctx }: BodyProps) {
+    return (
+      <Fields
+        rows={[
+          { label: "Token", value: <Denom denom={str(msg, "denom")} /> },
+          { label: "New admin", value: <Account address={newAdmin(msg)} ctx={ctx} /> },
+        ]}
+      />
+    );
+  },
+});
+
 const F = "/bze.tokenfactory.";
 
 export const tokenfactoryRenderers: Record<string, MessageRenderer> = {
@@ -206,4 +268,7 @@ export const tokenfactoryRenderers: Record<string, MessageRenderer> = {
   [`${F}MsgChangeAdmin`]: changeAdmin,
   [`${F}MsgSetDenomMetadata`]: setMetadata,
   [`${F}MsgSetDenomBranding`]: setBranding,
+  [`${F}MsgDisableMinting`]: disableMinting,
+  [`${F}MsgSetDenomConfig`]: setDenomConfig,
+  [`${F}MsgSetDenomAdmin`]: setDenomAdmin,
 };

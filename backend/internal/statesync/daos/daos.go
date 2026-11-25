@@ -90,9 +90,6 @@ func (s *Set) Name() string { return statesync.Daos }
 // Interval is the safety-net period.
 func (s *Set) Interval() time.Duration { return s.interval }
 
-// Key is the set key of DAO id.
-func Key(id uint64) string { return strconv.FormatUint(id, 10) }
-
 // FullResync lists every DAO, a page of PageLimit at a time, and saves them.
 func (s *Set) FullResync(ctx context.Context) error {
 	var out []Dao
