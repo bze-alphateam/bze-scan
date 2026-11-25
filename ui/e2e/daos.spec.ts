@@ -8,10 +8,11 @@ import { mockApi, respond } from "./mock-api";
 // daos/<id>/history.json.
 
 test.describe("DAOs list", () => {
-  test("lists the DAOs and opens one", async ({ page }) => {
+  test("lists the DAOs and opens one", async ({ page, isMobile }) => {
     await page.goto("/daos");
     await expect(page).toHaveTitle("DAOs · BZE Explorer");
-    await expect(page.getByRole("navigation", { name: "Explorer" }).getByRole("link", { name: "DAOs" })).toHaveAttribute("href", "/daos");
+    // The nav row is the desktop layout; phones reach the entry through the drawer.
+    if (!isMobile) await expect(page.getByRole("navigation", { name: "Explorer" }).getByRole("link", { name: "DAOs" })).toHaveAttribute("href", "/daos");
     const rows = page.getByTestId("dao-row");
     await expect(rows).toHaveCount(2);
     await expect(page.getByTestId("dao-app-link")).toHaveAttribute("href", /^https:\/\/(testnet-)?dao\.getbze\.com$/);
