@@ -18,6 +18,7 @@ import (
 
 	"cosmossdk.io/math"
 	ratelimittypes "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/types"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -89,7 +90,11 @@ type Snapshot struct {
 
 // Reader reads the limits.
 type Reader interface {
+	// Snapshot returns the limits, reading the node when the cache is stale.
 	Snapshot(ctx context.Context) (*Snapshot, error)
+	// Peek returns the last successful read, whatever its age, and false
+	// when there is none yet. It never calls the node.
+	Peek() (*Snapshot, bool)
 }
 
 // Service reads the limits through Query, caching the read of the node for a
@@ -134,7 +139,36 @@ func (s *Service) Snapshot(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Compute(r.supported, r.limits, r.blacklisted, s.now()), nil
+	return compute(r, s.now()), nil
+}
+
+// Peek returns the last good read without calling the node.
+func (s *Service) Peek() (*Snapshot, bool) {
+	s.mu.Lock()
+	r := s.raw
+	s.mu.Unlock()
+	if r == nil {
+		return nil, false
+	}
+	return compute(r, s.now()), true
+}
+
+// Run keeps the cache warm: it reads the node every TTL until ctx is done,
+// so the pages that only Peek have something to show. A failed read is
+// logged and tried again at the next tick.
+func (s *Service) Run(ctx context.Context) error {
+	tick := time.NewTicker(s.ttl)
+	defer tick.Stop()
+	for {
+		if _, err := s.Snapshot(ctx); err != nil {
+			log.WithError(err).Warn("rate limits: reading the node failed")
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+		}
+	}
 }
 
 func (s *Service) cached(ctx context.Context) (*read, error) {
@@ -182,15 +216,15 @@ func (s *Service) fetch(ctx context.Context) (*read, error) {
 	return out, nil
 }
 
-// Compute works the computed fields out of the module's limits at now.
-func Compute(supported bool, limits []ratelimittypes.RateLimit, blacklisted []string, now time.Time) *Snapshot {
-	snap := &Snapshot{Supported: supported, Limits: make([]Limit, 0, len(limits)), Blacklisted: []string{}}
-	if !supported {
+// compute works the computed fields out of what the node answered at now.
+func compute(r *read, now time.Time) *Snapshot {
+	snap := &Snapshot{Supported: r.supported, Limits: make([]Limit, 0, len(r.limits)), Blacklisted: []string{}}
+	if !r.supported {
 		return snap
 	}
-	snap.Blacklisted = append(snap.Blacklisted, blacklisted...)
-	for _, rl := range limits {
-		snap.Limits = append(snap.Limits, compute(rl, now))
+	snap.Blacklisted = append(snap.Blacklisted, r.blacklisted...)
+	for _, rl := range r.limits {
+		snap.Limits = append(snap.Limits, computeLimit(rl, now))
 	}
 	sort.SliceStable(snap.Limits, func(i, j int) bool {
 		a, b := snap.Limits[i], snap.Limits[j]
@@ -206,7 +240,7 @@ func Compute(supported bool, limits []ratelimittypes.RateLimit, blacklisted []st
 	return snap
 }
 
-func compute(rl ratelimittypes.RateLimit, now time.Time) Limit {
+func computeLimit(rl ratelimittypes.RateLimit, now time.Time) Limit {
 	l := Limit{}
 	if rl.Path != nil {
 		l.Denom, l.ChannelID = rl.Path.Denom, rl.Path.ChannelOrClientId

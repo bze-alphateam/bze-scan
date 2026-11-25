@@ -16,6 +16,14 @@ import (
 // ratelimits.Service.
 type RateLimitReader interface {
 	Snapshot(ctx context.Context) (*ratelimits.Snapshot, error)
+	// Peek is the last good read, never a node call.
+	Peek() (*ratelimits.Snapshot, bool)
+}
+
+// TokenRateLimits gives the token page its denom's limits without waiting
+// on the node; implemented by RateLimitController.
+type TokenRateLimits interface {
+	TokenRateLimits(ctx context.Context, denom string) []dto.RateLimit
 }
 
 // RateLimitCatalog reads what names a limit's denom and channel;
@@ -97,26 +105,33 @@ func (h *RateLimitController) items(ctx context.Context, limits []ratelimits.Lim
 	return out, nil
 }
 
+// TokenRateLimits is the token page's rate_limits: the denom's limits from
+// the last good read, never a node call. No read yet, or a database
+// failure, is no limits: the page never waits or fails for them.
+func (h *RateLimitController) TokenRateLimits(ctx context.Context, denom string) []dto.RateLimit {
+	snap, ok := h.limits.Peek()
+	if !ok {
+		return []dto.RateLimit{}
+	}
+	items, err := h.items(ctx, snap.Limits, func(l ratelimits.Limit) bool { return l.Denom == denom })
+	if err != nil {
+		log.WithError(err).WithField("denom", denom).Warn("token rate limits unavailable")
+		return []dto.RateLimit{}
+	}
+	return items
+}
+
 // WithRateLimits adds the rate limits of the denom to the token page; without
 // it rate_limits is always empty.
-func (h *TokenController) WithRateLimits(r *RateLimitController) *TokenController {
+func (h *TokenController) WithRateLimits(r TokenRateLimits) *TokenController {
 	h.rates = r
 	return h
 }
 
-// rateLimits is the token page's rate_limits: the denom's limits from the
-// cached read. A page never fails for them: no node answer is no limits.
+// rateLimits is the token page's rate_limits.
 func (h *TokenController) rateLimits(ctx context.Context, denom string) []dto.RateLimit {
 	if h.rates == nil {
 		return []dto.RateLimit{}
 	}
-	snap, err := h.rates.limits.Snapshot(ctx)
-	if err == nil {
-		var items []dto.RateLimit
-		if items, err = h.rates.items(ctx, snap.Limits, func(l ratelimits.Limit) bool { return l.Denom == denom }); err == nil {
-			return items
-		}
-	}
-	log.WithError(err).WithField("denom", denom).Warn("token rate limits unavailable")
-	return []dto.RateLimit{}
+	return h.rates.TokenRateLimits(ctx, denom)
 }

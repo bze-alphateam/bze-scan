@@ -45,7 +45,7 @@ type TokenReader interface {
 // chain's own convention.
 type TokenController struct {
 	repo  TokenReader
-	rates *RateLimitController
+	rates TokenRateLimits
 }
 
 // NewTokenController returns a controller over repo.
