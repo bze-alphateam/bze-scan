@@ -29,6 +29,18 @@ describe("failureReason", () => {
     expect(failureReason({ codespace: "sdk", code, error_log: "raw log" })).toMatch(want);
   });
 
+  it.each([
+    ["ratelimit", 4, "Over the daily limit for this route. Try a smaller amount or later; limits reset at 00:00 UTC."],
+    ["ratelimit", 7, "This token cannot cross chains right now (blocked)."],
+    ["txfeecollector", 1140, "Transfers on this channel are stopped."],
+  ])("words a refused cross-chain send: %s code %i", (codespace, code, want) => {
+    expect(failureReason({ codespace, code, error_log: "raw log" })).toBe(want);
+  });
+
+  it("keeps the log of the same code in another codespace", () => {
+    expect(failureReason({ codespace: "tradebin", code: 4, error_log: "raw log" })).toBe("raw log");
+  });
+
   it("shows another code's log verbatim", () => {
     const log = "failed to execute message; message index: 0: order price too low";
     expect(failureReason({ codespace: "tradebin", code: 5, error_log: log })).toBe(log);

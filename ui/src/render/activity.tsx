@@ -3,6 +3,7 @@ import BigNumber from "bignumber.js";
 import type { Activity, ActivityCategory, ActivityCounterparty, ActivityDetail, Balance, Coin, IbcTransfer } from "@/api/types";
 import type { ActionCategory } from "@/components/ui/action-card";
 import { formatAmount, shortAddress } from "@/lib/format";
+import { refusalText } from "@/render/ibc-refusal";
 import { coinText, humanise, parseCoins } from "@/render/messages/common";
 import { marketName, quoteAmount, splitMarket } from "@/render/messages/dex";
 import type { RenderContext } from "@/render/messages/types";
@@ -305,8 +306,9 @@ const SENTENCES: Record<string, Sentence> = {
   ibc_out: ({ ibc }) => [`Cross-chain transfer to ${otherChain(ibc) ?? "another chain"}`],
   ibc_in: (i) => {
     const chain = otherChain(i.ibc);
-    if (chain) return [`Cross-chain transfer from ${chain}`];
-    return withParty(i, "Cross-chain transfer from", "Cross-chain transfer from another chain");
+    const refused = i.ibc?.status === "rejected" ? refusalText(i.ibc.ack_error) : null;
+    const head = chain ? [`Cross-chain transfer from ${chain}`] : withParty(i, "Cross-chain transfer from", "Cross-chain transfer from another chain");
+    return refused ? [...head, `. ${refused}`] : head;
   },
   ibc_refund: ({ ibc }) => {
     const chain = otherChain(ibc);
