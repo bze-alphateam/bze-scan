@@ -44,6 +44,8 @@ export function resultHref(r: SearchResult): string {
       return `/blocks/${encodeURIComponent(r.id)}`;
     case "transaction":
       return `/txs/${encodeURIComponent(r.id)}`;
+    case "dao":
+      return `/daos/${encodeURIComponent(r.id)}`;
     default:
       return `/search?q=${encodeURIComponent(r.id)}`;
   }

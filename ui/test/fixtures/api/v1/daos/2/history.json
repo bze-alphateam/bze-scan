@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "height": 25101200,
+      "tx_index": 3,
+      "msg_index": 0,
+      "seq": 0,
+      "type": "EventAdminNominated",
+      "attrs": {
+        "id": "2",
+        "admin": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+        "nominee": "bze1t5lr34ka3w2evm6r2p8yegksh42sj7ykxzcul4"
+      },
+      "tx_hash": "3434343434343434343434343434343434343434343434343434343434343434",
+      "time": "2099-10-06T08:00:00Z"
+    },
+    {
+      "height": 25101000,
+      "tx_index": 0,
+      "msg_index": 0,
+      "seq": 0,
+      "type": "EventDaoCreated",
+      "attrs": {
+        "id": "2",
+        "address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+        "admin": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+        "type": "DAO_TYPE_STAKE"
+      },
+      "tx_hash": "CDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD",
+      "time": "2099-10-05T12:00:00Z"
+    }
+  ],
+  "next_cursor": null
+}

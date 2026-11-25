@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "height": 25100500,
+      "tx_index": 1,
+      "msg_index": 0,
+      "seq": 0,
+      "type": "EventDaoMembersUpdated",
+      "attrs": {
+        "id": "1",
+        "added": [
+          "bze1yq9qpu2785aclxkev4ey4839dxjsg5wzseayzc"
+        ],
+        "removed": []
+      },
+      "tx_hash": "EFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEF",
+      "time": "2099-10-03T10:00:00Z"
+    },
+    {
+      "height": 25100300,
+      "tx_index": 2,
+      "msg_index": 0,
+      "seq": 0,
+      "type": "EventDaoConfigUpdated",
+      "attrs": {
+        "id": "1",
+        "fields": [
+          "min_quorum",
+          "threshold"
+        ]
+      },
+      "tx_hash": "1212121212121212121212121212121212121212121212121212121212121212",
+      "time": "2099-10-02T18:00:00Z"
+    },
+    {
+      "height": 25100100,
+      "tx_index": 0,
+      "msg_index": 0,
+      "seq": 0,
+      "type": "EventDaoCreated",
+      "attrs": {
+        "id": "1",
+        "address": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+        "admin": "bze1a56qzxq6qc55a58h8c5uk84srvysktt5dej0vg",
+        "type": "DAO_TYPE_STATIC_LIST"
+      },
+      "tx_hash": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "time": "2099-10-02T09:15:00Z"
+    }
+  ],
+  "next_cursor": null
+}

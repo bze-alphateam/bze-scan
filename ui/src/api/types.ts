@@ -35,10 +35,10 @@ export interface Balance extends Coin {
   exponent: number | null;
 }
 
-/** Labels: `module` accounts, `ibc_escrow`, `validator_owner`, `known`. */
+/** Labels: `module` accounts, `ibc_escrow`, `validator_owner`, `known`, `dao` (named "DAO #id · name"). */
 export interface Label {
   name: string;
-  kind: "module" | "ibc_escrow" | "validator_owner" | "known" | (string & {});
+  kind: "module" | "ibc_escrow" | "validator_owner" | "known" | "dao" | (string & {});
 }
 
 // Blocks
@@ -1101,6 +1101,111 @@ export interface Halted {
 }
 
 export type LiveHalt = NotHalted | Halted;
+
+// DAOs
+
+export type DaoType = "static_list" | "stake";
+
+export interface DaoListParams extends PageParams {
+  type?: DaoType;
+  /** DAOs run by this address. */
+  admin?: string;
+}
+
+/** An item of `/daos`. */
+export interface DaoSummary {
+  id: number;
+  name: string;
+  type: DaoType | (string & {});
+  address: string;
+  admin: string;
+  admin_label: Label | null;
+  self_governed: boolean;
+  created_time: string | null;
+  /** Proposals open for votes; present once the proposals backend ships. */
+  proposals_open?: number;
+}
+
+/** `/daos`: `supported` is false on a node that has not upgraded to chain v8.3.0. */
+export interface DaoList extends Page<DaoSummary> {
+  supported: boolean;
+}
+
+export interface DaoConfig {
+  min_quorum: string;
+  threshold: string;
+  voting_period_seconds: number;
+  allow_expedite: boolean;
+  expedited_period_seconds: number;
+  expedite_quorum: string;
+  expedite_threshold: string;
+  open_submission: boolean;
+  proposal_cost: Balance | null;
+  proposal_deposit: Balance | null;
+  deposit_refund_policy: string;
+  cost_destination: string;
+  kept_deposit_destination: string;
+}
+
+export interface DaoStakeSource {
+  sr_id: string | null;
+  dr_denom: string | null;
+  staking_denom: string;
+  staked_amount: Balance;
+}
+
+/** The DAO as the chain holds it now; only `available` is set when the node did not answer. */
+export interface DaoLive {
+  available: boolean;
+  id?: number;
+  address?: string;
+  type?: DaoType | (string & {});
+  name?: string;
+  admin_seq?: number;
+  pending_admin_seq?: number;
+  admin?: string;
+  pending_admin?: string;
+  description?: string;
+  config?: DaoConfig;
+  members?: string[];
+  electorate?: { sr_ids: string[]; dr_denom: string };
+  created_at?: string;
+  electorate_stake?: { sources: DaoStakeSource[]; voting_stake: Balance };
+}
+
+/** The account that ultimately runs a DAO, following the admin chain. */
+export interface DaoController {
+  address: string;
+  label: Label | null;
+  end_reason: string;
+  /** The DAO addresses the chain visited, in order, starting with the queried DAO itself. */
+  path: string[];
+}
+
+/** `/daos/{id}`. */
+export interface Dao extends DaoSummary {
+  address_label: Label | null;
+  created_height: number | null;
+  created_tx_hash: string | null;
+  creator: string | null;
+  creator_label: Label | null;
+  updated_height: number | null;
+  live: DaoLive;
+  controller: DaoController | null;
+  treasury: Balance[];
+}
+
+/** An item of `/daos/{id}/history`: `attrs` are the chain event's attributes. */
+export interface DaoEvent {
+  height: number;
+  tx_index: number;
+  msg_index: number;
+  seq: number;
+  type: string;
+  attrs: Record<string, unknown>;
+  tx_hash: string | null;
+  time: string;
+}
 
 // Cross-chain (IBC channels and the rate limits of chain v8.3.0)
 

@@ -47,6 +47,7 @@ describe("search results", () => {
     expect(orderResults(results).map((r) => r.type)).toEqual(["validator", "account"]);
     expect(results.map(resultHref)).toEqual([`/accounts/${ACCOUNT}`, `/validators/${VALOPER}`]);
     expect(resultHref({ type: "block", id: "5", label: "5" })).toBe("/blocks/5");
+    expect(resultHref({ type: "dao", id: "7", label: "DAO #7 · Honey Council" })).toBe("/daos/7");
     expect(resultHref({ type: "transaction", id: HASH, label: HASH })).toBe(`/txs/${HASH}`);
   });
 });

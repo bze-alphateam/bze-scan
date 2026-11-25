@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": 2,
+      "name": "Hive Stakers",
+      "type": "stake",
+      "address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+      "admin": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+      "admin_label": {
+        "name": "DAO #1 \u00b7 Honey Council",
+        "kind": "dao"
+      },
+      "self_governed": false,
+      "created_time": "2099-10-05T12:00:00Z"
+    },
+    {
+      "id": 1,
+      "name": "Honey Council",
+      "type": "static_list",
+      "address": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+      "admin": "bze1a56qzxq6qc55a58h8c5uk84srvysktt5dej0vg",
+      "admin_label": null,
+      "self_governed": false,
+      "created_time": "2099-10-02T09:15:00Z"
+    }
+  ],
+  "next_cursor": null,
+  "supported": true
+}
