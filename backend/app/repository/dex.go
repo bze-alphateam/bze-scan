@@ -262,7 +262,7 @@ const txPendingSQL = `SELECT EXISTS (
 		   AND NOT ` + settledByEvent + `)
 	OR (EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))
 	    AND NOT EXISTS (SELECT 1 FROM explorer.upgrades u
-	                     WHERE u.height > $1 AND u.height <= (SELECT max(height) FROM explorer.blocks)))`
+	                     WHERE u.kind = 'governance' AND u.superseded_by_height IS NULL AND u.height > $1 AND u.height <= (SELECT max(height) FROM explorer.blocks)))`
 
 // txRefundsSQL reads the refunds of the transaction: the OrderMessageRefundedEvents
 // of its own messages (message_id empty), then the block-level ones its order

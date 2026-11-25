@@ -79,10 +79,15 @@ type Watch struct {
 // Live is what the watch saw at its latest poll of a halt: the votes of
 // the round consensus is in, member by member.
 type Live struct {
-	// Height is the plan height U, ProposalID and Name its proposal.
+	// Height is the plan height U, ProposalID (nil for an emergency
+	// halt) and Name its proposal's.
 	Height     int64
-	ProposalID int64
+	ProposalID *int64
 	Name       string
+	// Kind, Reason and ScheduledBy are the upgrade's (Upgrade).
+	Kind        string
+	Reason      string
+	ScheduledBy string
 	// Round is the consensus round at U+1.
 	Round int32
 	// HaltedSince is the time of the node's latest block.
@@ -271,6 +276,7 @@ func (w *Watch) poll(ctx context.Context) {
 func (w *Watch) snapshot(u *Upgrade, round int32, since, at time.Time, earliest map[int]node.RoundVote, voted map[int]map[node.VoteType]bool) {
 	l := &Live{
 		Height: u.Height, ProposalID: u.ProposalID, Name: u.Name,
+		Kind: u.Kind, Reason: u.Reason, ScheduledBy: u.ScheduledBy,
 		Round: round, HaltedSince: since, CheckedAt: at,
 		Members: make([]LiveMember, len(w.members)),
 	}

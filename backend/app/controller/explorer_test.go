@@ -470,11 +470,23 @@ func TestBlockByHeight(t *testing.T) {
 			"denom": "ubze", "amount": "9", "symbol": null, "exponent": null}],
 		"transfers_count": 3,
 		"events": [{"seq": 7, "type": "bze.tradebin.OrderExecutedEvent", "attrs": {"id": "1"}}],
-		"events_next_cursor": null
+		"events_next_cursor": null, "upgrade": null
 	}`, rec.Body.String())
 	assert.Equal(t, [][2]int64{{25000894, -1}}, f.gotTransfers, "the block's own transfers")
 	assert.Equal(t, int64(-1), f.gotAfter)
 	assert.Equal(t, controller.BlockEventsInline+1, f.gotLimit)
+}
+
+// The block an emergency halt was planned at names it.
+func TestBlockOfAnEmergencyHalt(t *testing.T) {
+	reason, signer := "exploit", "bze1guardian"
+	f := &fakeReader{block: &repository.Block{BlockSummary: repository.BlockSummary{Height: 50},
+		Upgrade: &repository.BlockUpgrade{Kind: "emergency", Name: "emergency-halt-50", Reason: &reason, ScheduledBy: &signer}}}
+	rec := get(t, newAPI(f), "/blocks/50")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	body := decodeRaw(t, rec)
+	assert.JSONEq(t, `{"kind": "emergency", "name": "emergency-halt-50", "proposal_id": null, "reason": "exploit",
+		"scheduled_by": "bze1guardian", "scheduled_tx_hash": null}`, string(body["upgrade"]))
 }
 
 func TestBlockTransfersPageOwnRowsFirst(t *testing.T) {

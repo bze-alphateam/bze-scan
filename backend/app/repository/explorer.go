@@ -70,6 +70,21 @@ type Block struct {
 	// transactions' and the block's own.
 	TransfersCount int64
 	Transactions   []BlockTx
+	// Upgrade is the upgrade planned at the block's height (the chain
+	// halted after deciding it), nil when none or when an emergency halt
+	// replaced the plan.
+	Upgrade *BlockUpgrade
+}
+
+// BlockUpgrade is the upgrade planned at a block's height, as the block
+// page names it.
+type BlockUpgrade struct {
+	Kind            string
+	Name            string
+	ProposalID      *int64
+	Reason          *string
+	ScheduledBy     *string
+	ScheduledTxHash *string
 }
 
 // BlockTx is a transaction as the block page lists it.
@@ -256,6 +271,16 @@ func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("block %d transactions: %w", height, err)
+	}
+	var up BlockUpgrade
+	err = r.db.QueryRow(ctx, `SELECT kind, name, proposal_id, reason, scheduled_by, scheduled_tx_hash
+		FROM explorer.upgrades WHERE height = $1 AND superseded_by_height IS NULL`, height).
+		Scan(&up.Kind, &up.Name, &up.ProposalID, &up.Reason, &up.ScheduledBy, &up.ScheduledTxHash)
+	switch {
+	case err == nil:
+		b.Upgrade = &up
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, fmt.Errorf("block %d upgrade: %w", height, err)
 	}
 	return &b, nil
 }

@@ -355,3 +355,40 @@ func TestWatchLiveShowsTheVotesOfTheCurrentRound(t *testing.T) {
 	_, ok = e.watch.Live()
 	assert.False(t, ok)
 }
+
+// An emergency halt (no proposal) is watched like a governance upgrade:
+// armed while the node sits at H-1 or H, the votes read at H+1.
+func TestWatchArmsForAnEmergencyHalt(t *testing.T) {
+	store := newMemStore(99)
+	store.planned = []upgrades.Upgrade{{Height: planHeight, Name: "emergency-halt-100", Kind: upgrades.KindEmergency,
+		Reason: "exploit under way", ScheduledBy: "bze1guardian"}}
+	require.NoError(t, store.Discover(context.Background()))
+	n := &fakeWatchNode{}
+	e := startWatch(t, store, n)
+
+	n.halted(planHeight-1, base.Add(time.Minute))
+	n.votes(map[int]time.Time{0: base.Add(55 * time.Second)})
+	e.step(t, base.Add(time.Minute))
+	assert.Equal(t, []int64{haltHeight}, e.members.calls, "the set at H+1")
+	assert.Equal(t, []string{"AAAA halt_vote 10:01:00", "BBBB -", "CCCC -", "DDDD -"}, store.recovery(planHeight))
+	live, ok := e.watch.Live()
+	require.True(t, ok)
+	assert.Equal(t, planHeight, live.Height)
+	assert.Nil(t, live.ProposalID)
+	assert.Equal(t, upgrades.KindEmergency, live.Kind)
+	assert.Equal(t, "exploit under way", live.Reason)
+	assert.Equal(t, "bze1guardian", live.ScheduledBy)
+	assert.Equal(t, "emergency-halt-100", live.Name)
+
+	// The restart binary replayed H: still armed. B votes.
+	n.halted(planHeight, base.Add(2*time.Minute))
+	n.votes(map[int]time.Time{1: base.Add(118 * time.Second)})
+	e.step(t, base.Add(2*time.Minute))
+	assert.Equal(t, []string{"AAAA halt_vote 10:01:00", "BBBB halt_vote 10:02:00", "CCCC -", "DDDD -"}, store.recovery(planHeight))
+
+	// H+1 decided: disarmed.
+	n.halted(haltHeight, base.Add(3*time.Minute))
+	e.step(t, base.Add(3*time.Minute))
+	_, ok = e.watch.Live()
+	assert.False(t, ok)
+}

@@ -22,19 +22,30 @@ type ProposalUpgrade struct {
 // Height (the old binary stops after deciding that block, consensus waits
 // at Height+1), and every validator of the set at Height+1 with when it
 // came back. ComputedAt is null while the commits after the upgrade are
-// still being read; WindowEndHeight is the last height read.
+// still being read; WindowEndHeight is the last height read. Kind is
+// "governance" (a passed software upgrade proposal, ProposalID) or
+// "emergency" (an emergency halt, chain v8.3.0: no proposal, ProposalID
+// null; Reason, ScheduledBy and ScheduledTxHash say who scheduled it why,
+// the transaction null when governance ran it). SupersededByHeight is set
+// on a governance upgrade an emergency halt at that height replaced on
+// chain: the chain never halted for it.
 type Upgrade struct {
-	Height          int64           `json:"height"`
-	ProposalID      int64           `json:"proposal_id"`
-	Name            string          `json:"name"`
-	HaltTime        *time.Time      `json:"halt_time"`
-	ResumeTime      *time.Time      `json:"resume_time"`
-	DowntimeSeconds *int64          `json:"downtime_seconds"`
-	Watched         bool            `json:"watched"`
-	ActiveSetSize   *int            `json:"active_set_size"`
-	WindowEndHeight *int64          `json:"window_end_height"`
-	ComputedAt      *time.Time      `json:"computed_at"`
-	Members         []UpgradeMember `json:"members"`
+	Height             int64           `json:"height"`
+	ProposalID         *int64          `json:"proposal_id"`
+	Name               string          `json:"name"`
+	Kind               string          `json:"kind"`
+	Reason             *string         `json:"reason"`
+	ScheduledBy        *string         `json:"scheduled_by"`
+	ScheduledTxHash    *string         `json:"scheduled_tx_hash"`
+	SupersededByHeight *int64          `json:"superseded_by_height"`
+	HaltTime           *time.Time      `json:"halt_time"`
+	ResumeTime         *time.Time      `json:"resume_time"`
+	DowntimeSeconds    *int64          `json:"downtime_seconds"`
+	Watched            bool            `json:"watched"`
+	ActiveSetSize      *int            `json:"active_set_size"`
+	WindowEndHeight    *int64          `json:"window_end_height"`
+	ComputedAt         *time.Time      `json:"computed_at"`
+	Members            []UpgradeMember `json:"members"`
 }
 
 // UpgradeMember is a validator of the set at the upgrade's halt, sorted by
@@ -74,7 +85,9 @@ func NewProposalUpgrade(u *repository.ProposalUpgrade) *ProposalUpgrade {
 // NewUpgrade maps an upgrade and its members.
 func NewUpgrade(u *repository.Upgrade, members []repository.UpgradeMember) Upgrade {
 	out := Upgrade{
-		Height: u.Height, ProposalID: u.ProposalID, Name: u.Name, HaltTime: utc(u.HaltTime), ResumeTime: utc(u.ResumeTime),
+		Height: u.Height, ProposalID: u.ProposalID, Name: u.Name, Kind: u.Kind, Reason: u.Reason,
+		ScheduledBy: u.ScheduledBy, ScheduledTxHash: u.ScheduledTxHash, SupersededByHeight: u.SupersededByHeight,
+		HaltTime: utc(u.HaltTime), ResumeTime: utc(u.ResumeTime),
 		DowntimeSeconds: downtime(u.HaltTime, u.ResumeTime), Watched: u.Watched, ActiveSetSize: u.ActiveSetSize,
 		WindowEndHeight: u.WindowEndHeight, ComputedAt: utc(u.ComputedAt),
 		Members: make([]UpgradeMember, 0, len(members)),

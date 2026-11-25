@@ -80,7 +80,7 @@ func newMemStore(tip int64) *memStore {
 	return &memStore{
 		upgrades: map[int64]*upgrades.Upgrade{}, computed: map[int64]bool{}, setSize: map[int64]int{},
 		rows: map[int64]map[string]*row{}, tip: tip,
-		planned: []upgrades.Upgrade{{Height: planHeight, ProposalID: 48, Name: "v9.0.0"}},
+		planned: []upgrades.Upgrade{{Height: planHeight, ProposalID: ptr(int64(48)), Name: "v9.0.0", Kind: upgrades.KindGovernance}},
 	}
 }
 
@@ -322,3 +322,5 @@ func (l *countingLimiter) Wait(ctx context.Context) error {
 }
 
 var errDown = fmt.Errorf("commit: %w: HTTP 503", node.ErrUnavailable)
+
+func ptr[T any](v T) *T { return &v }

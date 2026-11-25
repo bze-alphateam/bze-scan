@@ -31,6 +31,15 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/activeset"
 )
 
+// Kinds of upgrade.
+const (
+	// KindGovernance: a passed software_upgrade proposal planned it.
+	KindGovernance = "governance"
+	// KindEmergency: an emergency halt (x/guardian MsgHaltChain, chain
+	// v8.3.0) scheduled it at the next block; no proposal is behind it.
+	KindEmergency = "emergency"
+)
+
 // Sources of a member's back_time.
 const (
 	SourceHaltVote = "halt_vote"
@@ -40,9 +49,15 @@ const (
 // Upgrade is an explorer.upgrades row.
 type Upgrade struct {
 	// Height is the plan height U.
-	Height     int64
-	ProposalID int64
+	Height int64
+	// ProposalID is nil for an emergency halt.
+	ProposalID *int64
 	Name       string
+	// Kind is KindGovernance or KindEmergency; Reason and ScheduledBy are
+	// an emergency halt's.
+	Kind        string
+	Reason      string
+	ScheduledBy string
 	// HaltTime and ResumeTime are nil until the commits of U+1 and U+2
 	// were read.
 	HaltTime   *time.Time
@@ -104,9 +119,11 @@ type Scan struct {
 // Store reads and writes the upgrades and their members.
 type Store interface {
 	// Discover adds the passed software upgrades it does not hold yet, by
-	// the plan of their message.
+	// the plan of their message, and marks the ones an emergency halt
+	// replaced on chain.
 	Discover(ctx context.Context) error
-	// Pending lists the upgrades not computed yet, by height.
+	// Pending lists the upgrades not computed yet, by height, without the
+	// superseded ones.
 	Pending(ctx context.Context) ([]Upgrade, error)
 	// Upgrade returns the upgrade planned at height, false when none.
 	Upgrade(ctx context.Context, height int64) (Upgrade, bool, error)
