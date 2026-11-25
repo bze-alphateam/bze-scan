@@ -16,13 +16,16 @@ var ActivityCategories = []string{
 // transaction (tx_hash set) or one block's own events (tx_hash null) did
 // to the address.
 type Activity struct {
-	Time     time.Time `json:"time"`
-	Height   int64     `json:"height"`
-	TxHash   *string   `json:"tx_hash"`
-	Kind     string    `json:"kind"`
-	Category string    `json:"category"`
-	IsSigner bool      `json:"is_signer"`
-	Success  bool      `json:"success"`
+	Time   time.Time `json:"time"`
+	Height int64     `json:"height"`
+	// TxIndex is the transaction's position in its block, -1 for a block's
+	// own row: (height, tx_index) orders the list.
+	TxIndex  int64   `json:"tx_index"`
+	TxHash   *string `json:"tx_hash"`
+	Kind     string  `json:"kind"`
+	Category string  `json:"category"`
+	IsSigner bool    `json:"is_signer"`
+	Success  bool    `json:"success"`
 	// Counterparty is null when there is not exactly one.
 	Counterparty *Counterparty `json:"counterparty"`
 	// Deltas is the net balance change per denom, the fee included.
@@ -64,7 +67,7 @@ func ActivityDenoms(rows []repository.Activity) []string {
 // NewActivity maps an activity row, with the denoms' display data.
 func NewActivity(a repository.Activity, denoms map[string]repository.Denom) Activity {
 	out := Activity{
-		Time: a.Time.UTC(), Height: a.Height, TxHash: a.TxHash, Kind: a.Kind, Category: a.Category,
+		Time: a.Time.UTC(), Height: a.Height, TxIndex: a.TxIndex, TxHash: a.TxHash, Kind: a.Kind, Category: a.Category,
 		IsSigner: a.IsSigner, Success: a.Success, Deltas: balances(coinsIn(a.Deltas), denoms),
 		MsgTypes: nonNil(a.MsgTypes), Details: jsonOrNull(a.Details),
 	}

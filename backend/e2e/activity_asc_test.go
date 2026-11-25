@@ -29,12 +29,21 @@ func ascPages(t *testing.T, base, address, start, filters string, limit int) [][
 	t.Helper()
 	list := fmt.Sprintf("%s/accounts/%s/activity?order=asc&limit=%d%s", base, address, limit, filters)
 	var pages [][]dto.Activity
+	var last *dto.Activity
 	for next := list + start; ; {
 		r := fetch(t, next)
 		require.Equal(t, http.StatusOK, r.status, string(r.body))
 		assert.Equal(t, "no-store", r.header.Get("Cache-Control"))
 		page := into[dto.List[dto.Activity]](t, r)
 		pages = append(pages, page.Items)
+		for i := range page.Items {
+			a := &page.Items[i]
+			if last != nil {
+				require.True(t, a.Height > last.Height || a.Height == last.Height && a.TxIndex > last.TxIndex,
+					"(height, tx_index) strictly ascending: %d/%d after %d/%d", a.Height, a.TxIndex, last.Height, last.TxIndex)
+			}
+			last = a
+		}
 		if page.NextCursor == nil {
 			return pages
 		}
