@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -631,6 +632,10 @@ func (h *ExplorerController) searchNames(ctx context.Context, q string) ([]dto.S
 		out = append(out, dto.SearchResult{Type: dto.ResultValidator, ID: v.OperatorAddress, Label: v.Moniker})
 	}
 	for _, l := range labels {
+		if id, ok := daoLabelID(l); ok {
+			out = append(out, dto.SearchResult{Type: dto.ResultDao, ID: id, Label: l.Name})
+			continue
+		}
 		out = append(out, dto.SearchResult{Type: dto.ResultAccount, ID: l.Address, Label: l.Name})
 	}
 	return out, nil
@@ -715,4 +720,20 @@ func bech32Address(s string) (string, string, bool) {
 		return "", "", false
 	}
 	return hrp, strings.ToLower(s), true
+}
+
+// daoLabelRe reads the id off the label the daos set writes for a DAO's
+// treasury account: "DAO #<id>" or "DAO #<id> · <name>".
+var daoLabelRe = regexp.MustCompile(`^DAO #([0-9]+)`)
+
+// daoLabelID returns the DAO id a label of kind dao names.
+func daoLabelID(l repository.Label) (string, bool) {
+	if l.Kind != "dao" {
+		return "", false
+	}
+	m := daoLabelRe.FindStringSubmatch(l.Name)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }

@@ -80,6 +80,10 @@ type Entities struct {
 	// EmergencyHalts are the upgrades rows of kind emergency the heights'
 	// ChainHaltScheduledEvents schedule (chain v8.3.0).
 	EmergencyHalts []EmergencyHalt
+	// Daos and DaoEvents are the daos rows of the heights' DAO creations and
+	// the dao_events rows of every DAO change (chain v8.3.0).
+	Daos      []DaoCreated
+	DaoEvents []DaoEvent
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -281,6 +285,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	blockTokenEvents(t.log, ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	emergencyHalts(ents, b, "", in.Results.FinalizeBlockEvents)
+	blockDaoEvents(ents, b, in.Results.FinalizeBlockEvents)
 	var queue []queued
 	txFills := 0 // the transactions' fills so far, for their seqs
 	for i, raw := range in.Block.Txs {
@@ -393,6 +398,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int,
 		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
 		// Every event of the transaction: an authz MsgExec runs the halt too.
 		emergencyHalts(ents, b, tx.Hash, res.Events)
+		txDaoEvents(ents, b, i, tx.Hash, decoded.Msgs, res.Events)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

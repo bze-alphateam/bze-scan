@@ -505,6 +505,8 @@ const (
 	ResultTransaction = "transaction"
 	ResultAccount     = "account"
 	ResultValidator   = "validator"
+	// ResultDao is a DAO (chain v8.3.0); its id is the DAO's number.
+	ResultDao = "dao"
 )
 
 // SearchResponse is GET /api/v1/search.

@@ -19,6 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/chainstate"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/channels"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/dailystats"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/daos"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/denoms"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/holders"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/nonvoters"
@@ -179,6 +181,7 @@ func NewStateSync(ctx context.Context, cfg *config.Config, codec *chain.Codec, a
 			Node:   localNode,
 			Store:  paramsnap.NewPGStore(pool),
 		}, 0),
+		daos.New(daos.Deps{Client: daotypes.NewQueryClient(conn), Store: daos.NewPGStore(pool)}, 0),
 		holders.New(holders.Deps{Bank: bank, Store: holders.NewPGStore(pool)}, 0),
 		orders.New(orders.Deps{Node: localNode, Tradebin: tradebin, Store: orders.NewPGStore(pool)}, 0),
 	)

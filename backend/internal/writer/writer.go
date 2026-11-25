@@ -550,7 +550,11 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups), nil
+	daos, err := daoStatements(top, ents, mode)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups, daos), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

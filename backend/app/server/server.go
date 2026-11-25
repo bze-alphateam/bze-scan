@@ -46,6 +46,12 @@ type Deps struct {
 	// Accounts reads the account rows and labels; nil leaves
 	// /api/v1/accounts out.
 	Accounts controller.AccountReader
+	// Daos reads the DAO tables; nil leaves the /daos routes out. DaoState
+	// and DaoTreasury read the chain's DAO and the DAO's balances live; nil
+	// answers every DAO's live part unavailable.
+	Daos        controller.DaoReader
+	DaoState    controller.DaoState
+	DaoTreasury controller.DaoTreasury
 	// AccountState reads accounts live from the node; nil answers every
 	// account with the live part unavailable.
 	AccountState controller.AccountState
@@ -190,6 +196,12 @@ func New(deps Deps) *echo.Echo {
 		if deps.OpenOrders != nil {
 			api.GET("/accounts/:address/open-orders", accounts.OpenOrders)
 		}
+	}
+	if deps.Daos != nil {
+		daos := controller.NewDaoController(deps.Daos, deps.DaoState, deps.DaoTreasury)
+		api.GET("/daos", daos.Daos)
+		api.GET("/daos/:id", daos.Dao)
+		api.GET("/daos/:id/history", daos.DaoHistory)
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)

@@ -20,7 +20,7 @@ const (
 // order ensure_partitions creates them.
 var PartitionedTables = []string{
 	"blocks", "transactions", "messages", "transfers",
-	"account_activity", "block_events", "order_fills", "swaps",
+	"account_activity", "block_events", "order_fills", "swaps", "dao_events",
 }
 
 // PartitionLower is the lower bound (inclusive) of the partition holding

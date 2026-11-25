@@ -1,0 +1,85 @@
+{
+    "daos": [
+        {
+            "id": "1",
+            "address": "bze1fsv8555ywhurwvf60srv04656erguqs5z9e0x0a0x426kpnn445sgck0e5",
+            "admin": "bze1fsv8555ywhurwvf60srv04656erguqs5z9e0x0a0x426kpnn445sgck0e5",
+            "pending_admin": "",
+            "type": "DAO_TYPE_STATIC_LIST",
+            "name": "Founders",
+            "description": "The founding members",
+            "config": {
+                "min_quorum": "0.400000000000000000",
+                "threshold": "0.500000000000000000",
+                "voting_period": "259200s",
+                "allow_expedite": true,
+                "expedited_period": "86400s",
+                "expedite_quorum": "0.600000000000000000",
+                "expedite_threshold": "0.700000000000000000",
+                "open_submission": false,
+                "proposal_cost": {
+                    "denom": "ubze",
+                    "amount": "5000000"
+                },
+                "proposal_deposit": {
+                    "denom": "ubze",
+                    "amount": "100000000"
+                },
+                "deposit_refund_policy": "ONLY_PASSED",
+                "cost_destination": "TREASURY",
+                "kept_deposit_destination": "BURN"
+            },
+            "members": [
+                "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+                "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
+            ],
+            "created_at": "1700000000",
+            "admin_seq": "0",
+            "pending_admin_seq": "0"
+        },
+        {
+            "id": "2",
+            "address": "bze1xv5cjjf4lmfn2akksfel9e5q3kuufd62qugncgswz75nr8mr3qysyz5k8w",
+            "admin": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+            "pending_admin": "",
+            "type": "DAO_TYPE_STAKE",
+            "name": "Stakers club",
+            "description": "Stakers of BZE",
+            "config": {
+                "min_quorum": "0.400000000000000000",
+                "threshold": "0.500000000000000000",
+                "voting_period": "259200s",
+                "allow_expedite": true,
+                "expedited_period": "86400s",
+                "expedite_quorum": "0.600000000000000000",
+                "expedite_threshold": "0.700000000000000000",
+                "open_submission": false,
+                "proposal_cost": {
+                    "denom": "ubze",
+                    "amount": "5000000"
+                },
+                "proposal_deposit": {
+                    "denom": "ubze",
+                    "amount": "100000000"
+                },
+                "deposit_refund_policy": "ONLY_PASSED",
+                "cost_destination": "TREASURY",
+                "kept_deposit_destination": "BURN"
+            },
+            "electorate": {
+                "sr_ids": [
+                    "sr-1",
+                    "sr-gone"
+                ],
+                "dr_denom": "ubze"
+            },
+            "created_at": "1700100000",
+            "admin_seq": "1",
+            "pending_admin_seq": "0"
+        }
+    ],
+    "pagination": {
+        "next_key": null,
+        "total": "2"
+    }
+}

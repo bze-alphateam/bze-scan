@@ -81,6 +81,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"registry_asset_list",
 		"ibc_channel_confirmation",
 		"activity_deltas_index", "activity_incoming_index", "order_book_tx_events", "merged_orders", "emergency_halts",
+		"daos",
 	}, idents)
 }
 
@@ -117,13 +118,15 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 	assert.Equal(t, all, partitioned)
 	_, swaps := createdTables(t, "000023_pool_swaps.up.sql")
 	assert.Equal(t, []string{"swaps"}, swaps)
-	assert.Equal(t, migrations.PartitionedTables, append(partitioned, swaps...))
+	_, daoEvents := createdTables(t, "000034_daos.up.sql")
+	assert.Equal(t, []string{"dao_events"}, daoEvents)
+	assert.Equal(t, migrations.PartitionedTables, append(append(partitioned, swaps...), daoEvents...))
 	for _, name := range []string{"000004_state_tables.up.sql", "000005_operational.up.sql"} {
 		_, partitioned := createdTables(t, name)
 		assert.Empty(t, partitioned, name)
 	}
 
-	for _, name := range []string{"000006_functions.up.sql", "000023_pool_swaps.down.sql", "000023_pool_swaps.up.sql"} {
+	for _, name := range []string{"000006_functions.up.sql", "000023_pool_swaps.down.sql", "000023_pool_swaps.up.sql", "000034_daos.down.sql", "000034_daos.up.sql"} {
 		fn := readMigration(t, name)
 		m := regexp.MustCompile(`ARRAY\[([^\]]+)\]`).FindStringSubmatch(fn)
 		require.NotNil(t, m, name)
@@ -132,8 +135,12 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 			listed = append(listed, strings.Trim(strings.TrimSpace(q), "'"))
 		}
 		want := migrations.PartitionedTables
-		if name != "000023_pool_swaps.up.sql" {
-			want = want[:len(want)-1] // before the swaps table
+		switch name {
+		case "000034_daos.up.sql":
+		case "000023_pool_swaps.up.sql", "000034_daos.down.sql":
+			want = want[:len(want)-1] // before the dao_events table
+		default:
+			want = want[:len(want)-2] // before the swaps table
 		}
 		assert.Equal(t, want, listed, name)
 		assert.Contains(t, fn, "generate_series((p_from / 1000000) * 1000000, p_to, 1000000)", name)
@@ -144,7 +151,7 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 // TestDownMigrationsDropWhatUpCreates checks that every table an up file
 // creates is dropped by its down file.
 func TestDownMigrationsDropWhatUpCreates(t *testing.T) {
-	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps", "000024_candles"} {
+	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps", "000024_candles", "000034_daos"} {
 		all, _ := createdTables(t, base+".up.sql")
 		down := readMigration(t, base+".down.sql")
 		for _, table := range all {
