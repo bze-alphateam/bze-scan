@@ -141,6 +141,7 @@ func TestActivityAscKeepsTheKeysetInTheText(t *testing.T) {
 	assert.Contains(t, sql, "AND (height, tx_index) > ($4::bigint, $5::integer)")
 	assert.Contains(t, sql, "AND height >= $4::bigint\n\t\t\t  AND (height", "a plain bound the partitions are pruned by")
 	assert.NotContains(t, sql, "IS NULL OR (height")
+	assert.NotContains(t, sql, "$4::bigint IS NULL")
 	assert.NotContains(t, sql, "time >=")
 	assert.Contains(t, sql, "ORDER BY height ASC, tx_index ASC\n\t\t\tLIMIT $3) a")
 	assert.Contains(t, sql, "ORDER BY a.height ASC, a.tx_index ASC")

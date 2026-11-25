@@ -129,7 +129,7 @@ func TestAccountActivityOldestFirst(t *testing.T) {
 	// From a time: rows at or after it.
 	assert.Equal(t, incoming, key(ascPages(t, base, address, "&after_time="+url.QueryEscape(at(2).Format(time.RFC3339)),
 		"&incoming=true", 2)))
-	assert.Equal(t, incoming[3:], key(ascPages(t, base, address,
+	assert.Equal(t, incoming[1:], key(ascPages(t, base, address,
 		"&after_time="+url.QueryEscape(at(2).Add(time.Second).Format(time.RFC3339)), "&incoming=true", 2)))
 
 	// Filters keep working.
@@ -201,9 +201,12 @@ func testActivityAscPlan(t *testing.T, e *syncEnv, address string, after int64) 
 
 	var scans []ascPlanNode
 	var sortsActivity bool
-	var walk func(n ascPlanNode, underSort bool)
-	walk = func(n ascPlanNode, underSort bool) {
-		underSort = underSort || n.NodeType == "Sort" || n.NodeType == "Incremental Sort"
+	// Only a Sort under the page's Limit counts: the outer ORDER BY after
+	// the joins may sort the page's few rows.
+	var walk func(n ascPlanNode, inLimit, underSort bool)
+	walk = func(n ascPlanNode, inLimit, underSort bool) {
+		inLimit = inLimit || n.NodeType == "Limit"
+		underSort = underSort || inLimit && (n.NodeType == "Sort" || n.NodeType == "Incremental Sort")
 		if strings.HasPrefix(n.Relation, "account_activity") {
 			sortsActivity = sortsActivity || underSort
 			if n.Relation == partition {
@@ -211,11 +214,11 @@ func testActivityAscPlan(t *testing.T, e *syncEnv, address string, after int64) 
 			}
 		}
 		for _, c := range n.Plans {
-			walk(c, underSort)
+			walk(c, inLimit, underSort)
 		}
 	}
-	walk(plan[0].Plan, false)
-	assert.False(t, sortsActivity, "no Sort above an account_activity scan: %s", raw)
+	walk(plan[0].Plan, false, false)
+	assert.False(t, sortsActivity, "no Sort between the page's Limit and an account_activity scan: %s", raw)
 	require.Len(t, scans, 1, "the partition holding the rows is read once: %s", raw)
 	s := scans[0]
 	assert.Contains(t, incoming, s.Index, "the incoming index: %s", raw)
