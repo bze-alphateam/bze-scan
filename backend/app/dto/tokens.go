@@ -257,7 +257,7 @@ func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *s
 		Website: t.Website, Markets: nonNil(t.Markets), PriceUpdatedAt: utc(t.PriceUpdatedAt),
 		Metadata: jsonOrNull(t.Metadata), UpdatedAt: t.UpdatedAt.UTC(),
 		Events: make([]TokenEvent, 0, len(events)), EventsNextCursor: eventsNext,
-		Transfers24h: TransferVolume{Count: volume.Count, Amount: volume.Amount},
+		Transfers24h: TransferVolume{Count: volume.Count, Amount: volume.Amount}, RateLimits: []RateLimit{},
 	}
 	for _, e := range events {
 		out.Events = append(out.Events, NewTokenEvent(e))

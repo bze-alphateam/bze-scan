@@ -202,7 +202,10 @@ func New(deps Deps) *echo.Echo {
 		}
 	}
 	if deps.Tokens != nil {
-		tokens := controller.NewTokenController(deps.Tokens).WithRateLimits(rateLimits)
+		tokens := controller.NewTokenController(deps.Tokens)
+		if rateLimits != nil {
+			tokens.WithRateLimits(rateLimits)
+		}
 		api.GET("/tokens", tokens.Tokens)
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)

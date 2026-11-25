@@ -7,13 +7,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"cosmossdk.io/math"
+	ratelimittypes "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/types"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/controller"
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
@@ -28,6 +31,8 @@ type fakeLimits struct {
 }
 
 func (f fakeLimits) Snapshot(context.Context) (*ratelimits.Snapshot, error) { return f.snap, f.err }
+
+func (f fakeLimits) Peek() (*ratelimits.Snapshot, bool) { return f.snap, f.snap != nil }
 
 type fakeCatalog struct {
 	briefs   map[string]repository.DenomBrief
@@ -171,4 +176,65 @@ func TestTokenRateLimitsAreEmptyWhenThereAreNoneOrTheNodeFails(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
 		assert.JSONEq(t, "[]", string(raw["rate_limits"]), name)
 	}
+}
+
+// countingQuery is the node's rate limit query, counting its calls.
+type countingQuery struct {
+	calls atomic.Int32
+}
+
+func (c *countingQuery) AllRateLimits(context.Context, *ratelimittypes.QueryAllRateLimitsRequest, ...grpc.CallOption) (*ratelimittypes.QueryAllRateLimitsResponse, error) {
+	c.calls.Add(1)
+	return &ratelimittypes.QueryAllRateLimitsResponse{RateLimits: []ratelimittypes.RateLimit{{
+		Path:  &ratelimittypes.Path{Denom: honeyDenom, ChannelOrClientId: "channel-3"},
+		Quota: &ratelimittypes.Quota{MaxPercentSend: math.NewInt(2), MaxPercentRecv: math.NewInt(2), DurationHours: 24},
+		Flow:  &ratelimittypes.Flow{Inflow: math.NewInt(0), Outflow: math.NewInt(5), ChannelValue: math.NewInt(1000)},
+	}}}, nil
+}
+
+func (c *countingQuery) AllBlacklistedDenoms(context.Context, *ratelimittypes.QueryAllBlacklistedDenomsRequest, ...grpc.CallOption) (*ratelimittypes.QueryAllBlacklistedDenomsResponse, error) {
+	return &ratelimittypes.QueryAllBlacklistedDenomsResponse{}, nil
+}
+
+func TestTokenPageNeverWaitsOnTheNode(t *testing.T) {
+	q := &countingQuery{}
+	service := ratelimits.New(q, time.Hour, nil)
+	cat := &fakeCatalog{}
+	f := &fakeTokens{token: honeyToken(), events: tokenEvents(1)}
+	e := echo.New()
+	e.HTTPErrorHandler = middleware.ErrorHandler
+	limits := controller.NewRateLimitController(service, cat)
+	tokens := controller.NewTokenController(f).WithRateLimits(limits)
+	e.GET("/api/v1/tokens/:denom", tokens.Token)
+	e.GET("/ibc/rate-limits", limits.RateLimits)
+	path := "/api/v1/tokens/" + url.PathEscape(honeyDenom)
+
+	// Cold cache: an empty list, and the node is not called.
+	rec := get(t, e, path)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Empty(t, decode[dto.Token](t, rec).RateLimits)
+	assert.JSONEq(t, "[]", rawField(t, rec, "rate_limits"))
+	assert.Zero(t, q.calls.Load())
+
+	// The endpoint reads the node once; the token page then has the limits
+	// and makes no further call.
+	rec = get(t, e, "/ibc/rate-limits")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.EqualValues(t, 1, q.calls.Load())
+	for range 3 {
+		rec = get(t, e, path)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		got := decode[dto.Token](t, rec).RateLimits
+		require.Len(t, got, 1)
+		assert.Equal(t, "channel-3", got[0].ChannelID)
+		assert.Equal(t, "15", got[0].Send.Remaining)
+	}
+	assert.EqualValues(t, 1, q.calls.Load())
+}
+
+func rawField(t *testing.T, rec *httptest.ResponseRecorder, key string) string {
+	t.Helper()
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	return string(raw[key])
 }

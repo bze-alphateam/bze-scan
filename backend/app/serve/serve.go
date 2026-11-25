@@ -161,13 +161,14 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	// The IBC rate limits route (and the tokens' rate_limits) read them
 	// live; without a gRPC address they are left out.
 	var rateLimits controller.RateLimitReader
+	var warmRateLimits component
 	if cfg.NodeGRPCAddr != "" {
 		rl, closeRateLimits, err := NewRateLimits(cfg, codec)
 		if err != nil {
 			return err
 		}
 		defer closeRateLimits()
-		rateLimits = rl
+		rateLimits, warmRateLimits = rl, component{name: "rate limits", run: rl.Run}
 	}
 
 	// The open orders route reads the orders table when its history is
@@ -303,6 +304,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		{name: "status checker", run: checker.Run},
 		{name: "stake movements", run: flows.Run},
 		{name: "asset list", run: assetList.Run},
+	}
+	if warmRateLimits.run != nil {
+		components = append(components, warmRateLimits)
 	}
 	if coverage.run != nil {
 		components = append(components, coverage)
