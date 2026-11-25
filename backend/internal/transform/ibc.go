@@ -73,7 +73,8 @@ const ibcErrorPrefix = "ibccallbackerror-"
 
 // Reasons of the rate limiting module's transfer_denied event, and its code
 // in the acknowledgement of a channel closed by the guardian
-// (txfeecollector ErrChannelClosed, 1140).
+// (txfeecollector ErrChannelClosed, 1140; the guardian's ErrInvalidChannel
+// shares the code but is message validation only and never reaches a recv ack).
 const (
 	reasonRateLimitExceeded = "rate_limit_exceeded"
 	reasonBlacklistedDenom  = "blacklisted_denom"
@@ -219,37 +220,47 @@ func receivedTransfer(ev node.Event, events []node.Event) (*IBCTransfer, error) 
 	if err != nil {
 		return nil, err
 	}
+	// A transfer the module accepted is received, whatever else the message emitted.
+	for _, e := range events {
+		if s, ok := e.Get("success"); ok && e.Type == evFungibleToken && s == "true" {
+			row.Status = IBCReceived
+			return row, nil
+		}
+	}
 	row.Status = IBCRejected
 	plain := make([]node.Event, len(events))
 	for i, e := range events {
 		plain[i] = withoutErrorPrefix(e)
 	}
-	// A refusal BZE names itself wins over the error text of the packet.
+	// A refusal BZE names wins over the error text of the packet.
 	for _, e := range plain {
 		if cause := refusalCause(e); cause != "" {
 			row.AckError = cause
 			return row, nil
 		}
 	}
+	// The acknowledgement's error text, else the transfer module's own error.
+	var ackText, moduleErr string
 	for _, e := range plain {
 		switch e.Type {
 		case evFungibleToken:
-			if s, ok := e.Get("success"); ok && s == "true" {
-				row.Status = IBCReceived
-				return row, nil
-			}
-			if msg, ok := e.Get("error"); ok && row.AckError == "" {
-				row.AckError = msg
+			if msg, ok := e.Get("error"); ok && moduleErr == "" {
+				moduleErr = msg
 			}
 		case evWriteAck:
-			if msg := ackError(e); msg != "" && row.AckError == "" {
-				row.AckError = msg
+			if msg := ackError(e); msg != "" && ackText == "" {
+				ackText = msg
 			}
 		}
 	}
-	// A closed channel refuses with an error acknowledgement and no event.
-	if strings.HasPrefix(row.AckError, ackChannelClosedPrefix) {
+	switch {
+	case strings.HasPrefix(ackText, ackChannelClosedPrefix):
+		// A closed channel refuses with an error acknowledgement and no event.
 		row.AckError = IBCChannelClosed
+	case ackText != "":
+		row.AckError = ackText
+	default:
+		row.AckError = moduleErr
 	}
 	return row, nil
 }

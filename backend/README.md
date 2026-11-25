@@ -1491,7 +1491,7 @@ packets on port `transfer` only):
 | `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `rate_limit_exceeded` (chain v8.3.0, ack code 4) | `in`, `rejected`, `ack_error` "rate limit exceeded" |
 | `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `blacklisted_denom` (chain v8.3.0, ack code 7) | `in`, `rejected`, `ack_error` "blocked denom" |
 | `MsgRecvPacket` | `recv_packet` and no refusal event, error ack `ABCI code: 1140:` (a channel the guardian closed, chain v8.3.0) | `in`, `rejected`, `ack_error` "channel closed" |
-| `MsgRecvPacket` | `recv_packet` + any other error ack | `in`, `rejected`, `ack_error` the error of the transfer module's `fungible_token_packet`, else of the acknowledgement |
+| `MsgRecvPacket` | `recv_packet` + any other error ack | `in`, `rejected`, `ack_error` the acknowledgement's error text, else the transfer module's `fungible_token_packet` error |
 
 When the IBC application answers with an error acknowledgement, ibc-go prefixes
 the type and every attribute key of each event the application emitted with

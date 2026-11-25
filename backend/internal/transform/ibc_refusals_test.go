@@ -1,6 +1,7 @@
 package transform_test
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -35,6 +36,13 @@ func plainEvent(typ string, kv ...string) node.Event {
 // v8.3.0 chain: the code only) and the events the refusing module emitted.
 func refusedInbound(t *testing.T, ackCode string, events ...node.Event) transform.Input {
 	t.Helper()
+	return refusedInboundAs(t, ackCode, true, events...)
+}
+
+// refusedInboundAs writes the error ack as ibc-go v10 does (packet_ack_hex
+// only), or under the legacy packet_ack key alone.
+func refusedInboundAs(t *testing.T, ackCode string, hexOnly bool, events ...node.Event) transform.Input {
+	t.Helper()
 	in := fetchInput(t, fakenode.New(t), 24999209)
 	recvTx := &in.Results.TxsResults[0]
 	var writeAck node.Event
@@ -46,11 +54,18 @@ func refusedInbound(t *testing.T, ackCode string, events ...node.Event) transfor
 	require.NotEmpty(t, writeAck.Type)
 	errorAck := node.Event{Type: writeAck.Type}
 	for _, a := range writeAck.Attributes {
+		ack := `{"error":"ABCI code: ` + ackCode + `: error handling packet: see events for details"}`
 		switch a.Key {
 		case "packet_ack":
-			a.Value = `{"error":"ABCI code: ` + ackCode + `: error handling packet: see events for details"}`
+			if hexOnly {
+				continue
+			}
+			a.Value = ack
 		case "packet_ack_hex":
-			continue
+			if !hexOnly {
+				continue
+			}
+			a.Value = hex.EncodeToString([]byte(ack))
 		}
 		errorAck.Attributes = append(errorAck.Attributes, a)
 	}
@@ -116,6 +131,36 @@ func TestInboundRefusals(t *testing.T) {
 	}
 }
 
+// The legacy packet_ack key alone still reads, closed channel included.
+func TestLegacyPacketAckStillReads(t *testing.T) {
+	r := inboundRow(t, refusedInboundAs(t, "1140", false))
+	assert.Equal(t, transform.IBCChannelClosed, r.AckError)
+}
+
+// The acknowledgement's text wins over the transfer module's error, and a
+// 1140 in the module's own error is not a closed channel.
+func TestAckTextWinsOverTheModuleError(t *testing.T) {
+	module := func(msg string) node.Event {
+		return asCallbackError(plainEvent("fungible_token_packet", "module", "transfer", "success", "false", "error", msg))
+	}
+	r := inboundRow(t, refusedInbound(t, "1", module("invalid receiver")))
+	assert.Equal(t, "ABCI code: 1: error handling packet: see events for details", r.AckError)
+
+	r = inboundRow(t, refusedInbound(t, "1", module("ABCI code: 1140: stopped")))
+	assert.Equal(t, "ABCI code: 1: error handling packet: see events for details", r.AckError)
+}
+
+// A successful transfer is never marked rejected by a stray transfer_denied.
+func TestSuccessIsNotRefusedByAStrayEvent(t *testing.T) {
+	in := fetchInput(t, fakenode.New(t), 24999209)
+	in.Results.TxsResults[0].Events = append(in.Results.TxsResults[0].Events, rateLimitDenied("rate_limit_exceeded", "packet_recv"))
+	ents, err := realTransformer(t).Transform(in)
+	require.NoError(t, err)
+	r := byKey(t, ents.IBCTransfers, "channel-0", 10973, transform.IBCIn)
+	assert.Equal(t, transform.IBCReceived, r.Status)
+	assert.Empty(t, r.AckError)
+}
+
 // A refusal BZE names wins over the text the transfer module also reports.
 func TestRefusalWinsOverTheTransferModuleError(t *testing.T) {
 	r := inboundRow(t, refusedInbound(t, "4",
@@ -167,7 +212,7 @@ func TestIBCV10ShapesGiveTheRowsOfV8(t *testing.T) {
 		withoutDeprecatedPacketKeys(in)
 		r := inboundRow(t, in)
 		assert.Equal(t, transform.IBCRejected, r.Status)
-		assert.Equal(t, "invalid receiver", r.AckError)
+		assert.Equal(t, "ABCI code: 1: error handling packet: see events for details", r.AckError)
 	})
 
 	t.Run("ack error", func(t *testing.T) {
