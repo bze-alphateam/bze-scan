@@ -56,6 +56,12 @@ describe("directionView", () => {
     expect(directionView(limit({ enforced: false, used_pct: null }), "send").kind).toBe("unenforced");
   });
 
+  it("reads an unenforced limit as not enforced, whatever its quota or remaining", () => {
+    const unenforced = { enforced: false, remaining: "0", used_pct: null };
+    expect(directionView(limit({ ...unenforced, max_percent: "0" }), "send").kind).toBe("unenforced");
+    expect(directionView(limit({ ...unenforced, max_percent: "100" }), "send").kind).toBe("unenforced");
+  });
+
   it("falls back to the denom's last segment without a symbol", () => {
     expect(directionView({ ...limit({}), symbol: null, denom: "factory/bze1x/uhoney" }, "send")).toMatchObject({ text: expect.stringContaining("uhoney") });
   });

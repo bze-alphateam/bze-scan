@@ -42,14 +42,14 @@ export function directionView(l: RateLimit, side: "send" | "recv"): DirectionVie
   const label = side === "send" ? "Out" : "In";
   const sym = limitSymbol(l);
   const noun = side === "send" ? "Outgoing" : "Incoming";
+  if (!d.enforced) {
+    return { kind: "unenforced", label, text: "Not enforced yet: the token has no supply to measure against" };
+  }
   if (isZero(d.max_percent)) {
     return { kind: "blocked", label, text: `${noun} transfers of this token are not allowed on this route` };
   }
   if (isFull(d.max_percent)) {
     return { kind: "unlimited", label, text: "No practical limit" };
-  }
-  if (!d.enforced) {
-    return { kind: "unenforced", label, text: "Not enforced yet: the token has no supply to measure against" };
   }
   const pct = d.used_pct ?? 0;
   const net = new BigNumber(d.net_flow);
