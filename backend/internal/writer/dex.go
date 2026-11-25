@@ -288,10 +288,10 @@ const fillDeltasSQL = `WITH d AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS
 	UPDATE explorer.orders AS o SET
 		filled_amount = o.filled_amount + d.amount,
 		status = CASE WHEN o.status = 'open' AND o.filled_amount + d.amount >= o.amount THEN 'filled' ELSE o.status END,
-		closed_height = CASE WHEN o.status NOT IN ('cancelled', 'merged') AND o.filled_amount + d.amount >= o.amount
+		closed_height = CASE WHEN o.status <> 'cancelled' AND o.filled_amount + d.amount >= o.amount
 		                      AND (o.closed_height IS NULL OR d.height > o.closed_height)
 		                     THEN d.height ELSE o.closed_height END,
-		closed_time = CASE WHEN o.status NOT IN ('cancelled', 'merged') AND o.filled_amount + d.amount >= o.amount
+		closed_time = CASE WHEN o.status <> 'cancelled' AND o.filled_amount + d.amount >= o.amount
 		                    AND (o.closed_height IS NULL OR d.height > o.closed_height)
 		                   THEN d.time ELSE o.closed_time END,
 		updated_at = now()

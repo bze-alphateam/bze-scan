@@ -150,9 +150,12 @@ func TestMergedOrdersInEitherDirection(t *testing.T) {
 
 	// Rows a previous build wrote lack the merge columns, and a merged order
 	// is still open there: a reindex fills them in.
+	// The hourly sync of that build had closed the orders the node no longer
+	// listed as filled, at a later height.
 	for _, q := range []string{
 		`UPDATE explorer.orders SET merged_from = NULL, added_amount = NULL`,
-		`UPDATE explorer.orders SET status = 'open', closed_height = NULL, closed_time = NULL WHERE order_id <> '` + oid(41) + `'`,
+		`UPDATE explorer.orders SET status = 'filled', closed_height = ` + fmt.Sprint(dexH+9) + `, closed_time = now()
+			WHERE order_id IN ('` + oid(30) + `', '` + oid(40) + `')`,
 		`DELETE FROM explorer.order_closures`,
 	} {
 		_, err := e2eExec(down, q)
@@ -161,8 +164,30 @@ func TestMergedOrdersInEitherDirection(t *testing.T) {
 	for _, ents := range heights {
 		require.NoError(t, w.Write(ctx, []*transform.Entities{ents}, writer.ModeUpdate))
 	}
-	assert.Equal(t, want, mergeState(t, down), "the reindex restores the merges")
+	assert.Equal(t, want, mergeState(t, down), "the reindex turns the sync's filled into merged, at the merge height")
 	assert.Equal(t, wantClosures, closureState(t, down))
+}
+
+// Activity rows written by the build before this one have no details: a
+// reindex of the height adds the amend to the signer's row.
+func TestReindexAddsTheAmendToTheSignersActivityRow(t *testing.T) {
+	e := newSyncEnv(t)
+	ctx := context.Background()
+	w := batchWriter(t, e.url)
+	heights := mergeHeights(t)
+	for _, ents := range heights {
+		require.NoError(t, w.Write(ctx, []*transform.Entities{ents}, writer.ModeInsert))
+	}
+	count := func() []string {
+		return queryStrings(t, e.db, `SELECT count(*)::text FROM explorer.account_activity
+			WHERE height = $1 AND kind = 'dex_order' AND jsonb_array_length(details) = 1`, dexH)
+	}
+	assert.Equal(t, []string{"1"}, count())
+	_, err := e.db.Exec(`UPDATE explorer.account_activity SET details = '[]' WHERE height = $1`, dexH)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"0"}, count(), "a row as the previous build wrote it")
+	require.NoError(t, w.Write(ctx, []*transform.Entities{heights[1]}, writer.ModeUpdate))
+	assert.Equal(t, []string{"1"}, count())
 }
 
 func TestMergedOrdersOverTheAPI(t *testing.T) {
@@ -233,6 +258,27 @@ func TestMergedOrdersOverTheAPI(t *testing.T) {
 	assert.Equal(t, oid(41), *tx.Dex.Fills[0].TakerOrderID, "the taker is the merged order's id")
 	assert.Empty(t, tx.Dex.Cancelled, "a merge is not a cancel")
 	assert.False(t, tx.Dex.Pending)
+
+	// The owner's activity row of the create that merged carries the amend, so
+	// the list can say the order was added to.
+	amendRows := func(items []dto.Activity) []string {
+		var out []string
+		for _, a := range items {
+			var details []struct {
+				Type  string         `json:"type"`
+				Attrs map[string]any `json:"attrs"`
+			}
+			if a.Height == dexH && a.IsSigner && len(a.Details) > 0 {
+				require.NoError(t, json.Unmarshal(a.Details, &details))
+			}
+			for _, d := range details {
+				out = append(out, fmt.Sprint(a.Kind, " ", d.Type, " ", d.Attrs["id"], " ", d.Attrs["previous_id"]))
+			}
+		}
+		return out
+	}
+	activity := into[dto.List[dto.Activity]](t, fetch(t, base+"/accounts/"+dexOwner+"/activity"))
+	assert.Equal(t, []string{"dex_order bze.tradebin.OrderAmendedEvent " + oid(40) + " " + oid(30)}, amendRows(activity.Items))
 
 	// A cancel of the id that no longer exists was refused by the chain: the
 	// replaced order is never listed as cancelled.

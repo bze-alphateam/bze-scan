@@ -4,7 +4,6 @@ import NextLink from "next/link";
 import { LuClock } from "react-icons/lu";
 
 import { AppLink } from "@/components/layout/app-link";
-import { useParams } from "@/api/hooks";
 import type { Coin, Order, Refund, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { shortOrderId } from "@/lib/format";
@@ -25,6 +24,7 @@ import {
   splitMarket,
   type MessageOutcome,
 } from "./dex";
+import { FillCap } from "./fill-cap";
 import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 const DEX_MODULE = "DEX";
@@ -88,14 +88,12 @@ const isSpecialRefund = (r: Refund) => SPECIAL_REFUND_REASONS.includes(r.reason)
  * transaction and never rested. The cap is the tradebin parameter, left out while it is not known.
  */
 function MaxFillsLine({ refunds, marketId, ctx }: { refunds: Refund[]; marketId: string | null; ctx: RenderContext }) {
-  const params = useParams();
-  const raw = params.data?.tradebin?.params.maxFillsPerOrder;
-  const cap = typeof raw === "string" && /^\d+$/.test(raw) ? ` (${new BigNumber(raw).toFormat()})` : "";
   const back = backText(refunds, ctx);
   const notFilled = baseText(marketId ?? refunds[0]?.market_id ?? null, refundTotals(refunds).base, ctx);
   return (
     <Text fontSize="sm" color="orange.fg" role="status" data-testid="dex-max-fills">
-      Stopped after the most fills one order can take{cap}; {notFilled} was not filled
+      Stopped after the most fills one order can take
+      <FillCap />; {notFilled} was not filled
       {back ? ` and ${back} was sent back` : " (too small to send back, kept as dust)"}. Send another order for the rest.
     </Text>
   );
