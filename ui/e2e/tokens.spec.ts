@@ -4,6 +4,7 @@ import { noHorizontalScroll } from "./layout";
 import { mockApi } from "./mock-api";
 
 import honey from "../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney.json";
+import locked from "../test/fixtures/api/v1/tokens/factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/ulocked.json";
 import usdc from "../test/fixtures/api/v1/tokens/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4.json";
 import atone from "../test/fixtures/api/v1/tokens/ibc/E7CF15949EE673E0BD3F5AA7D711DD0A6C22992E7E5714A174DCEA289EB696A1.json";
 
@@ -75,6 +76,19 @@ test.describe("token page", () => {
 
     await page.getByRole("button", { name: /More details/ }).click();
     await expect(page.getByTestId("token-denom")).toHaveText(honey.denom);
+    await noHorizontalScroll(page);
+  });
+
+  test("a token with minting turned off shows it, its settings and the event", async ({ page }) => {
+    await page.goto(tokenPath(locked.denom));
+    await expect(page.getByTestId("supply-box")).toHaveAttribute("data-state", "locked");
+    await expect(page.getByTestId("supply-box")).toContainText("Supply is fixed: minting is turned off for good.");
+    await expect(page.getByTestId("token-settings")).toContainText("Paying fees in LOCK costs 50% more gas; the extra goes to");
+    await expect(page.getByTestId("settings-transfer")).toContainText("1% transfer fee");
+    await page.getByTestId("settings-raw-trigger").click();
+    await expect(page.getByTestId("settings-raw")).toContainText("gas_surcharge");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("activity-item").first()).toContainText("Minting turned off for good");
     await noHorizontalScroll(page);
   });
 

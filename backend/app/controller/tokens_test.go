@@ -34,6 +34,7 @@ type fakeTokens struct {
 	transfers []repository.DenomTransfer
 	holders   []repository.TokenHolder
 	volume    repository.TransferVolume
+	settings  *repository.TokenSettings
 	err       error
 	gotWindow time.Duration
 

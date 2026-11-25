@@ -24,7 +24,7 @@ describe("Header", () => {
     const names = within(nav)
       .getAllByRole("link", { hidden: true })
       .map((a) => a.textContent);
-    expect(names).toEqual(["Blocks", "Transactions", "Validators", "Tokens", "Proposals", "DAOs", "Parameters"]);
+    expect(names).toEqual(["Blocks", "Transactions", "Validators", "Tokens", "Cross-chain", "Proposals", "DAOs", "Parameters"]);
     expect(within(nav).getByText("Blocks")).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByText("Tokens")).not.toHaveAttribute("aria-current");
   });

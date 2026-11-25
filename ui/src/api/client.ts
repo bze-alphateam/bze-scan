@@ -12,9 +12,12 @@ import type {
   BlockEvent,
   BlockSummary,
   BlockTransfer,
+  Emergency,
+  EmergencyAction,
   ErrorBody,
   HallOfFame,
   IbcListParams,
+  IbcChannel,
   IbcTransfer,
   LiveHalt,
   ModuleAccount,
@@ -27,6 +30,7 @@ import type {
   ProposalSummary,
   ProposalNonVoter,
   ProposalVote,
+  RateLimitList,
   Upgrade,
   RawRpcResponse,
   RawTx,
@@ -95,8 +99,14 @@ export interface ExplorerApi {
   daos(params: DaoListParams, signal?: AbortSignal): Promise<DaoList>;
   dao(id: number, signal?: AbortSignal): Promise<Dao>;
   daoHistory(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<DaoEvent>>;
+  /** The emergency switches in force (chain v8.3.0). */
+  emergency(signal?: AbortSignal): Promise<Emergency>;
+  emergencyActions(params: PageParams, signal?: AbortSignal): Promise<Page<EmergencyAction>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
+
+  ibcChannels(signal?: AbortSignal): Promise<{ items: IbcChannel[] }>;
+  rateLimits(signal?: AbortSignal): Promise<RateLimitList>;
 
   stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
@@ -224,8 +234,13 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     daos: (params, signal) => get("/daos", { ...page(params), type: params.type, admin: params.admin }, signal),
     dao: (id, signal) => get(`/daos/${seg(String(id))}`, {}, signal),
     daoHistory: (id, params, signal) => get(`/daos/${seg(String(id))}/history`, page(params), signal),
+    emergency: (signal) => get("/emergency", {}, signal),
+    emergencyActions: (params, signal) => get("/emergency/actions", page(params), signal),
 
     search: (q, signal) => get("/search", { q }, signal),
+
+    ibcChannels: (signal) => get("/ibc/channels", {}, signal),
+    rateLimits: (signal) => get("/ibc/rate-limits", {}, signal),
 
     stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),

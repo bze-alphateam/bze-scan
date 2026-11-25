@@ -1,0 +1,93 @@
+{
+  "denom": "ulp_factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney_ubze",
+  "symbol": "HONEY/BZE LP",
+  "name": "HONEY/BZE LP Shares",
+  "kind": "lp",
+  "exponent": 12,
+  "supply": "500000000000",
+  "holders_count": null,
+  "price_usd": null,
+  "price_change_24h_pct": null,
+  "price_source": null,
+  "halted": false,
+  "logo_url": null,
+  "origin_chain": null,
+  "created_time": null,
+  "description": null,
+  "origin_chain_id": null,
+  "ibc_base_denom": null,
+  "ibc_path": null,
+  "creator": null,
+  "creator_label": null,
+  "admin": null,
+  "admin_label": null,
+  "created_height": null,
+  "created_tx_hash": null,
+  "website": null,
+  "markets": [],
+  "price_updated_at": "2099-10-11T09:59:00Z",
+  "metadata": {
+    "description": "The sweetest token on BZE.",
+    "denom_units": [
+      {
+        "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+        "exponent": 0
+      },
+      {
+        "denom": "HONEY",
+        "exponent": 6
+      }
+    ],
+    "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+    "display": "HONEY",
+    "name": "Honey",
+    "symbol": "HONEY"
+  },
+  "updated_at": "2099-10-11T09:59:00Z",
+  "events": [],
+  "events_next_cursor": null,
+  "transfers_24h": {
+    "count": 14,
+    "amount": "125000000000"
+  },
+  "ibc_hops": null,
+  "via_chain": null,
+  "lp_pair": {
+    "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+    "quote": "ubze"
+  },
+  "ibc_channel": null,
+  "stranded": false,
+  "pool": {
+    "pool_id": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney_ubze",
+    "reserves": {
+      "base": {
+        "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+        "symbol": "HONEY",
+        "exponent": 6,
+        "reserve": "1000000000"
+      },
+      "quote": {
+        "denom": "ubze",
+        "symbol": "BZE",
+        "exponent": 6,
+        "reserve": "2000000000"
+      }
+    },
+    "price": {
+      "chain": "2.000000000000000000",
+      "display": "2"
+    },
+    "avg_price": {
+      "chain": "1.800000000000000000",
+      "display": "1.8"
+    },
+    "avg_last_height": 4405100,
+    "drift_pct": "11.1",
+    "half_life_blocks": 20,
+    "fee_max_drift_pct": "10",
+    "module_max_drift_pct": "3",
+    "fees_in_bze": true,
+    "module_swaps_held": true
+  }
+}

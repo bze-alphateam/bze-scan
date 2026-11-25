@@ -58,6 +58,8 @@ export const queryKeys = {
   denoms: () => ["tokens", "all-pages"] as const,
   allTokens: () => ["tokens", "all-pages", "live"] as const,
   token: (denom: string) => ["token", denom] as const,
+  ibcChannels: () => ["ibc-channels"] as const,
+  rateLimits: () => ["rate-limits"] as const,
   tokenEventsAfter: (denom: string, cursor: string) => ["token-events", denom, cursor] as const,
   tokenHolders: (denom: string) => ["token-holders", denom] as const,
   tokenTransfers: (denom: string) => ["token-transfers", denom] as const,
@@ -78,6 +80,8 @@ export const queryKeys = {
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
   haltedDenoms: () => ["halted-denoms"] as const,
+  emergency: () => ["emergency"] as const,
+  emergencyActions: () => ["emergency-actions"] as const,
   modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -794,5 +798,39 @@ export function useLiveHalt() {
     ...slow,
     refetchInterval: (q) => (halted(q.state.data) ? live.refetchInterval : slow.refetchInterval),
     staleTime: (q) => (halted(q.state.data) ? live.staleTime : slow.staleTime),
+  });
+}
+
+/** Every IBC channel with its counterparty and client status. */
+export function useIbcChannels() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.ibcChannels(), queryFn: ({ signal }) => api.ibcChannels(signal), ...live });
+}
+
+/** Every IBC rate limit with its usage in the current window (one answer: there are few). */
+export function useRateLimits() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.rateLimits(), queryFn: ({ signal }) => api.rateLimits(signal), ...live });
+}
+
+/** The emergency switches in force: polled with the `status` policy (60 s). */
+export function useEmergency() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.emergency(),
+    queryFn: ({ signal }) => api.emergency(signal),
+    ...status,
+  });
+}
+
+/** The emergency actions and their undos, newest first: 20 a page. */
+export function useEmergencyActions() {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.emergencyActions(),
+    queryFn: ({ pageParam, signal }) => api.emergencyActions(pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...reference,
   });
 }
