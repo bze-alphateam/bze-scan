@@ -1,0 +1,8 @@
+{
+  "denom_reward": {
+    "staking_denom": "ubze",
+    "lock": 0,
+    "min_stake": "0",
+    "staked_amount": "250000"
+  }
+}

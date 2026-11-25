@@ -1,0 +1,14 @@
+{
+  "staking_reward": {
+    "reward_id": "sr-1",
+    "prize_amount": "1000",
+    "prize_denom": "ubze",
+    "staking_denom": "ubze",
+    "duration": 30,
+    "payouts": 0,
+    "min_stake": "0",
+    "lock": 0,
+    "staked_amount": "1000000",
+    "distributed_stake": "0"
+  }
+}

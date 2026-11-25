@@ -1,0 +1,12 @@
+{
+  "balances": [
+    {
+      "denom": "ubze",
+      "amount": "2500000"
+    }
+  ],
+  "pagination": {
+    "next_key": null,
+    "total": "1"
+  }
+}

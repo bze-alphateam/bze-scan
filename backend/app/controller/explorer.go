@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 	"github.com/bze-alphateam/bze-scan/backend/internal/classify"
+	"github.com/bze-alphateam/bze-scan/backend/internal/labels"
 )
 
 // Page sizes of the list routes.
@@ -98,6 +100,9 @@ type ExplorerReader interface {
 	VotesOf(ctx context.Context, account string, limit int) ([]repository.ValidatorVote, error)
 	// SearchLabels returns the labels whose name contains q, any case.
 	SearchLabels(ctx context.Context, q string, limit int) ([]repository.Label, error)
+	// DaoByAddress returns the DAO whose treasury account is address; not
+	// found is repository.ErrNotFound.
+	DaoByAddress(ctx context.Context, address string) (*repository.Dao, error)
 	// SearchValidators returns the validators whose moniker contains q, any
 	// case.
 	SearchValidators(ctx context.Context, q string, limit int) ([]repository.ValidatorMatch, error)
@@ -594,6 +599,15 @@ func (h *ExplorerController) Search(c *echo.Context) error {
 				return err
 			}
 			results = append(results, dto.SearchResult{Type: dto.ResultAccount, ID: addr, Label: addr, Indexed: &indexed})
+			// A DAO's treasury account is a DAO too.
+			dao, err := h.repo.DaoByAddress(ctx, addr)
+			if err != nil && !errors.Is(err, repository.ErrNotFound) {
+				return err
+			}
+			if err == nil {
+				results = append(results, dto.SearchResult{Type: dto.ResultDao, ID: strconv.FormatInt(dao.ID, 10),
+					Label: daoName(dao.ID, dao.Name)})
+			}
 		case validatorPrefix:
 			moniker, err := h.repo.ValidatorMoniker(ctx, addr)
 			if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -622,15 +636,19 @@ func (h *ExplorerController) searchNames(ctx context.Context, q string) ([]dto.S
 	if err != nil {
 		return nil, err
 	}
-	labels, err := h.repo.SearchLabels(ctx, q, SearchNameMatches)
+	named, err := h.repo.SearchLabels(ctx, q, SearchNameMatches)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]dto.SearchResult, 0, len(vals)+len(labels))
+	out := make([]dto.SearchResult, 0, len(vals)+len(named))
 	for _, v := range vals {
 		out = append(out, dto.SearchResult{Type: dto.ResultValidator, ID: v.OperatorAddress, Label: v.Moniker})
 	}
-	for _, l := range labels {
+	for _, l := range named {
+		if id, ok := daoLabelID(l); ok {
+			out = append(out, dto.SearchResult{Type: dto.ResultDao, ID: id, Label: l.Name})
+			continue
+		}
 		out = append(out, dto.SearchResult{Type: dto.ResultAccount, ID: l.Address, Label: l.Name})
 	}
 	return out, nil
@@ -715,4 +733,28 @@ func bech32Address(s string) (string, string, bool) {
 		return "", "", false
 	}
 	return hrp, strings.ToLower(s), true
+}
+
+// daoLabelRe reads the id off the label the daos set writes for a DAO's
+// treasury account: "DAO #<id>" or "DAO #<id> · <name>".
+var daoLabelRe = regexp.MustCompile(`^DAO #([0-9]+)`)
+
+// daoLabelID returns the DAO id a label of kind dao names.
+func daoLabelID(l repository.Label) (string, bool) {
+	if l.Kind != labels.KindDao {
+		return "", false
+	}
+	m := daoLabelRe.FindStringSubmatch(l.Name)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// daoName is how a DAO is shown: "DAO #<id> · <name>", as its label reads.
+func daoName(id int64, name string) string {
+	if name == "" {
+		return fmt.Sprintf("DAO #%d", id)
+	}
+	return fmt.Sprintf("DAO #%d · %s", id, name)
 }

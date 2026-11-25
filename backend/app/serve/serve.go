@@ -146,6 +146,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		defer closeState()
 		accountState = state
 	}
+	// The DAO routes read the chain's DAOs and the treasuries live; nil
+	// (no gRPC address) answers them unavailable.
+	var daoState controller.DaoState
+	var daoTreasury controller.DaoTreasury
+	if cfg.NodeGRPCAddr != "" {
+		state, treasury, closeDaos, err := NewDaoState(cfg, codec)
+		if err != nil {
+			return err
+		}
+		defer closeDaos()
+		daoState, daoTreasury = state, treasury
+	}
 	// The parameters routes (the halted denoms too) read them live; without
 	// a gRPC address they are left out.
 	var liveParams controller.LiveParams
@@ -290,6 +302,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	e := server.New(server.Deps{
 		Explorer:        explorerRepo,
 		Accounts:        explorerRepo,
+		Daos:            explorerRepo,
+		DaoState:        daoState,
+		DaoTreasury:     daoTreasury,
 		Tokens:          explorerRepo,
 		PoolPrices:      poolPrices,
 		Prices:          explorerRepo,

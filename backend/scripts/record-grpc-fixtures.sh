@@ -79,6 +79,14 @@
 #
 #   ratelimits (the IBC rate limits, chain v8.3.0 on; record from a v8.3.0 node):
 #     ratelimit/AllRateLimits.json, ratelimit/AllBlacklistedDenoms.json
+#   daos (the DAOs sync and the DAO page's live reads, chain v8.3.0; take them from a
+#     node that runs it and has DAOs):
+#     dao/Daos.json (one page of 100), and per DAO id in it: dao/Dao.<id>.json,
+#     dao/DaoController.<id>.json, bank/AllBalances.<treasury address>.json and,
+#     for a stake DAO, rewards/StakingReward.<sr id>.json per staking reward (a
+#     gateway error for one the chain no longer has) and rewards/DenomReward.<denom>.json.
+#     The e2e tests' DAO fixtures (daos_test.go) are hand-written until a node
+#     with DAOs is recorded.
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
@@ -103,7 +111,7 @@ PIN=""
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/internal/testutil/fakenode/testdata/grpc"
-for d in staking slashing bank distribution tokenfactory tradebin gov transfer channel client connection mint rewards burner cointrunk txfeecollector; do
+for d in dao staking slashing bank distribution tokenfactory tradebin gov transfer channel client connection mint rewards burner cointrunk txfeecollector; do
   mkdir -p "${OUT}/${d}"
 done
 
@@ -222,6 +230,23 @@ if has gov; then
   for id in ${PROPOSALS}; do
     fetch "cosmos/gov/v1/proposals/${id}" "gov/Proposal.${id}.json"
     fetch "cosmos/gov/v1/proposals/${id}/tally" "gov/TallyResult.${id}.json"
+  done
+fi
+
+if has daos; then
+  fetch "bze/dao/daos?pagination.limit=100" dao/Daos.json
+  for id in $(jq -r '.daos[].id' "${OUT}/dao/Daos.json"); do
+    fetch "bze/dao/dao/${id}" "dao/Dao.${id}.json"
+    fetch "bze/dao/dao_controller/${id}" "dao/DaoController.${id}.json"
+    fetch "cosmos/bank/v1beta1/balances/$(jq -r '.dao.address' "${OUT}/dao/Dao.${id}.json")?pagination.limit=1000" \
+      "bank/AllBalances.$(jq -r '.dao.address' "${OUT}/dao/Dao.${id}.json").json"
+    for sr in $(jq -r '.dao.electorate.sr_ids[]?' "${OUT}/dao/Dao.${id}.json"); do
+      fetch "bze/rewards/staking_reward/${sr}" "rewards/StakingReward.${sr}.json" 404
+    done
+    dr="$(jq -r '.dao.electorate.dr_denom // empty' "${OUT}/dao/Dao.${id}.json")"
+    if [[ -n "${dr}" ]]; then
+      fetch "bze/rewards/denom_reward?denom=$(esc "${dr}")" "rewards/DenomReward.$(esc "${dr}").json" 404
+    fi
   done
 fi
 

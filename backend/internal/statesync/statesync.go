@@ -27,10 +27,12 @@ import (
 // Set names: the keys of a Dirty and the sync_jobs rows of the sets.
 const (
 	Validators = "validators"
-	Proposals  = "proposals"
-	Denoms     = "denoms"
-	Channels   = "channels"
-	Params     = "params"
+	// Daos is the DAOs of chain v8.3.0; its keys are DAO ids.
+	Daos      = "daos"
+	Proposals = "proposals"
+	Denoms    = "denoms"
+	Channels  = "channels"
+	Params    = "params"
 	// ChainRegistry is the Cosmos chain registry cache; its keys are chain
 	// ids, or RegistryNameKey of a registry directory.
 	ChainRegistry = "chain_registry"
