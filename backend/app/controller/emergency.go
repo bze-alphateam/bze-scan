@@ -23,7 +23,7 @@ type EmergencyIndex interface {
 	EmergencyActions(ctx context.Context, before *repository.EmergencyKey, limit int) ([]repository.EmergencyAction, error)
 	EmergencyDenoms(ctx context.Context, denoms []string) (map[string]repository.EmergencyDenom, error)
 	EmergencyChannels(ctx context.Context, ids []string) (map[string]repository.EmergencyChannel, error)
-	EmergencyLabel(ctx context.Context, address string) (*string, error)
+	EmergencyLabel(ctx context.Context, address string) (*repository.EmergencyLabel, error)
 }
 
 // EmergencyController serves the emergency status routes.
@@ -54,7 +54,7 @@ func (h *EmergencyController) State(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	var label *string
+	var label *repository.EmergencyLabel
 	if s.Guardian != "" {
 		if label, err = h.index.EmergencyLabel(ctx, s.Guardian); err != nil {
 			return err

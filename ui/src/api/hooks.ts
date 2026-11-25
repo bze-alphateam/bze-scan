@@ -74,6 +74,8 @@ export const queryKeys = {
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
   haltedDenoms: () => ["halted-denoms"] as const,
+  emergency: () => ["emergency"] as const,
+  emergencyActions: () => ["emergency-actions"] as const,
   modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -741,4 +743,26 @@ export function useIbcChannels() {
 export function useRateLimits() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.rateLimits(), queryFn: ({ signal }) => api.rateLimits(signal), ...live });
+}
+
+/** The emergency switches in force: polled with the `status` policy (60 s). */
+export function useEmergency() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.emergency(),
+    queryFn: ({ signal }) => api.emergency(signal),
+    ...status,
+  });
+}
+
+/** The emergency actions and their undos, newest first: 20 a page. */
+export function useEmergencyActions() {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.emergencyActions(),
+    queryFn: ({ pageParam, signal }) => api.emergencyActions(pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...reference,
+  });
 }

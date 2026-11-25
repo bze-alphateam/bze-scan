@@ -66,6 +66,8 @@ describe("createHttpApi", () => {
     await api.stats();
     await api.params();
     await api.haltedDenoms();
+    await api.emergency();
+    await api.emergencyActions({ limit: 20, cursor: "e" });
     await api.rawBlock(7);
     await api.rawBlockResults(7);
     await api.rawCommit(7);
@@ -102,6 +104,8 @@ describe("createHttpApi", () => {
       "/v1/stats",
       "/v1/params",
       "/v1/params/halted-denoms",
+      "/v1/emergency",
+      "/v1/emergency/actions?cursor=e&limit=20",
       "/v1/raw/block/7",
       "/v1/raw/block_results/7",
       "/v1/raw/commit/7",

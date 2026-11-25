@@ -67,6 +67,10 @@ func TestEmergencyState(t *testing.T) {
 	_, err = e.db.Exec(`INSERT INTO explorer.ibc_channels (channel_id, counterparty_chain_id, updated_at) VALUES ('channel-3', 'cosmoshub-4', now())`)
 	require.NoError(t, err)
 
+	_, err = e.db.Exec(`INSERT INTO explorer.labels (address, name, kind, source, updated_at)
+		VALUES ('bze1jx4x3kn8mlz2s03zdpf2a38x9gl66llvjqdd55', 'DAO #3 · Ops', 'dao', 'sync', now())`)
+	require.NoError(t, err)
+
 	base := e.serveEmergency(t)
 	r := fetch(t, base+"/emergency")
 
@@ -78,6 +82,8 @@ func TestEmergencyState(t *testing.T) {
 	assert.Equal(t, int64(24998377), got.Height)
 	assert.True(t, got.AutomationPaused)
 	assert.Equal(t, "bze1jx4x3kn8mlz2s03zdpf2a38x9gl66llvjqdd55", got.Guardian.Address)
+	assert.Equal(t, "DAO #3 · Ops", *got.Guardian.Label)
+	assert.Equal(t, "dao", *got.Guardian.LabelKind)
 	require.Len(t, got.ClosedChannels, 1)
 	assert.Equal(t, "Cosmos Hub", *got.ClosedChannels[0].CounterpartyChainName)
 	require.Len(t, got.BlockedDenoms, 1)

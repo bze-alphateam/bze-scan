@@ -8,6 +8,8 @@ import type {
   BlockEvent,
   BlockSummary,
   BlockTransfer,
+  Emergency,
+  EmergencyAction,
   ErrorBody,
   HallOfFame,
   IbcListParams,
@@ -89,6 +91,10 @@ export interface ExplorerApi {
   proposalNonVoters(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<ProposalNonVoter>>;
   upgrade(height: number, signal?: AbortSignal): Promise<Upgrade>;
   liveHalt(signal?: AbortSignal): Promise<LiveHalt>;
+
+  /** The emergency switches in force (chain v8.3.0). */
+  emergency(signal?: AbortSignal): Promise<Emergency>;
+  emergencyActions(params: PageParams, signal?: AbortSignal): Promise<Page<EmergencyAction>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
@@ -217,6 +223,9 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     proposalNonVoters: (id, params, signal) => get(`/proposals/${seg(String(id))}/non-voters`, page(params), signal),
     upgrade: (height, signal) => get(`/upgrades/${seg(String(height))}`, {}, signal),
     liveHalt: (signal) => get("/upgrades/live", {}, signal),
+
+    emergency: (signal) => get("/emergency", {}, signal),
+    emergencyActions: (params, signal) => get("/emergency/actions", page(params), signal),
 
     search: (q, signal) => get("/search", { q }, signal),
 

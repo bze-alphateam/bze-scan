@@ -46,9 +46,8 @@ func (f *fakeEmergencyIndex) EmergencyChannels(context.Context, []string) (map[s
 	return map[string]repository.EmergencyChannel{"channel-3": {CounterpartyChainID: &id, CounterpartyChainName: &name}}, nil
 }
 
-func (f *fakeEmergencyIndex) EmergencyLabel(context.Context, string) (*string, error) {
-	l := "Guardian multisig"
-	return &l, nil
+func (f *fakeEmergencyIndex) EmergencyLabel(context.Context, string) (*repository.EmergencyLabel, error) {
+	return &repository.EmergencyLabel{Name: "DAO #3 · Ops", Kind: "dao"}, nil
 }
 
 func serveEmergency(t *testing.T, state controller.EmergencyState, index controller.EmergencyIndex, path string) *httptest.ResponseRecorder {
@@ -75,7 +74,7 @@ func TestEmergencyStateNamesDenomsChannelsAndGuardian(t *testing.T) {
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
 	assert.JSONEq(t, `{
 		"supported": true, "height": 10, "active": true,
-		"guardian": {"address": "bze1guardian", "label": "Guardian multisig"},
+		"guardian": {"address": "bze1guardian", "label": "DAO #3 · Ops", "label_kind": "dao"},
 		"automation_paused": true,
 		"closed_channels": [{"channel_id": "channel-3", "counterparty_chain_id": "cosmoshub-4", "counterparty_chain_name": "Cosmos Hub"}],
 		"blocked_denoms": [{"denom": "ibc/AAA", "symbol": null, "exponent": 0, "logo_url": null}],

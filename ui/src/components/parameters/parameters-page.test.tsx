@@ -186,6 +186,18 @@ describe("ParametersPage", () => {
     expect(replace).toHaveBeenCalledWith("/parameters?group=emergency", { scroll: false });
   });
 
+  it("leads from the Emergency group to the emergency status page", async () => {
+    renderWithProviders(<ParametersPage group="emergency" />, { api: api() });
+    await shown();
+    expect(screen.getByRole("link", { name: "See what is switched on right now →" })).toHaveAttribute("href", "/emergency");
+  });
+
+  it("does not lead the other groups to it", async () => {
+    renderWithProviders(<ParametersPage group="fees" />, { api: api() });
+    await shown();
+    expect(screen.queryByRole("link", { name: /switched on right now/ })).toBeNull();
+  });
+
   it("says nobody holds the emergency key when the guardian is empty", async () => {
     const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as ChainParams;
     renderWithProviders(<ParametersPage group="emergency" />, { api: api({ params: () => Promise.resolve(empty) }) });

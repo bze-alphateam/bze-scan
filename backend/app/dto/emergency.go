@@ -26,11 +26,12 @@ type EmergencyChannel struct {
 	CounterpartyChainName *string `json:"counterparty_chain_name"`
 }
 
-// EmergencyGuardian is the guardian address with its label (null when it has
-// none).
+// EmergencyGuardian is the guardian address with its label and the label's
+// kind (both null when it has none; kind `dao` for a DAO).
 type EmergencyGuardian struct {
-	Address string  `json:"address"`
-	Label   *string `json:"label"`
+	Address   string  `json:"address"`
+	Label     *string `json:"label"`
+	LabelKind *string `json:"label_kind"`
 }
 
 // EmergencyPlan is the scheduled upgrade plan; Emergency marks the plan of
@@ -63,7 +64,7 @@ type Emergency struct {
 // NewEmergency maps a live state with the rows that name its denoms and
 // channels and the label of its guardian.
 func NewEmergency(s *emergency.State, denoms map[string]repository.EmergencyDenom,
-	channels map[string]repository.EmergencyChannel, guardianLabel *string) Emergency {
+	channels map[string]repository.EmergencyChannel, guardian *repository.EmergencyLabel) Emergency {
 	out := Emergency{
 		Supported: s.Supported, Height: s.Height, Active: s.Active(), AutomationPaused: s.AutomationPaused,
 		ClosedChannels:   make([]EmergencyChannel, 0, len(s.ClosedChannels)),
@@ -72,7 +73,11 @@ func NewEmergency(s *emergency.State, denoms map[string]repository.EmergencyDeno
 		HaltedDenoms:     emergencyDenoms(s.HaltedDenoms, denoms),
 	}
 	if s.Guardian != "" {
-		out.Guardian = &EmergencyGuardian{Address: s.Guardian, Label: guardianLabel}
+		g := &EmergencyGuardian{Address: s.Guardian}
+		if guardian != nil {
+			g.Label, g.LabelKind = &guardian.Name, &guardian.Kind
+		}
+		out.Guardian = g
 	}
 	for _, id := range s.ClosedChannels {
 		c := channels[id]
