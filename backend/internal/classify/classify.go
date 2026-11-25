@@ -35,6 +35,8 @@ const (
 	// refunded after a rejection or a timeout.
 	KindIBCIn     = "ibc_in"
 	KindIBCRefund = "ibc_refund"
+	// KindDexOrder is the row of a MsgCreateOrder.
+	KindDexOrder = "dex_order"
 	// KindDexMakerFill is the participant row of a maker whose resting
 	// order a transaction filled (chain v8.3.0 names the maker in the
 	// taker's transaction); its details are the fills.
@@ -195,7 +197,7 @@ var messages = []MessageKind{
 	msg("/ibc.core.channel.v1.MsgPruneAcknowledgements", KindRelay, Other, Other, ""),
 
 	// bze.tradebin
-	msg("/bze.tradebin.MsgCreateOrder", "dex_order", DEX, DEX, ""),
+	msg("/bze.tradebin.MsgCreateOrder", KindDexOrder, DEX, DEX, ""),
 	msg("/bze.tradebin.MsgCancelOrder", "dex_cancel", DEX, DEX, ""),
 	msg("/bze.tradebin.MsgFillOrders", "dex_fill", DEX, DEX, ""),
 	msg("/bze.tradebin.MsgMultiSwap", "dex_swap", DEX, DEX, ""),
@@ -331,10 +333,8 @@ var blockEvents = []BlockEventKind{
 	event("bze.tradebin.OrderExecutedEvent", "dex_fill", DEX, "maker", "taker"),
 	event("bze.tradebin.OrderSavedEvent", "dex_order_saved", DEX, "owner"),
 	event("bze.tradebin.OrderCanceledEvent", "dex_cancel", DEX, "owner"),
-	// Chain v8.3.0: the queue messages that end without an order or a fill.
+	// Chain v8.3.0: the upgrade block sends back what was still queued.
 	event("bze.tradebin.OrderMessageRefundedEvent", "dex_refund", DEX, "owner"),
-	event("bze.tradebin.OrderCancelSkippedEvent", "dex_cancel_skipped", DEX, "owner"),
-	event("bze.tradebin.OrderMessageFailedEvent", "dex_failed", DEX, "owner"),
 	event("bze.tradebin.SwapEvent", "dex_swap", DEX),
 	event("bze.tradebin.LiquidityAddedEvent", "liquidity", DEX),
 	event("complete_unbonding", "unbonding_completed", Staking, "delegator"),

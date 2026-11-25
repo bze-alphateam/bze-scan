@@ -9,13 +9,19 @@ import (
 )
 
 // OrderStatuses are the status filters of an account's orders.
-var OrderStatuses = []string{"open", "filled", "cancelled"}
+var OrderStatuses = []string{"open", "filled", "cancelled", "merged"}
 
 // Order is an order that rested on the book: an item of GET
 // /api/v1/accounts/{address}/orders and the head of GET /api/v1/orders/{id}.
 // Amounts are in base units of the market's base denom; created_tx_hash is
 // null when the placing transaction is not known (before chain v8.2.0, or
 // placed by a message processed in a later block).
+//
+// Chain v8.3.0 merges an order placed at a price where its owner already
+// rests one into it: the merged order rests under the new order's id with
+// merged_from (the id it replaced) and added_amount (what it added to it),
+// and the replaced order ends with the status merged and merged_into (the
+// new id). All three are null otherwise.
 type Order struct {
 	OrderID       string     `json:"order_id"`
 	MarketID      string     `json:"market_id"`
@@ -31,6 +37,9 @@ type Order struct {
 	MessageID     *string    `json:"message_id"`
 	ClosedHeight  *int64     `json:"closed_height"`
 	ClosedTime    *time.Time `json:"closed_time"`
+	MergedFrom    *string    `json:"merged_from"`
+	AddedAmount   *string    `json:"added_amount"`
+	MergedInto    *string    `json:"merged_into"`
 }
 
 // Fill is a queue message filling (part of) a resting order: an item of
@@ -63,57 +72,39 @@ type OrderDetail struct {
 
 // TxDex is the order book outcome of a transaction on GET
 // /api/v1/txs/{hash}: the orders it placed on the book, the fills it took,
-// the orders it cancelled, and pending when an order message it queued has
-// no outcome indexed yet (never a failure: the outcome may land in a later
-// block).
+// the orders it cancelled, the refunds, and pending when an order message it
+// queued has no outcome indexed yet (the outcome may land in a later block).
 //
-// Since chain v8.3.0 the engine also reports the messages that end without
-// an order or a fill: refunds (the part of a message not executed went
-// back), skipped_cancels (a cancel found no order) and failed (the latest
-// block in which the engine could not process a message, which stays
-// queued). They are empty for older heights.
+// A refund is the part of an order that was not executed and went back to
+// its owner (chain v8.3.0). skipped_cancels and failed belong to a design of
+// chain v8.3.0 that no network ever ran: they are always empty arrays, kept
+// for one release so clients do not break, and will be removed.
 type TxDex struct {
-	Placed         []Order         `json:"placed"`
-	Fills          []Fill          `json:"fills"`
-	Cancelled      []Order         `json:"cancelled"`
-	Refunds        []Refund        `json:"refunds"`
-	SkippedCancels []SkippedCancel `json:"skipped_cancels"`
-	Failed         []FailedOrder   `json:"failed"`
-	Pending        bool            `json:"pending"`
+	Placed         []Order    `json:"placed"`
+	Fills          []Fill     `json:"fills"`
+	Cancelled      []Order    `json:"cancelled"`
+	Refunds        []Refund   `json:"refunds"`
+	SkippedCancels []struct{} `json:"skipped_cancels"`
+	Failed         []struct{} `json:"failed"`
+	Pending        bool       `json:"pending"`
 }
 
-// Refund is the part of a queue message that was not executed: amount is
-// the base amount, refund the coin sent back (null when it rounded to zero
-// and only dust was kept), reason no_match | unfilled_remainder |
-// below_min_amount.
+// Refund is the part of an order that was not executed: amount is the base
+// amount, refund the coin sent back (null when it rounded to zero and only
+// dust was kept), reason no_match | unfilled_remainder | below_min_amount |
+// max_fills_reached | upgrade. A refund of a transaction of chain v8.3.0
+// names the taker order in order_id and has no message_id; the upgrade
+// block's refund of a transaction of chain v8.2.x names its queue message in
+// both; a refund of a pre-release build has message_id only.
 type Refund struct {
 	Height    int64  `json:"height"`
-	MessageID string `json:"message_id"`
+	MessageID string `json:"message_id,omitempty"`
+	OrderID   string `json:"order_id,omitempty"`
 	MarketID  string `json:"market_id"`
 	OrderType string `json:"order_type"`
 	Amount    string `json:"amount"`
 	Refund    *Coin  `json:"refund"`
 	Reason    string `json:"reason"`
-}
-
-// SkippedCancel is a cancel that found no order (filled or cancelled
-// meanwhile): reason order_not_found.
-type SkippedCancel struct {
-	Height    int64  `json:"height"`
-	MessageID string `json:"message_id"`
-	MarketID  string `json:"market_id"`
-	OrderType string `json:"order_type"`
-	OrderID   string `json:"order_id"`
-	Reason    string `json:"reason"`
-}
-
-// FailedOrder is a queue message the engine failed to process; height is
-// the latest block it failed in. message_type is buy | sell | cancel |
-// fill_buy | fill_sell.
-type FailedOrder struct {
-	MessageID   string `json:"message_id"`
-	MessageType string `json:"message_type"`
-	Height      int64  `json:"height"`
 }
 
 // NewOrder maps an orders row.
@@ -122,6 +113,7 @@ func NewOrder(o repository.Order) Order {
 		OrderID: o.OrderID, MarketID: o.MarketID, Owner: o.Owner, Side: o.Side, Price: o.Price, Amount: o.Amount,
 		FilledAmount: o.FilledAmount, Status: o.Status, CreatedHeight: o.CreatedHeight, CreatedTime: o.CreatedTime.UTC(),
 		CreatedTxHash: o.CreatedTxHash, MessageID: o.MessageID, ClosedHeight: o.ClosedHeight, ClosedTime: utc(o.ClosedTime),
+		MergedFrom: o.MergedFrom, AddedAmount: o.AddedAmount, MergedInto: o.MergedInto,
 	}
 }
 
@@ -143,23 +135,15 @@ func NewOrderDetail(o *repository.Order, fillCount int64, fills []repository.Ord
 // and nothing pending (the transaction placed, filled and cancelled
 // nothing).
 func NewTxDex(d *repository.TxDex) *TxDex {
-	if d == nil || (len(d.Placed) == 0 && len(d.Fills) == 0 && len(d.Cancelled) == 0 && len(d.Refunds) == 0 &&
-		len(d.SkippedCancels) == 0 && len(d.Failed) == 0 && !d.Pending) {
+	if d == nil || (len(d.Placed) == 0 && len(d.Fills) == 0 && len(d.Cancelled) == 0 && len(d.Refunds) == 0 && !d.Pending) {
 		return nil
 	}
 	out := &TxDex{Placed: newOrders(d.Placed), Fills: newFills(d.Fills), Cancelled: newOrders(d.Cancelled),
-		Refunds: make([]Refund, 0, len(d.Refunds)), SkippedCancels: make([]SkippedCancel, 0, len(d.SkippedCancels)),
-		Failed: make([]FailedOrder, 0, len(d.Failed)), Pending: d.Pending}
+		Refunds: make([]Refund, 0, len(d.Refunds)), SkippedCancels: []struct{}{}, Failed: []struct{}{},
+		Pending: d.Pending}
 	for _, r := range d.Refunds {
-		out.Refunds = append(out.Refunds, Refund{Height: r.Height, MessageID: r.MessageID, MarketID: r.MarketID,
-			OrderType: r.OrderType, Amount: r.Amount, Refund: parseCoin(r.Refund), Reason: r.Reason})
-	}
-	for _, c := range d.SkippedCancels {
-		out.SkippedCancels = append(out.SkippedCancels, SkippedCancel{Height: c.Height, MessageID: c.MessageID,
-			MarketID: c.MarketID, OrderType: c.OrderType, OrderID: c.OrderID, Reason: c.Reason})
-	}
-	for _, f := range d.Failed {
-		out.Failed = append(out.Failed, FailedOrder{MessageID: f.MessageID, MessageType: f.MessageType, Height: f.Height})
+		out.Refunds = append(out.Refunds, Refund{Height: r.Height, MessageID: r.MessageID, OrderID: r.OrderID,
+			MarketID: r.MarketID, OrderType: r.OrderType, Amount: r.Amount, Refund: parseCoin(r.Refund), Reason: r.Reason})
 	}
 	return out
 }

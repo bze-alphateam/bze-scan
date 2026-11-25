@@ -70,16 +70,24 @@ func TestAccountOrdersPage(t *testing.T) {
 	assert.JSONEq(t, `{"items":[
 		{"order_id":"`+orderA+`","market_id":"ufoo/ubze","owner":"`+account+`","side":"sell","price":"223",
 		 "amount":"647259","filled_amount":"0","status":"open","created_height":30,"created_time":"2026-10-11T07:00:00Z",
-		 "created_tx_hash":"`+hashUpper+`","message_id":"000000000000000000000004","closed_height":null,"closed_time":null},
+		 "created_tx_hash":"`+hashUpper+`","message_id":"000000000000000000000004","closed_height":null,"closed_time":null,
+		 "merged_from":null,"added_amount":null,"merged_into":null},
 		{"order_id":"`+orderB+`","market_id":"ufoo/ubze","owner":"`+account+`","side":"buy","price":"0.0002",
 		 "amount":"5","filled_amount":"5","status":"filled","created_height":30,"created_time":"2026-10-11T07:00:00Z",
-		 "created_tx_hash":null,"message_id":null,"closed_height":31,"closed_time":"2026-10-11T07:00:00Z"}
+		 "created_tx_hash":null,"message_id":null,"closed_height":31,"closed_time":"2026-10-11T07:00:00Z",
+		 "merged_from":null,"added_amount":null,"merged_into":null}
 	],"next_cursor":"`+next+`"}`, rec.Body.String())
 
 	rec = get(t, e, "/accounts/"+account+"/orders?cursor="+next)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, &repository.OrderKey{Height: 30, OrderID: orderB}, repo.gotOrderBefore, "the id comes back zero-filled")
 	assert.Nil(t, repo.gotStatus, "no filter means every status")
+
+	// Chain v8.3.0's merged orders have a status of their own.
+	rec = get(t, e, "/accounts/"+account+"/orders?status=merged")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NotNil(t, repo.gotStatus)
+	assert.Equal(t, "merged", *repo.gotStatus)
 }
 
 func TestAccountFillsPage(t *testing.T) {
@@ -195,20 +203,50 @@ func TestTxCarriesItsV830Outcomes(t *testing.T) {
 	require.Len(t, got.Dex.Refunds, 2)
 	assert.Equal(t, &dto.Coin{Denom: "factory/x/uhoney", Amount: "16087378657"}, got.Dex.Refunds[0].Refund)
 	assert.Nil(t, got.Dex.Refunds[1].Refund, "rounded to zero")
-	assert.Equal(t, []dto.SkippedCancel{}, got.Dex.SkippedCancels)
+	assert.Equal(t, []struct{}{}, got.Dex.SkippedCancels)
+	assert.Equal(t, []struct{}{}, got.Dex.Failed)
+	assert.Contains(t, rec.Body.String(), `"skipped_cancels":[],"failed":[]`, "kept as empty arrays for one release")
+	assert.Contains(t, rec.Body.String(), `"message_id":"`+orderA+`"`)
+	assert.NotContains(t, rec.Body.String(), `"order_id":""`, "an empty order_id is left out")
 
-	f.dex[hashUpper] = &repository.TxDex{
-		SkippedCancels: []repository.CancelSkip{{Height: 30, MessageID: orderA, OrderID: orderA, Reason: "order_not_found"}},
-	}
-	got = decode[dto.Tx](t, get(t, e, "/txs/"+hashUpper))
-	require.NotNil(t, got.Dex, "a skipped cancel is an outcome")
-	assert.Equal(t, "order_not_found", got.Dex.SkippedCancels[0].Reason)
-
-	f.dex[hashUpper] = &repository.TxDex{Failed: []repository.OrderFailure{{MessageID: orderA, MessageType: "buy", Height: 32}},
-		Pending: true}
+	// A refund of a transaction's own events (chain v8.3.0) names the taker
+	// order, has no message id, and carries the new reasons through.
+	f.dex[hashUpper] = &repository.TxDex{Refunds: []repository.OrderRefund{
+		{Height: 30, OrderID: orderB, MarketID: "m", OrderType: "buy", Amount: "9", Refund: "18ubze", Reason: "max_fills_reached"},
+		{Height: 31, MessageID: orderA, OrderID: orderA, MarketID: "m", OrderType: "sell", Amount: "4", Refund: "", Reason: "upgrade"},
+	}}
 	rec = get(t, e, "/txs/"+hashUpper)
-	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
-	assert.Equal(t, []dto.FailedOrder{{MessageID: orderA, MessageType: "buy", Height: 32}}, decode[dto.Tx](t, rec).Dex.Failed)
+	got = decode[dto.Tx](t, rec)
+	require.Len(t, got.Dex.Refunds, 2)
+	assert.Equal(t, dto.Refund{Height: 30, OrderID: orderB, MarketID: "m", OrderType: "buy", Amount: "9",
+		Refund: &dto.Coin{Denom: "ubze", Amount: "18"}, Reason: "max_fills_reached"}, got.Dex.Refunds[0])
+	assert.Equal(t, "upgrade", got.Dex.Refunds[1].Reason)
+	assert.Equal(t, orderA, got.Dex.Refunds[1].MessageID)
+	assert.Contains(t, rec.Body.String(), `{"height":30,"order_id":"`+orderB+`","market_id":"m"`, "no message_id key")
+}
+
+// A merge shows on both orders: the merged order says what it replaced and
+// added, the replaced one is merged into it.
+func TestOrderPageCarriesTheMerge(t *testing.T) {
+	merged := orderRows()[0]
+	merged.MergedFrom, merged.AddedAmount = strp(orderB), strp("30")
+	replaced := orderRows()[1]
+	replaced.Status, replaced.MergedInto = "merged", strp(orderA)
+	e := newAPI(&fakeReader{order: &merged})
+	got := decode[dto.OrderDetail](t, get(t, e, "/orders/"+orderA))
+	require.NotNil(t, got.MergedFrom)
+	assert.Equal(t, orderB, *got.MergedFrom)
+	assert.Equal(t, "30", *got.AddedAmount)
+	assert.Nil(t, got.MergedInto)
+
+	e = newAPI(&fakeReader{order: &replaced})
+	rec := get(t, e, "/orders/"+orderB)
+	got = decode[dto.OrderDetail](t, rec)
+	assert.Equal(t, "merged", got.Status)
+	require.NotNil(t, got.MergedInto)
+	assert.Equal(t, orderA, *got.MergedInto)
+	assert.Nil(t, got.MergedFrom)
+	assert.Contains(t, rec.Body.String(), `"merged_from":null,"added_amount":null,"merged_into":"`+orderA+`"`)
 }
 
 func TestOrderCursorsRoundTrip(t *testing.T) {

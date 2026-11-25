@@ -225,11 +225,9 @@ func TestBZEBlockEventsAreTheChainsBlockLevelEmitters(t *testing.T) {
 		"bze.rewards.TradingRewardDistributionEvent", // hourly hook
 		"bze.rewards.TradingRewardExpireEvent",       // hourly hook
 		"bze.tradebin.LiquidityAddedEvent",           // periodic burn: locked coins into BZE liquidity
-		"bze.tradebin.OrderCancelSkippedEvent",       // EndBlock queue (v8.3.0)
 		"bze.tradebin.OrderCanceledEvent",            // EndBlock queue
 		"bze.tradebin.OrderExecutedEvent",            // EndBlock queue
-		"bze.tradebin.OrderMessageFailedEvent",       // EndBlock queue (v8.3.0)
-		"bze.tradebin.OrderMessageRefundedEvent",     // EndBlock queue (v8.3.0)
+		"bze.tradebin.OrderMessageRefundedEvent",     // the v8.3.0 upgrade block
 		"bze.tradebin.OrderSavedEvent",               // EndBlock queue
 		"bze.tradebin.SwapEvent",                     // fee collector's conversion to BZE
 	}, got)
@@ -240,5 +238,14 @@ func TestBZEBlockEventsAreTheChainsBlockLevelEmitters(t *testing.T) {
 	} {
 		_, ok := classify.LookupBlockEvent(txOnly)
 		assert.False(t, ok, "%s is emitted by message handlers only", txOnly)
+	}
+}
+
+// Two events of a design of chain v8.3.0 that no network ever emitted
+// (removed before any release) are not classified.
+func TestNeverShippedOrderEventsAreUnclassified(t *testing.T) {
+	for _, typ := range []string{"bze.tradebin.OrderCancelSkippedEvent", "bze.tradebin.OrderMessageFailedEvent"} {
+		_, ok := classify.LookupBlockEvent(typ)
+		assert.False(t, ok, typ)
 	}
 }

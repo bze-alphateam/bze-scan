@@ -42,7 +42,8 @@ type Activity struct {
 	// the transaction for a signer.
 	MsgTypes []string `json:"msg_types"`
 	// Details are the typed events naming the address: those of a block-level
-	// row, and the fills of a maker row (chain v8.3.0).
+	// row, the fills of a maker row, and the OrderAmendedEvents of a create's
+	// signer row when it merged into a resting order (chain v8.3.0).
 	Details []Event `json:"details"`
 }
 
@@ -362,9 +363,28 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 				a.Counterparty = takers[0]
 			}
 		}
+		if merged := amendedBy(msgs, addr); len(merged) > 0 && a.Kind == classify.KindDexOrder {
+			// A create that merged into the owner's resting order (chain
+			// v8.3.0): the row says so.
+			a.Details = merged
+		}
 		ents.Activity = append(ents.Activity, a)
 	}
 	return nil
+}
+
+// amendedBy returns the OrderAmendedEvents of the transaction's messages
+// whose owner is addr, in event order.
+func amendedBy(msgs []Message, addr string) []Event {
+	var out []Event
+	for _, m := range msgs {
+		for _, ev := range m.Events {
+			if ev.Type == evOrderAmended && anyString(ev.Attrs["owner"]) == addr {
+				out = append(out, Event{Type: ev.Type, Attrs: ev.Attrs})
+			}
+		}
+	}
+	return out
 }
 
 // fillsByMaker groups the OrderExecutedEvents of the transaction's messages

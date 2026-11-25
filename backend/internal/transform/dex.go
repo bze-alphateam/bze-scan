@@ -28,6 +28,7 @@ const (
 	evOrderSaved         = "bze.tradebin.OrderSavedEvent"
 	evOrderExecuted      = "bze.tradebin.OrderExecutedEvent"
 	evOrderCanceled      = "bze.tradebin.OrderCanceledEvent"
+	evOrderAmended       = "bze.tradebin.OrderAmendedEvent"
 )
 
 // Type URL of the message that fills resting orders.
@@ -45,6 +46,9 @@ const (
 	OrderOpen      = "open"
 	OrderFilled    = "filled"
 	OrderCancelled = "cancelled"
+	// OrderMerged is an order that a later order of its owner at the same
+	// price replaced (chain v8.3.0).
+	OrderMerged = "merged"
 )
 
 // OrderMessage is one explorer.order_messages row: a transaction-time order
@@ -86,6 +90,11 @@ type Order struct {
 	// and v7.1) and Owner is the creator of the message that placed it: the
 	// order's fills named no maker either.
 	OwnerFromMessage bool `json:"-"`
+	// MergedFrom is the id of the resting order this one replaced, and
+	// AddedAmount the amount this one added to it: set for the order of an
+	// OrderAmendedEvent (chain v8.3.0), whose Amount is the merged total.
+	MergedFrom  string `json:"merged_from,omitempty"`
+	AddedAmount string `json:"added_amount,omitempty"`
 }
 
 // OrderFill is one explorer.order_fills row: an OrderExecutedEvent, a queue
@@ -131,18 +140,24 @@ type OrderFill struct {
 const TxFillSeqBase = 1_000_000
 
 // Reasons of an order closure.
-const OrderClosureCancelled = "cancelled"
+const (
+	OrderClosureCancelled = "cancelled"
+	OrderClosureMerged    = "merged"
+)
 
 // OrderClosure is one explorer.order_closures row: how and by which
-// transaction an order ended without being filled, an OrderCanceledEvent of
-// a transaction (chain v8.3.0).
+// transaction an order ended without being filled, an OrderCanceledEvent or
+// an OrderAmendedEvent of a transaction (chain v8.3.0).
 type OrderClosure struct {
 	OrderID string    `json:"order_id"`
 	Height  int64     `json:"height"`
 	Time    time.Time `json:"time"`
 	TxHash  string    `json:"tx_hash"`
-	// Reason is OrderClosureCancelled.
+	// Reason is OrderClosureCancelled or OrderClosureMerged.
 	Reason string `json:"reason"`
+	// MergedInto is the id of the order that replaced this one, for
+	// OrderClosureMerged.
+	MergedInto string `json:"merged_into,omitempty"`
 }
 
 // OrderCancel is an OrderCanceledEvent: the order is closed as cancelled at
@@ -197,14 +212,17 @@ func blockOrders(ents *Entities, b Block, events []node.Event) []outcome {
 // txOrders appends the order book outcomes of a successful transaction's own
 // events (chain v8.3.0): an OrderSavedEvent is an order placed by the
 // transaction, an OrderExecutedEvent a fill it took (Seq numbers the block's
-// such fills in transaction, message and event order; txFills counts them) and an
-// OrderCanceledEvent closes an order. They carry no message id.
+// such fills in transaction, message and event order; txFills counts them), an
+// OrderCanceledEvent closes an order, and an OrderAmendedEvent is an order
+// placed by merging its remainder into the resting order of its owner at the
+// price: the order is new, the resting one is closed as merged. They carry no
+// message id.
 func txOrders(ents *Entities, b Block, txFills *int, txIndex int, txHash string, msgCount int, byIndex map[int][]node.Event) {
 	for j := range msgCount {
 		pos := StoredPositions(byIndex[j])
 		for k, ev := range byIndex[j] {
 			switch ev.Type {
-			case evOrderSaved, evOrderExecuted, evOrderCanceled:
+			case evOrderSaved, evOrderExecuted, evOrderCanceled, evOrderAmended:
 			default:
 				continue
 			}
@@ -225,6 +243,18 @@ func txOrders(ents *Entities, b Block, txFills *int, txIndex int, txHash string,
 					TakerOrderID: get("order_id"),
 				})
 				*txFills++
+			case evOrderAmended:
+				// The merged order rests under the new id with the total
+				// amount; the order it replaced no longer exists.
+				ents.Orders = append(ents.Orders, Order{
+					OrderID: get("id"), MarketID: get("market_id"), Owner: get("owner"), Side: get("order_type"),
+					Price: get("price"), Amount: get("amount"), Height: b.Height, Time: b.Time, CreatedTxHash: txHash,
+					MergedFrom: get("previous_id"), AddedAmount: get("added_amount"),
+				})
+				ents.OrderClosures = append(ents.OrderClosures, OrderClosure{
+					OrderID: get("previous_id"), Height: b.Height, Time: b.Time, TxHash: txHash,
+					Reason: OrderClosureMerged, MergedInto: get("id"),
+				})
 			case evOrderCanceled:
 				ents.OrderCancels = append(ents.OrderCancels, OrderCancel{OrderID: get("id"), Height: b.Height, Time: b.Time})
 				ents.OrderClosures = append(ents.OrderClosures, OrderClosure{

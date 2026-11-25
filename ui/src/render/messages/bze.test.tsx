@@ -5,7 +5,7 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { Fill, IbcTransfer, Order, Refund, Transfer, TxDex } from "@/api/types";
-import { renderWithProviders } from "@/test/render";
+import { fakeApi, renderWithProviders } from "@/test/render";
 
 import { dexMarketUrl, marketName, outcomeOf, priceText, splitMarket } from "./dex";
 import { fallbackRenderer } from "./fallback";
@@ -78,6 +78,10 @@ function fill(f: Partial<Fill>): Fill {
 }
 
 const dexCtx = (dex: TxDex, transfers: Transfer[] = []) => createRenderContext({ transfers, tokens, dex });
+
+/** A settled transaction's context: nothing placed, filled or cancelled unless given. */
+const settledDex = (dex: Partial<TxDex>) =>
+  createRenderContext({ transfers: [], tokens, dex: { placed: [], fills: [], cancelled: [], refunds: [], pending: false, ...dex }, dexSettled: true });
 
 function body(msg: RenderMessage, ctx: RenderContext) {
   const r = rendererFor(msg.type_url);
@@ -263,6 +267,125 @@ describe("DEX outcome", () => {
       expect(out?.fills).toHaveLength(1);
       expect(out?.pending).toBe(true);
     });
+
+    describe("merged orders and refunds in the transaction", () => {
+      const PREVIOUS = "000000000000000006714500";
+      const amended = (extra: Record<string, unknown> = {}) =>
+        event("OrderAmendedEvent", { id: TAKER, previous_id: PREVIOUS, added_amount: "400000000", amount: "1000000000", order_id: TAKER, ...extra });
+      const merged = (over: Partial<Order> = {}) => mk({ merged_from: PREVIOUS, added_amount: "400000000", amount: "1000000000", ...over });
+      const refundEvent = (orderId: string) => event("OrderMessageRefundedEvent", { order_id: orderId, reason: "max_fills_reached" });
+      const own = (r: Partial<Refund>): Refund => ({
+        height: 25191401,
+        order_id: TAKER,
+        market_id: MARKET,
+        order_type: "buy",
+        amount: "9000000000",
+        refund: { denom: USDC, amount: "112500000" },
+        reason: "max_fills_reached",
+        ...r,
+      });
+
+      it("says the create was added to the order the owner already rested at this price", () => {
+        const msg = msgOf(create, [amended()]);
+        const out = outcomeOf(msg, dexCtx({ placed: [merged()], fills: [], cancelled: [], pending: false }));
+        expect(out?.placed.map((o) => o.order_id)).toEqual([TAKER]);
+        body(msg, dexCtx({ placed: [merged()], fills: [], cancelled: [], pending: false }));
+        expect(screen.getByTestId("dex-placed")).toHaveTextContent(
+          "Added 400 BZE to your order at this price; it now rests as order #0…6714610 (total 1,000 BZE), at the back of the queue",
+        );
+        expect(screen.getByRole("link", { name: "order #0…6714610" })).toBeInTheDocument();
+        expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+      });
+
+      it("trims the merged order's id like any other", () => {
+        const id = "000000000000000006714623";
+        body(msgOf(create, [amended({ id, order_id: id })]), dexCtx({ placed: [merged({ order_id: id })], fills: [], cancelled: [], pending: false }));
+        expect(screen.getByTestId("dex-placed")).toHaveTextContent("it now rests as order #0…6714623 (total 1,000 BZE)");
+        expect(screen.getByTestId("order-id")).toHaveAttribute("title", id);
+      });
+
+      it("shows the fills and the merge of one message together", () => {
+        const msg = msgOf(create, [event("OrderExecutedEvent", { id: "998", order_id: TAKER }), amended()]);
+        body(msg, dexCtx({ placed: [merged({ added_amount: "400000000" })], fills: [ownFill()], cancelled: [], pending: false }));
+        expect(screen.getByTestId("dex-fills")).toHaveTextContent("Filled right away: 600 BZE for 7.5 USDC");
+        expect(screen.getByTestId("dex-placed")).toHaveTextContent("Added 400 BZE to your order at this price");
+        expect(screen.getByTestId("dex-filled")).toHaveTextContent("60% filled");
+      });
+
+      it("says what became of a merged order since", () => {
+        const msg = msgOf(create, [amended()]);
+        const text = (status: Order["status"]) => {
+          const view = body(msg, dexCtx({ placed: [merged({ status })], fills: [], cancelled: [], pending: false }));
+          const out = screen.getByTestId("dex-placed").textContent;
+          view.unmount();
+          return out;
+        };
+        expect(text("open")).toMatch(/at the back of the queue$/);
+        expect(text("merged")).toMatch(/at the back of the queue; since merged into a later order$/);
+        expect(text("filled")).toMatch(/at the back of the queue; since filled$/);
+        expect(text("cancelled")).toMatch(/at the back of the queue; since cancelled$/);
+      });
+
+      it("words a plain order that was merged into a later one", () => {
+        const msg = msgOf(create, [event("OrderSavedEvent", { id: TAKER, order_id: TAKER })]);
+        body(msg, dexCtx({ placed: [mk({ status: "merged", filled_amount: "100000000" })], fills: [], cancelled: [], pending: false }));
+        expect(screen.getByTestId("dex-placed")).toHaveTextContent("300 BZE rested on the order book, since merged into a later order");
+      });
+
+      it("keeps another message's merge out", () => {
+        const msg = msgOf(create, [amended()]);
+        const out = outcomeOf(msg, dexCtx({ placed: [merged(), merged({ order_id: OTHER_TAKER })], fills: [], cancelled: [], pending: false }));
+        expect(out?.placed.map((o) => o.order_id)).toEqual([TAKER]);
+      });
+
+      it("reads a refund event with an order id as the v8.3.0 outcome, not the v8.2.x queue", () => {
+        const msg = msgOf(create, [refundEvent(TAKER)]);
+        const dex = dexCtx({ placed: [mk()], fills: [], cancelled: [], refunds: [own({}), own({ order_id: OTHER_TAKER })], pending: true });
+        const out = outcomeOf(msg, dex);
+        expect(out?.pending).toBe(false);
+        expect(out?.placed).toEqual([]);
+        expect(out?.refunds.map((r) => r.order_id)).toEqual([TAKER]);
+      });
+
+      it("says a create stopped at the fill cap, with the cap from the parameters", async () => {
+        const msg = msgOf(create, [event("OrderExecutedEvent", { id: "998", order_id: TAKER }), refundEvent(TAKER)]);
+        const api = fakeApi({ params: async () => ({ tradebin: { params: { maxFillsPerOrder: "500" }, last_change: null } }) });
+        const dex = settledDex({ fills: [ownFill()], refunds: [own({})] });
+        const r = rendererFor(msg.type_url);
+        renderWithProviders(<r.Body msg={msg} ctx={dex} />, { api });
+        expect(screen.getByTestId("dex-max-fills")).toBeInTheDocument();
+        expect(await screen.findByText(/Stopped after the most fills one order can take \(500\);/)).toHaveTextContent(
+          "Stopped after the most fills one order can take (500); 9,000 BZE was not filled and 112.5 USDC was sent back. Send another order for the rest.",
+        );
+        expect(screen.queryByTestId("dex-placed")).not.toBeInTheDocument();
+        expect(screen.queryByTestId("dex-below-min")).not.toBeInTheDocument();
+      });
+
+      it("leaves the cap out while the parameters are unknown, and says dust was kept", () => {
+        const msg = msgOf(create, [refundEvent(TAKER)]);
+        body(msg, settledDex({ refunds: [own({ amount: "1", refund: null })] }));
+        expect(screen.getByTestId("dex-max-fills")).toHaveTextContent(
+          "Stopped after the most fills one order can take; 0.000001 BZE was not filled (too small to send back, kept as dust). Send another order for the rest.",
+        );
+      });
+
+      it("says one fill entry stopped at the cap without the old no-orders wording", () => {
+        const fillMsg = fixture("tradebin-fill-orders");
+        const msg = msgOf(fillMsg, [event("OrderExecutedEvent", { id: "998", order_id: TAKER }), refundEvent(TAKER), refundEvent(OTHER_TAKER)]);
+        const refunds = [own({}), own({ order_id: OTHER_TAKER, amount: "1000000000", refund: { denom: USDC, amount: "12500000" } })];
+        body(msg, settledDex({ fills: [ownFill({ amount: "200000000" })], refunds }));
+        expect(screen.getByTestId("dex-max-fills")).toHaveTextContent("10,000 BZE was not filled and 125 USDC was sent back.");
+        expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
+      });
+
+      it("keeps the old not-filled wording for the older reasons of a v8.3.0 fill message", () => {
+        const fillMsg = fixture("tradebin-fill-orders");
+        const msg = msgOf(fillMsg, [refundEvent(TAKER)]);
+        body(msg, settledDex({ refunds: [own({ reason: "no_match", amount: "200000000", refund: { denom: "ubze", amount: "200000000" } })] }));
+        expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled (no order at that price): 200 BZE sent back.");
+        expect(screen.queryByTestId("dex-max-fills")).not.toBeInTheDocument();
+      });
+    });
   });
 
   it("says a settled fill filled nothing, never that its orders were filled", () => {
@@ -305,7 +428,7 @@ describe("DEX outcome", () => {
     expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled");
   });
 
-  describe("chain v8.3.0 outcomes", () => {
+  describe("chain v8.3.0 outcomes by queue message id (the upgrade block and pre-release builds)", () => {
     const id = (n: number) => String(n).padStart(24, "0");
     const v830Fill = {
       ...fixture("tradebin-fill-orders"),
@@ -325,7 +448,7 @@ describe("DEX outcome", () => {
       createRenderContext({
         transfers: [],
         tokens,
-        dex: { placed: [], fills: [], cancelled: [], refunds: [], skipped_cancels: [], failed: [], pending: false, ...dex },
+        dex: { placed: [], fills: [], cancelled: [], refunds: [], pending: false, ...dex },
         dexSettled: true,
       });
 
@@ -352,33 +475,36 @@ describe("DEX outcome", () => {
       expect(screen.getByTestId("dex-not-filled")).toHaveTextContent("Nothing was filled: these orders were no longer on the book");
     });
 
+    it("says a queued create the upgrade sent back, on its original transaction", () => {
+      const queued = { ...create, events: [{ type: "bze.tradebin.OrderCreateMessageEvent", attrs: { message_id: id(3) } }] };
+      const r = refund({ message_id: id(3), order_id: id(3), order_type: "buy", amount: "400000000", refund: { denom: USDC, amount: "5000000" }, reason: "upgrade" });
+      expect(outcomeOf(queued, settled({ refunds: [r], pending: false }))?.refunds).toEqual([r]);
+      body(queued, settled({ refunds: [r] }));
+      expect(screen.getByTestId("dex-upgrade")).toHaveTextContent(
+        "This order was still waiting when the chain upgraded to v8.3.0 and was sent back: 5 USDC. Place it again.",
+      );
+      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("dex-below-min")).not.toBeInTheDocument();
+    });
+
+    it("says a queued fill the upgrade sent back, and does not call it unfilled for want of orders", () => {
+      const r = refund({ message_id: id(1), order_id: id(1), reason: "upgrade" });
+      body(v830Fill, settled({ refunds: [r] }));
+      expect(screen.getByTestId("dex-upgrade")).toHaveTextContent("sent back: 200 BZE. Place it again.");
+      expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
+    });
+
+    it("says an upgrade refund that was only dust", () => {
+      const queued = { ...create, events: [{ type: "bze.tradebin.OrderCreateMessageEvent", attrs: { message_id: id(3) } }] };
+      body(queued, settled({ refunds: [refund({ message_id: id(3), reason: "upgrade", amount: "1", refund: null })] }));
+      expect(screen.getByTestId("dex-upgrade")).toHaveTextContent("was sent back: too small to send back, kept as dust. Place it again.");
+    });
+
     it("says a create's remainder below the minimum went back", () => {
       const placedFill = fill({});
       body(create, settled({ fills: [placedFill], refunds: [refund({ message_id: id(3), order_type: "buy", amount: "400000000", refund: { denom: USDC, amount: "5000000" }, reason: "below_min_amount" })] }));
       expect(screen.getByTestId("dex-below-min")).toHaveTextContent("The rest was below the minimum order: 5 USDC sent back.");
       expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
-    });
-
-    it("says a cancel found its order already gone", () => {
-      const cancel = fixture("tradebin-cancel-order");
-      body(cancel, settled({ skipped_cancels: [{ height: 25191401, message_id: id(4), market_id: MARKET, order_type: "buy", order_id: "1042", reason: "order_not_found" }] }));
-      expect(screen.getByTestId("dex-cancel-skipped")).toHaveTextContent("Order #1042 was already filled or cancelled; nothing to cancel.");
-      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
-    });
-
-    it("says a failed message is retried, never that a fill filled nothing", () => {
-      const failed = [{ message_id: id(1), message_type: "fill_buy", height: 25191402 }];
-      body(v830Fill, settled({ failed, pending: true }));
-      expect(screen.getByTestId("dex-failed")).toHaveTextContent("The order book could not process this yet; it retries every block.");
-      expect(screen.queryByTestId("dex-not-filled")).not.toBeInTheDocument();
-      expect(screen.queryByTestId("dex-pending")).not.toBeInTheDocument();
-    });
-
-    it("keeps a failure quiet once the message was processed", () => {
-      const failed = [{ message_id: id(3), message_type: "buy", height: 25191402 }];
-      body(create, settled({ failed, placed: [order({})], pending: false }));
-      expect(screen.queryByTestId("dex-failed")).not.toBeInTheDocument();
-      expect(screen.getByTestId("dex-placed")).toBeInTheDocument();
     });
   });
 

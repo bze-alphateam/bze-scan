@@ -9,6 +9,7 @@ import failedTx from "../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D
 import raffleTx from "../test/fixtures/api/v1/txs/B0A1F2E3D4C5B6A79881726354453627180918273645546372819203A4B5C6D7.json";
 import voteTx from "../test/fixtures/api/v1/txs/C0DE47A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D.json";
 import sendTx from "../test/fixtures/api/v1/txs/3F9A6B2C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D0C21E.json";
+import mergeTx from "../test/fixtures/api/v1/txs/A41D5C0E7B3F9264D8E0A1B2C3D4E5F60718293A4B5C6D7E8F9A0B1C2D3E4F50.json";
 import refundedTx from "../test/fixtures/api/v1/txs/F111ED0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F.json";
 
 // The mock API answers these hashes from test/fixtures/api/v1/txs and 404s any
@@ -141,6 +142,18 @@ test.describe("transaction page with BZE actions", () => {
     await expect(card.getByTestId("dex-fills")).toContainText("Filled right away: 600 BZE for 7.5 USDC");
     await expect(card.getByTestId("dex-placed")).toContainText("400 BZE still waiting on the order book");
     await expect(card.getByTestId("dex-filled")).toHaveText("60% filled");
+    await expect(card.getByTestId("dex-pending")).toHaveCount(0);
+  });
+
+  test("says a create was added to the owner's resting order, which rests under the new id (chain v8.3.0)", async ({ page }) => {
+    await page.goto(`/txs/${mergeTx.hash}`);
+    const card = page.getByTestId("action-card");
+    await expect(card.getByRole("heading", { name: "Buy order · 400 BZE at 0.0125 USDC" })).toBeVisible();
+    await expect(card.getByTestId("dex-placed")).toHaveText(
+      "Added 400 BZE to your order at this price; it now rests as order #0…6714620 (total 1,000 BZE), at the back of the queue",
+    );
+    await expect(card.getByRole("link", { name: "order #0…6714620" })).toBeVisible();
+    await expect(card.getByTestId("dex-fills")).toHaveCount(0);
     await expect(card.getByTestId("dex-pending")).toHaveCount(0);
   });
 

@@ -17,6 +17,7 @@ import {
   deltaLines,
   ibcChip,
   ibcFor,
+  KNOWN_KINDS,
   lineText,
   parseCategory,
   withoutFee,
@@ -138,8 +139,26 @@ describe("activityLine", () => {
     const dust = { ...refunded, attrs: { ...refunded.attrs, refund: "" } };
     expect(text(of({ kind: "dex_refund", tx_hash: null, details: [dust] }))).toBe("Refund too small to send back on BZE/USDC");
     expect(text(of({ kind: "dex_refund" }))).toBe("Refunded by the DEX");
-    expect(text(of({ kind: "dex_cancel_skipped", tx_hash: null }))).toBe("Cancel skipped, the order was gone");
-    expect(text(of({ kind: "dex_failed", tx_hash: null }))).toBe("The DEX could not process an order yet");
+  });
+
+  it("reads the upgrade block's refund like any refund, and no longer knows the events that never shipped", () => {
+    const upgrade = {
+      type: "bze.tradebin.OrderMessageRefundedEvent",
+      attrs: { owner: ADDR, market_id: `ubze/${USDC}`, amount: "100", refund: "200ubze", reason: "upgrade" },
+    };
+    expect(text(of({ kind: "dex_refund", tx_hash: null, details: [upgrade] }))).toBe("Refunded · 0.0002 BZE on BZE/USDC");
+    expect(KNOWN_KINDS).not.toContain("dex_cancel_skipped");
+    expect(KNOWN_KINDS).not.toContain("dex_failed");
+  });
+
+  it("says a create merged into the owner's resting order (chain v8.3.0)", () => {
+    const amended = {
+      type: "bze.tradebin.OrderAmendedEvent",
+      attrs: { owner: ADDR, market_id: `ubze/${USDC}`, added_amount: "40", amount: "140", previous_id: "9", id: "10" },
+    };
+    expect(text(of({ kind: "dex_order", details: [amended] }))).toBe("Added to your order on BZE/USDC");
+    expect(text(of({ kind: "dex_order", details: [] }))).toBe("Placed an order on the DEX");
+    expect(text(of({ kind: "dex_order" }))).toBe("Placed an order on the DEX");
   });
 
   it("reads an order resting on the book, a chain-made cancel and a swap", () => {

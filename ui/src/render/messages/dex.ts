@@ -1,6 +1,6 @@
 import BigNumber from "bignumber.js";
 
-import type { Coin, FailedOrderMessage, Fill, Order, Refund, SkippedCancel } from "@/api/types";
+import type { Coin, Fill, Order, Refund } from "@/api/types";
 import { externalLinks } from "@/lib/links";
 
 import { eventAttr, str } from "./common";
@@ -100,10 +100,6 @@ export interface MessageOutcome {
   cancelled: Order[];
   /** What the order book sent back (chain v8.3.0). */
   refunds: Refund[];
-  /** Cancels that found no order (chain v8.3.0). */
-  skippedCancels: SkippedCancel[];
-  /** Messages the order book failed to process and retries (chain v8.3.0). */
-  failed: FailedOrderMessage[];
   /** The order book has not processed this transaction's messages yet. */
   pending: boolean;
 }
@@ -125,14 +121,25 @@ function messageIds(msg: RenderMessage): Set<string> {
 const SAVED_EVENT = "bze.tradebin.OrderSavedEvent";
 const EXECUTED_EVENT = "bze.tradebin.OrderExecutedEvent";
 const CANCELED_EVENT = "bze.tradebin.OrderCanceledEvent";
+const AMENDED_EVENT = "bze.tradebin.OrderAmendedEvent";
+const REFUNDED_EVENT = "bze.tradebin.OrderMessageRefundedEvent";
 
 /** The outcome events a v8.3.0 message carries; the queue messages are the older chain's. */
-const TX_LEVEL_EVENTS: readonly string[] = [SAVED_EVENT, EXECUTED_EVENT, CANCELED_EVENT];
+const TX_LEVEL_EVENTS: readonly string[] = [SAVED_EVENT, EXECUTED_EVENT, CANCELED_EVENT, AMENDED_EVENT];
 
-/** Whether the message's own events carry the order book's outcome (chain v8.3.0 runs the engine inside the message). */
+/**
+ * Whether the message's own events carry the order book's outcome (chain v8.3.0 runs the engine inside the
+ * message). A refund event counts only with the taker's `order_id`: a build before the release emitted it
+ * with a queue `message_id`, as a block event, and the v8.2.x matching reads that.
+ */
 function ranOrderBook(msg: RenderMessage): boolean {
-  return (msg.events ?? []).some((e) => TX_LEVEL_EVENTS.includes(e.type));
+  return (msg.events ?? []).some(
+    (e) => TX_LEVEL_EVENTS.includes(e.type) || (e.type === REFUNDED_EVENT && typeof e.attrs.order_id === "string" && e.attrs.order_id !== ""),
+  );
 }
+
+/** The refund reasons that have a sentence of their own (chain v8.3.0), apart from the older "not filled" wording. */
+export const SPECIAL_REFUND_REASONS: readonly string[] = ["max_fills_reached", "upgrade"];
 
 /** The string attribute `key` of the message's own events of `type`. */
 function eventValues(msg: RenderMessage, type: string, key: string): Set<string> {
@@ -146,9 +153,10 @@ function eventValues(msg: RenderMessage, type: string, key: string): Set<string>
 
 /**
  * The part of the transaction's DEX outcome that belongs to one message:
- * from chain v8.3.0 the orders its own `OrderSavedEvent`s name, the fills
+ * from chain v8.3.0 the orders its own `OrderSavedEvent`s and `OrderAmendedEvent`s name, the fills
  * whose `taker_order_id` is the `order_id` of its own `OrderExecutedEvent`s,
- * the orders its own `OrderCanceledEvent`s name; before that, orders and fills
+ * the orders its own `OrderCanceledEvent`s name, the refunds of its own `OrderMessageRefundedEvent`s; before
+ * that, orders and fills
  * whose queue message id one of its events names, and before chain v8.2.0 (no
  * ids) those of its market and owner. A cancel's order is the one its body
  * names. Null when the transaction has no outcome.
@@ -157,17 +165,16 @@ export function outcomeOf(msg: RenderMessage, ctx: RenderContext): MessageOutcom
   const dex = ctx.dex;
   if (!dex) return null;
   if (ranOrderBook(msg)) {
-    const placed = eventValues(msg, SAVED_EVENT, "id");
+    // A merged order rests under the amend's new id, like a saved one.
+    const placed = new Set([...eventValues(msg, SAVED_EVENT, "id"), ...eventValues(msg, AMENDED_EVENT, "id")]);
     const takerOrders = eventValues(msg, EXECUTED_EVENT, "order_id");
     const cancelled = eventValues(msg, CANCELED_EVENT, "id");
-    const ids = messageIds(msg);
+    const refunded = eventValues(msg, REFUNDED_EVENT, "order_id");
     return {
       placed: dex.placed.filter((o) => placed.has(o.order_id)),
       fills: dex.fills.filter((f) => f.taker_order_id != null && takerOrders.has(f.taker_order_id)),
       cancelled: dex.cancelled.filter((o) => cancelled.has(o.order_id)),
-      refunds: (dex.refunds ?? []).filter((r) => ids.has(r.message_id)),
-      skippedCancels: (dex.skipped_cancels ?? []).filter((c) => ids.has(c.message_id)),
-      failed: (dex.failed ?? []).filter((f) => ids.has(f.message_id)),
+      refunds: (dex.refunds ?? []).filter((r) => r.message_id == null && r.order_id != null && refunded.has(r.order_id)),
       pending: false,
     };
   }
@@ -181,10 +188,8 @@ export function outcomeOf(msg: RenderMessage, ctx: RenderContext): MessageOutcom
     placed: dex.placed.filter((o) => own(o.message_id, o.market_id, o.owner)),
     fills: dex.fills.filter((f) => own(f.taker_message_id, f.market_id, f.taker)),
     cancelled: orderId == null ? [] : dex.cancelled.filter((o) => o.order_id === orderId && o.market_id === market),
-    // These carry a message id always: they exist only since chain v8.3.0.
-    refunds: (dex.refunds ?? []).filter((r) => ids.has(r.message_id)),
-    skippedCancels: (dex.skipped_cancels ?? []).filter((c) => ids.has(c.message_id)),
-    failed: (dex.failed ?? []).filter((f) => ids.has(f.message_id)),
+    // The upgrade block's refunds of a queued message carry its message id.
+    refunds: (dex.refunds ?? []).filter((r) => r.message_id != null && ids.has(r.message_id)),
     pending: dex.pending,
   };
 }
