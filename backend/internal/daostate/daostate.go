@@ -27,6 +27,8 @@ import (
 
 	daotypes "github.com/bze-alphateam/bze/x/dao/types"
 	rewardstypes "github.com/bze-alphateam/bze/x/rewards/types"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 )
 
 // DefaultTTL is how long an answer is served from the cache.
@@ -195,8 +197,8 @@ func New(cfg Config, deps Deps) *Reader {
 }
 
 // Supported reports whether the node runs x/dao: true once a query has
-// answered, false for a node that answers Unimplemented or has never
-// answered.
+// answered, false for a node that answers Unimplemented (remembered for the
+// TTL) or that cannot be reached and has never answered (asked again).
 func (r *Reader) Supported(ctx context.Context) bool {
 	if r.answered.Load() {
 		return true
@@ -204,11 +206,13 @@ func (r *Reader) Supported(ctx context.Context) bool {
 	if at := r.failedAt.Load(); at != 0 && r.now().Sub(time.Unix(0, at)) < r.ttl {
 		return false
 	}
-	if _, err := r.Params(ctx); err != nil {
+	_, err := r.Params(ctx)
+	if errors.Is(err, ErrUnsupported) {
 		r.failedAt.Store(r.now().UnixNano())
-		return false
 	}
-	return true
+	// Any other failure (a node outage) is not remembered: the next request
+	// asks again.
+	return err == nil
 }
 
 // Params reads the module's parameters.
@@ -307,7 +311,11 @@ func (r *Reader) Stake(ctx context.Context, e Electorate) (ElectorateStake, erro
 				denom = s.StakingDenom
 			}
 		}
-		// A source the chain no longer has holds zero of that denom.
+		// A source the chain no longer has holds zero of that denom; when
+		// every source is gone the bond denom stands in.
+		if denom == "" {
+			denom = chain.BondDenom
+		}
 		for i, s := range sources {
 			if s.StakedAmount.Amount == "" {
 				sources[i].StakedAmount = Coin{Denom: denom, Amount: "0"}

@@ -13,6 +13,7 @@ import { formatCount, formatDate } from "@/lib/format";
 import { externalLinks } from "@/lib/links";
 import { describeParam, groupOfModule, PARAM_GROUPS, plainKey } from "@/lib/parameters";
 import { coins, Fields, humanise } from "@/render/messages/common";
+import { createRenderContext, rendererFor } from "@/render/messages/registry";
 import { coinsText, type Action, type Entry } from "@/render/proposals";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -219,6 +220,19 @@ export function ActionView({ a, p, denoms, upgradeEta }: ActionProps) {
           . Transfers over it work again once the proposal passes.
         </Text>
       );
+    case "message": {
+      const r = rendererFor(a.typeUrl);
+      const msg = { type_url: a.typeUrl, sender: null, module: null, body: a.body, events: null, msg_index: null };
+      const ctx = createRenderContext({ transfers: [], tokens: denoms });
+      return (
+        <Stack gap="2" data-testid="action" data-action={a.type}>
+          <Text fontWeight="semibold" fontSize="sm">
+            {r.title(msg, ctx)}
+          </Text>
+          <r.Body msg={msg} ctx={ctx} />
+        </Stack>
+      );
+    }
     case "text":
       return null;
     case "other":

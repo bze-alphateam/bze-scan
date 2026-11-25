@@ -1,0 +1,17 @@
+{
+  "type_url": "/bze.dao.MsgUpdateMembers",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "add": [
+      "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq"
+    ],
+    "remove": [
+      "bze1a"
+    ]
+  },
+  "events": []
+}
