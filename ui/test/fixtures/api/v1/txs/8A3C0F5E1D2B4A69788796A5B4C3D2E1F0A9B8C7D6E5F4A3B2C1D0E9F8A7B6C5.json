@@ -1,0 +1,148 @@
+{
+  "height": 26100020,
+  "tx_index": 1,
+  "hash": "8A3C0F5E1D2B4A69788796A5B4C3D2E1F0A9B8C7D6E5F4A3B2C1D0E9F8A7B6C5",
+  "time": "2026-11-24T10:00:03Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/bze.tradebin.MsgCreateOrder"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/bze.tradebin.MsgCreateOrder",
+    "module": "tradebin",
+    "body": {
+      "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "order_type": "buy",
+      "amount": "1000000000",
+      "price": "0.0125",
+      "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 300000,
+  "gas_used": 212004,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/bze.tradebin.MsgCreateOrder",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "tradebin",
+      "body": {
+        "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "order_type": "buy",
+        "amount": "1000000000",
+        "price": "0.0125",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+      },
+      "events": [
+        {
+          "type": "bze.tradebin.OrderExecutedEvent",
+          "attrs": {
+            "id": "000000000000000006714600",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "sell",
+            "amount": "400000000",
+            "price": "0.0125",
+            "maker": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+            "taker": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "order_id": "000000000000000006714610"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderExecutedEvent",
+          "attrs": {
+            "id": "000000000000000006714601",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "sell",
+            "amount": "200000000",
+            "price": "0.0125",
+            "maker": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+            "taker": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "order_id": "000000000000000006714610"
+          }
+        },
+        {
+          "type": "bze.tradebin.OrderSavedEvent",
+          "attrs": {
+            "id": "000000000000000006714610",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "buy",
+            "amount": "400000000",
+            "price": "0.0125",
+            "owner": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "order_id": "000000000000000006714610"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [],
+  "dex": {
+    "placed": [
+      {
+        "order_id": "000000000000000006714610",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "owner": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "side": "buy",
+        "price": "0.0125",
+        "amount": "400000000",
+        "filled_amount": "0",
+        "status": "open",
+        "created_height": 26100020,
+        "created_time": "2026-11-24T10:00:03Z",
+        "created_tx_hash": "8A3C0F5E1D2B4A69788796A5B4C3D2E1F0A9B8C7D6E5F4A3B2C1D0E9F8A7B6C5",
+        "message_id": null,
+        "closed_height": null,
+        "closed_time": null
+      }
+    ],
+    "fills": [
+      {
+        "height": 26100020,
+        "time": "2026-11-24T10:00:03Z",
+        "order_id": "000000000000000006714600",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "side": "sell",
+        "price": "0.0125",
+        "amount": "400000000",
+        "maker": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+        "taker": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "taker_tx_hash": "8A3C0F5E1D2B4A69788796A5B4C3D2E1F0A9B8C7D6E5F4A3B2C1D0E9F8A7B6C5",
+        "taker_message_id": null,
+        "taker_order_id": "000000000000000006714610"
+      },
+      {
+        "height": 26100020,
+        "time": "2026-11-24T10:00:03Z",
+        "order_id": "000000000000000006714601",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "side": "sell",
+        "price": "0.0125",
+        "amount": "200000000",
+        "maker": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "taker": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "taker_tx_hash": "8A3C0F5E1D2B4A69788796A5B4C3D2E1F0A9B8C7D6E5F4A3B2C1D0E9F8A7B6C5",
+        "taker_message_id": null,
+        "taker_order_id": "000000000000000006714610"
+      }
+    ],
+    "cancelled": [],
+    "pending": false
+  },
+  "ibc_transfers": null
+}

@@ -122,15 +122,55 @@ function messageIds(msg: RenderMessage): Set<string> {
   return ids;
 }
 
+const SAVED_EVENT = "bze.tradebin.OrderSavedEvent";
+const EXECUTED_EVENT = "bze.tradebin.OrderExecutedEvent";
+const CANCELED_EVENT = "bze.tradebin.OrderCanceledEvent";
+
+/** The outcome events a v8.3.0 message carries; the queue messages are the older chain's. */
+const TX_LEVEL_EVENTS: readonly string[] = [SAVED_EVENT, EXECUTED_EVENT, CANCELED_EVENT];
+
+/** Whether the message's own events carry the order book's outcome (chain v8.3.0 runs the engine inside the message). */
+function ranOrderBook(msg: RenderMessage): boolean {
+  return (msg.events ?? []).some((e) => TX_LEVEL_EVENTS.includes(e.type));
+}
+
+/** The string attribute `key` of the message's own events of `type`. */
+function eventValues(msg: RenderMessage, type: string, key: string): Set<string> {
+  const out = new Set<string>();
+  for (const e of msg.events ?? []) {
+    const v = e.type === type ? e.attrs[key] : undefined;
+    if (typeof v === "string" && v !== "") out.add(v);
+  }
+  return out;
+}
+
 /**
  * The part of the transaction's DEX outcome that belongs to one message:
- * orders and fills whose queue message id one of its events names; before
- * chain v8.2.0 (no ids) those of its market and owner. A cancel's order is
- * the one its body names. Null when the transaction has no outcome.
+ * from chain v8.3.0 the orders its own `OrderSavedEvent`s name, the fills
+ * whose `taker_order_id` is the `order_id` of its own `OrderExecutedEvent`s,
+ * the orders its own `OrderCanceledEvent`s name; before that, orders and fills
+ * whose queue message id one of its events names, and before chain v8.2.0 (no
+ * ids) those of its market and owner. A cancel's order is the one its body
+ * names. Null when the transaction has no outcome.
  */
 export function outcomeOf(msg: RenderMessage, ctx: RenderContext): MessageOutcome | null {
   const dex = ctx.dex;
   if (!dex) return null;
+  if (ranOrderBook(msg)) {
+    const placed = eventValues(msg, SAVED_EVENT, "id");
+    const takerOrders = eventValues(msg, EXECUTED_EVENT, "order_id");
+    const cancelled = eventValues(msg, CANCELED_EVENT, "id");
+    const ids = messageIds(msg);
+    return {
+      placed: dex.placed.filter((o) => placed.has(o.order_id)),
+      fills: dex.fills.filter((f) => f.taker_order_id != null && takerOrders.has(f.taker_order_id)),
+      cancelled: dex.cancelled.filter((o) => cancelled.has(o.order_id)),
+      refunds: (dex.refunds ?? []).filter((r) => ids.has(r.message_id)),
+      skippedCancels: (dex.skipped_cancels ?? []).filter((c) => ids.has(c.message_id)),
+      failed: (dex.failed ?? []).filter((f) => ids.has(f.message_id)),
+      pending: false,
+    };
+  }
   const ids = messageIds(msg);
   const market = str(msg, "market_id");
   const creator = str(msg, "creator");

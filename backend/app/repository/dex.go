@@ -41,6 +41,8 @@ type OrderFill struct {
 	TakerMessageID *string
 	TakerTxHash    *string
 	Time           time.Time
+	// TakerOrderID is the id of the taker's order (chain v8.3.0); nil before.
+	TakerOrderID *string
 }
 
 // OrderKey is the keyset position of an order in an owner's list.
@@ -110,7 +112,7 @@ const (
 	orderCols = `o.order_id, o.market_id, o.owner, o.side, o.price::text, o.amount::text, o.filled_amount::text,
 		o.status, o.created_height, o.created_time, o.created_tx_hash, o.message_id, o.closed_height, o.closed_time`
 	fillCols = `f.height, f.seq, f.order_id, f.market_id, f.side, f.price::text, f.amount::text, f.maker, f.taker,
-		f.taker_message_id, f.taker_tx_hash, f.time`
+		f.taker_message_id, f.taker_tx_hash, f.time, f.taker_order_id`
 )
 
 func scanOrder(row pgx.CollectableRow) (Order, error) {
@@ -123,7 +125,7 @@ func scanOrder(row pgx.CollectableRow) (Order, error) {
 func scanFill(row pgx.CollectableRow) (OrderFill, error) {
 	var f OrderFill
 	err := row.Scan(&f.Height, &f.Seq, &f.OrderID, &f.MarketID, &f.Side, &f.Price, &f.Amount, &f.Maker, &f.Taker,
-		&f.TakerMessageID, &f.TakerTxHash, &f.Time)
+		&f.TakerMessageID, &f.TakerTxHash, &f.Time, &f.TakerOrderID)
 	return f, err
 }
 
@@ -228,6 +230,11 @@ func (r *Explorer) OrderFills(ctx context.Context, id string, limit int) (int64,
 const cancelledIDs = `SELECT e->'attrs'->>'orderId' FROM explorer.messages m, jsonb_array_elements(m.events) e
 	WHERE m.height = $1 AND m.tx_index = $2 AND e->>'type' = 'bze.tradebin.OrderCancelMessageEvent'`
 
+// cancelledByEvent are the order ids the OrderCanceledEvents of the
+// transaction's own messages name (chain v8.3.0, which has no cancel message).
+const cancelledByEvent = `SELECT e->'attrs'->>'id' FROM explorer.messages m, jsonb_array_elements(m.events) e
+	WHERE m.height = $1 AND m.tx_index = $2 AND e->>'type' = 'bze.tradebin.OrderCanceledEvent'`
+
 // Since chain v8.3.0 the engine also reports the queue messages that end
 // without an order or a fill. Those events are only kept as block_events
 // rows; one belongs to an order message of the transaction (at $1, $2)
@@ -303,7 +310,7 @@ func (r *Explorer) TxDex(ctx context.Context, height, txIndex int64, hash string
 		return nil, err
 	}
 	if out.Cancelled, err = r.orders(ctx, "orders cancelled by "+hash, `SELECT `+orderCols+` FROM explorer.orders o
-		WHERE o.status = 'cancelled' AND o.order_id IN (`+cancelledIDs+`) ORDER BY o.order_id`,
+		WHERE o.status = 'cancelled' AND o.order_id IN (`+cancelledIDs+` UNION `+cancelledByEvent+`) ORDER BY o.order_id`,
 		height, txIndex); err != nil {
 		return nil, err
 	}

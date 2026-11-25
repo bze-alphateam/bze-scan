@@ -188,6 +188,8 @@ export interface Fill {
   taker: string;
   taker_tx_hash: string | null;
   taker_message_id: string | null;
+  /** The id of the taker's own order (chain v8.3.0); absent before. */
+  taker_order_id?: string | null;
 }
 
 /** Why the order book sent part of a message back (chain v8.3.0). */
@@ -557,7 +559,7 @@ export interface Activity {
   /** The net balance change per denom, the fee included. */
   deltas: Balance[];
   msg_types: string[];
-  /** Block-level rows only; null on transaction rows. */
+  /** Block-level rows, and the fills of a maker's `dex_maker_fill` row (chain v8.3.0); null on other transaction rows. */
   details: ActivityDetail[] | null;
   /** The transaction's fee when the address signed or paid it; null otherwise. */
   fee: Balance[] | null;

@@ -32,7 +32,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 29
+const latestVersion = 30
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -43,7 +43,7 @@ var explorerTables = []string{
 	"account_activity", "accounts", "backfill_checkpoints", "block_event_kinds",
 	"block_events", "blocks", "candles", "chain_state", "chains", "daily_stats", "denoms",
 	"ibc_channels", "ibc_transfers", "index_failures", "indexer_state", "labels",
-	"message_kinds", "messages", "order_fills", "order_messages", "orders",
+	"message_kinds", "messages", "order_closures", "order_fills", "order_messages", "orders",
 	"param_snapshots", "pending_rewrites", "proposal_deposits", "proposal_non_voters", "proposal_votes", "proposals",
 	"registry_assets", "swaps", "sync_jobs", "token_events", "token_holders",
 	"transactions", "transfers", "upgrade_recovery", "upgrades", "validator_events", "validators",

@@ -211,6 +211,8 @@ func sqlOf(tx *mockTx) []string {
 		switch {
 		case strings.Contains(s.sql, "ensure_partitions"):
 			out = append(out, "partitions")
+		case strings.Contains(s.sql, "DELETE FROM explorer.swaps"):
+			out = append(out, "stale swaps")
 		case strings.Contains(s.sql, "INSERT INTO explorer.transactions"):
 			out = append(out, "transactions")
 		case strings.Contains(s.sql, "INSERT INTO explorer.messages"):

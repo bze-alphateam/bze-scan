@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { noHorizontalScroll } from "./layout";
 
 import dexTx from "../test/fixtures/api/v1/txs/5D1E0A7B3C9F42E6A8D0B1C2D3E4F5061728394A5B6C7D8E9F0A1B2C3D4E5F60.json";
+import orderBookTx from "../test/fixtures/api/v1/txs/8A3C0F5E1D2B4A69788796A5B4C3D2E1F0A9B8C7D6E5F4A3B2C1D0E9F8A7B6C5.json";
 import ibcTx from "../test/fixtures/api/v1/txs/9C2B4E6A8D0F1325476980ABCDEF0123456789ABCDEF0123456789ABCDEF0A7E.json";
 import failedTx from "../test/fixtures/api/v1/txs/7D04E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B40E9B0.json";
 import raffleTx from "../test/fixtures/api/v1/txs/B0A1F2E3D4C5B6A79881726354453627180918273645546372819203A4B5C6D7.json";
@@ -131,6 +132,16 @@ test.describe("transaction page with BZE actions", () => {
     await expect(steps.nth(3)).toContainText("held for the buy order");
     await expect(steps.nth(4)).toContainText("staking-reward prize");
     await expect(page.getByTestId("net-box")).toBeVisible();
+  });
+
+  test("shows the fills and the rested remainder of a chain v8.3.0 order, matched by order id", async ({ page }) => {
+    await page.goto(`/txs/${orderBookTx.hash}`);
+    const card = page.getByTestId("action-card");
+    await expect(card.getByRole("heading", { name: "Buy order · 1,000 BZE at 0.0125 USDC" })).toBeVisible();
+    await expect(card.getByTestId("dex-fills")).toContainText("Filled right away: 600 BZE for 7.5 USDC");
+    await expect(card.getByTestId("dex-placed")).toContainText("400 BZE still waiting on the order book");
+    await expect(card.getByTestId("dex-filled")).toHaveText("60% filled");
+    await expect(card.getByTestId("dex-pending")).toHaveCount(0);
   });
 
   test("says what a fill message that found no orders got back (chain v8.3.0)", async ({ page }) => {

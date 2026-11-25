@@ -328,6 +328,14 @@ const SENTENCES: Record<string, Sentence> = {
     const more = fills.length - 1;
     return [`Order filled · ${fills[0]}${more > 0 ? ` + ${more} more` : ""}`];
   },
+  dex_maker_fill: (i) => {
+    // The maker's resting order, filled by someone else's transaction (chain v8.3.0).
+    const fills = fillPhrases(i.row, i.address, i.ctx);
+    if (fills.length === 0) return withParty(i, "Your order was filled by", "Your order was filled");
+    const more = fills.length - 1;
+    const text = `Your order was filled · ${fills[0]}${more > 0 ? ` + ${more} more` : ""}`;
+    return i.party ? [text, " by ", i.party] : [text];
+  },
   dex_order_saved: (i) => {
     const d = ownEvent(i.row, "bze.tradebin.OrderSavedEvent", "owner", i.address);
     const m = d ? splitMarket(attr(d, "market_id")) : null;

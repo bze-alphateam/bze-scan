@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -155,6 +156,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Orders = append(all.Orders, e.Orders...)
 		all.OrderFills = append(all.OrderFills, e.OrderFills...)
 		all.OrderCancels = append(all.OrderCancels, e.OrderCancels...)
+		all.OrderClosures = append(all.OrderClosures, e.OrderClosures...)
 		all.Swaps = append(all.Swaps, e.Swaps...)
 		all.IBCTransfers = append(all.IBCTransfers, e.IBCTransfers...)
 	}
@@ -199,7 +201,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 	if mode == ModeUpdate {
 		stmts = append(stmts, statement{table: "failures", sql: resolveFailuresSQL, args: []any{heights}})
 	}
-	swaps, err := swapStatements(hi, &all, mode)
+	swaps, err := swapStatements(hi, &all, mode, pruneRanges(&all, mode))
 	if err != nil {
 		return err
 	}
@@ -300,4 +302,27 @@ func (w *BatchWriter) AdvanceCursor(ctx context.Context, height int64) error {
 		return fmt.Errorf("advance cursor to %d: commit: %w", height, err)
 	}
 	return nil
+}
+
+// pruneRanges are the height ranges ([lo, hi), contiguous heights merged) of
+// the blocks a reindex writes: their swaps are recomputed whole, so the rows
+// of an old numbering go. None outside ModeUpdate.
+func pruneRanges(all *transform.Entities, mode Mode) [][2]int64 {
+	if mode != ModeUpdate {
+		return nil
+	}
+	heights := make([]int64, len(all.Blocks))
+	for i, b := range all.Blocks {
+		heights[i] = b.Height
+	}
+	slices.Sort(heights)
+	var out [][2]int64
+	for _, h := range heights {
+		if n := len(out); n > 0 && h <= out[n-1][1] {
+			out[n-1][1] = max(out[n-1][1], h+1)
+			continue
+		}
+		out = append(out, [2]int64{h, h + 1})
+	}
+	return out
 }

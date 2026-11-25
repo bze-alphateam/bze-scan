@@ -31,8 +31,9 @@ type Activity struct {
 	// Deltas is the net balance change per denom, the fee included.
 	Deltas   []Balance `json:"deltas"`
 	MsgTypes []string  `json:"msg_types"`
-	// Details are the typed events naming the address (block-level rows);
-	// null on transaction rows.
+	// Details are the typed events naming the address: block-level rows and
+	// the fills of a maker's dex_maker_fill row (chain v8.3.0); null on other
+	// transaction rows.
 	Details json.RawMessage `json:"details"`
 	// Fee is the transaction's fee when the address signed or paid it; null
 	// otherwise.

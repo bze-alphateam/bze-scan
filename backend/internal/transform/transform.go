@@ -68,6 +68,9 @@ type Entities struct {
 	Orders        []Order
 	OrderFills    []OrderFill
 	OrderCancels  []OrderCancel
+	// OrderClosures are the order_closures rows of the heights' cancels made
+	// by transactions (chain v8.3.0).
+	OrderClosures []OrderClosure
 	// Swaps are the swaps rows of the heights' liquidity-pool swaps; they
 	// and OrderFills carry the trades' ids.
 	Swaps []Swap
@@ -275,8 +278,9 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	var queue []queued
+	txFills := 0 // the transactions' fills so far, for their seqs
 	for i, raw := range in.Block.Txs {
-		if err := t.transaction(ents, &queue, b, i, raw, in.Results.TxsResults[i]); err != nil {
+		if err := t.transaction(ents, &queue, &txFills, b, i, raw, in.Results.TxsResults[i]); err != nil {
 			return nil, fmt.Errorf("transform %d: tx %d: %w", h, i, err)
 		}
 	}
@@ -292,7 +296,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 // transaction appends the transactions row and the messages rows of the
 // transaction at index i, and to queue the order messages it enqueued
 // without a message id.
-func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i int, rawB64 string, res node.TxResult) error {
+func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int, b Block, i int, rawB64 string, res node.TxResult) error {
 	raw, err := base64.StdEncoding.DecodeString(rawB64)
 	if err != nil {
 		return fmt.Errorf("raw bytes: %w", err)
@@ -377,6 +381,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, b Block, i in
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
 		txOrderMessages(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
+		txOrders(ents, b, txFills, i, tx.Hash, len(decoded.Msgs), byIndex)
 		if err := txSwaps(ents, b, i, tx.Hash, len(decoded.Msgs), byIndex); err != nil {
 			return err
 		}

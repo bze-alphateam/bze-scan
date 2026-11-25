@@ -362,7 +362,7 @@ every later route follows:
 | `GET /api/v1/blocks/{height}/transfers?cursor&limit` | every transfer of the block, the block's own (`tx_index` -1) first, then the transactions' by tx_index and seq: `tx_index`, `tx_hash` (null for the block's own) and the transfer as on the transaction page; cached for a minute; 404 when not indexed |
 | `GET /api/v1/block-events?type&cursor&limit` | the stored block events of every block, newest first (height, then seq, descending): `height`, `seq`, `time` (the block's), `type`, `kind`, `category`, `attrs`; `type` (a classified event type such as `bze.burner.CoinsBurnedEvent`, else 400) keeps one type and reads the `(type, height)` index; `no-store` |
 | `GET /api/v1/txs?cursor&limit&status=success\|failed` | transactions, height and index descending: height, tx_index, hash, time, success, msg_count, msg_types, fee, first signer and `first_message` (`{type_url, module, body}` of the message at index 0, a lateral lookup bounded by the cursor's height; null for a transaction without messages, `body` null when it could not be decoded) |
-| `GET /api/v1/txs/{hash}` | every column of the transaction (with `first_message` as on the list) plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first), `cancelled` (the orders it cancelled), since chain v8.3.0 `refunds` (`height`, `message_id`, `market_id`, `order_type`, `amount` = the base amount not executed, `refund` = the coin sent back `{denom, amount}` or null when it rounded to zero and only dust was kept, `reason` `no_match`/`unfilled_remainder`/`below_min_amount`), `skipped_cancels` (`height`, `message_id`, `market_id`, `order_type`, `order_id`, `reason` `order_not_found`) and `failed` (`message_id`, `message_type`, `height` of the latest block the engine failed to process it in; it stays queued), empty before that release, and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, else cached for a minute). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
+| `GET /api/v1/txs/{hash}` | every column of the transaction (with `first_message` as on the list) plus `messages` (msg_index, type_url, sender, module, body, events) and `transfers` (seq, msg_index (null for the fee), kind `transfer`/`mint`/`burn`, sender, recipient, denom, amount in base units, `symbol`/`exponent` when the denom is known, `sender_label`/`recipient_label` `{name, kind}` when the address is labelled); the hash is 64 hex characters in any case (else 400); 404 when not indexed, which the UI shows as pending. `dex` is the order book outcome of its order messages, null when it has none: `placed` (the orders it rested on the book), `fills` (the fills it took, oldest first; since chain v8.3.0 each has `taker_order_id`, absent before), `cancelled` (the orders it cancelled, read from its `OrderCancelMessageEvent`s or, since chain v8.3.0, its own `OrderCanceledEvent`s; a v8.3.0 transaction is never `pending`), since chain v8.3.0 `refunds` (`height`, `message_id`, `market_id`, `order_type`, `amount` = the base amount not executed, `refund` = the coin sent back `{denom, amount}` or null when it rounded to zero and only dust was kept, `reason` `no_match`/`unfilled_remainder`/`below_min_amount`), `skipped_cancels` (`height`, `message_id`, `market_id`, `order_type`, `order_id`, `reason` `order_not_found`) and `failed` (`message_id`, `message_type`, `height` of the latest block the engine failed to process it in; it stays queued), empty before that release, and `pending` (an order message it queued has no outcome indexed yet; the answer is then `no-store`, else cached for a minute). `ibc_transfers` are the cross-chain transfers it created (a `MsgTransfer`, a `MsgRecvPacket`) or settled (a relayer's acknowledgement or timeout, which may settle several), as on the account's cross-chain list, null when it has none; while one is `pending` the answer is `no-store` |
 | `GET /api/v1/ibc/channels` | every IBC channel by number, one page: `channel_id`, `port_id`, `state` (`open`, `closed`, `init`, `tryopen`…), `client_status` (its light client: `active`, `expired`, `frozen`; null until asked — an expired or frozen client carries nothing until governance revives it), `client_id`, `connection_id`, `counterparty_channel_id`, `counterparty` (as on a transfer), `escrow_address` (the ICS-20 account holding what was sent over it), `updated_at`; `no-store` |
 | `GET /api/v1/orders/{id}` | an order that rested on the book (`id` up to 24 digits, zero-filled): `order_id`, `market_id`, `owner`, `side`, `price`, `amount` (what rested, base units), `filled_amount`, `status` (`open`, `filled`, `cancelled`), `created_height`, `created_time`, `created_tx_hash` and `message_id` (null when unknown), `closed_height`, `closed_time`, plus `fill_count` and the newest 100 `fills`. 400 for anything but digits; 404 when not indexed; `no-store` |
 | `GET /api/v1/validators?status=bonded\|unbonding\|unbonded\|all&cursor&limit` | validators (all statuses by default): the bonded ones by `rank`, then the others by tokens; rank, moniker, operator_address, tokens, voting_power_pct, commission_rate, uptime, jailed, status, `logo_url` (the Keybase picture of its identity, null without an identity or a picture), `missed_blocks` and `signed_blocks_window` (the slashing signing info, null until synced), `recent_votes` (`{voted, of}`: how many of the last ten proposals whose voting ended — fewer while the chain has fewer — its account voted on, whatever the option; also on `/validators/{op}`), `offline` / `missed_in_a_row` / `last_signed_height` (also on `/validators/{op}` and the Hall of Fame: an active — bonded, unjailed — validator's blocks not signed in a row up to the live cursor, counted from the latest of its last signed block, its last `bonded`/`unjailed` event and the start of the watch, `offline` from ten; all three null outside the active set, `last_signed_height` also null when it signed nothing since the watch began — the live writer records each block's signers in `validators.last_signed_height`, migration 000021, without history). `last_signed_time` (the time of the `last_signed_height` block, null when unknown) and `jail` (also on `/validators/{op}`: `{height, time, reason}` for a currently jailed validator, null otherwise — the earliest `slashed` event after the latest `unjailed` one — the block that jailed it, `reason` `downtime` or `double_sign`; `height`/`time`/`reason` are null when the jail happened below the indexed range). `voting_power_pct` (share of the bonded tokens) and `uptime` (`1 − missed / window` of the slashing signing info) are percentages with five decimals; rank, voting power and uptime are null outside the active set (not bonded, or jailed: the slashing module stops counting there, so the figure would be stale); another status is a 400. The list also carries `summary`, the page's header from `chain_state`: `bonded_tokens`, `staked_share`, `reward_rate` (as in `/stats`), `unbonding_period` (seconds), `top5_share` (the five largest bonded validators' share of the bonded tokens, five decimals) and `max_validators` (the seats of the active set); each null until the chain state is synced |
@@ -1253,6 +1253,33 @@ the queue message id (24 zero-filled digits, unique within a block).
   12,940,553..15,950,999 fills the rows of a database written before.
 - Reconciliation: the chain removes a remainder below the market minimum
   without an event; the hourly `orders` set (see the state sync) closes it.
+- Chain v8.3.0 runs the engine inside the message: nothing is queued, and
+  `OrderSavedEvent`, `OrderExecutedEvent` and `OrderCanceledEvent` are events
+  of the transaction itself (with its `msg_index`; a failed transaction has
+  none), carrying the id of the order the message created in `order_id`
+  (every placement gets one, a taker filled in full included; on an
+  `OrderExecutedEvent` `id` stays the maker's order). The transformer reads
+  them from every successful transaction whenever they appear (no upgrade
+  height, so a testnet and the mainnet need no constant), next to the
+  block-level path, which older heights keep unchanged: a saved event is an
+  `orders` row with `created_tx_hash` set directly and no message id; a fill
+  is an `order_fills` row with `taker_tx_hash` set directly, `seq`
+  1,000,000 + its ordinal among the block's transaction fills (transaction,
+  message, then event order; block-level seqs are positions in the block's
+  finalize events, below that), `tx_index`, `msg_index`, `msg_event_index`
+  (the event's 0-based position among the message's stored events, as in
+  `messages.events`) and `taker_order_id` (informational: not a key); all
+  four are NULL on block-level fills. No `order_messages` row is written, so
+  a v8.3.0 transaction is never `pending`. A cancel is an
+  `explorer.order_closures` row (`order_id` key, `height`, `time`, `tx_hash`,
+  `reason` `cancelled`, `merged_into`), written next to the cancel that
+  closes an already stored order; an order inserted after its cancel (the
+  backfill walks down) reads the closure like it reads a cancel block event.
+  The maker of a filled order is named in the taker's transaction, so it
+  gets a participant `account_activity` row of kind `dex_maker_fill`
+  (category `dex`, counterparty the taker when there is one) whose
+  `details` are that transaction's fills naming it: the only transaction
+  rows with details.
 
 ### Trades and trade ids
 
@@ -1269,9 +1296,11 @@ transaction (`tx_hash`, `tx_index`, `msg_index`) or its `block_seq`. Indexes:
 Every trade has a `trade_id` that never changes, the id the
 aggregator-compatible routes answer: `height × 1,000,000 + n`, `n` the
 trade's 1-based ordinal among all the trades of its block, first the swaps of
-the transactions by `tx_index`, `msg_index`, then position among the
-message's swap events, then the block-level trades (fills and swaps) by
-`block_events` seq. Chain data does not change once indexed and doubled
+the transactions (their swaps and, since chain v8.3.0, their order book
+fills together) by `tx_index`, `msg_index`, then the event's position among the
+message's stored events (a message can hold both: the fee conversion of an
+order message emits a swap among the fills), then the block-level trades
+(fills and swaps) by `block_events` seq. Chain data does not change once indexed and doubled
 events are already gone, so the ordinal is fixed; ids stay below 2^53 up to
 height 9×10^9, exact as JavaScript numbers. The transformer fails a block
 with 1,000,000 trades or more before any work on it. The live writer, the

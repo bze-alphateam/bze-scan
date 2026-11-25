@@ -119,6 +119,16 @@ describe("activityLine", () => {
     expect(text(of({ kind: "dex_fill" }))).toBe("Sent orders to fill on the DEX");
   });
 
+  it("reads a maker's filled order from the fills its row carries (chain v8.3.0)", () => {
+    const fill = rows.find((r) => r.kind === "dex_fill")!.details![0];
+    const row = of({ kind: "dex_maker_fill", category: "dex", is_signer: false, details: [fill] });
+    expect(text(row)).toBe("Your order was filled · sold 200 BZE for 2.56 USDC on BZE/USDC");
+    const cp = { address: OTHER, label: null, moniker: null };
+    const named = activityLine({ ...row, counterparty: cp }, { address: ADDR, ctx });
+    expect(named.parts).toEqual(["Your order was filled · sold 200 BZE for 2.56 USDC on BZE/USDC", " by ", { party: cp }]);
+    expect(text(of({ kind: "dex_maker_fill" }))).toBe("Your order was filled");
+  });
+
   it("reads the order book's chain v8.3.0 outcomes", () => {
     const refunded = {
       type: "bze.tradebin.OrderMessageRefundedEvent",

@@ -112,6 +112,37 @@ type OrderFill struct {
 	Time        time.Time `json:"time"`
 	// TradeID is the fill's trade id (see TradeIDsPerBlock).
 	TradeID int64 `json:"trade_id"`
+	// TxIndex, MsgIndex and MsgEventIndex locate a fill of a transaction's
+	// own events (chain v8.3.0): the message's position and the event's
+	// position among the message's stored events. Block-level fills have
+	// none; Seq of a transaction's fill is TxFillSeqBase + its ordinal among
+	// the block's.
+	TxIndex       *int `json:"tx_index,omitempty"`
+	MsgIndex      *int `json:"msg_index,omitempty"`
+	MsgEventIndex *int `json:"msg_event_index,omitempty"`
+	// TakerOrderID is the id of the taker's order (chain v8.3.0 gives every
+	// placement one, a taker filled in full included). Informational: it is
+	// not the key of anything.
+	TakerOrderID string `json:"taker_order_id,omitempty"`
+}
+
+// TxFillSeqBase is where the Seq of the fills of a transaction's events
+// starts: above any position in a block's finalize events.
+const TxFillSeqBase = 1_000_000
+
+// Reasons of an order closure.
+const OrderClosureCancelled = "cancelled"
+
+// OrderClosure is one explorer.order_closures row: how and by which
+// transaction an order ended without being filled, an OrderCanceledEvent of
+// a transaction (chain v8.3.0).
+type OrderClosure struct {
+	OrderID string    `json:"order_id"`
+	Height  int64     `json:"height"`
+	Time    time.Time `json:"time"`
+	TxHash  string    `json:"tx_hash"`
+	// Reason is OrderClosureCancelled.
+	Reason string `json:"reason"`
 }
 
 // OrderCancel is an OrderCanceledEvent: the order is closed as cancelled at
@@ -161,6 +192,47 @@ func blockOrders(ents *Entities, b Block, events []node.Event) []outcome {
 		}
 	}
 	return seq
+}
+
+// txOrders appends the order book outcomes of a successful transaction's own
+// events (chain v8.3.0): an OrderSavedEvent is an order placed by the
+// transaction, an OrderExecutedEvent a fill it took (Seq numbers the block's
+// such fills in transaction, message and event order; txFills counts them) and an
+// OrderCanceledEvent closes an order. They carry no message id.
+func txOrders(ents *Entities, b Block, txFills *int, txIndex int, txHash string, msgCount int, byIndex map[int][]node.Event) {
+	for j := range msgCount {
+		pos := StoredPositions(byIndex[j])
+		for k, ev := range byIndex[j] {
+			switch ev.Type {
+			case evOrderSaved, evOrderExecuted, evOrderCanceled:
+			default:
+				continue
+			}
+			attrs := storedEvent(ev).Attrs
+			get := func(key string) string { return anyString(attrs[key]) }
+			switch ev.Type {
+			case evOrderSaved:
+				ents.Orders = append(ents.Orders, Order{
+					OrderID: get("id"), MarketID: get("market_id"), Owner: get("owner"), Side: get("order_type"),
+					Price: get("price"), Amount: get("amount"), Height: b.Height, Time: b.Time, CreatedTxHash: txHash,
+				})
+			case evOrderExecuted:
+				ti, mi, ei := txIndex, j, pos[k]
+				ents.OrderFills = append(ents.OrderFills, OrderFill{
+					Height: b.Height, Seq: TxFillSeqBase + *txFills, OrderID: get("id"), MarketID: get("market_id"), Side: get("order_type"),
+					Price: get("price"), Amount: get("amount"), Maker: get("maker"), Taker: get("taker"),
+					TakerTxHash: txHash, Time: b.Time, TxIndex: &ti, MsgIndex: &mi, MsgEventIndex: &ei,
+					TakerOrderID: get("order_id"),
+				})
+				*txFills++
+			case evOrderCanceled:
+				ents.OrderCancels = append(ents.OrderCancels, OrderCancel{OrderID: get("id"), Height: b.Height, Time: b.Time})
+				ents.OrderClosures = append(ents.OrderClosures, OrderClosure{
+					OrderID: get("id"), Height: b.Height, Time: b.Time, TxHash: txHash, Reason: OrderClosureCancelled,
+				})
+			}
+		}
+	}
 }
 
 // txOrderMessages appends the order_messages rows of a successful

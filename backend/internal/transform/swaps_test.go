@@ -88,13 +88,13 @@ func TestSwapsAndTradeIDs(t *testing.T) {
 
 	assert.Equal(t, []transform.Swap{
 		{Height: 10, TradeID: id(1), Time: at, PoolID: uatom + "_ubze", Base: uatom, Quote: "ubze", Side: "buy",
-			BaseAmount: "40", QuoteAmount: "1000", Creator: swapper, TxHash: plain, TxIndex: intp(0), MsgIndex: intp(0)},
+			BaseAmount: "40", QuoteAmount: "1000", Creator: swapper, TxHash: plain, TxIndex: intp(0), MsgIndex: intp(0), MsgEventIndex: intp(0)},
 		// The failed transaction swapped nothing; the multi-hop swap is two
 		// trades, in hop order.
 		{Height: 10, TradeID: id(2), Time: at, PoolID: uatom + "_ubze", Base: uatom, Quote: "ubze", Side: "sell",
-			BaseAmount: "50", QuoteAmount: "1200", Creator: swapper, TxHash: multi, TxIndex: intp(2), MsgIndex: intp(1)},
+			BaseAmount: "50", QuoteAmount: "1200", Creator: swapper, TxHash: multi, TxIndex: intp(2), MsgIndex: intp(1), MsgEventIndex: intp(0)},
 		{Height: 10, TradeID: id(3), Time: at, PoolID: uhoney + "_ubze", Base: uhoney, Quote: "ubze", Side: "buy",
-			BaseAmount: "9", QuoteAmount: "1200", Creator: swapper, TxHash: multi, TxIndex: intp(2), MsgIndex: intp(1)},
+			BaseAmount: "9", QuoteAmount: "1200", Creator: swapper, TxHash: multi, TxIndex: intp(2), MsgIndex: intp(1), MsgEventIndex: intp(1)},
 		// The chain's own swap comes after every transaction's, between the
 		// fills by block event order.
 		{Height: 10, TradeID: id(5), Time: at, PoolID: uhoney + "_ubze", Base: uhoney, Quote: "ubze", Side: "sell",
