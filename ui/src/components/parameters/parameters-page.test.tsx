@@ -169,6 +169,7 @@ describe("ParametersPage", () => {
     expect(row("Voting period a DAO may choose")).toHaveTextContent("1 hour to 90 days");
     expect(row("Earliest early finish")).toHaveTextContent("1 day");
     expect(row("Votes cleaned per call")).toHaveAttribute("data-advanced", "true");
+    expect(await within(await screen.findByTestId("module-accounts")).findAllByTestId("module-account-row")).toHaveLength(1);
     unmount();
 
     renderWithProviders(<ParametersPage group="emergency" />, { api: api() });
