@@ -422,7 +422,7 @@ func TestUpgradeBlockRefundsLinkToTheQueuedTransactions(t *testing.T) {
 	assert.True(t, tx(queuedB).Pending)
 
 	require.NoError(t, w.Write(ctx, []*transform.Entities{block, after}, writer.ModeInsert))
-	require.NoError(t, w.Write(ctx, []*transform.Entities{a, c, d, b, block, after}, writer.ModeUpdate), "a reindex")
+	require.NoError(t, w.Write(ctx, []*transform.Entities{a, d, b, block, after}, writer.ModeUpdate), "a reindex")
 
 	first := tx(queuedA)
 	require.NotNil(t, first)
