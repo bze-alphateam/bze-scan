@@ -37,6 +37,10 @@ var mainnet = map[string]string{
 	"txfeecollector_cp":      "bze1knfjgvdsv67u2ksejka54ulpfzegr6semkvjn0",
 }
 
+// dao is the module account chain v8.3.0 adds (derived from its name; the
+// chain has no mainnet entry before the upgrade).
+const dao = "bze1vwr8z00ty7mqnk4dtchr9mn9j96nuh6wy6knxr"
+
 const feeCollector = "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2"
 
 func byModule(t *testing.T) map[string]labels.Label {
@@ -55,8 +59,12 @@ func TestEveryModuleAccountOfTheChainIsLabelled(t *testing.T) {
 		assert.NotEmpty(t, l.Name, module)
 		assert.Equal(t, labels.KindModule, l.Kind)
 	}
-	assert.Equal(t, mainnet, got)
-	assert.Len(t, labels.Modules(), len(mainnet), "one label per module")
+	want := map[string]string{"dao": dao}
+	for k, v := range mainnet {
+		want[k] = v
+	}
+	assert.Equal(t, want, got, "mainnet's accounts (retired ones included) plus the v8.3.0 dao")
+	assert.Len(t, labels.Modules(), len(want), "one label per module")
 }
 
 func TestModuleNames(t *testing.T) {
@@ -65,6 +73,21 @@ func TestModuleNames(t *testing.T) {
 	assert.Equal(t, "Factory", m["tokenfactory"].Name)
 	assert.Equal(t, "Burner", m["burner"].Name)
 	assert.Equal(t, "Fee collector", m["fee_collector"].Name)
+}
+
+func TestRetiredModuleAccountsAreKeptAndFlagged(t *testing.T) {
+	m := byModule(t)
+	for _, module := range []string{"nft", "feeibc", "txfeecollector_burner"} {
+		assert.True(t, m[module].Retired, module)
+		assert.True(t, labels.IsRetired(module), module)
+		assert.Contains(t, m[module].Name, "(retired in v8.3.0)", module)
+	}
+	assert.Equal(t, "DAO module (proposal deposits)", m["dao"].Name)
+	for _, module := range []string{"dao", "burner", "gov", "unknown"} {
+		assert.False(t, labels.IsRetired(module), module)
+	}
+	assert.NotContains(t, m, "guardian", "guardian and ratelimit have no module account")
+	assert.NotContains(t, m, "ratelimit")
 }
 
 func TestKnownIsEmptyForNow(t *testing.T) {

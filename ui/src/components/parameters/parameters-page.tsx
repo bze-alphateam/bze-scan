@@ -63,7 +63,7 @@ const ITEM_OFF = { ...ITEM_LOOK, bg: { base: "bg.panel", c2: "transparent" }, bo
 
 /** The module accounts each group's parameters steer, by the `module` of `/modules`. */
 const GROUP_ACCOUNTS: Record<ParamGroup, string[]> = {
-  fees: ["fee_collector", "txfeecollector", "txfeecollector_burner", "txfeecollector_cp"],
+  fees: ["fee_collector", "txfeecollector", "txfeecollector_cp"],
   staking: ["bonded_tokens_pool", "not_bonded_tokens_pool"],
   inflation: ["mint", "distribution"],
   penalties: [],

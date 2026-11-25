@@ -3,77 +3,110 @@
     {
       "address": "bze1v7uw4xhrcv0vk7qp8jf9lu3hm5d8uu5yjp5qun",
       "name": "Burner",
-      "module": "burner"
+      "module": "burner",
+      "retired": false
     },
     {
       "address": "bze1jv65s3grqf6v6jl3dp4t6c9t9rk99cd86mghmg",
       "name": "Distribution",
-      "module": "distribution"
+      "module": "distribution",
+      "retired": false
     },
     {
       "address": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
       "name": "DEX",
-      "module": "tradebin"
+      "module": "tradebin",
+      "retired": false
     },
     {
       "address": "bze17xpfvakm2amg962yls6f84z3kell8c5lda0te2",
       "name": "Fee collector",
-      "module": "fee_collector"
+      "module": "fee_collector",
+      "retired": false
     },
     {
       "address": "bze1m3h30wlvsf8llruxtpukdvsy0km2kum844tn4h",
       "name": "Mint",
-      "module": "mint"
+      "module": "mint",
+      "retired": false
     },
     {
       "address": "bze1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3gl9ytq",
       "name": "Bonded tokens pool",
-      "module": "bonded_tokens_pool"
+      "module": "bonded_tokens_pool",
+      "retired": false
     },
     {
       "address": "bze1tygms3xhhs3yv487phx3dw4a95jn7t7lule4a5",
       "name": "Unbonding tokens pool",
-      "module": "not_bonded_tokens_pool"
+      "module": "not_bonded_tokens_pool",
+      "retired": false
     },
     {
       "address": "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy",
       "name": "Governance",
-      "module": "gov"
+      "module": "gov",
+      "retired": false
     },
     {
       "address": "bze1245yut9zht8q4hz39sd0lzqtzkuw5us58k46ua",
       "name": "Rewards",
-      "module": "rewards"
+      "module": "rewards",
+      "retired": false
     },
     {
       "address": "bze1pc5zjcvhx3e8l305zjl72grytfa30r5mdypmw4",
       "name": "Burner black hole",
-      "module": "burner_black_hole"
+      "module": "burner_black_hole",
+      "retired": false
     },
     {
       "address": "bze18hsqalgwlzqavrrkfnxmrjmygwyjy8senx5tgs",
       "name": "Burner raffle",
-      "module": "burner_raffle"
+      "module": "burner_raffle",
+      "retired": false
     },
     {
       "address": "bze19ejy8n9qsectrf4semdp9cpknflld0j6qy3xlk",
       "name": "Factory",
-      "module": "tokenfactory"
+      "module": "tokenfactory",
+      "retired": false
     },
     {
       "address": "bze1k8py7ynzrrnmzqwk2mkz3a6znatmqshdnnsehy",
       "name": "Stakers fee collector",
-      "module": "txfeecollector"
+      "module": "txfeecollector",
+      "retired": false
     },
     {
       "address": "bze1pj73qt0lk9q64vwx4veu53ez6la2409wewcfqq",
-      "name": "Burner fee collector",
-      "module": "txfeecollector_burner"
+      "name": "Burner fee collector (retired in v8.3.0)",
+      "module": "txfeecollector_burner",
+      "retired": true
     },
     {
       "address": "bze1knfjgvdsv67u2ksejka54ulpfzegr6semkvjn0",
       "name": "CP fee collector",
-      "module": "txfeecollector_cp"
+      "module": "txfeecollector_cp",
+      "retired": false
+    },
+    {
+      "address": "bze1vwr8z00ty7mqnk4dtchr9mn9j96nuh6wy6knxr",
+      "name": "DAO module (proposal deposits)",
+      "module": "dao",
+      "retired": false
+    },
+    {
+      "address": "bze176rcyfn5k9d0wcxel3kmwvxh0hy3xcweyg0g5n",
+      "name": "Cross-chain relayer fees (retired in v8.3.0)",
+      "module": "feeibc",
+      "retired": true
+    },
+    {
+      "address": "bze1hr93qzcjspaa32px0qqywlh9hf9a8plgju2a4s",
+      "name": "NFT (retired in v8.3.0)",
+      "module": "nft",
+      "retired": true
     }
   ]
 }

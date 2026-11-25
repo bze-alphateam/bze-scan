@@ -23,9 +23,20 @@ func TestModulesListsTheSeededModuleAccounts(t *testing.T) {
 
 	want := make([]dto.ModuleAccount, 0, len(labels.Modules()))
 	for _, m := range labels.Modules() {
-		want = append(want, dto.ModuleAccount{Address: m.Address, Name: m.Name, Module: m.Module})
+		want = append(want, dto.ModuleAccount{Address: m.Address, Name: m.Name, Module: m.Module, Retired: m.Retired})
 	}
 	assert.ElementsMatch(t, want, list.Items, "every seeded module account; no validator owner or escrow")
+	byModule := map[string]dto.ModuleAccount{}
+	for _, m := range list.Items {
+		byModule[m.Module] = m
+	}
+	require.Contains(t, byModule, "dao")
+	assert.False(t, byModule["dao"].Retired)
+	for _, retired := range []string{"nft", "feeibc", "txfeecollector_burner"} {
+		require.Contains(t, byModule, retired)
+		assert.True(t, byModule[retired].Retired, retired)
+	}
+	assert.False(t, byModule["burner"].Retired)
 	var order []string
 	for _, m := range list.Items {
 		order = append(order, m.Address)

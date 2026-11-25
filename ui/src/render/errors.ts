@@ -27,6 +27,16 @@ const SDK: Record<number, (tx: FailedTx, symbolOf: SymbolOf, feeDenom: string | 
   32: () => "Sent out of order, try again",
 };
 
+// The IBC rate limits (codespace `ratelimit`) and the guardian's channel stop
+// (codespace `txfeecollector`) refuse an outgoing transfer: the transaction fails.
+const RATE_LIMIT: Record<number, string> = {
+  4: "Over the daily limit for this route. Try a smaller amount or later; limits reset at 00:00 UTC.",
+  7: "This token cannot cross chains right now (blocked).",
+};
+const TXFEECOLLECTOR: Record<number, string> = {
+  1140: "Transfers on this channel are stopped.",
+};
+
 /**
  * The plain-word reason of a failed transaction; `feeDenom` names the coin
  * when the log does not.
@@ -34,6 +44,8 @@ const SDK: Record<number, (tx: FailedTx, symbolOf: SymbolOf, feeDenom: string | 
 export function failureReason(tx: FailedTx, symbolOf: SymbolOf = () => null, feeDenom: string | null = null): string {
   const known = tx.codespace === "sdk" ? SDK[tx.code] : undefined;
   if (known) return known(tx, symbolOf, feeDenom);
+  const words = tx.codespace === "ratelimit" ? RATE_LIMIT[tx.code] : tx.codespace === "txfeecollector" ? TXFEECOLLECTOR[tx.code] : undefined;
+  if (words) return words;
   if (tx.error_log) return tx.error_log;
   return `Failed with code ${tx.code}${tx.codespace ? ` (${tx.codespace})` : ""}`;
 }

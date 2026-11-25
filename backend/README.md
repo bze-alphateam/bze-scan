@@ -371,7 +371,7 @@ every later route follows:
 | `GET /api/v1/validators/{operator}/blocks?cursor&limit` | the blocks it proposed, height descending, as the block list; empty without a consensus address |
 | `GET /api/v1/validators/stake-changes` | every validator's net stake change over the last 24 hours and the last 7 days: `{complete, as_of_height, items: {"<operator>": {"24h", "7d"}}}`, signed ubze strings (`"0"` for a window without net change); a validator without movements in the last 7 days is left out. Served from memory (see [Stake movements](#stake-movements)); `complete` is false while some height of the window is not indexed (the figures are then partial), and before the set is loaded (`as_of_height` 0, no items) |
 | `GET /api/v1/validators/{operator}/movements?page&limit` | the validator's stake movements of the last 7 days, newest first, from memory: `{complete, window_from, page, total, items}`, page from 1, `limit` 10 by default, at most 50; each item has height, tx_hash, time, `kind` (`delegate`, `undelegate`, `redelegate_in`, `redelegate_out`, `cancel_unbonding`, `create` = the initial self-stake), delegator, amount (ubze, positive) and `counterparty_validator` (`{operator_address, moniker}`, moniker null when unknown; null except on redelegations). `window_from` is null before the set is loaded; 400 unless a `bzevaloper1…` address or for a bad page/limit, 404 when not synced |
-| `GET /api/v1/modules` | `{"items": [{"address", "name", "module"}]}`: every module account the labels seed names (`labels` of kind `module`), by name; no pages. Cached `public, max-age=60`: only a migration's seed changes them |
+| `GET /api/v1/modules` | `{"items": [{"address", "name", "module", "retired"}]}`: every module account the labels seed names (`labels` of kind `module`), by name (`retired` is true for `nft`, `feeibc` and `txfeecollector_burner`, which chain v8.3.0 dropped but whose labels stay for history; `dao` is new); no pages. Cached `public, max-age=60`: only a migration's seed changes them |
 | `GET /api/v1/accounts/{address}` | `address`, `label` (`{name, kind}` or null), `first_seen` (`{height, time}` of its first signed transaction, null when the explorer never saw it), `last_seen_height`, `tx_count`, `activity_count`, then the live state read from the node: `balances` (`{denom, amount, symbol, exponent}`, symbol and exponent from `denoms`, null when unknown), `delegations` and `unbonding` (`{validator, moniker, amount}`, unbonding with `completion_time`, one item per entry), `rewards` (`{validator, coins}`), `total_staked` (base units of the bond denom) and `total_rewards` (coins), rewards truncated to whole base units, and `live: {available}`. 400 unless a `bze1…` address; an address the explorer never saw is a 200 with null `first_seen`. When the node cannot be read the answer is still a 200 with the indexed part, empty live lists, null `total_staked` and `live.available` false |
 | `GET /api/v1/accounts/{address}/activity?category=&denom=&incoming=&order=&after_height\|after_time&cursor\|page&limit` | what each transaction or block did to the address, newest first (height, then tx_index, a block's own row after its transactions): `time`, `height`, `tx_index` (the transaction's position in its block, −1 for a block-level row), `tx_hash` (null for a block-level row), `kind`, `category`, `is_signer`, `success`, `counterparty` (`{address, label, moniker}` when there is exactly one, else null), `deltas` (the net balance change per denom, fee included, as balances with symbol and exponent), `msg_types`, `details` (the typed events naming the address on block-level rows, else null) and `fee` (when the address signed or paid the transaction, else null). `category` filters on `sent`, `received`, `staking`, `dex`, `governance`, `tokens`, `rewards`, `burner`, `cross_chain` or `other`; anything else, or an address that is not `bze1…`, is a 400; no activity is an empty list. `denom` (exact base denom, URL-encoded: `ubze`, `factory/bze1…/name`, `ibc/…`) keeps the rows whose `deltas` hold that denom (the fee included, so a row that only paid the fee in it counts), combines with `category`, `cursor`, `page` and `limit`, and with `page` makes `total` count the filtered rows; an invalid denom is a 400 (`denom is not valid`), an unknown valid one an empty list. It is served by a GIN index on `account_activity.deltas`. `incoming=true` (anything else is a 400) keeps the rows of a successful transaction in which the address's balance rose in some denom and a message paid it: a bank send or multi-send to it, one of those run through authz, or a cross-chain receipt for it; a row that only names the address, or a refund of a cross-chain send, is left out. It combines with `category`, `cursor`, `page` and `limit`; with `denom` the balance has to have risen in that denom. It is served by a partial index on `account_activity`. `page=<n>` (n ≥ 1, else 400; not with `cursor`) skips the newest `(n−1)·limit` rows and adds `total`: the address's row count (`activity_count`, 0 when the explorer never saw it) or, with `category`, that category's count; a page past the end is an empty list with the total; `next_cursor` still leads to the older rows. Without `page` there is no `total`. `order=asc` (`desc`, the default, is the order above; anything else is a 400) lists the same rows oldest first (height, then tx_index, ascending) from exactly one start: `after_height=<h>` (the rows above height h, none of h itself), `after_time=<RFC 3339>` (the rows at or after that block time) or `cursor` (the previous oldest-first page's `next_cursor`, the key of its last row); none or two of them is a 400, as is `page` with `order=asc` and `after_height`/`after_time` without it. The filters combine as above and there is no `total`. The keyset walks the same indexes backward, so an `after_height` or `cursor` page costs the same at any depth; an `after_time` page reads the address's rows from its oldest one up to that time, so it is meant for a first page, followed by cursors |
 | `GET /api/v1/accounts/{address}/orders?status=&cursor&limit` | the orders the address rested on the book, newest first (created height, then id), as the order route without fills; `status` filters on `open`, `filled`, `cancelled` or `merged`. A taker order that filled completely never rested, so it is only in the fills. 400 unless a `bze1…` address or a known status |
@@ -1073,7 +1073,13 @@ message handlers only, such as `DenomRewardDistributionEvent`, never reach
 the finalize-block events), and the transformer logs a warning for a
 `bze.*` block event it does not list, which is then neither stored nor
 turned into activity. A type added to the classification later needs a
-reindex of the range. The wording a page shows ("transaction fee", "paid to the seller") is
+reindex of the range. Chain v8.3.0 adds the guardian events (kind `guardian`),
+`DenomAdminChangeEvent`, `PoolFeesUpdatedEvent`, the `bze.dao.*` events and
+`CommunityPoolFeePaidEvent` (kind `community_pool_fee`, the recipient gets a
+block-level activity row): governance runs its passed proposals' messages in
+EndBlock, so their typed events are block-level. `GasSurchargePaidEvent` and
+`TradingRewardStartEvent` are emitted inside transactions only and have no
+entry. The wording a page shows ("transaction fee", "paid to the seller") is
 derived at read time; the tables hold facts only.
 
 ### Token events
@@ -1093,7 +1099,14 @@ transaction (or per block, `tx_index = -1`), `actor` the message's signer:
   one for the quote, details market_id, base, quote), `pool_created` (base,
   quote and the pool's LP denom) and `halted`/`unhalted`
   (`DenomHaltedEvent`/`DenomUnhaltedEvent`, which governance enacts in
-  EndBlock, so block-level rows without an actor).
+  EndBlock, so block-level rows without an actor);
+- chain v8.3.0: `minting_disabled` (`DenomMintingDisabledEvent`),
+  `config_changed` (`DenomConfigChangeEvent`; details `community_pool`,
+  `transfer_fee`, `gas_surcharge`, the new values), `admin_set_by_governance`
+  (governance's `MsgSetDenomAdmin`: a block-level `DenomAdminChangeEvent`,
+  details `{"from", "to"}`; a transaction's own `MsgChangeAdmin` stays
+  `admin_changed`) and `pool_fees_updated` (`PoolFeesUpdatedEvent`, a row
+  for both denoms of the pool, details `pool_id`, `old_fee`, `new_fee`).
 
 Every denom a token event names is marked dirty for the denoms set, and so
 are the tokenfactory change events.
@@ -1171,6 +1184,14 @@ transaction (`internal/transform/activity.go`), never per message:
   refunded by an acknowledgement or a timeout `ibc_refund`. An address named
   only by the ante handler's events (a fee granter) is `fee_only`. A failed
   transaction gives one `fee_only` row (category `other`) to its fee payer.
+  Chain v8.3.0 messages are all `governance` except the tokenfactory ones
+  (`tokens`): x/dao kinds `dao_create`, `dao_proposal`, `dao_vote`,
+  `dao_admin_execute`, `dao_admin`, `dao_update`; the guardian's seven
+  emergency messages `guardian`; `MsgDisableMinting` `token_admin`,
+  `MsgSetDenomConfig` `token_update`. Messages only governance can send (the
+  `MsgUpdateParams` of the DAO and guardian modules, the guardian's
+  unblock/resume/reopen, the rate limit table, `MsgSetDenomAdmin`,
+  `MsgUpdatePools`) are listed in `classify.Unclassified` and stay `other`.
 - **Counterparty**: the entry's `counterparty_attr` over the messages of the
   first message's type, when it names exactly one account or validator
   operator other than the address. When it names nobody else, a non-signer
@@ -1487,7 +1508,19 @@ packets on port `transfer` only):
 | `MsgAcknowledgement` | `acknowledge_packet` + `fungible_token_packet` with `error` | `refunded_rejected`, `ack_error` |
 | `MsgTimeout`, `MsgTimeoutOnClose` | `timeout_packet` | `refunded_timeout` |
 | `MsgRecvPacket` | `recv_packet` + `fungible_token_packet` with `success = "true"` | `in`, `received` |
-| `MsgRecvPacket` | `recv_packet` + `bze.txfeecollector.BlockedIbcInboundEvent` (chain v8.2.0) | `in`, `rejected`, `ack_error` "blocked inbound denom" (another error ack: its error) |
+| `MsgRecvPacket` | `recv_packet` + `bze.txfeecollector.BlockedIbcInboundEvent` (chain v8.2.0) | `in`, `rejected`, `ack_error` "blocked inbound denom" |
+| `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `rate_limit_exceeded` (chain v8.3.0, ack code 4) | `in`, `rejected`, `ack_error` "rate limit exceeded" |
+| `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `blacklisted_denom` (chain v8.3.0, ack code 7) | `in`, `rejected`, `ack_error` "blocked denom" |
+| `MsgRecvPacket` | `recv_packet` and no refusal event, error ack `ABCI code: 1140:` (a channel the guardian closed, chain v8.3.0) | `in`, `rejected`, `ack_error` "channel closed" |
+| `MsgRecvPacket` | `recv_packet` + any other error ack | `in`, `rejected`, `ack_error` the acknowledgement's error text, else the transfer module's `fungible_token_packet` error |
+
+When the IBC application answers with an error acknowledgement, ibc-go prefixes
+the type and every attribute key of each event the application emitted with
+`ibccallbackerror-` (`ibccallbackerror-transfer_denied`, `ibccallbackerror-reason`,
+`ibccallbackerror-bze.txfeecollector.BlockedIbcInboundEvent`, …). The reader accepts
+the prefixed and the plain form of every event type and key. A refusal BZE names
+wins over the error text of the packet. `ack_error` is free text, so the four
+values above are not enumerated in the schema.
 
 `timeout_height` `0-0` and `timeout_timestamp` 0 mean none (NULL). Every
 final status sets `result_*`. The backfill walks down, so an

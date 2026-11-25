@@ -628,6 +628,8 @@ export interface ModuleAccount {
   address: string;
   name: string;
   module: string;
+  /** True for a module account the chain retired in v8.3.0; its history stays. */
+  retired: boolean;
 }
 
 /** What moved of a denom in a window: `amount` summed in base units. */
