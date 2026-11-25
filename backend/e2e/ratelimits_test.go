@@ -59,7 +59,8 @@ func TestIBCRateLimits(t *testing.T) {
 	require.NotNil(t, usdc.Send.UsedPct)
 	assert.InDelta(t, 25.0, *usdc.Send.UsedPct, 0.001)
 	assert.Equal(t, "0", usdc.Recv.Threshold)
-	assert.Equal(t, "0", usdc.Recv.Remaining)
+	assert.Equal(t, "-5000000", usdc.Recv.NetFlow)
+	assert.Equal(t, "5000000", usdc.Recv.Remaining, "what was sent may come back: a net flow of 0 is not above a threshold of 0")
 	assert.Nil(t, usdc.Recv.UsedPct)
 
 	// The filters.
