@@ -49,5 +49,46 @@
     "state": "open",
     "client_status": "active"
   },
-  "stranded": false
+  "stranded": false,
+  "mintable": null,
+  "config": null,
+  "rate_limits": [
+    {
+      "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "symbol": "USDC.n",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-3",
+      "counterparty": {
+        "chain_id": "noble-1",
+        "pretty_name": "Noble",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "100",
+        "threshold": "80000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "80000000000",
+        "used_pct": null,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "0",
+        "threshold": "0",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "0",
+        "used_pct": null,
+        "enforced": true
+      }
+    }
+  ]
 }

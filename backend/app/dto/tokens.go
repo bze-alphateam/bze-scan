@@ -92,6 +92,7 @@ type TokenHolder struct {
 // rest of them.
 type Token struct {
 	TokenSummary
+	TokenSettings
 	Description      *string         `json:"description"`
 	OriginChainID    *string         `json:"origin_chain_id"`
 	IBCBaseDenom     *string         `json:"ibc_base_denom"`
@@ -112,6 +113,10 @@ type Token struct {
 	// Transfers24h is what moved in the 24 hours before the latest indexed
 	// block.
 	Transfers24h TransferVolume `json:"transfers_24h"`
+	Pool         *PoolPrice     `json:"pool"` // LP denoms only, see pool_price.go
+	// RateLimits are the denom's IBC rate limits (chain v8.3.0), empty when
+	// it has none; see ratelimits.go.
+	RateLimits []RateLimit `json:"rate_limits"`
 }
 
 // TransferVolume counts the transfers of a denom in a window; Amount is
@@ -254,7 +259,7 @@ func NewToken(t *repository.Token, events []repository.TokenEvent, eventsNext *s
 		Website: t.Website, Markets: nonNil(t.Markets), PriceUpdatedAt: utc(t.PriceUpdatedAt),
 		Metadata: jsonOrNull(t.Metadata), UpdatedAt: t.UpdatedAt.UTC(),
 		Events: make([]TokenEvent, 0, len(events)), EventsNextCursor: eventsNext,
-		Transfers24h: TransferVolume{Count: volume.Count, Amount: volume.Amount},
+		Transfers24h: TransferVolume{Count: volume.Count, Amount: volume.Amount}, RateLimits: []RateLimit{},
 	}
 	for _, e := range events {
 		out.Events = append(out.Events, NewTokenEvent(e))

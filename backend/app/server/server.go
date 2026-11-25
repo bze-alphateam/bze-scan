@@ -61,6 +61,13 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// PoolPrices adds the pool price state to LP token pages; nil leaves it out.
+	PoolPrices controller.PoolPriceReader
+	// RateLimits reads the live IBC rate limits and RateLimitNames names
+	// their denoms and channels; nil RateLimits leaves
+	// /api/v1/ibc/rate-limits out and the tokens' rate_limits empty.
+	RateLimits     controller.RateLimitReader
+	RateLimitNames controller.RateLimitCatalog
 	// Prices reads the priced denoms; nil leaves /api/v1/prices out.
 	Prices controller.PriceReader
 	// Proposals reads the proposals, votes and deposits; nil leaves
@@ -86,6 +93,11 @@ type Deps struct {
 	// HaltedDenoms reads the denoms governance halted on the DEX; nil
 	// leaves /api/v1/params/halted-denoms out.
 	HaltedDenoms controller.HaltedDenomsReader
+	// Emergency reads the emergency switches live and EmergencyIndex their
+	// stored actions. Without EmergencyIndex both routes are left out; without
+	// Emergency (no gRPC address) only /api/v1/emergency is.
+	Emergency      controller.EmergencyState
+	EmergencyIndex controller.EmergencyIndex
 	// StakeFlows serves the validators' stake movements of the last 7 days
 	// from memory and ValidatorNames names their validators; nil StakeFlows
 	// leaves /api/v1/validators/stake-changes and
@@ -173,6 +185,11 @@ func New(deps Deps) *echo.Echo {
 	api.GET("/txs/:hash", explorer.Tx)
 	api.GET("/orders/:id", explorer.Order)
 	api.GET("/ibc/channels", explorer.IBCChannels)
+	var rateLimits *controller.RateLimitController
+	if deps.RateLimits != nil && deps.RateLimitNames != nil {
+		rateLimits = controller.NewRateLimitController(deps.RateLimits, deps.RateLimitNames)
+		api.GET("/ibc/rate-limits", rateLimits.RateLimits)
+	}
 	api.GET("/modules", explorer.Modules)
 	api.GET("/validators", explorer.Validators)
 	api.GET("/validators/hall-of-fame", explorer.HallOfFame)
@@ -205,6 +222,10 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)
+		tokens.Pools = deps.PoolPrices
+		if rateLimits != nil {
+			tokens.WithRateLimits(rateLimits)
+		}
 		api.GET("/tokens", tokens.Tokens)
 		api.GET("/tokens/:denom", tokens.Token)
 		api.GET("/tokens/:denom/events", tokens.TokenEvents)
@@ -238,6 +259,13 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.HaltedDenoms != nil {
 		api.GET("/params/halted-denoms", controller.NewHaltedDenomsController(deps.HaltedDenoms).HaltedDenoms)
+	}
+	if deps.EmergencyIndex != nil {
+		emergency := controller.NewEmergencyController(deps.Emergency, deps.EmergencyIndex)
+		api.GET("/emergency/actions", emergency.Actions)
+		if deps.Emergency != nil {
+			api.GET("/emergency", emergency.State)
+		}
 	}
 	if deps.Status != nil {
 		api.GET("/status", controller.NewStatusController(deps.Status).Status)

@@ -1,0 +1,148 @@
+{
+  "items": [
+    {
+      "channel_id": "channel-0",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-0",
+      "connection_id": "connection-0",
+      "counterparty_channel_id": "channel-100",
+      "counterparty": {
+        "chain_id": "osmosis-1",
+        "pretty_name": "Osmosis",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow0",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-2",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-2",
+      "connection_id": "connection-2",
+      "counterparty_channel_id": "channel-102",
+      "counterparty": {
+        "chain_id": "archway-1",
+        "pretty_name": "Archway",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow2",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-3",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-3",
+      "connection_id": "connection-3",
+      "counterparty_channel_id": "channel-103",
+      "counterparty": {
+        "chain_id": "noble-1",
+        "pretty_name": "Noble",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow3",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-6",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-6",
+      "connection_id": "connection-6",
+      "counterparty_channel_id": "channel-106",
+      "counterparty": {
+        "chain_id": "atomone-1",
+        "pretty_name": "AtomOne",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow6",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-10",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-10",
+      "connection_id": "connection-10",
+      "counterparty_channel_id": "channel-110",
+      "counterparty": {
+        "chain_id": "lumen-1",
+        "pretty_name": "Lumen",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow10",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-11",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-11",
+      "connection_id": "connection-11",
+      "counterparty_channel_id": "channel-111",
+      "counterparty": {
+        "chain_id": "cosmoshub-4",
+        "pretty_name": "Cosmos Hub",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow11",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-12",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "expired",
+      "client_id": "07-tendermint-12",
+      "connection_id": "connection-12",
+      "counterparty_channel_id": "channel-112",
+      "counterparty": {
+        "chain_id": "dungeon-1",
+        "pretty_name": "Dungeon",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow12",
+      "updated_at": "2099-10-11T09:00:00Z"
+    },
+    {
+      "channel_id": "channel-13",
+      "port_id": "transfer",
+      "state": "open",
+      "client_status": "active",
+      "client_id": "07-tendermint-13",
+      "connection_id": "connection-13",
+      "counterparty_channel_id": "channel-113",
+      "counterparty": {
+        "chain_id": "injective-1",
+        "pretty_name": "Injective",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "escrow_address": "bze1escrow13",
+      "updated_at": "2099-10-11T09:00:00Z"
+    }
+  ]
+}

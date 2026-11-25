@@ -11,6 +11,7 @@ export const navLinks: NavLink[] = [
   { label: "Transactions", href: "/txs" },
   { label: "Validators", href: "/validators" },
   { label: "Tokens", href: "/tokens" },
+  { label: "Cross-chain", href: "/ibc" },
   { label: "Proposals", href: "/proposals" },
   { label: "Parameters", href: "/parameters" },
 ];

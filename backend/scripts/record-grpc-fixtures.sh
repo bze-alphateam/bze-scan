@@ -77,6 +77,8 @@
 #     cointrunk, txfeecollector; dao and guardian exist from chain v8.3.0 and
 #     are not recorded here: take them, and tradebin/burner, from a v8.3.0 node)
 #
+#   ratelimits (the IBC rate limits, chain v8.3.0 on; record from a v8.3.0 node):
+#     ratelimit/AllRateLimits.json, ratelimit/AllBlacklistedDenoms.json
 #   daos (the DAOs sync and the DAO page's live reads, chain v8.3.0; take them from a
 #     node that runs it and has DAOs):
 #     dao/Daos.json (one page of 100), and per DAO id in it: dao/Dao.<id>.json,
@@ -284,6 +286,11 @@ if has orderbooks; then
       "tradebin/MarketAggregatedOrders.$(esc "${m}").sell.json"
   done
   PIN=""
+fi
+
+if has ratelimits; then
+  fetch "Stride-Labs/ibc-rate-limiting/ratelimit/ratelimits" ratelimit/AllRateLimits.json
+  fetch "Stride-Labs/ibc-rate-limiting/ratelimit/blacklisted_denoms" ratelimit/AllBlacklistedDenoms.json
 fi
 
 if has chain; then

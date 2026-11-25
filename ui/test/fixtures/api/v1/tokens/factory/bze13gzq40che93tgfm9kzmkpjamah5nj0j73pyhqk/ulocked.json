@@ -1,0 +1,80 @@
+{
+  "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/ulocked",
+  "symbol": "LOCK",
+  "name": "Locked token",
+  "kind": "factory",
+  "exponent": 6,
+  "supply": "500000000000",
+  "holders_count": 310,
+  "price_usd": "0.002",
+  "price_change_24h_pct": null,
+  "price_source": "dex",
+  "halted": false,
+  "logo_url": null,
+  "origin_chain": null,
+  "created_time": "2099-10-02T09:15:00Z",
+  "description": "The sweetest token on BZE.",
+  "origin_chain_id": null,
+  "ibc_base_denom": null,
+  "ibc_path": null,
+  "creator": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+  "creator_label": null,
+  "admin": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+  "admin_label": null,
+  "created_height": 24000100,
+  "created_tx_hash": "5A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F9",
+  "website": "https://honey.example",
+  "markets": [
+    "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney/ubze"
+  ],
+  "price_updated_at": "2099-10-11T09:59:00Z",
+  "metadata": {
+    "description": "The sweetest token on BZE.",
+    "denom_units": [
+      {
+        "denom": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+        "exponent": 0
+      },
+      {
+        "denom": "HONEY",
+        "exponent": 6
+      }
+    ],
+    "base": "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney",
+    "display": "HONEY",
+    "name": "Honey",
+    "symbol": "HONEY"
+  },
+  "updated_at": "2099-10-11T09:59:00Z",
+  "events": [
+    {
+      "height": 25000100,
+      "tx_index": 0,
+      "seq": 0,
+      "tx_hash": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "kind": "minting_disabled",
+      "actor": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "actor_label": null,
+      "amount": null,
+      "details": null,
+      "time": "2026-11-20T10:00:00Z"
+    }
+  ],
+  "events_next_cursor": null,
+  "transfers_24h": {
+    "count": 14,
+    "amount": "125000000000"
+  },
+  "ibc_hops": null,
+  "via_chain": null,
+  "lp_pair": null,
+  "ibc_channel": null,
+  "stranded": false,
+  "mintable": false,
+  "config": {
+    "community_pool": "bze1f0qgels0eu96ev6a67znu70q7rquy9eragn8nw",
+    "community_pool_label": null,
+    "transfer_fee": "0.010000000000000000",
+    "gas_surcharge": "0.500000000000000000"
+  }
+}
