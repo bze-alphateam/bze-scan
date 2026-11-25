@@ -89,7 +89,7 @@ func stakeProposal(id int64, status string, votingEnd time.Time) repository.DaoP
 		ID: id, DaoID: ip(2), DaoName: sp("Stakers"), DaoType: sp("stake"), Proposer: sp(daoAdmin),
 		ProposerLabel: &repository.Label{Address: daoAdmin, Name: "Alpha", Kind: "known"}, Title: sp("Spend"),
 		Summary: sp("s"), Msgs: json.RawMessage(`[{"@type":"/cosmos.bank.v1beta1.MsgSend"}]`), Expedited: bp(true),
-		VotingEnd: &votingEnd, Denominator: sp("1000"), Status: status, Yes: sp("700"), No: sp("0"), Abstain: sp("0"),
+		VotingEnd: &votingEnd, Denominator: sp("1000"), Status: &status, Yes: sp("700"), No: sp("0"), Abstain: sp("0"),
 		PinnedConfig: json.RawMessage(`{"min_quorum":"0.400000000000000000","threshold":"0.500000000000000000",
 			"expedite_quorum":"0.600000000000000000","expedite_threshold":"0.700000000000000000"}`),
 		ExpediteSettleable: true,
@@ -162,7 +162,7 @@ func TestDaoProposalDetailWithoutPinnedConfigOrNode(t *testing.T) {
 	assert.False(t, d.ExpediteSettleable)
 
 	// A row whose submission is not indexed: no DAO, no checks.
-	f.proposals = []repository.DaoProposal{{ID: 4, Status: "rejected"}}
+	f.proposals = []repository.DaoProposal{{ID: 4, Status: sp("rejected")}}
 	d = decode[dto.DaoProposal](t, get(t, daoProposalServer(f, nil), "/api/v1/dao-proposals/4"))
 	assert.Nil(t, d.Dao)
 	assert.Nil(t, d.Checks)

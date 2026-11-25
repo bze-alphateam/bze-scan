@@ -121,7 +121,6 @@ func TestSetIdentity(t *testing.T) {
 	s := newSet(&fakeClient{}, &memStore{})
 	assert.Equal(t, statesync.DaoProposals, s.Name())
 	assert.Equal(t, daoproposals.DefaultInterval, s.Interval())
-	assert.Equal(t, "7", daoproposals.Key(7))
 }
 
 func TestFirstRunListsTheOpenProposalsOfEveryDao(t *testing.T) {

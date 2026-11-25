@@ -87,7 +87,7 @@ func TestEarlySettleSurvivesItsRetry(t *testing.T) {
 	assert.Equal(t, true, rows[0]["executed"])
 }
 
-// The submission only fills: it never writes the status.
+// The submission only fills: it never changes a status.
 func TestDaoProposalSubmissionFillsOnly(t *testing.T) {
 	db := newMockDB(49)
 	a := block(100)
@@ -103,7 +103,8 @@ func TestDaoProposalSubmissionFillsOnly(t *testing.T) {
 	assert.Equal(t, "T", rows[0]["title"])
 	assert.Nil(t, rows[1]["title"], "a submission without its body leaves the title to the sync")
 	assert.Nil(t, rows[1]["voting_end"])
-	assert.NotContains(t, st.sql, "status", "the submission never touches the status")
+	assert.Contains(t, st.sql, "status = COALESCE(p.status, CASE WHEN p.cleaned_height IS NULL THEN 'voting' END)",
+		"the submission opens only a row without a status that was not cleaned up, never changes one")
 	assert.Contains(t, st.sql, "title = COALESCE(p.title, EXCLUDED.title)")
 }
 
@@ -126,7 +127,7 @@ func TestDaoVotesAndReductions(t *testing.T) {
 	require.Len(t, rows, 2)
 	assert.Equal(t, "no", rows[0]["option"], "height 101 beats height 100")
 	assert.Equal(t, "abstain", rows[1]["option"], "the later message")
-	assert.Contains(t, st.sql, "(EXCLUDED.height, EXCLUDED.tx_index, EXCLUDED.msg_index) >= (v.height, v.tx_index, v.msg_index)")
+	assert.Contains(t, st.sql, "COALESCE(NULLIF(EXCLUDED.tx_index, -1), 2147483647)", "a block-level ballot comes after the block's transactions")
 
 	red := payload(t, daoStatement(t, db.txs[0], "INSERT INTO explorer.dao_ballot_reductions"))
 	require.Len(t, red, 1)
@@ -140,4 +141,19 @@ func TestNoDaoProposalWritesWithoutRows(t *testing.T) {
 	for _, st := range db.txs[0].stmts {
 		assert.NotContains(t, st.sql, "dao_")
 	}
+}
+
+// A ballot of the block's own events (tx_index -1, the EndBlocker) comes
+// after the ballots cast by the block's transactions.
+func TestBlockLevelDaoVoteIsTheBlocksLatest(t *testing.T) {
+	db := newMockDB(49)
+	a := block(100)
+	a.DaoVotes = []transform.DaoVote{
+		{ProposalID: 4, Voter: "bze1dao", Option: "no", Weight: "1", Height: 100, TxIndex: -1, MsgIndex: -1},
+		{ProposalID: 4, Voter: "bze1dao", Option: "yes", Weight: "1", Height: 100, TxIndex: 3, MsgIndex: 0},
+	}
+	require.NoError(t, writer.NewBatchWriter(db).Write(context.Background(), []*transform.Entities{a}, writer.ModeInsert))
+	rows := payload(t, daoStatement(t, db.txs[0], "INSERT INTO explorer.dao_votes"))
+	require.Len(t, rows, 1)
+	assert.Equal(t, "no", rows[0]["option"])
 }

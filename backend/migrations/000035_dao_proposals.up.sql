@@ -6,8 +6,9 @@
 
 -- 20. DAO proposals. Lifecycle events can be indexed before the submission
 -- (downward backfill, or a submission below the live floor), so every column
--- but the id and the status is nullable: a settle writes a row the
--- submission fills later.
+-- but the id is nullable: a settle writes a row the submission fills later.
+-- A placeholder row written by a deposit release or a cleanup alone has no
+-- status (NULL): it is not open.
 CREATE TABLE explorer.dao_proposals (
   id                  BIGINT       PRIMARY KEY,         -- global proposal id (not per DAO)
   dao_id              BIGINT,
@@ -22,7 +23,7 @@ CREATE TABLE explorer.dao_proposals (
   voting_end          TIMESTAMPTZ,
   denominator         NUMERIC,                          -- pinned total voting power at submission
   pinned_config       JSONB,                            -- the DaoConfig pinned at submission (proto JSON), from the state sync
-  status              TEXT         NOT NULL DEFAULT 'voting', -- voting | rejected | executed | execution_failed | expired | cancelled
+  status              TEXT,                             -- voting | rejected | executed | execution_failed | expired | cancelled; NULL: not known yet
   status_height       BIGINT,                           -- height of the event that set the status (NULL: set by the state sync)
   yes                 NUMERIC,                          -- running while voting (state sync), final at settle
   no                  NUMERIC,
@@ -45,7 +46,7 @@ CREATE TABLE explorer.dao_proposals (
 
 CREATE INDEX idx_dao_proposals_dao    ON explorer.dao_proposals (dao_id, id DESC);
 CREATE INDEX idx_dao_proposals_status ON explorer.dao_proposals (dao_id, status, id DESC);
-CREATE INDEX idx_dao_proposals_voting ON explorer.dao_proposals (id) WHERE status = 'voting';
+CREATE INDEX idx_dao_proposals_voting ON explorer.dao_proposals (id) WHERE status = 'voting' AND cleaned_height IS NULL;
 
 -- 21. DAO votes: each voter's latest ballot (a revote replaces it).
 CREATE TABLE explorer.dao_votes (

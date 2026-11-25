@@ -59,23 +59,25 @@ const upsertSQL = `INSERT INTO explorer.dao_proposals AS p (id, dao_id, proposer
 		denominator = COALESCE(p.denominator, EXCLUDED.denominator),
 		pinned_config = EXCLUDED.pinned_config,
 		status = CASE WHEN ` + forward + ` THEN EXCLUDED.status ELSE p.status END,
-		status_height = CASE WHEN ` + forward + ` AND p.status <> EXCLUDED.status THEN NULL ELSE p.status_height END,
+		status_height = CASE WHEN ` + forward + ` AND p.status IS DISTINCT FROM EXCLUDED.status THEN NULL
+		                     ELSE p.status_height END,
 		yes = CASE WHEN ` + running + ` THEN EXCLUDED.yes ELSE COALESCE(p.yes, EXCLUDED.yes) END,
 		no = CASE WHEN ` + running + ` THEN EXCLUDED.no ELSE COALESCE(p.no, EXCLUDED.no) END,
 		abstain = CASE WHEN ` + running + ` THEN EXCLUDED.abstain ELSE COALESCE(p.abstain, EXCLUDED.abstain) END,
 		tally_updated_at = CASE WHEN ` + running + ` THEN EXCLUDED.tally_updated_at
 		                        ELSE COALESCE(p.tally_updated_at, EXCLUDED.tally_updated_at) END,
 		expedite_settleable = ` + running + ` AND EXCLUDED.expedite_settleable,
-		retry_deadline = CASE WHEN EXCLUDED.status = 'execution_failed' AND p.status IN ('voting', 'execution_failed')
+		retry_deadline = CASE WHEN EXCLUDED.status = 'execution_failed'
+		                           AND COALESCE(p.status, 'voting') IN ('voting', 'execution_failed')
 		                      THEN EXCLUDED.retry_deadline ELSE p.retry_deadline END,
 		updated_at = now()`
 
 // forward is true when the chain's status may replace the stored one.
-const forward = `(p.status = 'voting' OR p.status = EXCLUDED.status
+const forward = `(p.status IS NULL OR p.status = 'voting' OR p.status = EXCLUDED.status
 	OR (p.status = 'execution_failed' AND EXCLUDED.status IN ('executed', 'expired')))`
 
 // running is true when the chain's tally is a running one the row takes.
-const running = `(p.status = 'voting' AND EXCLUDED.status = 'voting')`
+const running = `(COALESCE(p.status, 'voting') = 'voting' AND EXCLUDED.status = 'voting')`
 
 type row struct {
 	ID                 uint64          `json:"id"`
@@ -125,9 +127,11 @@ func (s *PGStore) Save(ctx context.Context, ps []Proposal) error {
 	return tx.Commit(ctx)
 }
 
-// Voting returns the ids of the stored proposals in voting.
+// Voting returns the ids of the stored proposals in voting (a placeholder
+// without a status, or a proposal cleaned up, is not).
 func (s *PGStore) Voting(ctx context.Context) ([]uint64, error) {
-	rows, err := s.db.Query(ctx, `SELECT id FROM explorer.dao_proposals WHERE status = 'voting' ORDER BY id`)
+	rows, err := s.db.Query(ctx, `SELECT id FROM explorer.dao_proposals
+		WHERE status = 'voting' AND cleaned_height IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("dao proposals: voting: %w", err)
 	}

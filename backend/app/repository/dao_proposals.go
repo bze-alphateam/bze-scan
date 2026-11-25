@@ -15,23 +15,25 @@ import (
 // on a row whose submission is not indexed (a settle indexed first, a
 // proposal submitted below the live floor and gone from the chain).
 type DaoProposal struct {
-	ID                 int64
-	DaoID              *int64
-	DaoName            *string
-	DaoType            *string
-	Proposer           *string
-	ProposerLabel      *Label
-	Title              *string
-	Summary            *string
-	Msgs               json.RawMessage
-	Expedited          *bool
-	SubmitHeight       *int64
-	SubmitTime         *time.Time
-	SubmitTxHash       *string
-	VotingEnd          *time.Time
-	Denominator        *string
-	PinnedConfig       json.RawMessage
-	Status             string
+	ID            int64
+	DaoID         *int64
+	DaoName       *string
+	DaoType       *string
+	Proposer      *string
+	ProposerLabel *Label
+	Title         *string
+	Summary       *string
+	Msgs          json.RawMessage
+	Expedited     *bool
+	SubmitHeight  *int64
+	SubmitTime    *time.Time
+	SubmitTxHash  *string
+	VotingEnd     *time.Time
+	Denominator   *string
+	PinnedConfig  json.RawMessage
+	// Status is nil on a placeholder row (a deposit release or a cleanup
+	// indexed without the submission and the settle).
+	Status             *string
 	Yes                *string
 	No                 *string
 	Abstain            *string
@@ -127,10 +129,17 @@ type DaoVoteKey struct {
 	Voter           string
 }
 
+// inBlock is the position of a row of alias within its block: its
+// transaction index, block-level rows (tx_index -1, the EndBlocker) after
+// every transaction.
+func inBlock(alias string) string {
+	return `COALESCE(NULLIF(` + alias + `.tx_index, -1), 2147483647)`
+}
+
 // DaoVotes returns up to limit votes of DAO proposal id, heaviest effective
 // weight first, then by voter, after when not nil, only option when not nil.
 // A reduction counts against a ballot when it comes after it (height,
-// transaction, message): a revote's weight already reflects the earlier
+// transaction, message; the block's own events after its transactions): a revote's weight already reflects the earlier
 // ones.
 func (r *Explorer) DaoVotes(ctx context.Context, id int64, option *string, after *DaoVoteKey, limit int) ([]DaoVote, error) {
 	var weight, voter *string
@@ -144,7 +153,7 @@ func (r *Explorer) DaoVotes(ctx context.Context, id int64, option *string, after
 		          FROM explorer.dao_votes v
 		          LEFT JOIN LATERAL (SELECT sum(b.amount) AS amount FROM explorer.dao_ballot_reductions b
 		                WHERE b.proposal_id = v.proposal_id AND b.voter = v.voter AND b.height >= v.height
-		                  AND (b.height, b.tx_index, b.msg_index) > (v.height, v.tx_index, v.msg_index)) red ON true
+		                  AND (b.height, `+inBlock("b")+`, b.msg_index) > (v.height, `+inBlock("v")+`, v.msg_index)) red ON true
 		         WHERE v.proposal_id = $1 AND ($2::text IS NULL OR v.option = $2)) x
 		  LEFT JOIN explorer.labels l ON l.address = x.voter
 		 WHERE $3::numeric IS NULL OR x.eff < $3 OR (x.eff = $3 AND x.voter > $4)

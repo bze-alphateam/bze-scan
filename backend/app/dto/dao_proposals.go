@@ -14,10 +14,12 @@ import (
 // and the denominator are base units of the DAO's stake denom (stake DAO) or
 // member votes (static list: one per member), as strings.
 type DaoProposalSummary struct {
-	ID            int64      `json:"id"`
-	DaoID         *int64     `json:"dao_id"`
-	Title         *string    `json:"title"`
-	Status        string     `json:"status"`
+	ID    int64   `json:"id"`
+	DaoID *int64  `json:"dao_id"`
+	Title *string `json:"title"`
+	// Status is null on a placeholder row (a deposit release or a cleanup
+	// indexed without the submission and the settle): not open.
+	Status        *string    `json:"status"`
 	Proposer      *string    `json:"proposer"`
 	ProposerLabel *Label     `json:"proposer_label"`
 	Expedited     *bool      `json:"expedited"`
@@ -121,7 +123,7 @@ func NewDaoProposal(p repository.DaoProposal, votes int64, weight *WeightDenom, 
 	if p.DaoID != nil && p.DaoName != nil && p.DaoType != nil {
 		out.Dao = &DaoRef{ID: *p.DaoID, Name: *p.DaoName, Type: *p.DaoType}
 	}
-	voting := p.Status == "voting"
+	voting := p.Status != nil && *p.Status == "voting"
 	out.VotingEnded = voting && p.VotingEnd != nil && !now.Before(*p.VotingEnd)
 	out.ExpediteSettleable = voting && p.ExpediteSettleable
 	out.Checks = checks(p)
