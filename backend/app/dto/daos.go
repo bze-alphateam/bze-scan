@@ -88,6 +88,12 @@ type DaoElectorateStake struct {
 // flag is set.
 type DaoLive struct {
 	Available       bool                `json:"available"`
+	ID              *int64              `json:"id,omitempty"`
+	Address         *string             `json:"address,omitempty"`
+	Type            *string             `json:"type,omitempty"`
+	Name            *string             `json:"name,omitempty"`
+	AdminSeq        *uint64             `json:"admin_seq,omitempty"`
+	PendingAdminSeq *uint64             `json:"pending_admin_seq,omitempty"`
 	Admin           *string             `json:"admin,omitempty"`
 	PendingAdmin    *string             `json:"pending_admin,omitempty"`
 	Description     *string             `json:"description,omitempty"`
@@ -159,8 +165,11 @@ func NewDao(row repository.Dao, live *daostate.Live, treasury []chainstate.Coin,
 		return out
 	}
 	d := live.Dao
+	id := int64(d.ID)
 	out.Live = DaoLive{
-		Available: true, Admin: &d.Admin, Description: &d.Description, Members: d.Members,
+		Available: true, ID: &id, Address: &d.Address, Type: &d.Type, Name: &d.Name,
+		AdminSeq: &d.AdminSeq, PendingAdminSeq: &d.PendingAdminSeq,
+		Admin: &d.Admin, Description: &d.Description, Members: d.Members,
 		Config: &DaoConfig{
 			MinQuorum: d.Config.MinQuorum, Threshold: d.Config.Threshold, VotingPeriodSeconds: d.Config.VotingPeriodS,
 			AllowExpedite: d.Config.AllowExpedite, ExpeditedPeriodSeconds: d.Config.ExpeditedPeriodS,

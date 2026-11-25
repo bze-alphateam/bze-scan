@@ -59,10 +59,12 @@ type fakeReader struct {
 	block    *repository.Block
 	tx       *repository.Tx
 	accounts map[string]bool
-	monikers map[string]string
-	vals     []repository.ValidatorSummary
-	fame     *repository.HallOfFame
-	err      error
+	// daosByAddress are the DAOs DaoByAddress finds, by treasury account.
+	daosByAddress map[string]*repository.Dao
+	monikers      map[string]string
+	vals          []repository.ValidatorSummary
+	fame          *repository.HallOfFame
+	err           error
 	// The validator page: one validator, its proposed blocks (newest
 	// first), events and votes.
 	validator   *repository.ValidatorDetail
@@ -192,6 +194,14 @@ func (f *fakeReader) BlockEvents(_ context.Context, _, after int64, limit int) (
 		}
 	}
 	return out, f.err
+}
+
+// DaoByAddress answers from daosByAddress; any other address is not a DAO.
+func (f *fakeReader) DaoByAddress(_ context.Context, address string) (*repository.Dao, error) {
+	if d, ok := f.daosByAddress[address]; ok {
+		return d, nil
+	}
+	return nil, repository.ErrNotFound
 }
 
 func (f *fakeReader) SearchLabels(_ context.Context, q string, limit int) ([]repository.Label, error) {

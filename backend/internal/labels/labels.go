@@ -20,6 +20,9 @@ const (
 	KindIBCEscrow      = "ibc_escrow"
 	KindValidatorOwner = "validator_owner"
 	KindKnown          = "known"
+	// KindDao names a DAO's treasury account (chain v8.3.0); the daos
+	// state-sync set writes them.
+	KindDao = "dao"
 )
 
 // Sources of labels.

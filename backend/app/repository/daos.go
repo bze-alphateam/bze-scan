@@ -82,6 +82,19 @@ func (r *Explorer) Dao(ctx context.Context, id int64) (*Dao, error) {
 	return &d, nil
 }
 
+// DaoByAddress returns the DAO whose treasury account is address;
+// ErrNotFound when none.
+func (r *Explorer) DaoByAddress(ctx context.Context, address string) (*Dao, error) {
+	d, err := scanDao(r.db.QueryRow(ctx, `SELECT `+daoCols+daoFrom+` WHERE d.address = $1`, address))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("dao %s: %w", address, err)
+	}
+	return &d, nil
+}
+
 // Labels returns the labels of the addresses that have one, by address.
 func (r *Explorer) Labels(ctx context.Context, addresses []string) (map[string]Label, error) {
 	out := map[string]Label{}

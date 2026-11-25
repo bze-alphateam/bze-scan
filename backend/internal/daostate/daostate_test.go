@@ -2,6 +2,7 @@ package daostate_test
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,7 +18,10 @@ import (
 	daotypes "github.com/bze-alphateam/bze/x/dao/types"
 	rewardstypes "github.com/bze-alphateam/bze/x/rewards/types"
 
+	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/daostate"
+	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
+	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
 type fakeDAO struct {
@@ -98,7 +102,7 @@ var (
 	}
 	stakeDao = daotypes.Dao{
 		Id: 2, Address: "bze1dao2", Admin: "bze1admin", PendingAdmin: "bze1next", Type: daotypes.DaoType_DAO_TYPE_STAKE,
-		Name: "Stakers", Electorate: &daotypes.StakeElectorate{SrIds: []string{"sr1", "gone", "sr2"}, DrDenom: "factory/x/y"},
+		Name: "Stakers", AdminSeq: 2, PendingAdminSeq: 4, Electorate: &daotypes.StakeElectorate{SrIds: []string{"sr1", "gone", "sr2"}, DrDenom: "factory/x/y"},
 	}
 )
 
@@ -149,12 +153,14 @@ func TestLiveStakeDaoSumsItsSources(t *testing.T) {
 	require.NotNil(t, live.Stake)
 	assert.Equal(t, []daostate.Source{
 		{SrID: "sr1", StakingDenom: "ubze", StakedAmount: daostate.Coin{Denom: "ubze", Amount: "1000"}},
-		{SrID: "gone", StakedAmount: daostate.Coin{Amount: "0"}},
+		{SrID: "gone", StakedAmount: daostate.Coin{Denom: "ubze", Amount: "0"}},
 		{SrID: "sr2", StakingDenom: "ubze", StakedAmount: daostate.Coin{Denom: "ubze", Amount: "250"}},
 		{DrDenom: "factory/x/y", StakingDenom: "ubze", StakedAmount: daostate.Coin{Denom: "ubze", Amount: "70"}},
 	}, live.Stake.Sources)
 	assert.Equal(t, daostate.Coin{Denom: "ubze", Amount: "1320"}, live.Stake.VotingStake)
 	assert.Equal(t, "bze1next", live.Dao.PendingAdmin)
+	assert.Equal(t, uint64(2), live.Dao.AdminSeq)
+	assert.Equal(t, uint64(4), live.Dao.PendingAdminSeq)
 }
 
 func TestUnknownDaoIsNotFound(t *testing.T) {
@@ -227,4 +233,73 @@ func TestAnswersAreCachedUntilTheTTLPasses(t *testing.T) {
 	_, err := r.Dao(context.Background(), 1)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, dao.calls.Load())
+}
+
+// A node without x/dao is asked once per TTL, not once per request.
+func TestSupportedRemembersAFailureForTheTTL(t *testing.T) {
+	dao := fixtureDAO()
+	dao.err = status.Error(codes.Unimplemented, "unknown service")
+	now := time.Unix(1000, 0)
+	r := daostate.New(daostate.Config{Now: func() time.Time { return now }}, daostate.Deps{DAO: dao, Rewards: fixtureRewards()})
+	for range 5 {
+		assert.False(t, r.Supported(context.Background()))
+	}
+	assert.EqualValues(t, 1, dao.calls.Load())
+
+	// The node upgrades: the next look after the TTL finds it.
+	dao.err = nil
+	now = now.Add(daostate.DefaultTTL + time.Second)
+	assert.True(t, r.Supported(context.Background()))
+}
+
+// The hand-written gRPC fixtures of the DAO e2e tests parse as the chain's
+// proto JSON.
+func TestTheFakeNodeFixturesDecode(t *testing.T) {
+	var daos daotypes.QueryDaosResponse
+	fakenode.LoadGRPCFixture(t, "dao", "Daos", "", &daos)
+	require.Len(t, daos.Daos, 2)
+	assert.Equal(t, daotypes.DaoType_DAO_TYPE_STATIC_LIST, daos.Daos[0].Type)
+	assert.Equal(t, daos.Daos[0].Address, daos.Daos[0].Admin, "DAO 1 owns itself")
+	assert.Equal(t, daotypes.DaoType_DAO_TYPE_STAKE, daos.Daos[1].Type)
+	require.NotNil(t, daos.Daos[1].Electorate)
+	assert.Equal(t, []string{"sr-1", "sr-gone"}, daos.Daos[1].Electorate.SrIds)
+	assert.Equal(t, 72*time.Hour, daos.Daos[1].Config.VotingPeriod)
+	assert.Equal(t, daotypes.DepositRefundPolicy_ONLY_PASSED, daos.Daos[1].Config.DepositRefundPolicy)
+
+	for _, id := range []string{"1", "2"} {
+		var dao daotypes.QueryDaoResponse
+		fakenode.LoadGRPCFixture(t, "dao", "Dao", id, &dao)
+		assert.Equal(t, id, fmt.Sprint(dao.Dao.Id))
+		var ctl daotypes.QueryDaoControllerResponse
+		fakenode.LoadGRPCFixture(t, "dao", "DaoController", id, &ctl)
+		assert.NotEmpty(t, ctl.Controller)
+	}
+	var sr rewardstypes.QueryGetStakingRewardResponse
+	fakenode.LoadGRPCFixture(t, "rewards", "StakingReward", "sr-1", &sr)
+	assert.Equal(t, "1000000", sr.StakingReward.StakedAmount)
+	var dr rewardstypes.QueryDenomRewardResponse
+	fakenode.LoadGRPCFixture(t, "rewards", "DenomReward", "ubze", &dr)
+	assert.Equal(t, "250000", dr.DenomReward.StakedAmount.String())
+}
+
+// The reader over a real gRPC connection to the fake node: the fixtures'
+// file names match the requests the reader sends.
+func TestLiveOverTheFakeGRPC(t *testing.T) {
+	g := fakenode.NewGRPC(t)
+	codec, err := chain.NewCodec()
+	require.NoError(t, err)
+	conn, err := grpcclient.Dial(grpcclient.Config{Addr: g.Addr}, codec.GRPC())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	r := daostate.New(daostate.Config{}, daostate.Deps{DAO: daotypes.NewQueryClient(conn), Rewards: rewardstypes.NewQueryClient(conn)})
+
+	live, err := r.Live(context.Background(), 2)
+	require.NoError(t, err)
+	assert.Equal(t, "stake", live.Dao.Type)
+	require.NotNil(t, live.Stake)
+	assert.Equal(t, daostate.Coin{Denom: "ubze", Amount: "1250000"}, live.Stake.VotingStake, "sr-1 + the vanished sr-gone (0) + the ubze denom reward")
+	assert.Equal(t, "account", live.Controller.EndReason)
+
+	_, err = r.Live(context.Background(), 99)
+	assert.ErrorIs(t, err, daostate.ErrUnsupported, "the fake node answers Unimplemented for a DAO it has no fixture of")
 }

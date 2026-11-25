@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/bze-alphateam/bze-scan/backend/internal/labels"
 )
 
 // DB is the part of a pgx pool the store needs; *pgxpool.Pool satisfies it.
@@ -39,14 +41,14 @@ const upsertSQL = `INSERT INTO explorer.daos AS d (id, address, type, name, admi
 
 // labelSQL names the DAOs' treasury accounts. An address a label of another
 // kind already names keeps it.
-const labelSQL = `INSERT INTO explorer.labels AS l (address, name, kind, source, updated_at)
+var labelSQL = `INSERT INTO explorer.labels AS l (address, name, kind, source, updated_at)
 	SELECT r.address,
 	       CASE WHEN r.name = '' THEN 'DAO #' || r.id ELSE 'DAO #' || r.id || ' · ' || r.name END,
-	       'dao', 'sync', now()
+	       '` + labels.KindDao + `', 'sync', now()
 	  FROM jsonb_to_recordset($1::jsonb) AS r(id bigint, address text, name text)
 	 ORDER BY r.address
 	ON CONFLICT (address) DO UPDATE SET name = EXCLUDED.name, updated_at = EXCLUDED.updated_at
-	WHERE l.kind = 'dao' AND l.name IS DISTINCT FROM EXCLUDED.name`
+	WHERE l.kind = '` + labels.KindDao + `' AND l.name IS DISTINCT FROM EXCLUDED.name`
 
 type row struct {
 	ID           uint64 `json:"id"`

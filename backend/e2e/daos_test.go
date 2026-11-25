@@ -79,8 +79,8 @@ func indexTheDaos(t *testing.T, e *syncEnv) []*transform.Entities {
 
 func (e *syncEnv) daoRows(t *testing.T) []string {
 	t.Helper()
-	return queryStrings(t, e.db, `SELECT concat_ws(' ', id, type, name, admin = address, self_governed,
-		created_height, creator = $1, updated_height) FROM explorer.daos ORDER BY id`, daoAdmin)
+	return queryStrings(t, e.db, `SELECT concat_ws(' ', id, type, name, (admin = address)::int, self_governed::int,
+		created_height, (creator = $1)::int, updated_height) FROM explorer.daos ORDER BY id`, daoAdmin)
 }
 
 func TestDaosAreIndexedSyncedAndServed(t *testing.T) {
@@ -89,16 +89,16 @@ func TestDaosAreIndexedSyncedAndServed(t *testing.T) {
 
 	// The events alone give the creations and the history, before any sync.
 	assert.Equal(t, []string{
-		"1 static_list Founders true true 25100000 true 25100000",
-		"2 stake Stakers club false false 25100000 true 25100001",
+		"1 static_list Founders 1 1 25100000 1 25100000",
+		"2 stake Stakers club 0 0 25100000 1 25100001",
 	}, e.daoRows(t))
-	events := queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, tx_hash IS NOT NULL)
+	events := queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, (tx_hash IS NOT NULL)::int)
 		FROM explorer.dao_events ORDER BY height, tx_index, msg_index, seq`)
 	assert.Equal(t, []string{
-		"1 EventDaoCreated 25100000 0 0 0 true",
-		"2 EventDaoCreated 25100000 1 0 0 true",
-		"2 EventDaoMetadataUpdated 25100001 0 0 0 true",
-		"2 EventAdminExecuted 25100001 0 0 1 true",
+		"1 EventDaoCreated 25100000 0 0 0 1",
+		"2 EventDaoCreated 25100000 1 0 0 1",
+		"2 EventDaoMetadataUpdated 25100001 0 0 0 1",
+		"2 EventAdminExecuted 25100001 0 0 1 1",
 	}, events)
 
 	// Reindexing the same heights keeps the same rows.
@@ -106,7 +106,7 @@ func TestDaosAreIndexedSyncedAndServed(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 	require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), ents, writer.ModeUpdate))
-	assert.Equal(t, events, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, tx_hash IS NOT NULL)
+	assert.Equal(t, events, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, (tx_hash IS NOT NULL)::int)
 		FROM explorer.dao_events ORDER BY height, tx_index, msg_index, seq`), "a reindex of the same heights")
 	assert.Len(t, e.daoRows(t), 2)
 

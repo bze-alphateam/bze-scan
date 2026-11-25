@@ -115,6 +115,8 @@ type Dao struct {
 	Electorate *Electorate
 	// CreatedAt is unix seconds.
 	CreatedAt int64
+	// AdminSeq and PendingAdminSeq are the chain's admin change counters.
+	AdminSeq, PendingAdminSeq uint64
 }
 
 // Controller is the account that ultimately controls a DAO.
@@ -171,6 +173,9 @@ type Reader struct {
 
 	// answered is set once the node has answered an x/dao query.
 	answered atomic.Bool
+	// failedAt is when Supported last found the node not answering, so a
+	// node that does not run x/dao is asked once per TTL, not per request.
+	failedAt atomic.Int64
 }
 
 type entry struct {
@@ -196,8 +201,14 @@ func (r *Reader) Supported(ctx context.Context) bool {
 	if r.answered.Load() {
 		return true
 	}
-	_, err := r.Params(ctx)
-	return err == nil
+	if at := r.failedAt.Load(); at != 0 && r.now().Sub(time.Unix(0, at)) < r.ttl {
+		return false
+	}
+	if _, err := r.Params(ctx); err != nil {
+		r.failedAt.Store(r.now().UnixNano())
+		return false
+	}
+	return true
 }
 
 // Params reads the module's parameters.
@@ -226,8 +237,8 @@ func (r *Reader) Dao(ctx context.Context, id uint64) (Dao, error) {
 	})
 }
 
-// Controller reads the account that ultimately controls DAO id.
-func (r *Reader) Controller(ctx context.Context, id uint64) (Controller, error) {
+// DaoController reads the account that ultimately controls DAO id.
+func (r *Reader) DaoController(ctx context.Context, id uint64) (Controller, error) {
 	return cached(ctx, r, "controller|"+strconv.FormatUint(id, 10), func(ctx context.Context) (Controller, error) {
 		resp, err := r.deps.DAO.DaoController(ctx, &daotypes.QueryDaoControllerRequest{DaoId: id})
 		if err != nil {
@@ -287,17 +298,19 @@ func (r *Reader) Stake(ctx context.Context, e Electorate) (ElectorateStake, erro
 			sources = append(sources, *dr)
 		}
 		total, denom := math.ZeroInt(), ""
-		for i, s := range sources {
-			if s.StakedAmount.Amount == "" {
-				sources[i].StakedAmount = Coin{Denom: s.StakingDenom, Amount: "0"}
-				continue
-			}
+		for _, s := range sources {
 			if n, ok := math.NewIntFromString(s.StakedAmount.Amount); ok {
 				total = total.Add(n)
 			}
 			// Every source of a stake DAO shares one staking denom.
 			if denom == "" {
 				denom = s.StakingDenom
+			}
+		}
+		// A source the chain no longer has holds zero of that denom.
+		for i, s := range sources {
+			if s.StakedAmount.Amount == "" {
+				sources[i].StakedAmount = Coin{Denom: denom, Amount: "0"}
 			}
 		}
 		return ElectorateStake{Sources: sources, VotingStake: Coin{Denom: denom, Amount: total.String()}}, nil
@@ -315,7 +328,7 @@ func (r *Reader) Live(ctx context.Context, id uint64) (*Live, error) {
 	out := Live{Dao: dao}
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
-		out.Controller, err = r.Controller(gctx, id)
+		out.Controller, err = r.DaoController(gctx, id)
 		return err
 	})
 	if dao.Electorate != nil {
@@ -355,6 +368,7 @@ func daoOf(d daotypes.Dao) Dao {
 	out := Dao{
 		ID: d.Id, Address: d.Address, Admin: d.Admin, PendingAdmin: d.PendingAdmin, Type: TypeOf(d.Type),
 		Name: d.Name, Description: d.Description, Members: d.Members, CreatedAt: d.CreatedAt,
+		AdminSeq: d.AdminSeq, PendingAdminSeq: d.PendingAdminSeq,
 		Config: VotingConfig{
 			MinQuorum: d.Config.MinQuorum.String(), Threshold: d.Config.Threshold.String(),
 			VotingPeriodS: int64(d.Config.VotingPeriod / time.Second), AllowExpedite: d.Config.AllowExpedite,

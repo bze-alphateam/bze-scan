@@ -311,3 +311,15 @@ func TestSearchFindsDaosByName(t *testing.T) {
 		{Type: "account", ID: "bze1known", Label: "Stakers treasury"},
 	}, decode[dto.SearchResponse](t, rec).Results)
 }
+
+// The address of a DAO's treasury account finds the account and the DAO.
+func TestSearchByATreasuryAddressFindsTheDao(t *testing.T) {
+	f := &fakeReader{accounts: map[string]bool{daoAdmin: true},
+		daosByAddress: map[string]*repository.Dao{daoAdmin: {ID: 12, Name: "Stakers club"}}}
+	rec := get(t, newAPI(f), "/search?q="+daoAdmin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	results := decode[dto.SearchResponse](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, dto.ResultAccount, results[0].Type)
+	assert.Equal(t, dto.SearchResult{Type: "dao", ID: "12", Label: "DAO #12 · Stakers club"}, results[1])
+}
