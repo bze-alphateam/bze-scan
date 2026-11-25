@@ -627,6 +627,30 @@ describe("cross-chain status", () => {
     expect(screen.getByTestId("ibc-status")).toHaveTextContent("blocked inbound denom");
   });
 
+  it.each([
+    ["rate limit exceeded", "Refused by BZE: this route's daily limit was reached. The sending chain refunds it."],
+    ["blocked denom", "Refused by BZE: this token is blocked from crossing chains. The sending chain refunds it."],
+    ["channel closed", "Refused by BZE: transfers on this channel are stopped. The sending chain refunds it."],
+  ])("explains an inbound transfer BZE refused: %s", (ackError, words) => {
+    const recv = fixture("ibc-recv-packet");
+    const row = ibcRow({
+      channel_id: "channel-0",
+      sequence: 812,
+      direction: "in",
+      status: "rejected",
+      ack_error: ackError,
+      receiver: B,
+      denom: "uusdc",
+      amount: "320000000",
+      counterparty: { chain_id: "noble-1", pretty_name: "Noble", logo_url: null, explorer_account_url: null, explorer_tx_url: null },
+    });
+    body(recv, ibcCtx([row]));
+    const status = screen.getByTestId("ibc-status");
+    expect(status).toHaveTextContent("Rejected");
+    expect(status).toHaveTextContent(words);
+    expect(status).not.toHaveTextContent(ackError);
+  });
+
   it("keeps the plain title without a status (a list's context)", () => {
     expect(rendererFor(send.type_url).title(send, ibcCtx([]))).toBe("Cross-chain transfer · 2 ATOM → cosmos1k4y…7fha through channel-3");
   });

@@ -39,9 +39,20 @@ const (
 	IBCRejected         = "rejected"
 )
 
-// IBCBlockedInbound is the ack_error of an inbound transfer BZE refused
-// because its denom is blocked.
-const IBCBlockedInbound = "blocked inbound denom"
+// The ack_error of an inbound transfer BZE refused itself, one value per
+// cause; any other refusal keeps the error text of the acknowledgement.
+const (
+	// IBCBlockedInbound: the denom is in the blocked_ibc_inbound parameter.
+	IBCBlockedInbound = "blocked inbound denom"
+	// IBCRateLimited: the route's rate limit quota was exceeded (ibc-apps
+	// rate-limiting, chain v8.3.0).
+	IBCRateLimited = "rate limit exceeded"
+	// IBCBlockedDenom: the denom is on the rate limiting blacklist (the
+	// guardian's MsgBlockDenom).
+	IBCBlockedDenom = "blocked denom"
+	// IBCChannelClosed: the guardian closed the channel (MsgCloseChannel).
+	IBCChannelClosed = "channel closed"
+)
 
 // Events of the transfer lifecycle (ibc-go v8).
 const (
@@ -52,6 +63,21 @@ const (
 	evFungibleToken     = "fungible_token_packet"
 	evWriteAck          = "write_acknowledgement"
 	evBlockedIBCInbound = "bze.txfeecollector.BlockedIbcInboundEvent"
+	evTransferDenied    = "transfer_denied"
+)
+
+// ibcErrorPrefix is what ibc-go puts before the type and every attribute key
+// of each event the IBC application emitted when it answers a packet with an
+// error acknowledgement (ConvertToErrorEvents; already in v8.8).
+const ibcErrorPrefix = "ibccallbackerror-"
+
+// Reasons of the rate limiting module's transfer_denied event, and its code
+// in the acknowledgement of a channel closed by the guardian
+// (txfeecollector ErrChannelClosed, 1140).
+const (
+	reasonRateLimitExceeded = "rate_limit_exceeded"
+	reasonBlacklistedDenom  = "blacklisted_denom"
+	ackChannelClosedPrefix  = "ABCI code: 1140:"
 )
 
 // channelEvents change a channel's state: the channels set resyncs.
@@ -194,11 +220,19 @@ func receivedTransfer(ev node.Event, events []node.Event) (*IBCTransfer, error) 
 		return nil, err
 	}
 	row.Status = IBCRejected
-	for _, e := range events {
-		switch e.Type {
-		case evBlockedIBCInbound:
-			row.AckError = IBCBlockedInbound
+	plain := make([]node.Event, len(events))
+	for i, e := range events {
+		plain[i] = withoutErrorPrefix(e)
+	}
+	// A refusal BZE names itself wins over the error text of the packet.
+	for _, e := range plain {
+		if cause := refusalCause(e); cause != "" {
+			row.AckError = cause
 			return row, nil
+		}
+	}
+	for _, e := range plain {
+		switch e.Type {
 		case evFungibleToken:
 			if s, ok := e.Get("success"); ok && s == "true" {
 				row.Status = IBCReceived
@@ -213,7 +247,46 @@ func receivedTransfer(ev node.Event, events []node.Event) (*IBCTransfer, error) 
 			}
 		}
 	}
+	// A closed channel refuses with an error acknowledgement and no event.
+	if strings.HasPrefix(row.AckError, ackChannelClosedPrefix) {
+		row.AckError = IBCChannelClosed
+	}
 	return row, nil
+}
+
+// withoutErrorPrefix is the event as the application emitted it: ibc-go
+// prefixes the type and the attribute keys of every event of an error
+// acknowledgement, and the plain form is what a success carries.
+func withoutErrorPrefix(ev node.Event) node.Event {
+	if !strings.HasPrefix(ev.Type, ibcErrorPrefix) {
+		return ev
+	}
+	out := node.Event{Type: strings.TrimPrefix(ev.Type, ibcErrorPrefix), Attributes: make([]node.Attribute, len(ev.Attributes))}
+	for i, a := range ev.Attributes {
+		out.Attributes[i] = node.Attribute{Key: strings.TrimPrefix(a.Key, ibcErrorPrefix), Value: a.Value}
+	}
+	return out
+}
+
+// refusalCause is the ack_error an event of a refused inbound transfer gives,
+// empty when the event is not a refusal BZE names.
+func refusalCause(ev node.Event) string {
+	switch ev.Type {
+	case evBlockedIBCInbound:
+		return IBCBlockedInbound
+	case evTransferDenied:
+		if module, ok := ev.Get("module"); ok && module != "ratelimit" {
+			return ""
+		}
+		reason, _ := ev.Get("reason")
+		switch reason {
+		case reasonRateLimitExceeded:
+			return IBCRateLimited
+		case reasonBlacklistedDenom:
+			return IBCBlockedDenom
+		}
+	}
+	return ""
 }
 
 // acknowledged is the outcome of an acknowledgement: the transfer module's

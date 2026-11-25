@@ -1487,7 +1487,19 @@ packets on port `transfer` only):
 | `MsgAcknowledgement` | `acknowledge_packet` + `fungible_token_packet` with `error` | `refunded_rejected`, `ack_error` |
 | `MsgTimeout`, `MsgTimeoutOnClose` | `timeout_packet` | `refunded_timeout` |
 | `MsgRecvPacket` | `recv_packet` + `fungible_token_packet` with `success = "true"` | `in`, `received` |
-| `MsgRecvPacket` | `recv_packet` + `bze.txfeecollector.BlockedIbcInboundEvent` (chain v8.2.0) | `in`, `rejected`, `ack_error` "blocked inbound denom" (another error ack: its error) |
+| `MsgRecvPacket` | `recv_packet` + `bze.txfeecollector.BlockedIbcInboundEvent` (chain v8.2.0) | `in`, `rejected`, `ack_error` "blocked inbound denom" |
+| `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `rate_limit_exceeded` (chain v8.3.0, ack code 4) | `in`, `rejected`, `ack_error` "rate limit exceeded" |
+| `MsgRecvPacket` | `recv_packet` + `transfer_denied` with `reason` `blacklisted_denom` (chain v8.3.0, ack code 7) | `in`, `rejected`, `ack_error` "blocked denom" |
+| `MsgRecvPacket` | `recv_packet` and no refusal event, error ack `ABCI code: 1140:` (a channel the guardian closed, chain v8.3.0) | `in`, `rejected`, `ack_error` "channel closed" |
+| `MsgRecvPacket` | `recv_packet` + any other error ack | `in`, `rejected`, `ack_error` the error of the transfer module's `fungible_token_packet`, else of the acknowledgement |
+
+When the IBC application answers with an error acknowledgement, ibc-go prefixes
+the type and every attribute key of each event the application emitted with
+`ibccallbackerror-` (`ibccallbackerror-transfer_denied`, `ibccallbackerror-reason`,
+`ibccallbackerror-bze.txfeecollector.BlockedIbcInboundEvent`, …). The reader accepts
+the prefixed and the plain form of every event type and key. A refusal BZE names
+wins over the error text of the packet. `ack_error` is free text, so the four
+values above are not enumerated in the schema.
 
 `timeout_height` `0-0` and `timeout_timestamp` 0 mean none (NULL). Every
 final status sets `result_*`. The backfill walks down, so an
