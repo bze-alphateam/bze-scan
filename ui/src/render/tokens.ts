@@ -3,6 +3,7 @@ import { formatAmount, formatCount, formatPct, formatUsd } from "@/lib/format";
 import { compareDecimals, sumAmounts } from "@/lib/math";
 
 import { multiHop } from "./account";
+import { v830EventLine } from "./token-settings";
 
 // The tokens pages' words and numbers, kept pure so they are tested without
 // rendering. Amounts stay in base units until formatted.
@@ -295,12 +296,13 @@ export function supplyText(t: Pick<TokenSummary, "supply" | "exponent" | "symbol
  * minted on its own chain), `inflation` (BZE, minted every block for the
  * stakers) and `pool` (pool shares follow the pool's liquidity).
  */
-export type SupplyState = "admin" | "fixed" | "elsewhere" | "inflation" | "pool";
+export type SupplyState = "admin" | "locked" | "fixed" | "elsewhere" | "inflation" | "pool";
 
-export function supplyState(t: Pick<Token, "kind" | "admin">): SupplyState | null {
+export function supplyState(t: Pick<Token, "kind" | "admin"> & { mintable?: boolean | null }): SupplyState | null {
   switch (t.kind) {
     case "factory":
-      return t.admin ? "admin" : "fixed";
+      if (t.admin) return t.mintable === false ? "locked" : "admin";
+      return "fixed";
     case "ibc":
       return "elsewhere";
     case "native":
@@ -317,6 +319,7 @@ export function supplyTileSub(state: SupplyState | null): string | null {
   switch (state) {
     case "admin":
       return "can change · see below";
+    case "locked":
     case "fixed":
       return "can only go down";
     case "elsewhere":
@@ -385,6 +388,8 @@ const detail = (e: TokenEvent, key: string) => {
 export function eventLine(e: TokenEvent, t: Pick<Token, "admin" | "exponent" | "symbol" | "denom">): EventLine {
   const actor: Party | null = e.actor ? { address: e.actor, label: e.actor_label } : null;
   const amount = e.amount != null ? formatAmount(e.amount, t.exponent, tokenSymbol(t)) : "";
+  const v830 = v830EventLine(e);
+  if (v830) return v830;
   const by = (text: string): EventLine =>
     actor && actor.address === t.admin ? { text: `${text} by the admin`, party: null } : { text: actor ? `${text} by` : text, party: actor };
   switch (e.kind) {

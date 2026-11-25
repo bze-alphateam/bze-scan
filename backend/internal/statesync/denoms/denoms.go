@@ -32,6 +32,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/types/query"
@@ -118,6 +119,8 @@ type Bank interface {
 // tokenfactorytypes.QueryClient satisfies it.
 type TokenFactory interface {
 	DenomAuthority(ctx context.Context, in *tokenfactorytypes.QueryDenomAuthorityRequest, opts ...grpc.CallOption) (*tokenfactorytypes.QueryDenomAuthorityResponse, error)
+	// DenomConfig is chain v8.3.0's; an older node answers Unimplemented.
+	DenomConfig(ctx context.Context, in *tokenfactorytypes.QueryDenomConfigRequest, opts ...grpc.CallOption) (*tokenfactorytypes.QueryDenomConfigResponse, error)
 }
 
 // Tradebin is the part of the tradebin query client the set uses;
@@ -202,6 +205,12 @@ type Denom struct {
 	// Admin is the factory denom's admin; empty once renounced.
 	Admin   string
 	LogoURL string
+	// Mintable is the factory denom's minting switch; nil when the node
+	// predates v8.3.0 (its authority has no such field) or the denom has no
+	// authority.
+	Mintable *bool
+	// Config is the factory denom's v8.3.0 settings; nil when unknown.
+	Config *Config
 	// Supply is the bank total supply in base units, "0" when the bank
 	// holds none.
 	Supply  string
@@ -209,6 +218,14 @@ type Denom struct {
 	Markets []string
 	// Metadata is the bank metadata as the node returns it; nil without.
 	Metadata json.RawMessage
+}
+
+// Config is a factory denom's DenomConfig: the community pool address
+// (empty for none) and the two ratios as decimal strings.
+type Config struct {
+	CommunityPool string
+	TransferFee   string
+	GasSurcharge  string
 }
 
 // Snapshot is one write of the set.
@@ -254,6 +271,10 @@ type Set struct {
 	deps     Deps
 	interval time.Duration
 	mu       sync.Mutex
+
+	// noConfig is set when the node answered DenomConfig Unimplemented in the
+	// current run; each run clears it.
+	noConfig atomic.Bool
 
 	// known are the stored denoms, for Canonical.
 	knownMu sync.RWMutex
@@ -323,6 +344,7 @@ func (s *Set) learn(full bool, denoms ...string) {
 func (s *Set) FullResync(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.noConfig.Store(false)
 
 	supply := map[string]string{}
 	var next []byte
@@ -418,6 +440,7 @@ func (s *Set) ResyncOne(ctx context.Context, key string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.noConfig.Store(false)
 
 	md, err := s.metadata(ctx, key)
 	if err != nil {
@@ -641,6 +664,9 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 			return Denom{}, fmt.Errorf("tokenfactory DenomAuthority %s: %w", denom, err)
 		case resp.DenomAuthority != nil:
 			row.Admin = resp.DenomAuthority.Admin
+			if err := s.settings(ctx, &row, resp.DenomAuthority.Mintable); err != nil {
+				return Denom{}, err
+			}
 		}
 	}
 	if (row.Kind == KindNative || row.Kind == KindFactory) && row.LogoURL == "" && origins != nil && s.deps.ChainID != "" {
@@ -670,6 +696,31 @@ func (s *Set) row(ctx context.Context, denom string, md *banktypes.Metadata, sup
 		row.Exponent = DefaultExponent
 	}
 	return row, nil
+}
+
+// settings reads the v8.3.0 settings of a factory denom. A node that answers
+// DenomConfig Unimplemented predates them: it is probed once per run (the
+// answer is remembered in noConfig) and the denom keeps NULLs, since its
+// authority would otherwise decode as minting turned off.
+func (s *Set) settings(ctx context.Context, row *Denom, mintable bool) error {
+	if s.noConfig.Load() {
+		return nil
+	}
+	resp, err := s.deps.TokenFactory.DenomConfig(ctx, &tokenfactorytypes.QueryDenomConfigRequest{Denom: row.Denom})
+	switch {
+	case status.Code(err) == codes.Unimplemented:
+		s.noConfig.Store(true)
+		return nil
+	case err != nil:
+		return fmt.Errorf("tokenfactory DenomConfig %s: %w", row.Denom, err)
+	}
+	row.Mintable = &mintable
+	row.Config = &Config{
+		CommunityPool: resp.Config.CommunityPool,
+		TransferFee:   resp.Config.TransferFee.String(),
+		GasSurcharge:  resp.Config.GasSurcharge.String(),
+	}
+	return nil
 }
 
 // origins is what one run resolves IBC denoms with: the channels' chains,

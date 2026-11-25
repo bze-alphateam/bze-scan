@@ -49,5 +49,7 @@
     "state": "open",
     "client_status": "active"
   },
-  "stranded": false
+  "stranded": false,
+  "mintable": null,
+  "config": null
 }

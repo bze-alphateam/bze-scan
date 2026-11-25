@@ -708,6 +708,18 @@ export interface Token extends TokenSummary {
   events: TokenEvent[];
   events_next_cursor: string | null;
   transfers_24h: TransferVolume;
+  /** Factory tokens, chain v8.3.0: false once minting is off for good; null when unknown or not a factory token. */
+  mintable: boolean | null;
+  /** Factory tokens, chain v8.3.0: the fee settings; null when unknown or not a factory token. */
+  config: TokenConfig | null;
+}
+
+/** A factory token's fee settings; the ratios are decimal strings, the pool is null for none (or a module account). */
+export interface TokenConfig {
+  community_pool: string | null;
+  community_pool_label: Label | null;
+  transfer_fee: string;
+  gas_surcharge: string;
 }
 
 /** A holder in the last snapshot; `share_pct` of the supply, null without one. */

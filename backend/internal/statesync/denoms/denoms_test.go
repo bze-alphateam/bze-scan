@@ -76,6 +76,12 @@ type fakeNode struct {
 	// noPools answers Unimplemented.
 	pools   []tradebintypes.LiquidityPool
 	noPools bool
+	// configs answers DenomConfig per denom (the defaults for the others);
+	// mintable lists the denoms whose authority says mintable; noConfig
+	// answers DenomConfig Unimplemented (chain v8.2.x).
+	configs  map[string]tokenfactorytypes.DenomConfig
+	mintable map[string]bool
+	noConfig bool
 }
 
 func newFakeNode(t *testing.T) *fakeNode { return &fakeNode{t: t, calls: map[string]int{}} }
@@ -149,7 +155,24 @@ func (n *fakeNode) DenomAuthority(_ context.Context, in *tokenfactorytypes.Query
 	}
 	var resp tokenfactorytypes.QueryDenomAuthorityResponse
 	fakenode.LoadGRPCFixture(n.t, "tokenfactory", "DenomAuthority", url.PathEscape(in.Denom), &resp)
+	if resp.DenomAuthority != nil {
+		resp.DenomAuthority.Mintable = n.mintable[in.Denom]
+	}
 	return &resp, nil
+}
+
+func (n *fakeNode) DenomConfig(_ context.Context, in *tokenfactorytypes.QueryDenomConfigRequest, _ ...grpc.CallOption) (*tokenfactorytypes.QueryDenomConfigResponse, error) {
+	if err := n.count("DenomConfig"); err != nil {
+		return nil, err
+	}
+	if n.noConfig {
+		return nil, status.Error(codes.Unimplemented, "unknown method DenomConfig")
+	}
+	cfg, ok := n.configs[in.Denom]
+	if !ok {
+		cfg = tokenfactorytypes.DenomConfig{TransferFee: sdkmath.LegacyZeroDec(), GasSurcharge: sdkmath.LegacyZeroDec()}
+	}
+	return &tokenfactorytypes.QueryDenomConfigResponse{Config: cfg}, nil
 }
 
 func (n *fakeNode) AllMarkets(context.Context, *tradebintypes.QueryAllMarketsRequest, ...grpc.CallOption) (*tradebintypes.QueryAllMarketsResponse, error) {

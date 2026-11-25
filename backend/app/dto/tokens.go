@@ -92,6 +92,7 @@ type TokenHolder struct {
 // rest of them.
 type Token struct {
 	TokenSummary
+	TokenSettings
 	Description      *string         `json:"description"`
 	OriginChainID    *string         `json:"origin_chain_id"`
 	IBCBaseDenom     *string         `json:"ibc_base_denom"`
