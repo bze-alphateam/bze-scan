@@ -105,12 +105,7 @@ type row struct {
 func (s *PGStore) Save(ctx context.Context, ps []Proposal) error {
 	rows := make([]row, 0, len(ps))
 	for _, p := range ps {
-		rows = append(rows, row{
-			ID: p.ID, DaoID: p.DaoID, Proposer: p.Proposer, Title: p.Title, Summary: p.Summary, Msgs: p.Msgs,
-			Expedited: p.Expedited, SubmitHeight: p.SubmitHeight, SubmitTime: p.SubmitTime, VotingEnd: p.VotingEnd,
-			Denominator: p.Denominator, PinnedConfig: p.PinnedConfig, Status: p.Status, Yes: p.Yes, No: p.No,
-			Abstain: p.Abstain, TallyAt: p.TallyAt, ExpediteSettleable: p.ExpediteSettleable, RetryDeadline: p.RetryDeadline,
-		})
+		rows = append(rows, row(p))
 	}
 	payload, err := json.Marshal(rows)
 	if err != nil {
