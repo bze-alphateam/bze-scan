@@ -27,6 +27,7 @@ type fakeConn struct {
 	mu        sync.Mutex
 	methods   []string
 	fail      map[string]bool
+	missing   map[string]bool // methods the node does not have
 	halted    []string
 	haltErr   error
 	haltedReq *tradebintypes.QueryHaltedDenomsRequest
@@ -38,6 +39,9 @@ func (c *fakeConn) Invoke(_ context.Context, method string, args, reply any, _ .
 	c.methods = append(c.methods, method)
 	if c.fail[method] {
 		return errors.New("unavailable")
+	}
+	if c.missing[method] {
+		return status.Error(codes.Unimplemented, "unknown service")
 	}
 	if method == "/bze.tradebin.Query/HaltedDenoms" {
 		c.haltedReq, _ = args.(*tradebintypes.QueryHaltedDenomsRequest)
@@ -72,12 +76,42 @@ func TestEveryModuleIsReadAndAFailureLeavesOnlyItOut(t *testing.T) {
 		"/cosmos.distribution.v1beta1.Query/Params", "/cosmos.slashing.v1beta1.Query/Params",
 		"/cosmos.gov.v1.Query/Params", "/bze.tradebin.Query/Params", "/bze.tokenfactory.Query/Params",
 		"/bze.rewards.Query/Params", "/bze.burner.Query/Params", "/bze.cointrunk.Query/Params",
-		"/bze.txfeecollector.Query/Params",
+		"/bze.txfeecollector.Query/Params", "/bze.dao.Query/Params", "/bze.guardian.v1.Query/Params",
 	}, conn.methods)
 	assert.Len(t, got, len(params.Modules)-2, "burner failed; gov's empty answer carries no params")
 	assert.NotContains(t, got, "burner")
 	assert.JSONEq(t, `{"type":"cosmos.staking.v1beta1.Params"}`, string(got["staking"]))
 	assert.JSONEq(t, `{"type":"bze.txfeecollector.Params"}`, string(got["txfeecollector"]))
+}
+
+func TestDaoAndGuardianAreReadAndMapped(t *testing.T) {
+	got, err := params.NewGRPC(&fakeConn{}, fakeJSON{}).Params(context.Background())
+	require.ErrorContains(t, err, "gov params", "only gov's empty answer fails")
+	assert.JSONEq(t, `{"type":"bze.dao.Params"}`, string(got["dao"]))
+	assert.JSONEq(t, `{"type":"bze.guardian.v1.Params"}`, string(got["guardian"]))
+}
+
+// A v8.2.x node answers Unimplemented for the modules v8.3.0 added: they are
+// left out and nothing is reported, so the API stays 200 and the log quiet.
+func TestAModuleTheNodeDoesNotHaveIsLeftOutWithoutAnError(t *testing.T) {
+	conn := &fakeConn{
+		missing: map[string]bool{"/bze.dao.Query/Params": true, "/bze.guardian.v1.Query/Params": true},
+		fail:    map[string]bool{"/cosmos.gov.v1.Query/Params": true},
+	}
+	got, err := params.NewGRPC(conn, fakeJSON{}).Params(context.Background())
+	require.ErrorContains(t, err, "gov params: unavailable")
+	assert.NotContains(t, err.Error(), "dao")
+	assert.NotContains(t, err.Error(), "guardian")
+	assert.NotContains(t, got, "dao")
+	assert.NotContains(t, got, "guardian")
+	assert.Contains(t, got, "tradebin")
+
+	conn = &fakeConn{
+		missing: map[string]bool{"/bze.dao.Query/Params": true, "/bze.guardian.v1.Query/Params": true},
+	}
+	_, err = params.NewGRPC(conn, fakeJSON{}).Params(context.Background())
+	assert.ErrorContains(t, err, "gov params: no params in the answer")
+	assert.NotContains(t, err.Error(), "Unimplemented")
 }
 
 func TestGovWithoutParamsIsAFailure(t *testing.T) {
@@ -122,6 +156,9 @@ type countingReader struct {
 	haltedCalls int
 	halted      []string
 	haltErr     error
+	v830Calls   int
+	v830        bool
+	v830Err     error
 }
 
 func (r *countingReader) HaltedDenoms(context.Context) ([]string, error) {
@@ -129,6 +166,13 @@ func (r *countingReader) HaltedDenoms(context.Context) ([]string, error) {
 	defer r.mu.Unlock()
 	r.haltedCalls++
 	return r.halted, r.haltErr
+}
+
+func (r *countingReader) V830(context.Context) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.v830Calls++
+	return r.v830, r.v830Err
 }
 
 func (r *countingReader) Params(context.Context) (map[string]json.RawMessage, error) {
@@ -192,4 +236,41 @@ func TestCachedReadsTheHaltedDenomsAgainAfterAFailure(t *testing.T) {
 	require.Error(t, err)
 	_, _ = c.HaltedDenoms(context.Background())
 	assert.Equal(t, 2, r.haltedCalls)
+}
+
+func TestV830IsFalseOnlyWhenTheGuardianIsUnimplemented(t *testing.T) {
+	ctx := context.Background()
+	old := &fakeConn{missing: map[string]bool{"/bze.guardian.v1.Query/Params": true}}
+	got, err := params.NewGRPC(old, fakeJSON{}).V830(ctx)
+	require.NoError(t, err)
+	assert.False(t, got)
+
+	up := params.NewGRPC(&fakeConn{}, fakeJSON{})
+	got, err = up.V830(ctx)
+	require.NoError(t, err)
+	assert.True(t, got)
+
+	down := params.NewGRPC(&fakeConn{fail: map[string]bool{"/bze.guardian.v1.Query/Params": true}}, fakeJSON{})
+	_, err = down.V830(ctx)
+	assert.ErrorContains(t, err, "guardian params: unavailable", "a timeout says nothing about the chain")
+}
+
+func TestCachedV830KeepsTheLastKnownAnswerWhenTheReadFails(t *testing.T) {
+	now := time.Unix(0, 0)
+	r := &countingReader{v830Err: errors.New("timeout")}
+	c := params.NewCached(r, 0, func() time.Time { return now })
+	got, err := c.V830(context.Background())
+	require.NoError(t, err)
+	assert.True(t, got, "no answer yet: a v8.3.0 node until the node says otherwise")
+
+	r.v830Err, r.v830 = nil, false
+	now = now.Add(params.DefaultTTL)
+	got, _ = c.V830(context.Background())
+	assert.False(t, got)
+
+	r.v830Err = errors.New("timeout")
+	now = now.Add(params.DefaultTTL)
+	got, err = c.V830(context.Background())
+	require.NoError(t, err)
+	assert.False(t, got, "the last known answer stands")
 }

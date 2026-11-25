@@ -28,6 +28,8 @@ import (
 
 	burnertypes "github.com/bze-alphateam/bze/x/burner/types"
 	cointrunktypes "github.com/bze-alphateam/bze/x/cointrunk/types"
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
+	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
 	rewardstypes "github.com/bze-alphateam/bze/x/rewards/types"
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
@@ -38,12 +40,14 @@ import (
 // parameters page.
 var Modules = []string{
 	"txfeecollector", "staking", "mint", "distribution", "slashing", "gov",
-	"tradebin", "tokenfactory", "rewards", "burner", "cointrunk",
+	"tradebin", "tokenfactory", "rewards", "burner", "cointrunk", "dao", "guardian",
 }
 
 // Reader reads the live parameters by module. A module that fails is left
 // out of the map and its error is joined into the returned one, so a
-// caller can use what answered.
+// caller can use what answered. A module the node does not have (it answers
+// Unimplemented: x/dao and x/guardian on a v8.2.x node) is left out without
+// an error.
 type Reader interface {
 	Params(ctx context.Context) (map[string]json.RawMessage, error)
 }
@@ -132,6 +136,18 @@ func (g *GRPC) read(ctx context.Context, module string) (gogoproto.Message, erro
 			return nil, err
 		}
 		return &r.Params, nil
+	case "dao":
+		r, err := daotypes.NewQueryClient(g.conn).Params(ctx, &daotypes.QueryParamsRequest{})
+		if err != nil {
+			return nil, err
+		}
+		return &r.Params, nil
+	case "guardian":
+		r, err := guardiantypes.NewQueryClient(g.conn).Params(ctx, &guardiantypes.QueryParamsRequest{})
+		if err != nil {
+			return nil, err
+		}
+		return &r.Params, nil
 	case "txfeecollector":
 		r, err := txfeecollectortypes.NewQueryClient(g.conn).Params(ctx, &txfeecollectortypes.QueryParamsRequest{})
 		if err != nil {
@@ -165,6 +181,9 @@ func (g *GRPC) Params(ctx context.Context) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage, len(Modules))
 	var errs []error
 	for _, r := range results {
+		if status.Code(r.err) == codes.Unimplemented {
+			continue // the node does not have the module (yet)
+		}
 		if r.err != nil {
 			errs = append(errs, fmt.Errorf("%s params: %w", r.module, r.err))
 			continue
@@ -172,6 +191,28 @@ func (g *GRPC) Params(ctx context.Context) (map[string]json.RawMessage, error) {
 		out[r.module] = r.raw
 	}
 	return out, errors.Join(errs...)
+}
+
+// ChainReader tells which chain the node runs.
+type ChainReader interface {
+	// V830 is false only when the node answers the guardian params query
+	// (it exists from chain v8.3.0 on) Unimplemented; any other failure is
+	// an error.
+	V830(ctx context.Context) (bool, error)
+}
+
+var _ ChainReader = (*GRPC)(nil)
+
+// V830 asks the node for the guardian params.
+func (g *GRPC) V830(ctx context.Context) (bool, error) {
+	_, err := g.read(ctx, "guardian")
+	if status.Code(err) == codes.Unimplemented {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("guardian params: %w", err)
+	}
+	return true, nil
 }
 
 // HaltReader reads the denoms governance halted on the DEX. They are not a
@@ -211,6 +252,7 @@ const DefaultTTL = 30 * time.Second
 type Live interface {
 	Reader
 	HaltReader
+	ChainReader
 }
 
 // Cached serves a Live reader's answers for a TTL; concurrent misses share
@@ -220,6 +262,11 @@ type Cached struct {
 	from   Live
 	params ttlCache[map[string]json.RawMessage]
 	halted ttlCache[[]string]
+	chain  ttlCache[bool]
+
+	mu    sync.Mutex
+	known bool // the last answer of V830
+	have  bool
 }
 
 // NewCached caches from for ttl (zero is DefaultTTL); now nil is the wall
@@ -235,6 +282,7 @@ func NewCached(from Live, ttl time.Duration, now func() time.Time) *Cached {
 		from:   from,
 		params: ttlCache[map[string]json.RawMessage]{ttl: ttl, now: now},
 		halted: ttlCache[[]string]{ttl: ttl, now: now},
+		chain:  ttlCache[bool]{ttl: ttl, now: now},
 	}
 }
 
@@ -249,6 +297,23 @@ func (c *Cached) Params(ctx context.Context) (map[string]json.RawMessage, error)
 // reads.
 func (c *Cached) HaltedDenoms(ctx context.Context) ([]string, error) {
 	return c.halted.get(ctx, c.from.HaltedDenoms)
+}
+
+// V830 returns the cached answer while it is fresh, else reads. When the
+// read fails the last known answer stands (true before there is one): a
+// timeout is no sign of an older chain.
+func (c *Cached) V830(ctx context.Context) (bool, error) {
+	v, err := c.chain.get(ctx, c.from.V830)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil {
+		c.known, c.have = v, true
+		return v, nil
+	}
+	if c.have {
+		return c.known, nil
+	}
+	return true, nil
 }
 
 // ttlCache holds one answer for a TTL.
