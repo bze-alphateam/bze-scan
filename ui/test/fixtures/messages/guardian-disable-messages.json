@@ -1,0 +1,14 @@
+{
+  "type_url": "/bze.guardian.v1.MsgDisableMessages",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "msg_type_urls": [
+      "/bze.tradebin.MsgCreateOrder",
+      "/bze.tradebin.MsgMultiSwap",
+      "/cosmos.bank.v1beta1.MsgSend"
+    ]
+  },
+  "events": []
+}

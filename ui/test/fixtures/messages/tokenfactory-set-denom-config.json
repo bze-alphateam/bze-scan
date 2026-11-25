@@ -1,0 +1,13 @@
+{
+  "type_url": "/bze.tokenfactory.MsgSetDenomConfig",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "tokenfactory",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "community_pool": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "transfer_fee": "0.01",
+    "gas_surcharge": "0.5"
+  },
+  "events": []
+}

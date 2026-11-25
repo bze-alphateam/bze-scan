@@ -1,0 +1,12 @@
+{
+  "type_url": "/bze.guardian.v1.MsgUpdateParams",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "params": {
+      "guardian": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4"
+    }
+  },
+  "events": []
+}
