@@ -9,6 +9,7 @@ import { isNotFound } from "@/api/client";
 import { useDenoms, useEmergency, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import { useApi } from "@/api/provider";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { PoolPriceCard } from "@/components/tokens/pool-price-card";
 import { ExportButton } from "@/components/export/export-modal";
 import { AppLink } from "@/components/layout/app-link";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -64,6 +65,7 @@ import {
 } from "@/render/tokens";
 import { tokenSwitches } from "@/render/emergency";
 
+import { TokenLimits } from "./token-limits";
 import { TokenLogo } from "./tokens-page";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -820,8 +822,10 @@ export function TokenView({ t }: { t: Token }) {
       <Header t={t} />
       <Warnings t={t} />
       <Tiles t={t} />
+      <PoolPriceCard t={t} />
       <SupplyCallout t={t} events={events} complete={complete} />
       {route && <Route t={t} route={route} />}
+      <TokenLimits t={t} />
       <About t={t} route={route} />
       <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />

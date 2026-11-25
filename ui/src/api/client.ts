@@ -13,6 +13,7 @@ import type {
   ErrorBody,
   HallOfFame,
   IbcListParams,
+  IbcChannel,
   IbcTransfer,
   LiveHalt,
   ModuleAccount,
@@ -25,6 +26,7 @@ import type {
   ProposalSummary,
   ProposalNonVoter,
   ProposalVote,
+  RateLimitList,
   Upgrade,
   RawRpcResponse,
   RawTx,
@@ -95,6 +97,9 @@ export interface ExplorerApi {
   emergencyActions(params: PageParams, signal?: AbortSignal): Promise<Page<EmergencyAction>>;
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
+
+  ibcChannels(signal?: AbortSignal): Promise<{ items: IbcChannel[] }>;
+  rateLimits(signal?: AbortSignal): Promise<RateLimitList>;
 
   stats(signal?: AbortSignal): Promise<Stats>;
   params(signal?: AbortSignal): Promise<ChainParams>;
@@ -223,6 +228,9 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     emergencyActions: (params, signal) => get("/emergency/actions", page(params), signal),
 
     search: (q, signal) => get("/search", { q }, signal),
+
+    ibcChannels: (signal) => get("/ibc/channels", {}, signal),
+    rateLimits: (signal) => get("/ibc/rate-limits", {}, signal),
 
     stats: (signal) => get("/stats", {}, signal),
     params: (signal) => get("/params", {}, signal),

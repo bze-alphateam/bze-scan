@@ -226,6 +226,12 @@ func New(cfg Config, deps Deps) *Service {
 	return &Service{cfg: cfg, deps: deps, prices: map[string]cachedPrice{}}
 }
 
+// Pools returns every liquidity pool as the tickers read them (cached by the
+// reader), so another reader of the pools shares the node queries.
+func (s *Service) Pools(ctx context.Context) ([]Pool, error) {
+	return s.deps.Pools.Pools(ctx)
+}
+
 // Tickers returns every market's and pool's ticker, by market id, built at
 // most TTL ago. The caller must not modify them. It fails only when neither
 // the market list nor the pools can be read and none was read before. The

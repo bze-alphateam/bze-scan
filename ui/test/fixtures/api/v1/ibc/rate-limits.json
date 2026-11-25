@@ -1,0 +1,341 @@
+{
+  "supported": true,
+  "items": [
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-0",
+      "counterparty": {
+        "chain_id": "osmosis-1",
+        "pretty_name": "Osmosis",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "1200000000000",
+        "used": "1200000000000",
+        "remaining": "800000000000",
+        "used_pct": 60.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "-300000000000",
+        "used": "0",
+        "remaining": "2300000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-2",
+      "counterparty": {
+        "chain_id": "archway-1",
+        "pretty_name": "Archway",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-3",
+      "counterparty": {
+        "chain_id": "noble-1",
+        "pretty_name": "Noble",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-6",
+      "counterparty": {
+        "chain_id": "atomone-1",
+        "pretty_name": "AtomOne",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "1800000000000",
+        "used": "1800000000000",
+        "remaining": "200000000000",
+        "used_pct": 90.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-10",
+      "counterparty": {
+        "chain_id": "lumen-1",
+        "pretty_name": "Lumen",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-11",
+      "counterparty": {
+        "chain_id": "cosmoshub-4",
+        "pretty_name": "Cosmos Hub",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-12",
+      "counterparty": {
+        "chain_id": "dungeon-1",
+        "pretty_name": "Dungeon",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ubze",
+      "symbol": "BZE",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-13",
+      "counterparty": {
+        "chain_id": "injective-1",
+        "pretty_name": "Injective",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "2",
+        "threshold": "2000000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "2000000000000",
+        "used_pct": 0.0,
+        "enforced": true
+      }
+    },
+    {
+      "denom": "ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+      "symbol": "USDC.n",
+      "exponent": 6,
+      "logo_url": null,
+      "channel_id": "channel-3",
+      "counterparty": {
+        "chain_id": "noble-1",
+        "pretty_name": "Noble",
+        "logo_url": null,
+        "explorer_account_url": null,
+        "explorer_tx_url": null
+      },
+      "window_hours": 24,
+      "next_reset": "2099-10-12T00:00:00Z",
+      "channel_value": "100000000000000",
+      "inflow": "0",
+      "outflow": "0",
+      "send": {
+        "max_percent": "100",
+        "threshold": "80000000000",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "80000000000",
+        "used_pct": null,
+        "enforced": true
+      },
+      "recv": {
+        "max_percent": "0",
+        "threshold": "0",
+        "net_flow": "0",
+        "used": "0",
+        "remaining": "0",
+        "used_pct": null,
+        "enforced": true
+      }
+    }
+  ],
+  "blacklisted_denoms": [
+    "factory/bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk/uhoney"
+  ]
+}
