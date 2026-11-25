@@ -258,9 +258,6 @@ func TestCatchUpWithNothingToDo(t *testing.T) {
 	assert.Empty(t, committed(d), "no block stored yet")
 }
 
-// Fills left without a trade id below the cursor (written by the previous
-// release after the cursor passed them) are numbered one height at a time,
-// the cursor left alone; the block's swaps and fills are numbered together.
 // A fill of a transaction's own events (chain v8.3.0) numbers with the swaps
 // of its message by the event's position, and the write drops the rows of
 // the range's old numbering.
@@ -317,6 +314,9 @@ func TestCatchUpNumbersATransactionsFillsWithItsSwaps(t *testing.T) {
 	assert.Equal(t, float64(70_000_002), prune[0]["trade_id"])
 }
 
+// Fills left without a trade id below the cursor (written by the previous
+// release after the cursor passed them) are numbered one height at a time,
+// the cursor left alone; the block's swaps and fills are numbered together.
 func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 	at := time.Unix(100, 0).UTC()
 	swap := `{"creator":"bze1c","in":{"denom":"ubze","amount":"5"},"out":{"denom":"uatom","amount":"2"},"pool_id":"uatom_ubze"}`

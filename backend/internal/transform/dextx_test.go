@@ -145,30 +145,36 @@ func TestTxLevelOrdersAreStable(t *testing.T) {
 }
 
 // A block with both kinds of outcome, as the v8.3.0 upgrade block can look: a
-// queued message of tx 0 with its block-level fill, and tx 1's own fee swap and
-// fill. The queue attribution keeps to the block-level rows, the tx rows keep
-// their hashes, and the trade ids number the transaction's trades by position,
+// queued message of tx 0 with its block-level fill, a message of tx 2 queued
+// without an id (the heuristic's path) with its block-level fill, and tx 1's
+// own fee swap and fill. The attribution keeps to the block-level rows (by
+// message id, by queue order), the tx rows keep their hashes, and the trade ids number the transaction's trades by position,
 // then the block-level ones.
 func TestQueueHeuristicLeavesTxLevelOutcomesAlone(t *testing.T) {
 	in := baseInput()
 	in.Block.Txs = []string{
 		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "10", Price: "2", MarketId: market}),
 		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "20", Price: "2", MarketId: market}),
+		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "15", Price: "2", MarketId: market}),
 	}
 	in.Results.TxsResults = []node.TxResult{
 		{Events: one(typed("bze.tradebin.OrderCreateMessageEvent", "0", "creator", trader, "market_id", market,
 			"order_type", "buy", "amount", "10", "price", "2", "message_id", msgID(1)))},
 		{Events: orderEvents(one(swapEvent("0", trader, "3", uhoney, "1", "ubze")),
 			one(txExecuted("0", msgID(902), msgID(1001), "20", "2")))},
+		{Events: one(typed("bze.tradebin.OrderCreateMessageEvent", "0", "creator", trader, "market_id", market,
+			"order_type", "buy", "amount", "15", "price", "2"))},
 	}
 	in.Results.FinalizeBlockEvents = []node.Event{
 		typed("bze.tradebin.OrderExecutedEvent", "", "id", msgID(905), "market_id", market, "order_type", "sell",
 			"amount", "10", "price", "2", "maker", maker1, "taker", trader, "message_id", msgID(1)),
+		typed("bze.tradebin.OrderExecutedEvent", "", "id", msgID(906), "market_id", market, "order_type", "sell",
+			"amount", "15", "price", "2", "maker", maker1, "taker", trader),
 		swapEvent("", burnerAcc, "300", uhoney, "5", "ubze"),
 	}
 	ents, err := realTransformer(t).Transform(in)
 	require.NoError(t, err)
-	require.Len(t, ents.OrderFills, 2)
+	require.Len(t, ents.OrderFills, 3)
 	byOrder := map[string]transform.OrderFill{}
 	for _, f := range ents.OrderFills {
 		byOrder[f.OrderID] = f
@@ -179,16 +185,21 @@ func TestQueueHeuristicLeavesTxLevelOutcomesAlone(t *testing.T) {
 	assert.Equal(t, 0, queued.Seq)
 	assert.Equal(t, msgID(1), queued.TakerMessageID)
 	assert.Equal(t, ents.Transactions[0].Hash, queued.TakerTxHash, "attributed by its message id")
+	byQueue := byOrder[msgID(906)]
+	assert.Nil(t, byQueue.TxIndex)
+	assert.Empty(t, byQueue.TakerMessageID)
+	assert.Equal(t, ents.Transactions[2].Hash, byQueue.TakerTxHash, "the heuristic claims the block-level outcome for tx 2")
 	assert.Equal(t, transform.TxFillSeqBase, own.Seq)
 	assert.Empty(t, own.TakerMessageID)
 	assert.Equal(t, ents.Transactions[1].Hash, own.TakerTxHash)
-	require.Len(t, ents.OrderMessages, 1)
+	require.Len(t, ents.OrderMessages, 1, "only the message with an id")
 
 	id := func(n int64) int64 { return 10*transform.TradeIDsPerBlock + n }
 	assert.Equal(t, id(1), ents.Swaps[0].TradeID, "tx 1's swap sits before its fill")
 	assert.Equal(t, id(2), own.TradeID)
 	assert.Equal(t, id(3), queued.TradeID, "then the block-level trades, by seq")
-	assert.Equal(t, id(4), ents.Swaps[1].TradeID)
+	assert.Equal(t, id(4), byQueue.TradeID)
+	assert.Equal(t, id(5), ents.Swaps[1].TradeID)
 }
 
 // The seqs of the fills of a block's transactions run on across them.
