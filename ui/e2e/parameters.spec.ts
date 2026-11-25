@@ -18,7 +18,7 @@ test.describe("chain parameters", () => {
     await expect(group).toHaveCount(1);
     await expect(group).toHaveAttribute("id", "fees");
     await expect(page.getByText("not available")).toHaveCount(0);
-    await expect(page.getByTestId("module-account-row")).toHaveCount(4);
+    await expect(page.getByTestId("module-account-row")).toHaveCount(3);
     await expect(page.getByTestId("module-account-row").first()).toContainText("Fee collector");
   });
 

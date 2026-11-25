@@ -219,6 +219,36 @@ var messages = []MessageKind{
 	msg("/bze.tokenfactory.MsgChangeAdmin", "token_admin", Tokens, Tokens, ""),
 	msg("/bze.tokenfactory.MsgSetDenomMetadata", "token_update", Tokens, Tokens, ""),
 	msg("/bze.tokenfactory.MsgSetDenomBranding", "token_update", Tokens, Tokens, ""),
+	// Chain v8.3.0: the admin turns minting off for good, or sets the
+	// community pool and fees of the denom.
+	msg("/bze.tokenfactory.MsgDisableMinting", "token_admin", Tokens, Tokens, ""),
+	msg("/bze.tokenfactory.MsgSetDenomConfig", "token_update", Tokens, Tokens, ""),
+
+	// bze.dao (chain v8.3.0). The update messages are signed by the DAO
+	// account, through a proposal or its admin.
+	msg("/bze.dao.MsgCreateDao", "dao_create", Governance, Governance, ""),
+	msg("/bze.dao.MsgSubmitProposal", "dao_proposal", Governance, Governance, ""),
+	msg("/bze.dao.MsgVote", "dao_vote", Governance, Governance, ""),
+	msg("/bze.dao.MsgCancelProposal", "dao_proposal", Governance, Governance, ""),
+	msg("/bze.dao.MsgSettleProposal", "dao_proposal", Governance, Governance, ""),
+	msg("/bze.dao.MsgCleanupProposal", "dao_proposal", Governance, Governance, ""),
+	msg("/bze.dao.MsgAdminExecute", "dao_admin_execute", Governance, Governance, ""),
+	msg("/bze.dao.MsgNominateAdmin", "dao_admin", Governance, Governance, ""),
+	msg("/bze.dao.MsgAcceptAdminNomination", "dao_admin", Governance, Governance, ""),
+	msg("/bze.dao.MsgWithdrawAdminNomination", "dao_admin", Governance, Governance, ""),
+	msg("/bze.dao.MsgUpdateDaoConfig", "dao_update", Governance, Governance, ""),
+	msg("/bze.dao.MsgUpdateMetadata", "dao_update", Governance, Governance, ""),
+	msg("/bze.dao.MsgUpdateElectorate", "dao_update", Governance, Governance, ""),
+	msg("/bze.dao.MsgUpdateMembers", "dao_update", Governance, Governance, ""),
+
+	// bze.guardian (chain v8.3.0): emergency powers of the guardian or gov.
+	msg("/bze.guardian.v1.MsgTightenRateLimit", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgBlockDenom", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgDisableMessages", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgHaltTradingDenoms", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgHaltChain", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgPauseAutomation", "guardian", Governance, Governance, ""),
+	msg("/bze.guardian.v1.MsgCloseChannel", "guardian", Governance, Governance, ""),
 
 	// bze.rewards
 	msg("/bze.rewards.MsgJoinStaking", "reward_join", Rewards, Rewards, ""),
@@ -249,6 +279,19 @@ var messages = []MessageKind{
 // host-side interchain accounts). Lookup answers "other" for them.
 var Unclassified = []string{
 	"/bze.burner.MsgUpdateParams",
+	// Gov only: DAO and guardian parameters, the guardian's undo messages,
+	// the rate limit table, a denom's admin and the pool fees.
+	"/bze.dao.MsgUpdateParams",
+	"/bze.guardian.v1.MsgReopenChannel",
+	"/bze.guardian.v1.MsgResumeAutomation",
+	"/bze.guardian.v1.MsgUnblockDenom",
+	"/bze.guardian.v1.MsgUpdateParams",
+	"/bze.tokenfactory.MsgSetDenomAdmin",
+	"/bze.tradebin.MsgUpdatePools",
+	"/ratelimit.v1.MsgAddRateLimit",
+	"/ratelimit.v1.MsgRemoveRateLimit",
+	"/ratelimit.v1.MsgResetRateLimit",
+	"/ratelimit.v1.MsgUpdateRateLimit",
 	"/bze.cointrunk.MsgAcceptDomain",
 	"/bze.cointrunk.MsgSavePublisher",
 	"/bze.cointrunk.MsgUpdateParams",
@@ -352,6 +395,45 @@ var blockEvents = []BlockEventKind{
 	event("inactive_proposal", "proposal_dropped", Governance),
 	event("bze.epochs.EpochStartEvent", "epoch", Other),
 	event("bze.epochs.EpochEndEvent", "epoch", Other),
+
+	// Chain v8.3.0. The txfeecollector pays a token's community pool in
+	// EndBlock; the recipient is that pool's address. GasSurchargePaidEvent
+	// (ante handler) and rewards.TradingRewardStartEvent (order-fill hook)
+	// are emitted inside transactions only: no entry needed.
+	event("bze.txfeecollector.CommunityPoolFeePaidEvent", "community_pool_fee", Tokens, "recipient"),
+
+	// Messages that governance executes in its EndBlocker (a passed
+	// proposal) emit their typed events at block level: guardian powers,
+	// MsgSetDenomAdmin, MsgUpdatePools and DAO messages.
+	event("bze.guardian.v1.TightenRateLimitEvent", "guardian", Governance),
+	event("bze.guardian.v1.DenomBlockedEvent", "guardian", Governance),
+	event("bze.guardian.v1.DenomUnblockedEvent", "guardian", Governance),
+	event("bze.guardian.v1.MessagesDisabledEvent", "guardian", Governance),
+	event("bze.guardian.v1.TradingDenomsHaltedEvent", "guardian", Governance),
+	event("bze.guardian.v1.ChainHaltScheduledEvent", "guardian", Governance),
+	event("bze.guardian.v1.AutomationPausedEvent", "guardian", Governance),
+	event("bze.guardian.v1.AutomationResumedEvent", "guardian", Governance),
+	event("bze.guardian.v1.ChannelClosedEvent", "guardian", Governance),
+	event("bze.guardian.v1.ChannelReopenedEvent", "guardian", Governance),
+	event("bze.tokenfactory.DenomAdminChangeEvent", "token_admin", Tokens, "new_admin"),
+	event("bze.tradebin.PoolFeesUpdatedEvent", "dex_pool", DEX),
+	event("bze.dao.EventDaoCreated", "dao_create", Governance, "address", "admin"),
+	event("bze.dao.EventAdminExecuted", "dao_admin_execute", Governance, "admin"),
+	event("bze.dao.EventAdminNominated", "dao_admin", Governance, "admin", "nominee"),
+	event("bze.dao.EventAdminChanged", "dao_admin", Governance, "new_admin"),
+	event("bze.dao.EventAdminNominationWithdrawn", "dao_admin", Governance, "nominee"),
+	event("bze.dao.EventProposalSubmitted", "dao_proposal", Governance),
+	event("bze.dao.EventVote", "dao_vote", Governance, "voter"),
+	event("bze.dao.EventBallotReduced", "dao_vote", Governance, "voter"),
+	event("bze.dao.EventProposalCancelled", "dao_proposal", Governance),
+	event("bze.dao.EventDepositReleased", "dao_proposal", Governance),
+	event("bze.dao.EventProposalSettled", "dao_proposal", Governance),
+	event("bze.dao.EventProposalExecuted", "dao_proposal", Governance),
+	event("bze.dao.EventProposalCleaned", "dao_proposal", Governance),
+	event("bze.dao.EventDaoConfigUpdated", "dao_update", Governance),
+	event("bze.dao.EventDaoMetadataUpdated", "dao_update", Governance),
+	event("bze.dao.EventDaoElectorateUpdated", "dao_update", Governance),
+	event("bze.dao.EventDaoMembersUpdated", "dao_update", Governance),
 }
 
 var (

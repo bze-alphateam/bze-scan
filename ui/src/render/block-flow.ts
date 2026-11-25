@@ -60,14 +60,17 @@ const MODULE_GROUPS = new Map<string, FlowGroup>([
   ["Governance", "governance"],
 ]);
 
+/** A retired module account (chain v8.3.0) keeps its label with this suffix; history reads it as before. */
+const baseName = (name: string) => name.replace(/ \(retired in v8\.3\.0\)$/, "");
+
 const isModule = (l: Label | null): l is Label => l?.kind === "module" || l?.kind === "ibc_escrow";
 const isEscrow = (l: Label | null) => l?.kind === "ibc_escrow";
-const named = (l: Label | null, ...names: string[]) => l?.kind === "module" && names.includes(l.name);
+const named = (l: Label | null, ...names: string[]) => l?.kind === "module" && names.includes(baseName(l.name));
 
 function moduleGroup(l: Label | null): FlowGroup | null {
   if (isEscrow(l)) return "cross_chain";
   if (!isModule(l)) return null;
-  return MODULE_GROUPS.get(l.name) ?? "other";
+  return MODULE_GROUPS.get(baseName(l.name)) ?? "other";
 }
 
 /**

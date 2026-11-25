@@ -217,13 +217,19 @@ describe("Module account", () => {
   });
 
   it("falls back to plain words for a module the page does not know", async () => {
-    const wasm = { address: ADDR, name: "Contracts", module: "wasm" };
+    const wasm = { address: ADDR, name: "Contracts", module: "wasm", retired: false };
     renderWithProviders(<AccountPage address={ADDR} />, {
       api: api(asModule(ADDR, "Contracts"), withModules([...modules.items, wasm])),
     });
     expect(await screen.findByTestId("module-owner")).toHaveTextContent("Owned by the chain's wasm module.");
     expect(screen.getAllByTestId("tile")[1]).toHaveTextContent("held by the module");
     expect(screen.getAllByTestId("tile")[2]).toHaveTextContent("Moves whenas the module's rules say");
+  });
+
+  it("tells the history of a retired module account, and shows nothing of the kind for a live one", async () => {
+    const nft = modules.items.find((m) => m.module === "nft")!;
+    renderWithProviders(<AccountPage address={nft.address} />, { api: api(asModule(nft.address, nft.name), withModules()) });
+    expect(await screen.findByTestId("module-retired")).toHaveTextContent("NFT module, removed in v8.3.0 (never used on BZE).");
   });
 
   it("explains a node that did not answer", async () => {

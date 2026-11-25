@@ -5,6 +5,7 @@ import type { Account, OpenOrders, Page, TokenSummary, Validator } from "@/api/t
 import account from "../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4.json";
 import openOrders from "../../test/fixtures/api/v1/accounts/bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4/open-orders.json";
 import tokens from "../../test/fixtures/api/v1/tokens.json";
+import modulesFixture from "../../test/fixtures/api/v1/modules.json";
 import list from "../../test/fixtures/api/v1/validators.json";
 
 import {
@@ -117,6 +118,28 @@ describe("module accounts", () => {
     });
     expect(moduleFacts("bonded_tokens_pool").owner).toBe("Owned by the staking module. Holds all staked BZE.");
     expect(moduleFacts("nft").movesSub).toBe("not used on BZE");
+  });
+
+  it("knows the DAO module account and the history of the three retired ones", () => {
+    expect(moduleFacts("dao")).toEqual({
+      owner: "Owned by the DAO module. Holds the deposits of open DAO proposals until they settle.",
+      moves: "DAO proposals open or settle",
+      movesSub: "deposits come in, are returned or kept",
+    });
+    expect(moduleFacts("dao").retired).toBeUndefined();
+    expect(moduleFacts("txfeecollector_burner").retired).toBe(
+      "Until v8.3.0 it collected fees bound for the Burner; the v8.3.0 upgrade sent its coins to the Burner.",
+    );
+    expect(moduleFacts("feeibc").retired).toBe("Relayer fee escrow of the removed IBC fee middleware (never used on BZE).");
+    expect(moduleFacts("nft").retired).toBe("NFT module, removed in v8.3.0 (never used on BZE).");
+    expect(moduleFacts("burner").retired).toBeUndefined();
+  });
+
+  it("agrees with the modules fixture on which accounts are retired", () => {
+    const retired = modulesFixture.items.filter((m) => m.retired).map((m) => m.module).sort();
+    expect(retired).toEqual(["feeibc", "nft", "txfeecollector_burner"]);
+    for (const m of modulesFixture.items) expect(Boolean(moduleFacts(m.module).retired)).toBe(m.retired);
+    expect(modulesFixture.items.map((m) => m.module)).toContain("dao");
   });
 
   it("falls back to plain words for a module it does not know", () => {
