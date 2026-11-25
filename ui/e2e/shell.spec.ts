@@ -55,7 +55,7 @@ test.describe("desktop header", () => {
     await page.goto("/");
     const header = page.getByRole("banner");
     const nav = header.getByRole("navigation", { name: "Explorer" });
-    await expect(nav.getByRole("link")).toHaveText(["Blocks", "Transactions", "Validators", "Tokens", "Proposals", "Parameters"]);
+    await expect(nav.getByRole("link")).toHaveText(["Blocks", "Transactions", "Validators", "Tokens", "Proposals", "DAOs", "Parameters"]);
     await expect(header.getByRole("combobox", { name: "Search the explorer" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Open menu" })).toBeHidden();

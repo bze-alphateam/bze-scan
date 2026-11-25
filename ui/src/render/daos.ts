@@ -27,7 +27,7 @@ export function typeExplainer(type: string): string {
 /** The DAO an address is, from a `dao` label "DAO #7 · Name"; null for any other label. */
 export function daoOfLabel(label: Label | null | undefined): { id: number; name: string } | null {
   if (label?.kind !== "dao") return null;
-  const m = /^DAO #(\d+)(?: · (.*))?$/.exec(label.name);
+  const m = /^DAO #(\d+)(?: · (.*))?$/s.exec(label.name);
   return m ? { id: Number(m[1]), name: m[2] ?? "" } : null;
 }
 

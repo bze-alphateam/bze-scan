@@ -21,11 +21,10 @@ interface AccountChipProps extends StackProps {
 export function AccountChip({ address, label, ...props }: AccountChipProps) {
   const name = label?.name ?? shortAddress(address);
   const isModule = label?.kind === "module";
-  const isDao = label?.kind === "dao";
   return (
     <Link asChild maxW="full" color="accent.fg">
       <NextLink href={addressHref(address)} title={address} aria-label={isModule ? `${name} · module` : name}>
-        <HStack as="span" gap="2" display="inline-flex" minW="0" maxW="full" data-module={isModule || undefined} data-dao={isDao || undefined} {...props}>
+        <HStack as="span" gap="2" display="inline-flex" minW="0" maxW="full" data-module={isModule || undefined} {...props}>
           <Avatar name={label?.name ?? address} size="5" variant={isModule ? "module" : "default"} />
           <Text as="span" truncate fontFamily={label ? undefined : "mono"}>
             {name}

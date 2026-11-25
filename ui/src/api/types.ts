@@ -1162,7 +1162,7 @@ export interface DaoController {
   address: string;
   label: Label | null;
   end_reason: string;
-  /** The addresses between the DAO's admin and the controller. */
+  /** The DAO addresses the chain visited, in order, starting with the queried DAO itself. */
   path: string[];
 }
 

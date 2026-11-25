@@ -69,6 +69,7 @@ describe("daoOfLabel", () => {
     expect(daoOfLabel({ name: "DAO #7 · Honey Council", kind: "dao" })).toEqual({ id: 7, name: "Honey Council" });
     expect(daoOfLabel({ name: "DAO #7", kind: "dao" })).toEqual({ id: 7, name: "" });
     expect(daoOfLabel({ name: "DAO #7 · X", kind: "known" })).toBeNull();
+    expect(daoOfLabel({ name: "DAO #7 · Line one\nline two", kind: "dao" })).toEqual({ id: 7, name: "Line one\nline two" });
     expect(daoOfLabel(null)).toBeNull();
   });
 });

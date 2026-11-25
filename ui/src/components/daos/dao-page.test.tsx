@@ -180,9 +180,11 @@ describe("DaoPage", () => {
       const [sr, dr] = screen.getAllByTestId("dao-source");
       expect(sr).toHaveTextContent("Staking reward 3");
       expect(sr).toHaveTextContent("9,000,000 BZE");
-      expect(within(sr).getByRole("link", { name: "BZE" })).toHaveAttribute("href", "/tokens/ubze");
+      // One link per width: under the program on phones, in its own column from c2.
+      expect(within(sr).getAllByRole("link", { name: "BZE" }).map((l) => l.getAttribute("href"))).toEqual(["/tokens/ubze", "/tokens/ubze"]);
+      expect(within(sr).getByTestId("source-token-phone")).toBeInTheDocument();
       expect(dr).toHaveTextContent("Denom reward of factory/");
-      expect(within(dr).getByRole("link")).toHaveAttribute("href", expect.stringContaining("/tokens/factory%2F"));
+      expect(within(dr).getAllByRole("link")[0]).toHaveAttribute("href", expect.stringContaining("/tokens/factory%2F"));
     });
 
     it("says a proposal costs nothing and shows who can propose", async () => {

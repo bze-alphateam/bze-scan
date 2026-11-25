@@ -256,9 +256,15 @@ function ElectorateTab({ d }: { d: Dao }) {
           {sources
             ? sources.map((s) => (
                 <ListRow key={s.sr_id ?? `dr-${s.dr_denom}`} role="listitem" templateColumns={SOURCE_COLUMNS} fontSize="13px" data-testid="dao-source">
-                  <Text minW="0" overflowWrap="anywhere">
-                    {sourceKind(s)}
-                  </Text>
+                  <Box minW="0">
+                    <Text overflowWrap="anywhere">{sourceKind(s)}</Text>
+                    {/* The staking token's own column starts at c2; on phones its link sits under the program. */}
+                    <Link asChild hideFrom="c2" fontSize="12px" color="accent.fg">
+                      <NextLink href={tokenHref(s.staking_denom)} data-testid="source-token-phone">
+                        {s.staked_amount.symbol ?? s.staking_denom}
+                      </NextLink>
+                    </Link>
+                  </Box>
                   <Box hideBelow="c2" minW="0">
                     <Link asChild color="accent.fg" overflowWrap="anywhere">
                       <NextLink href={tokenHref(s.staking_denom)}>{s.staked_amount.symbol ?? s.staking_denom}</NextLink>

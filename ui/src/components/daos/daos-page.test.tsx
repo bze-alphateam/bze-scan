@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { DaoList, DaoListParams } from "@/api/types";
+import { queryKeys } from "@/api/hooks";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import list from "../../../test/fixtures/api/v1/daos.json";
@@ -84,6 +85,19 @@ describe("DaosPage", () => {
     expect(within(empty).getByRole("link", { name: "Create one in the DAO app" })).toHaveAttribute("href", "https://dao.getbze.com/create");
     expect(within(empty).getByRole("link")).toHaveAttribute("target", "_blank");
     expect(screen.getByTestId("dao-app-link")).toHaveAttribute("href", "https://dao.getbze.com");
+  });
+
+  it("polls the first page only: once an older page is loaded the list stops polling", async () => {
+    const daos = (p: DaoListParams) =>
+      Promise.resolve(p.cursor ? { items: [all.items[1]], next_cursor: null, supported: true } : { items: [all.items[0]], next_cursor: "c1", supported: true });
+    const { queryClient } = renderWithProviders(<DaosPage />, { api: api({ daos }) });
+    await screen.findAllByTestId("dao-row");
+    const query = () => queryClient.getQueryCache().find({ queryKey: queryKeys.daos(null) });
+    const interval = () => (query()?.options as { refetchInterval: (q: unknown) => number | false }).refetchInterval(query());
+    expect(interval()).toBe(4000);
+    await userEvent.click(screen.getByRole("button", { name: "Show more" }));
+    await screen.findByText("Honey Council");
+    expect(interval()).toBe(false);
   });
 
   it("says DAOs arrive with v8.3.0 before the upgrade", async () => {

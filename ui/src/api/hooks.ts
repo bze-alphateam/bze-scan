@@ -508,7 +508,17 @@ export function useTokenTransfers(denom: string) {
   });
 }
 
-/** The DAOs, newest first, of one type (every type for null): 20 a page, the loaded pages polled. */
+/**
+ * An infinite list's policy: only the first page is live. Once an older page is
+ * loaded the list stops polling, so the older pages (which never change) are not
+ * fetched again every few seconds; a refocus or remount still refreshes it.
+ */
+const firstPageLive = {
+  ...live,
+  refetchInterval: (q: { state: { data: { pages: unknown[] } | undefined } }) => ((q.state.data?.pages.length ?? 1) > 1 ? false : live.refetchInterval),
+} as const;
+
+/** The DAOs, newest first, of one type (every type for null): 20 a page, the first page polled. */
 export function useDaos(type: DaoType | null) {
   const api = useApi();
   return useInfiniteQuery({
@@ -516,7 +526,7 @@ export function useDaos(type: DaoType | null) {
     queryFn: ({ pageParam, signal }) => api.daos({ ...pageParam, type: type ?? undefined }, signal),
     initialPageParam: firstPage(20),
     getNextPageParam: nextPage(20),
-    ...live,
+    ...firstPageLive,
   });
 }
 
@@ -531,14 +541,14 @@ export function useDaosSupport() {
   });
 }
 
-/** The DAOs an address runs (an account page's "Admin of" list). The mock API ignores the filter, so the rows are checked again. */
+/** The DAOs an address runs (an account page's "Admin of" list), every page followed. The mock API ignores the filter, so the rows are checked again. */
 export function useDaosByAdmin(admin: string) {
   const api = useApi();
   return useQuery({
     queryKey: queryKeys.daosByAdmin(admin),
-    queryFn: ({ signal }) => api.daos({ admin, limit: 20 }, signal),
-    ...live,
-    select: (list) => list.items.filter((d) => d.admin === admin),
+    queryFn: ({ signal }) => allPages((cursor) => api.daos({ admin, cursor, limit: 100 }, signal)),
+    ...slow,
+    select: (items) => items.filter((d) => d.admin === admin),
   });
 }
 
@@ -556,7 +566,7 @@ export function useDaoHistory(id: number) {
     queryFn: ({ pageParam, signal }) => api.daoHistory(id, pageParam, signal),
     initialPageParam: firstPage(20),
     getNextPageParam: nextPage(20),
-    ...live,
+    ...firstPageLive,
   });
 }
 
