@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+
 	daotypes "github.com/bze-alphateam/bze/x/dao/types"
 	tokenfactorytypes "github.com/bze-alphateam/bze/x/tokenfactory/types"
 
@@ -94,7 +96,11 @@ func wrapperActor(m chain.Msg, body map[string]any) string {
 		if err != nil || id == 0 {
 			return ""
 		}
-		return daotypes.DaoAddress(id).String()
+		addr, err := bech32.ConvertAndEncode(chain.Bech32Prefix, daotypes.DaoAddress(id))
+		if err != nil {
+			return ""
+		}
+		return addr
 	case msgDaoSettle:
 		return ""
 	default:

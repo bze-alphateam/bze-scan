@@ -102,6 +102,8 @@ func (r *mockRows) Scan(dest ...any) error {
 			*d = r.rows[r.i][j].(int)
 		case *string:
 			*d = r.rows[r.i][j].(string)
+		case *time.Time:
+			*d = r.rows[r.i][j].(time.Time)
 		}
 	}
 	return nil
