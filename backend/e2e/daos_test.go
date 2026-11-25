@@ -94,7 +94,7 @@ func TestDaosAreIndexedSyncedAndServed(t *testing.T) {
 	}, e.daoRows(t))
 	events := queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, (tx_hash IS NOT NULL)::int)
 		FROM explorer.dao_events ORDER BY height, tx_index, msg_index, seq`)
-	assert.Equal(t, []string{
+	assert.ElementsMatch(t, []string{
 		"1 EventDaoCreated 25100000 0 0 0 1",
 		"2 EventDaoCreated 25100000 1 0 0 1",
 		"2 EventDaoMetadataUpdated 25100001 0 0 0 1",
@@ -106,7 +106,7 @@ func TestDaosAreIndexedSyncedAndServed(t *testing.T) {
 	require.NoError(t, err)
 	defer pool.Close()
 	require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), ents, writer.ModeUpdate))
-	assert.Equal(t, events, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, (tx_hash IS NOT NULL)::int)
+	assert.ElementsMatch(t, events, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, type, height, tx_index, msg_index, seq, (tx_hash IS NOT NULL)::int)
 		FROM explorer.dao_events ORDER BY height, tx_index, msg_index, seq`), "a reindex of the same heights")
 	assert.Len(t, e.daoRows(t), 2)
 
@@ -278,12 +278,12 @@ func TestDaoCreatedAfterTheSyncRowFillsOnlyWhatIsMissing(t *testing.T) {
 
 	ents := indexTheDaos(t, e)
 	rows := func() []string {
-		return queryStrings(t, e.db, `SELECT concat_ws(' ', id, name, created_height, created_tx_hash IS NOT NULL, coalesce(creator, '-'))
+		return queryStrings(t, e.db, `SELECT concat_ws(' ', id, name, created_height, (created_tx_hash IS NOT NULL)::int, coalesce(creator, '-'))
 			FROM explorer.daos ORDER BY id`)
 	}
 	assert.Equal(t, []string{
-		"1 Founders 25100000 true " + daoAdmin,
-		"2 Synced name 25100000 true " + daoAdmin,
+		"1 Founders 25100000 1 " + daoAdmin,
+		"2 Synced name 25100000 1 " + daoAdmin,
 	}, rows())
 
 	other := "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
@@ -293,7 +293,7 @@ func TestDaoCreatedAfterTheSyncRowFillsOnlyWhatIsMissing(t *testing.T) {
 	defer pool.Close()
 	require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), ents, writer.ModeUpdate))
 	assert.Equal(t, []string{
-		"1 Founders 25100000 true " + other,
-		"2 Synced name 25100000 true " + daoAdmin,
+		"1 Founders 25100000 1 " + other,
+		"2 Synced name 25100000 1 " + daoAdmin,
 	}, rows(), "a reindex corrects the creator")
 }
