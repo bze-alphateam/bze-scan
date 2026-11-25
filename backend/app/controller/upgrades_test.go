@@ -50,8 +50,9 @@ func TestUpgrade(t *testing.T) {
 	back, signed := time.Date(2026, 4, 28, 16, 4, 45, 770401227, time.UTC), time.Date(2026, 4, 28, 16, 4, 45, 776698023, time.UTC)
 	size, end, needed, first, secs := 23, int64(22551815), int64(1), int64(22551812), 734
 	op, moniker, source := "bzevaloper1x", "Thamar", "commit"
+	proposal := int64(40)
 	f := &fakeUpgrades{
-		upgrade: &repository.Upgrade{Height: 22551810, ProposalID: 40, Name: "v8.1.0", HaltTime: &halt, ResumeTime: &resume,
+		upgrade: &repository.Upgrade{Height: 22551810, ProposalID: &proposal, Name: "v8.1.0", Kind: "governance", HaltTime: &halt, ResumeTime: &resume,
 			ActiveSetSize: &size, WindowEndHeight: &end, ComputedAt: &resume},
 		members: []repository.UpgradeMember{
 			{ConsensusAddress: "2AD8E07AA7B80F9A5C7229AFE353F5C69F28AA67", OperatorAddress: &op, Moniker: &moniker,
@@ -66,7 +67,8 @@ func TestUpgrade(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
 	assert.JSONEq(t, `{
-		"height": 22551810, "proposal_id": 40, "name": "v8.1.0",
+		"height": 22551810, "proposal_id": 40, "name": "v8.1.0", "kind": "governance", "reason": null,
+		"scheduled_by": null, "scheduled_tx_hash": null, "superseded_by_height": null,
 		"halt_time": "2026-04-28T15:52:31.683549605Z", "resume_time": "2026-04-28T16:04:39.802993053Z",
 		"downtime_seconds": 728, "watched": false, "active_set_size": 23, "window_end_height": 22551815,
 		"computed_at": "2026-04-28T16:04:39.802993053Z",
@@ -80,7 +82,7 @@ func TestUpgrade(t *testing.T) {
 		]}`, rec.Body.String())
 
 	// Pending: no times, no members yet.
-	f.upgrade = &repository.Upgrade{Height: 22551810, ProposalID: 40, Name: "v8.1.0"}
+	f.upgrade = &repository.Upgrade{Height: 22551810, ProposalID: &proposal, Name: "v8.1.0", Kind: "governance"}
 	f.members = nil
 	rec = get(t, e, "/api/v1/upgrades/22551810")
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -95,4 +97,18 @@ func TestUpgrade(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/api/v1/upgrades/22551810").Code)
 	f.err = errors.New("boom")
 	assert.Equal(t, http.StatusInternalServerError, get(t, e, "/api/v1/upgrades/22551810").Code)
+}
+
+// An emergency halt has no proposal; who scheduled it why is in the row.
+func TestUpgradeEmergency(t *testing.T) {
+	reason, signer, hash := "pool drain under way", "bze1guardian", "ABCD"
+	f := &fakeUpgrades{upgrade: &repository.Upgrade{Height: 5000000, Name: "emergency-halt-5000000", Kind: "emergency",
+		Reason: &reason, ScheduledBy: &signer, ScheduledTxHash: &hash}}
+	rec := get(t, upgradeServer(f), "/api/v1/upgrades/5000000")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"height": 5000000, "proposal_id": null, "name": "emergency-halt-5000000", "kind": "emergency",
+		"reason": "pool drain under way", "scheduled_by": "bze1guardian", "scheduled_tx_hash": "ABCD",
+		"superseded_by_height": null, "halt_time": null, "resume_time": null, "downtime_seconds": null,
+		"watched": false, "active_set_size": null, "window_end_height": null, "computed_at": null, "members": []}`,
+		rec.Body.String())
 }

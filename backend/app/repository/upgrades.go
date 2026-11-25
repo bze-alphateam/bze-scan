@@ -12,9 +12,19 @@ import (
 // Upgrade is an explorer.upgrades row: a software upgrade planned at
 // Height and how the chain came back from its halt.
 type Upgrade struct {
-	Height     int64
-	ProposalID int64
+	Height int64
+	// ProposalID is nil for an emergency halt.
+	ProposalID *int64
 	Name       string
+	// Kind is governance or emergency. Reason, ScheduledBy and
+	// ScheduledTxHash are an emergency halt's (the transaction is nil when
+	// governance ran it); SupersededByHeight is the emergency halt that
+	// replaced a governance plan on chain.
+	Kind               string
+	Reason             *string
+	ScheduledBy        *string
+	ScheduledTxHash    *string
+	SupersededByHeight *int64
 	// HaltTime and ResumeTime are nil until the state sync read the
 	// commits after the upgrade.
 	HaltTime        *time.Time
@@ -54,11 +64,11 @@ type UpgradeMember struct {
 // Upgrade returns the upgrade planned at height, or ErrNotFound.
 func (r *Explorer) Upgrade(ctx context.Context, height int64) (*Upgrade, error) {
 	var u Upgrade
-	err := r.db.QueryRow(ctx, `SELECT height, proposal_id, name, halt_time, resume_time, watched,
-			active_set_size, window_end_height, computed_at
+	err := r.db.QueryRow(ctx, `SELECT height, proposal_id, name, kind, reason, scheduled_by, scheduled_tx_hash,
+			superseded_by_height, halt_time, resume_time, watched, active_set_size, window_end_height, computed_at
 		FROM explorer.upgrades WHERE height = $1`, height).
-		Scan(&u.Height, &u.ProposalID, &u.Name, &u.HaltTime, &u.ResumeTime, &u.Watched,
-			&u.ActiveSetSize, &u.WindowEndHeight, &u.ComputedAt)
+		Scan(&u.Height, &u.ProposalID, &u.Name, &u.Kind, &u.Reason, &u.ScheduledBy, &u.ScheduledTxHash,
+			&u.SupersededByHeight, &u.HaltTime, &u.ResumeTime, &u.Watched, &u.ActiveSetSize, &u.WindowEndHeight, &u.ComputedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

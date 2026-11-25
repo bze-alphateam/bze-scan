@@ -106,6 +106,23 @@ type Block struct {
 	// they are all here.
 	Events           []BlockEvent `json:"events"`
 	EventsNextCursor *string      `json:"events_next_cursor"`
+	// Upgrade is the upgrade planned at this height (the chain halted after
+	// deciding the block; GET /upgrades/{height} has who came back when),
+	// null when none.
+	Upgrade *BlockUpgrade `json:"upgrade"`
+}
+
+// BlockUpgrade is the upgrade planned at a block's height: Kind
+// "governance" (ProposalID planned it) or "emergency" (an emergency halt:
+// ProposalID null, Reason, ScheduledBy and ScheduledTxHash set, the
+// transaction null when governance ran it).
+type BlockUpgrade struct {
+	Kind            string  `json:"kind"`
+	Name            string  `json:"name"`
+	ProposalID      *int64  `json:"proposal_id"`
+	Reason          *string `json:"reason"`
+	ScheduledBy     *string `json:"scheduled_by"`
+	ScheduledTxHash *string `json:"scheduled_tx_hash"`
 }
 
 // Transfer is one coin moved by a transfer, a mint or a burn, in base
@@ -528,6 +545,10 @@ func NewBlock(b *repository.Block, transfers []repository.Transfer, events []rep
 		TransfersCount:   b.TransfersCount,
 		Events:           make([]BlockEvent, 0, len(events)),
 		EventsNextCursor: eventsNext,
+	}
+	if u := b.Upgrade; u != nil {
+		out.Upgrade = &BlockUpgrade{Kind: u.Kind, Name: u.Name, ProposalID: u.ProposalID, Reason: u.Reason,
+			ScheduledBy: u.ScheduledBy, ScheduledTxHash: u.ScheduledTxHash}
 	}
 	for _, e := range events {
 		out.Events = append(out.Events, NewBlockEvent(e))

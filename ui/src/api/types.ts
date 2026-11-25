@@ -119,6 +119,28 @@ export interface Block extends BlockSummary {
   transfers_count: number;
   events: BlockEvent[];
   events_next_cursor: string | null;
+  /**
+   * The upgrade planned at this height (the chain halted after deciding the block; `GET /upgrades/{height}`
+   * has who came back when); null when none. Optional: older answers lack it.
+   */
+  upgrade?: BlockUpgrade | null;
+}
+
+/**
+ * `governance`: a passed software upgrade proposal planned it. `emergency`: an emergency halt (chain v8.3.0), which
+ * the guardian or governance schedules at the next block, with no proposal behind it.
+ */
+export type UpgradeKind = "governance" | "emergency";
+
+/** The upgrade planned at a block's height. An emergency halt has no `proposal_id`, a reason and its signer. */
+export interface BlockUpgrade {
+  kind: UpgradeKind;
+  name: string;
+  proposal_id: number | null;
+  reason: string | null;
+  scheduled_by: string | null;
+  /** Null when governance ran the halt at block level. */
+  scheduled_tx_hash: string | null;
 }
 
 // Transactions
@@ -807,8 +829,15 @@ export interface ProposalUpgrade {
 
 /** `GET /upgrades/{height}`: the upgrade's halt and every validator of the set at the halt, with when it came back. */
 export interface Upgrade extends ProposalUpgrade {
-  proposal_id: number;
+  /** Null for an emergency halt. */
+  proposal_id: number | null;
   name: string;
+  kind: UpgradeKind;
+  reason: string | null;
+  scheduled_by: string | null;
+  scheduled_tx_hash: string | null;
+  /** A governance plan an emergency halt at that height replaced on chain: the chain never halted for it. */
+  superseded_by_height: number | null;
   active_set_size: number | null;
   /** The last height read for signatures: the window ends `window_end_height − height` blocks after the halt. */
   window_end_height: number | null;
@@ -1038,8 +1067,13 @@ export interface Halted {
   halted: true;
   height: number;
   halt_height: number;
-  proposal_id: number;
+  /** Null for an emergency halt. */
+  proposal_id: number | null;
   name: string;
+  kind: UpgradeKind;
+  /** An emergency halt's reason and signer; null for a governance upgrade. */
+  reason: string | null;
+  scheduled_by: string | null;
   round: number;
   halted_since: string;
   checked_at: string;

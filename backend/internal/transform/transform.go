@@ -77,6 +77,9 @@ type Entities struct {
 	// IBCTransfers are the ibc_transfers rows of the heights' cross-chain
 	// transfers: sent, received, acknowledged or timed out.
 	IBCTransfers []IBCTransfer
+	// EmergencyHalts are the upgrades rows of kind emergency the heights'
+	// ChainHaltScheduledEvents schedule (chain v8.3.0).
+	EmergencyHalts []EmergencyHalt
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -277,6 +280,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	}
 	blockTokenEvents(t.log, ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
+	emergencyHalts(ents, b, "", in.Results.FinalizeBlockEvents)
 	var queue []queued
 	txFills := 0 // the transactions' fills so far, for their seqs
 	for i, raw := range in.Block.Txs {
@@ -387,6 +391,8 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int,
 		}
 		*queue = txQueued(*queue, tx.Hash, decoded.Msgs, byIndex)
 		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
+		// Every event of the transaction: an authz MsgExec runs the halt too.
+		emergencyHalts(ents, b, tx.Hash, res.Events)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)

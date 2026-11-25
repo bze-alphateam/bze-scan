@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import { TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "@/api/policy";
-import type { Block, BlockTransfer, Page, RawRpcResponse, Stats, Status, TokenSummary, ValidatorList } from "@/api/types";
+import type { Block, BlockTransfer, Halted, Page, RawRpcResponse, Stats, Status, TokenSummary, Upgrade, ValidatorList } from "@/api/types";
 import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import block from "../../../test/fixtures/api/v1/blocks/25120440.json";
@@ -150,6 +150,64 @@ describe("BlockPage", () => {
     const ping = screen.getAllByRole("link", { name: /Open on Ping.pub/ });
     expect(ping).toHaveLength(2);
     for (const l of ping) expect(l).toHaveAttribute("href", expect.stringMatching(/\/block\/25120440$/));
+  });
+
+  it("names the emergency halt planned at the block and shows when the validators came back", async () => {
+    const halted = {
+      ...(block as unknown as Block),
+      upgrade: {
+        kind: "emergency",
+        name: `emergency-halt-${HEIGHT}`,
+        proposal_id: null,
+        reason: "pool drain under way",
+        scheduled_by: "bze1guardian",
+        scheduled_tx_hash: block.transactions[0].hash,
+      },
+    } as Block;
+    const recovery = { height: HEIGHT, kind: "emergency", members: [], computed_at: null, watched: true, halt_time: null, resume_time: null } as unknown as Upgrade;
+    renderWithProviders(<BlockPage height={HEIGHT} />, {
+      api: api({ block: () => Promise.resolve(halted), upgrade: () => Promise.resolve(recovery), liveHalt: async () => ({ halted: false }) }),
+    });
+    const note = await screen.findByTestId("emergency-halt");
+    expect(within(note).getByTestId("emergency-halt-line")).toHaveTextContent(
+      "Emergency halt scheduled by the guardian at block 25,120,440: pool drain under way",
+    );
+    expect(note).toHaveTextContent("No proposal is behind an emergency halt.");
+    expect(await within(note).findByTestId("upgrade-recovery")).toHaveTextContent("After the halt");
+  });
+
+  it("shows no emergency note for a block without one", async () => {
+    renderWithProviders(<BlockPage height={HEIGHT} />, { api: api() });
+    await screen.findByRole("heading", { level: 1, name: "Block 25,120,440" });
+    expect(screen.queryByTestId("emergency-halt")).toBeNull();
+  });
+
+  it("shows the emergency halt the chain is paused by on its block while it is not indexed", async () => {
+    const ahead = status.live_fill.db_height + 1;
+    const live: Halted = {
+      halted: true,
+      height: ahead,
+      halt_height: ahead + 1,
+      proposal_id: null,
+      name: `emergency-halt-${ahead}`,
+      kind: "emergency",
+      reason: "exploit",
+      scheduled_by: "bze1guardian",
+      round: 0,
+      halted_since: new Date(Date.now() - 120_000).toISOString(),
+      checked_at: new Date().toISOString(),
+      total_power: "100",
+      back_power: "10",
+      prevote_power: "10",
+      precommit_power: "0",
+      members: [],
+    };
+    renderWithProviders(<BlockPage height={ahead} />, { api: api({ block: notIndexed, liveHalt: async () => live }) });
+    const note = await screen.findByTestId("emergency-halt");
+    expect(note).toHaveTextContent(`Emergency halt scheduled by the guardian at block ${ahead.toLocaleString("en-US")}: exploit`);
+    expect(await within(note).findByTestId("live-halt")).toHaveTextContent("Chain paused by an emergency halt");
+    expect(screen.getByTestId("block-not_produced")).toHaveTextContent("Chain paused");
+    expect(within(note).queryByTestId("upgrade-recovery")).toBeNull();
   });
 
   it("waits for a height not produced yet, polling every 4 s for the pending window", async () => {

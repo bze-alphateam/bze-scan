@@ -159,6 +159,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.OrderClosures = append(all.OrderClosures, e.OrderClosures...)
 		all.Swaps = append(all.Swaps, e.Swaps...)
 		all.IBCTransfers = append(all.IBCTransfers, e.IBCTransfers...)
+		all.EmergencyHalts = append(all.EmergencyHalts, e.EmergencyHalts...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil

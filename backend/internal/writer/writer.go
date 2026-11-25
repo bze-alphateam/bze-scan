@@ -422,7 +422,8 @@ type statement struct {
 // validator_events, transfers, block_events, token_events and
 // account_activity of ents, then
 // its governance writes (govStatements), its order book writes
-// (dexStatements) and its cross-chain transfer writes (ibcStatements), in chunks of ChunkRows rows. top
+// (dexStatements), its cross-chain transfer writes (ibcStatements) and its
+// emergency halts (upgradeStatements), in chunks of ChunkRows rows. top
 // names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
@@ -545,7 +546,11 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc), nil
+	ups, err := upgradeStatements(top, ents)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups), nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

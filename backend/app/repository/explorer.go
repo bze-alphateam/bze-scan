@@ -70,6 +70,21 @@ type Block struct {
 	// transactions' and the block's own.
 	TransfersCount int64
 	Transactions   []BlockTx
+	// Upgrade is the upgrade planned at the block's height (the chain
+	// halted after deciding it), nil when none or when an emergency halt
+	// replaced the plan.
+	Upgrade *BlockUpgrade
+}
+
+// BlockUpgrade is the upgrade planned at a block's height, as the block
+// page names it.
+type BlockUpgrade struct {
+	Kind            string
+	Name            string
+	ProposalID      *int64
+	Reason          *string
+	ScheduledBy     *string
+	ScheduledTxHash *string
 }
 
 // BlockTx is a transaction as the block page lists it.
@@ -256,6 +271,16 @@ func (r *Explorer) Block(ctx context.Context, height int64) (*Block, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("block %d transactions: %w", height, err)
+	}
+	var up BlockUpgrade
+	err = r.db.QueryRow(ctx, `SELECT kind, name, proposal_id, reason, scheduled_by, scheduled_tx_hash
+		FROM explorer.upgrades WHERE height = $1 AND superseded_by_height IS NULL`, height).
+		Scan(&up.Kind, &up.Name, &up.ProposalID, &up.Reason, &up.ScheduledBy, &up.ScheduledTxHash)
+	switch {
+	case err == nil:
+		b.Upgrade = &up
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, fmt.Errorf("block %d upgrade: %w", height, err)
 	}
 	return &b, nil
 }
@@ -595,10 +620,12 @@ func (r *Explorer) HallOfFame(ctx context.Context) (*HallOfFame, error) {
 	// An upgrade is decided once its recovery is computed, or once the
 	// commits read reach a block HallOfFameMaxSecondsBack after the halt:
 	// whoever comes back later is too late anyway.
+	// Governance upgrades only: an emergency halt is no planned upgrade the
+	// validators could prepare for.
 	err := r.db.QueryRow(ctx, `SELECT u.height, u.name FROM explorer.upgrades u
-		WHERE u.computed_at IS NOT NULL
+		WHERE u.kind = 'governance' AND (u.computed_at IS NOT NULL
 		   OR (u.halt_time IS NOT NULL AND EXISTS (SELECT 1 FROM explorer.blocks b
-		       WHERE b.height = u.window_end_height AND b.time >= u.halt_time + make_interval(secs => $1)))
+		       WHERE b.height = u.window_end_height AND b.time >= u.halt_time + make_interval(secs => $1))))
 		ORDER BY u.height DESC LIMIT 1`, HallOfFameMaxSecondsBack).Scan(&up.Height, &up.Name)
 	switch {
 	case err == nil:

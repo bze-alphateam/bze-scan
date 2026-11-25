@@ -37,6 +37,12 @@ const (
 	KindIBCRefund = "ibc_refund"
 	// KindDexOrder is the row of a MsgCreateOrder.
 	KindDexOrder = "dex_order"
+	// KindChainTransfer is the block-level row of an account the chain
+	// moved coins out of by itself (a bank transfer at block level whose
+	// sender is no module account), and of the account it moved them to:
+	// an upgrade handler's migration (the v8.3.0 account migration), or a
+	// DAO's funds sent when governance runs its messages in the EndBlocker.
+	KindChainTransfer = "chain_transfer"
 	// KindDexMakerFill is the participant row of a maker whose resting
 	// order a transaction filled (chain v8.3.0 names the maker in the
 	// taker's transaction); its details are the fills.

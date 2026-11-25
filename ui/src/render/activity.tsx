@@ -268,6 +268,11 @@ const SENTENCES: Record<string, Sentence> = {
     return [back.length ? `Unstaking completed · ${amounts(back, i.ctx)} back in your account` : "Unstaking completed · back in your account"];
   },
   redelegation_completed: () => ["Stake move completed"],
+  // The chain moved the coins by itself, outside any transaction: an upgrade's migration (chain v8.3.0).
+  chain_transfer: (i) =>
+    i.row.category === "sent"
+      ? withParty(i, "The chain moved this account's coins to", "The chain moved this account's coins")
+      : withParty(i, "The chain moved coins here from", "The chain moved coins into this account"),
   slashed: () => ["A validator was slashed"],
 
   proposal: () => ["Submitted a governance proposal"],

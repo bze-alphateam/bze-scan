@@ -12,6 +12,9 @@ const halted: Halted = {
   halt_height: 25263601,
   proposal_id: 48,
   name: "v8.2.0",
+  kind: "governance",
+  reason: null,
+  scheduled_by: null,
   round: 2,
   halted_since: new Date(Date.now() - 12 * 60_000).toISOString(),
   checked_at: new Date().toISOString(),
@@ -43,6 +46,16 @@ describe("LiveHaltPanel", () => {
 
   it("stays hidden for another upgrade's proposal", async () => {
     renderWithProviders(<LiveHaltPanel proposalId={47} />, { api: api(halted) });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId("live-halt")).toBeNull();
+  });
+
+  it("shows an emergency halt on its block, not on another height", async () => {
+    const emergency: Halted = { ...halted, proposal_id: null, kind: "emergency", reason: "exploit", scheduled_by: "bze1guardian" };
+    const { unmount } = renderWithProviders(<LiveHaltPanel height={25263600} />, { api: api(emergency) });
+    expect(await screen.findByTestId("live-halt")).toHaveTextContent("Chain paused by an emergency halt");
+    unmount();
+    renderWithProviders(<LiveHaltPanel height={25263601} />, { api: api(emergency) });
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByTestId("live-halt")).toBeNull();
   });

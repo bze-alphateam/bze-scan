@@ -114,6 +114,17 @@ describe("activityLine", () => {
     expect(text(of({ kind: "send" }))).toBe("Sent tokens to several accounts");
   });
 
+  it("reads coins the chain moved by itself in both directions", () => {
+    const cp = { address: OTHER, label: null, moniker: null };
+    expect(text(of({ kind: "chain_transfer", category: "sent", tx_hash: null, counterparty: cp }))).toBe(
+      "The chain moved this account's coins to bze1q8f…x0rq",
+    );
+    expect(text(of({ kind: "chain_transfer", category: "received", tx_hash: null, counterparty: cp }))).toBe(
+      "The chain moved coins here from bze1q8f…x0rq",
+    );
+    expect(text(of({ kind: "chain_transfer", category: "received", tx_hash: null }))).toBe("The chain moved coins into this account");
+  });
+
   it("names a validator by moniker and counts the validators of a multi-claim", () => {
     const honeycomb = { address: "bzevaloper1hc9t7nwlq3n9y4n4ld0r0z5sfg3l5egwqk5w6c", label: null, moniker: "Honeycomb" };
     expect(text(of({ kind: "delegate", counterparty: honeycomb }))).toBe("Staked with Honeycomb");

@@ -32,7 +32,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 31
+const latestVersion = 32
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -393,7 +393,7 @@ func TestMigrationMergedOrders(t *testing.T) {
 	require.NoError(t, err)
 
 	mg := openMigrator(t, dbURL)
-	_, err = mg.Down(1)
+	_, err = mg.Down(latestVersion - 30) // back to before 000031
 	require.NoError(t, err)
 	assert.Empty(t, cols())
 	assert.Equal(t, []string{"idx_block_events_order_outcome"}, indexes())

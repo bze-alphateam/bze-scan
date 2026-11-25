@@ -40,8 +40,9 @@ func NewPGStore(db DB) *PGStore {
 // discoverSQL adds the passed upgrades by the plan of their message: a
 // MsgSoftwareUpgrade's, or the one of the legacy content a
 // MsgExecLegacyContent carries. A height planned twice keeps the latest
-// proposal.
-const discoverSQL = `INSERT INTO explorer.upgrades (height, proposal_id, name)
+// proposal: a newer one takes over a governance row (and plans it again
+// when an emergency halt had replaced it), never an emergency row.
+const discoverSQL = `INSERT INTO explorer.upgrades AS u (height, proposal_id, name)
 	SELECT DISTINCT ON (plan.h::bigint) plan.h::bigint, p.id, coalesce(plan.n, '')
 	FROM explorer.proposals p,
 	     jsonb_array_elements(CASE WHEN jsonb_typeof(p.messages) = 'array' THEN p.messages END) m,
@@ -49,29 +50,55 @@ const discoverSQL = `INSERT INTO explorer.upgrades (height, proposal_id, name)
 	                     coalesce(m->'plan'->>'name', m->'content'->'plan'->>'name') AS n) plan
 	WHERE p.status = 'passed' AND p.kind = 'software_upgrade' AND plan.h ~ '^[0-9]{1,18}$' AND plan.h::bigint > 0
 	ORDER BY plan.h::bigint, p.id DESC
-	ON CONFLICT (height) DO NOTHING`
+	ON CONFLICT (height) DO UPDATE SET proposal_id = EXCLUDED.proposal_id, name = EXCLUDED.name, superseded_by_height = NULL
+	WHERE u.kind = 'governance' AND u.computed_at IS NULL AND u.proposal_id < EXCLUDED.proposal_id`
 
-// Discover adds the passed upgrades not held yet.
+// SupersedeSQL marks the governance upgrades an emergency halt replaced on
+// chain: x/upgrade keeps one plan, so a halt scheduled for H while a
+// governance plan at a later height was scheduled (its proposal executed
+// before the halt's block H-1) removed that plan, and the chain never
+// halts for it. superseded_by_height is the earliest such H; a proposal
+// whose execution height is not known yet is not superseded. It reads the
+// stored rows only and sets or clears the mark of every pending governance
+// row, so the writer (after an emergency halt) and Discover (after a new
+// governance row or proposal) end with the same marks in any order.
+const SupersedeSQL = `UPDATE explorer.upgrades g
+	   SET superseded_by_height = s.h
+	  FROM (SELECT g2.height,
+	               (SELECT min(e.height) FROM explorer.upgrades e
+	                 WHERE e.kind = 'emergency' AND e.height < g2.height AND p.resolved_height < e.height - 1) AS h
+	          FROM explorer.upgrades g2
+	          LEFT JOIN explorer.proposals p ON p.id = g2.proposal_id
+	         WHERE g2.kind = 'governance' AND g2.computed_at IS NULL) s
+	 WHERE g.height = s.height AND g.superseded_by_height IS DISTINCT FROM s.h`
+
+// Discover adds the passed upgrades not held yet and marks the superseded
+// ones.
 func (s *PGStore) Discover(ctx context.Context) error {
 	if _, err := s.db.Exec(ctx, discoverSQL); err != nil {
 		return fmt.Errorf("discover upgrades: %w", err)
+	}
+	if _, err := s.db.Exec(ctx, SupersedeSQL); err != nil {
+		return fmt.Errorf("supersede upgrades: %w", err)
 	}
 	return nil
 }
 
 // upgradeCols reads an upgrade row u, Resumed from the indexed blocks.
-const upgradeCols = `u.height, u.proposal_id, u.name, u.halt_time, u.resume_time, u.watched, coalesce(u.window_end_height, 0),
+const upgradeCols = `u.height, u.proposal_id, u.name, u.kind, coalesce(u.reason, ''), coalesce(u.scheduled_by, ''), u.halt_time, u.resume_time, u.watched, coalesce(u.window_end_height, 0),
 	(SELECT count(*) FROM explorer.blocks b WHERE b.height IN (u.height + 1, u.height + 2)) = 2`
 
 func scanUpgrade(row pgx.Row) (Upgrade, error) {
 	var u Upgrade
-	err := row.Scan(&u.Height, &u.ProposalID, &u.Name, &u.HaltTime, &u.ResumeTime, &u.Watched, &u.ScannedTo, &u.Resumed)
+	err := row.Scan(&u.Height, &u.ProposalID, &u.Name, &u.Kind, &u.Reason, &u.ScheduledBy, &u.HaltTime, &u.ResumeTime, &u.Watched, &u.ScannedTo, &u.Resumed)
 	return u, err
 }
 
-// Pending lists the upgrades without computed_at, by height.
+// Pending lists the upgrades without computed_at, by height; a superseded
+// one never halts the chain.
 func (s *PGStore) Pending(ctx context.Context) ([]Upgrade, error) {
-	rows, err := s.db.Query(ctx, `SELECT `+upgradeCols+` FROM explorer.upgrades u WHERE u.computed_at IS NULL ORDER BY u.height`)
+	rows, err := s.db.Query(ctx, `SELECT `+upgradeCols+` FROM explorer.upgrades u
+		WHERE u.computed_at IS NULL AND u.superseded_by_height IS NULL ORDER BY u.height`)
 	if err != nil {
 		return nil, fmt.Errorf("pending upgrades: %w", err)
 	}

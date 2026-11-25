@@ -8,15 +8,20 @@ import (
 )
 
 // LiveHalt is GET /api/v1/upgrades/live while the chain waits at
-// HaltHeight for the software upgrade planned at Height. Powers are consensus powers as decimal strings;
+// HaltHeight for the software upgrade planned at Height. Kind is
+// "governance" (ProposalID planned it) or "emergency" (an emergency halt:
+// ProposalID null, Reason and ScheduledBy set). Powers are consensus powers as decimal strings;
 // consensus resumes once PrecommitPower is more than two thirds of
 // TotalPower.
 type LiveHalt struct {
 	Halted         bool             `json:"halted"`
 	Height         int64            `json:"height"`
 	HaltHeight     int64            `json:"halt_height"`
-	ProposalID     int64            `json:"proposal_id"`
+	ProposalID     *int64           `json:"proposal_id"`
 	Name           string           `json:"name"`
+	Kind           string           `json:"kind"`
+	Reason         *string          `json:"reason"`
+	ScheduledBy    *string          `json:"scheduled_by"`
 	Round          int32            `json:"round"`
 	HaltedSince    time.Time        `json:"halted_since"`
 	CheckedAt      time.Time        `json:"checked_at"`
@@ -52,6 +57,7 @@ type LiveHaltMember struct {
 func NewLiveHalt(l upgrades.Live, monikers map[string]string) LiveHalt {
 	out := LiveHalt{
 		Halted: true, Height: l.Height, HaltHeight: l.Height + 1, ProposalID: l.ProposalID, Name: l.Name,
+		Kind: l.Kind, Reason: optional(l.Reason), ScheduledBy: optional(l.ScheduledBy),
 		Round: l.Round, HaltedSince: l.HaltedSince, CheckedAt: l.CheckedAt,
 		Members: make([]LiveHaltMember, len(l.Members)),
 	}
@@ -85,4 +91,12 @@ func NewLiveHalt(l upgrades.Live, monikers map[string]string) LiveHalt {
 	out.PrevotePower = strconv.FormatInt(prevote, 10)
 	out.PrecommitPower = strconv.FormatInt(precommit, 10)
 	return out
+}
+
+// optional is nil for "".
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

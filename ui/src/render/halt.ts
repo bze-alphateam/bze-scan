@@ -67,3 +67,21 @@ export function behindLine(s: Status | undefined): string | null {
   }
   return "The explorer is not keeping up with the chain right now. The chain itself is not affected; the latest blocks and transactions may be missing here for a moment.";
 }
+
+/** The gov module account: it signs the emergency halts governance runs. */
+export const GOV_MODULE = "bze10d07y265gmmuvt4z0w9aw880jnsr700j8xlwyy";
+
+/** Who scheduled an emergency halt: governance (its module account signed) or the guardian. */
+export function haltScheduler(scheduledBy: string | null): string {
+  return scheduledBy === GOV_MODULE ? "governance" : "the guardian";
+}
+
+/**
+ * The note of an emergency halt (chain v8.3.0, no proposal behind it):
+ * `Emergency halt scheduled by the guardian at block 5,000,000: <reason>`, without the reason when it has none.
+ */
+export function emergencyLine(u: { height: number; reason: string | null; scheduled_by: string | null }): string {
+  const line = `Emergency halt scheduled by ${haltScheduler(u.scheduled_by)} at block ${formatCount(u.height)}`;
+  const reason = u.reason?.trim();
+  return reason ? `${line}: ${reason}` : line;
+}

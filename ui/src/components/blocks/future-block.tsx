@@ -3,10 +3,10 @@
 import { Box, Button, Flex, Grid, HStack, IconButton, Input, Link, Skeleton, Stack, Text } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { LuArrowRight, LuArrowUp, LuCalendar, LuTriangleAlert } from "react-icons/lu";
+import { LuArrowRight, LuArrowUp, LuCalendar, LuPause, LuTriangleAlert } from "react-icons/lu";
 
-import { useProposalList, useProposals, useStats } from "@/api/hooks";
-import type { ProposalSummary } from "@/api/types";
+import { useLiveHalt, useProposalList, useProposals, useStats } from "@/api/hooks";
+import type { Halted, ProposalSummary } from "@/api/types";
 import { Chip } from "@/components/ui/chip";
 import { ListHead, ListPanel, ListRow } from "@/components/ui/list";
 import { Breadcrumb, DetailTitle, PanelHead } from "@/components/ui/page-head";
@@ -28,6 +28,7 @@ import {
   tipAt,
   type Estimator,
 } from "@/render/future-block";
+import { haltScheduler } from "@/render/halt";
 import { describeProposal } from "@/render/proposals";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -387,12 +388,46 @@ function usePlanned(tip: number | null): { items: Planned[]; loading: boolean } 
   return { items, loading };
 }
 
+/**
+ * The emergency halt the chain is paused by (chain v8.3.0: scheduled at the next block, so it is only ever seen
+ * while the chain waits there); null otherwise. Not filtered by the extrapolated tip, which runs on during a halt.
+ */
+function useEmergencyHalt(): Halted | null {
+  const h = useLiveHalt().data;
+  return h?.halted && h.kind === "emergency" ? h : null;
+}
+
+function EmergencyRow({ h }: { h: Halted }) {
+  const reason = h.reason?.trim();
+  return (
+    <HStack role="listitem" gap="3" px="4" py="14px" _hover={{ bg: "bg.hover" }} data-testid="planned-emergency">
+      <Box display="grid" placeItems="center" boxSize="40px" flex="none" rounded="l2" bg="warn.subtle" color="warn.fg" aria-hidden>
+        <LuPause size={16} />
+      </Box>
+      <Box flex="1" minW="0">
+        <Link asChild display="block" fontWeight="600" color="accent.fg">
+          <NextLink href={`/blocks/${h.height}`}>Emergency halt</NextLink>
+        </Link>
+        <Text fontSize="13px" color="fg.muted">
+          at block{" "}
+          <Text as="span" fontFamily="mono">
+            {formatCount(h.height)}
+          </Text>
+          {` · scheduled by ${haltScheduler(h.scheduled_by)}${reason ? `: ${reason}` : ""} · the chain is paused`}
+        </Text>
+      </Box>
+    </HStack>
+  );
+}
+
 function PlannedBlocks({ tip, onCountDown }: { tip: number | null; onCountDown: (height: number) => void }) {
   const { items, loading } = usePlanned(tip);
+  const emergency = useEmergencyHalt();
+  const empty = items.length === 0 && !emergency;
   return (
     <ListPanel as="section" aria-labelledby="future-planned">
       <PanelHead id="future-planned" title="Planned blocks" />
-      {items.length === 0 ? (
+      {empty ? (
         loading ? (
           <Box px="4" py="14px" aria-hidden>
             <Skeleton h="4" w="70%" />
@@ -404,6 +439,7 @@ function PlannedBlocks({ tip, onCountDown }: { tip: number | null; onCountDown: 
         )
       ) : (
         <Box role="list" aria-label="Planned blocks">
+          {emergency && <EmergencyRow h={emergency} />}
           {items.map((u) => (
             <HStack key={`${u.p.id}:${u.height}`} role="listitem" gap="3" px="4" py="14px" _hover={{ bg: "bg.hover" }} data-testid="planned-row">
               <Box display="grid" placeItems="center" boxSize="40px" flex="none" rounded="l2" bg="accent.subtle" color="accent.fg" aria-hidden>
@@ -435,8 +471,8 @@ function PlannedBlocks({ tip, onCountDown }: { tip: number | null; onCountDown: 
           ))}
         </Box>
       )}
-      <Text px="4" pb="14px" pt={items.length === 0 ? "0" : "1"} fontSize="13px" color="fg.muted">
-        Upgrades from passed or voting proposals are listed here.
+      <Text px="4" pb="14px" pt={empty ? "0" : "1"} fontSize="13px" color="fg.muted">
+        Upgrades from passed or voting proposals are listed here, and an emergency halt while the chain is paused by one.
       </Text>
     </ListPanel>
   );

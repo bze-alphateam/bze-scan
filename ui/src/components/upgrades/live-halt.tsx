@@ -11,14 +11,15 @@ import { formatCount, formatPct, shortHash } from "@/lib/format";
 import { backLine, haltedFor, haltProgress, missingMembers, NEEDED_PCT, sharePct } from "@/render/halt";
 
 /**
- * While the chain is halted for a software upgrade: how much voting power is
- * back on the new version against the two thirds it needs, and the validators
- * still missing. Renders nothing otherwise, or when `proposalId` names
- * another upgrade's proposal.
+ * While the chain is halted for a software upgrade or an emergency halt: how
+ * much voting power is back on the new version against the two thirds it
+ * needs, and the validators still missing. Renders nothing otherwise, or when
+ * `proposalId` names another upgrade's proposal, or `height` another plan
+ * height.
  */
-export function LiveHaltPanel({ proposalId, ...props }: { proposalId?: number; mt?: string; mb?: string }) {
+export function LiveHaltPanel({ proposalId, height, ...props }: { proposalId?: number; height?: number; mt?: string; mb?: string }) {
   const h = useLiveHalt().data;
-  if (!h?.halted || (proposalId != null && h.proposal_id !== proposalId)) return null;
+  if (!h?.halted || (proposalId != null && h.proposal_id !== proposalId) || (height != null && h.height !== height)) return null;
   return <Panel h={h} {...props} />;
 }
 
@@ -27,7 +28,7 @@ function Panel({ h, ...props }: { h: Halted; mt?: string; mb?: string }) {
   const missing = missingMembers(h);
   return (
     <Card
-      title="Chain paused for the upgrade"
+      title={h.kind === "emergency" ? "Chain paused by an emergency halt" : "Chain paused for the upgrade"}
       meta={`Waiting at block ${formatCount(h.halt_height)} for ${haltedFor(h, new Date())}, round ${h.round}. Updates every few seconds.`}
       borderColor="warn.fg"
       data-testid="live-halt"

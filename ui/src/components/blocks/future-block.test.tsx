@@ -149,6 +149,32 @@ describe("FutureBlockPage", () => {
     expect(screen.getByTestId("future-countdown")).toHaveTextContent("Block 25,200,000 in about");
   });
 
+  it("lists the emergency halt the chain is paused by, whatever the extrapolated tip", async () => {
+    const live = {
+      halted: true,
+      height: 25100000,
+      halt_height: 25100001,
+      proposal_id: null,
+      name: "emergency-halt-25100000",
+      kind: "emergency",
+      reason: "exploit",
+      scheduled_by: "bze1guardian",
+      round: 0,
+      halted_since: stats.latest_time,
+      checked_at: stats.latest_time,
+      total_power: "1",
+      back_power: "0",
+      prevote_power: "0",
+      precommit_power: "0",
+      members: [],
+    } as const;
+    await render({}, { proposals: () => Promise.resolve({ items: [], next_cursor: null }), liveHalt: async () => ({ ...live, members: [] }) });
+    const row = screen.getByTestId("planned-emergency");
+    expect(within(row).getByRole("link", { name: "Emergency halt" })).toHaveAttribute("href", "/blocks/25100000");
+    expect(row).toHaveTextContent("at block 25,100,000 · scheduled by the guardian: exploit · the chain is paused");
+    expect(screen.queryByTestId("planned-empty")).toBeNull();
+  });
+
   it("says when no upgrade is planned", async () => {
     await render({}, { proposals: () => Promise.resolve({ items: [], next_cursor: null }) });
     expect(screen.getByTestId("planned-empty")).toHaveTextContent("No upgrade is planned right now.");

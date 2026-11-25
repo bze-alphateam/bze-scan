@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Halted, Status } from "@/api/types";
 
-import { backLine, behindLine, haltedFor, haltProgress, missingMembers } from "./halt";
+import { backLine, behindLine, emergencyLine, GOV_MODULE, haltedFor, haltProgress, haltScheduler, missingMembers } from "./halt";
 
 const member = (cons: string, power: string, back = false) => ({
   consensus_address: cons,
@@ -20,6 +20,9 @@ const halted: Halted = {
   halt_height: 25263601,
   proposal_id: 48,
   name: "v8.2.0",
+  kind: "governance",
+  reason: null,
+  scheduled_by: null,
   round: 3,
   halted_since: "2026-10-26T17:00:00Z",
   checked_at: "2026-10-26T17:12:00Z",
@@ -66,5 +69,15 @@ describe("halt", () => {
     expect(behindLine(status({ db_height: 90, node_height: 100 }))).toMatch(/^The explorer is 10 blocks behind the chain\. The chain itself is running/);
     expect(behindLine(status({ db_height: 99, node_height: 100 }))).toMatch(/^The explorer is 1 block behind/);
     expect(behindLine(status({ node_height: null }))).toMatch(/^The explorer is not keeping up with the chain right now\. The chain itself is not affected/);
+  });
+
+  it("words an emergency halt: who scheduled it, the block and the reason", () => {
+    expect(emergencyLine({ height: 5000000, reason: "pool drain under way", scheduled_by: "bze1guardian" })).toBe(
+      "Emergency halt scheduled by the guardian at block 5,000,000: pool drain under way",
+    );
+    expect(emergencyLine({ height: 5000000, reason: "  ", scheduled_by: GOV_MODULE })).toBe(
+      "Emergency halt scheduled by governance at block 5,000,000",
+    );
+    expect(haltScheduler(null)).toBe("the guardian");
   });
 });

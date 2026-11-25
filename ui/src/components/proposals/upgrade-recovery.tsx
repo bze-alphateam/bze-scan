@@ -23,13 +23,13 @@ export function haltedUpgrade(p: Proposal): ProposalUpgrade | null {
 }
 
 /** "After the upgrade": when each validator of the set at the halt came back, in arrival order. */
-export function UpgradeRecovery({ upgrade }: { upgrade: ProposalUpgrade }) {
+export function UpgradeRecovery({ upgrade, title = "After the upgrade" }: { upgrade: Pick<ProposalUpgrade, "height">; title?: string }) {
   const id = useId();
   const q = useUpgrade(upgrade.height);
   return (
     <Box as="section" aria-labelledby={id} mt="5" pt="4" borderTopWidth="1px" borderColor="border.panel" data-testid="upgrade-recovery">
       <Heading as="h3" id={id} fontSize="14px" fontWeight="600" mb="1">
-        After the upgrade
+        {title}
       </Heading>
       {q.data ? (
         <Recovery u={q.data} />

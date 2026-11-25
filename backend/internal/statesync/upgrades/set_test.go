@@ -166,7 +166,7 @@ func TestOneBudgetForEveryUpgrade(t *testing.T) {
 	// Two upgrades and 8 heights a run: the lower one takes the budget
 	// first, the other starts once it is done.
 	e := newSetEnv(t, 50_000, upgrades.Config{MaxPerRun: 8})
-	e.store.planned = append(e.store.planned, upgrades.Upgrade{Height: 1000, ProposalID: 49, Name: "v10"})
+	e.store.planned = append(e.store.planned, upgrades.Upgrade{Height: 1000, ProposalID: ptr(int64(49)), Name: "v10"})
 	e.commits.signed = func(int64) []string { return []string{consA, consB} } // C and D never: the whole window is read
 	ctx := context.Background()
 
