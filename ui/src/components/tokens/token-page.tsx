@@ -25,6 +25,7 @@ import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle, PanelHead } from "@
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
 import { Tag } from "@/components/ui/status-pill";
+import { TokenLimits } from "./token-limits";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
@@ -811,6 +812,7 @@ export function TokenView({ t }: { t: Token }) {
       <Tiles t={t} />
       <SupplyCallout t={t} events={events} complete={complete} />
       {route && <Route t={t} route={route} />}
+      <TokenLimits t={t} />
       <About t={t} route={route} />
       <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />
