@@ -450,7 +450,7 @@ func TestMigrationTokenSettings(t *testing.T) {
 		VALUES ('factory/bze1x/uz', 'factory', 6, 0, true, 0.010000000000000000, 0, now())`)
 	require.NoError(t, err)
 
-	_, err = openMigrator(t, dbURL).Down(latestVersion - 32) // back to before 000033
+	_, err = openMigrator(t, dbURL).Down(stepsBefore(t, 33)) // back to before 000033
 	require.NoError(t, err)
 	assert.Empty(t, cols())
 	assert.Equal(t, []string{"factory/bze1x/uz"}, queryStrings(t, db, `SELECT denom FROM explorer.denoms`), "the denom stays")
