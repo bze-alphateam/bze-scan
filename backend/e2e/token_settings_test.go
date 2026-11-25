@@ -39,25 +39,26 @@ func TestTokenSettingsOfAMintableToken(t *testing.T) {
 }
 
 // A resync of one denom (what a config_changed event marks dirty) picks up
-// the settings the admin set on the chain.
+// the settings the admin set on the chain. The VDL token is used: it has the
+// bank metadata a single-denom resync needs.
 func TestAResyncOfADenomPicksUpItsNewConfig(t *testing.T) {
 	e := newSyncEnv(t)
 	base := e.serve(t, hOrders)
 	waitFor(t, 10*time.Second, func() bool {
 		return e.count(t, `SELECT count(*) FROM explorer.denoms WHERE mintable IS NOT NULL`) > 0
 	}, "the denoms set read the settings")
-	before := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(coreyDenom)))
+	before := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(vdlDenom)))
 	require.NotNil(t, before.Config)
-	assert.Equal(t, "0", before.Config.GasSurcharge)
+	assert.Equal(t, "0.5", before.Config.GasSurcharge)
 
-	e.grpc.SetResponse("tokenfactory", "DenomConfig", url.PathEscape(coreyDenom), []byte(
-		`{"config":{"communityPool":"bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk","transferFee":"0.020000000000000000","gasSurcharge":"1.500000000000000000"}}`))
-	code, out := e.syncState(t, "--job", "denoms", "--id", coreyDenom)
+	e.grpc.SetResponse("tokenfactory", "DenomConfig", url.PathEscape(vdlDenom), []byte(
+		`{"config":{"communityPool":"","transferFee":"0.020000000000000000","gasSurcharge":"1.500000000000000000"}}`))
+	code, out := e.syncState(t, "--job", "denoms", "--id", vdlDenom)
 	require.Equal(t, 0, code, out)
 
-	after := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(coreyDenom)))
+	after := into[dto.Token](t, fetch(t, base+"/api/v1/tokens/"+url.PathEscape(vdlDenom)))
 	require.NotNil(t, after.Config)
-	assert.Equal(t, "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk", *after.Config.CommunityPool)
+	assert.Nil(t, after.Config.CommunityPool, "the admin dropped the pool")
 	assert.Equal(t, "0.02", after.Config.TransferFee)
 	assert.Equal(t, "1.5", after.Config.GasSurcharge)
 }

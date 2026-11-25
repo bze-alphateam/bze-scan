@@ -712,6 +712,8 @@ export interface Token extends TokenSummary {
   mintable: boolean | null;
   /** Factory tokens, chain v8.3.0: the fee settings; null when unknown or not a factory token. */
   config: TokenConfig | null;
+  /** The denom's IBC rate limits (chain v8.3.0); absent from older API answers, empty without any. */
+  rate_limits?: RateLimit[];
 }
 
 /** A factory token's fee settings; the ratios are decimal strings, the pool is null for none (or a module account). */
@@ -1097,3 +1099,60 @@ export interface Halted {
 }
 
 export type LiveHalt = NotHalted | Halted;
+
+// Cross-chain (IBC channels and the rate limits of chain v8.3.0)
+
+export interface IbcChannel {
+  channel_id: string;
+  port_id: string;
+  /** `open`, `closed`, `init`, `tryopen`… */
+  state: string | null;
+  /** Its light client; null until asked. */
+  client_status: "active" | "expired" | "frozen" | null;
+  client_id: string | null;
+  connection_id: string | null;
+  counterparty_channel_id: string | null;
+  counterparty: CounterpartyChain;
+  escrow_address: string;
+  updated_at: string;
+}
+
+/** One direction of a rate limit in its current window; amounts are base units. */
+export interface RateLimitDirection {
+  /** The quota: a percent of the channel value, as a decimal string. */
+  max_percent: string;
+  threshold: string;
+  /** This direction's flow minus the opposite one; negative when more went the other way. */
+  net_flow: string;
+  /** The net flow floored at 0. */
+  used: string;
+  remaining: string;
+  /** One decimal; null for a threshold of 0. */
+  used_pct: number | null;
+  /** False only for a channel value of 0, which the module never refuses. */
+  enforced: boolean;
+}
+
+export interface RateLimit {
+  denom: string;
+  symbol: string | null;
+  exponent: number;
+  logo_url: string | null;
+  channel_id: string;
+  counterparty: CounterpartyChain;
+  window_hours: number;
+  /** The next reset; null when the window does not divide 24 hours. */
+  next_reset: string | null;
+  channel_value: string;
+  inflow: string;
+  outflow: string;
+  send: RateLimitDirection;
+  recv: RateLimitDirection;
+}
+
+export interface RateLimitList {
+  /** False (and no items) for a node from before chain v8.3.0. */
+  supported: boolean;
+  items: RateLimit[];
+  blacklisted_denoms: string[];
+}

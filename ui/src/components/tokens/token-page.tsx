@@ -63,6 +63,7 @@ import {
   type SupplyState,
 } from "@/render/tokens";
 
+import { TokenLimits } from "./token-limits";
 import { TokenSettingsCard } from "./token-settings";
 import { TokenLogo } from "./tokens-page";
 
@@ -822,6 +823,7 @@ export function TokenView({ t }: { t: Token }) {
       <SupplyCallout t={t} events={events} complete={complete} />
       <TokenSettingsCard t={t} />
       {route && <Route t={t} route={route} />}
+      <TokenLimits t={t} />
       <About t={t} route={route} />
       <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />
