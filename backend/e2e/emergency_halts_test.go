@@ -161,7 +161,7 @@ func TestEmergencyHaltIsWatchedAndSupersedesTheGovernancePlan(t *testing.T) {
 	go func() { done <- watch.Run(wctx) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		assert.NoError(t, <-done)
 		closeWatch()
 	})
 	require.Eventually(t, func() bool {
