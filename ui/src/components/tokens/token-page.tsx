@@ -6,9 +6,10 @@ import type { ReactNode } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
-import { useDenoms, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
+import { useDenoms, useEmergency, useToken, useTokenEventsAfter, useTokenHolders, useTokenTransfers } from "@/api/hooks";
 import { useApi } from "@/api/provider";
 import type { LpPair, OriginChain, Token, TokenEvent } from "@/api/types";
+import { PoolPriceCard } from "@/components/tokens/pool-price-card";
 import { ExportButton } from "@/components/export/export-modal";
 import { AppLink } from "@/components/layout/app-link";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -62,7 +63,10 @@ import {
   type RouteStop,
   type SupplyState,
 } from "@/render/tokens";
+import { tokenSwitches } from "@/render/emergency";
 
+import { TokenLimits } from "./token-limits";
+import { TokenSettingsCard } from "./token-settings";
 import { TokenLogo } from "./tokens-page";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.
@@ -176,7 +180,9 @@ function Warnings({ t }: { t: Token }) {
   const hop = multiHopCallout(t);
   const direct = directToken(t, denoms.data?.values());
   const stranded = strandedExplainer(t);
-  if (!hop && !stranded) return null;
+  const emergency = useEmergency().data;
+  const { ibcBlocked } = tokenSwitches(emergency, t.denom);
+  if (!hop && !stranded && !ibcBlocked) return null;
   return (
     <Stack gap="3" mt="5">
       {hop && (
@@ -192,6 +198,14 @@ function Warnings({ t }: { t: Token }) {
               </Link>
             </>
           )}
+        </Callout>
+      )}
+      {ibcBlocked && (
+        <Callout tone="warn" title={`${tokenSymbol(t)} is blocked from crossing chains`} data-testid="ibc-blocked-callout">
+          An emergency measure stops {tokenSymbol(t)} from being sent to or received from other chains until it is lifted.{" "}
+          <Link asChild color="accent.fg">
+            <NextLink href="/emergency">Emergency status →</NextLink>
+          </Link>
         </Callout>
       )}
       {stranded && (
@@ -257,7 +271,7 @@ function Tiles({ t }: { t: Token }) {
   );
 }
 
-const SUPPLY_TONE: Record<SupplyState, CalloutTone> = { admin: "warn", fixed: "ok", elsewhere: "ok", inflation: "acc", pool: "acc" };
+const SUPPLY_TONE: Record<SupplyState, CalloutTone> = { admin: "warn", locked: "ok", fixed: "ok", elsewhere: "ok", inflation: "acc", pool: "acc" };
 
 /** Says out loud whether the supply can change, and who decides. */
 function SupplyCallout({ t, events, complete }: { t: Token; events: TokenEvent[]; complete: boolean }) {
@@ -273,6 +287,15 @@ function SupplyCallout({ t, events, complete }: { t: Token; events: TokenEvent[]
         <>
           The token&apos;s admin, <AccountChip address={t.admin ?? ""} label={t.admin_label} verticalAlign="middle" />, can create more {symbol}{" "}
           or destroy some at any time. {complete && mintBurnText(events, t)}
+        </>
+      ),
+    },
+    locked: {
+      title: `Nobody can create more ${symbol}`,
+      text: (
+        <>
+          Supply is fixed: minting is turned off for good. <AccountChip address={t.admin ?? ""} label={t.admin_label} verticalAlign="middle" /> still
+          manages the name, logo and burns. {complete && mintBurnText(events, t)}
         </>
       ),
     },
@@ -809,8 +832,11 @@ export function TokenView({ t }: { t: Token }) {
       <Header t={t} />
       <Warnings t={t} />
       <Tiles t={t} />
+      <PoolPriceCard t={t} />
       <SupplyCallout t={t} events={events} complete={complete} />
+      <TokenSettingsCard t={t} />
       {route && <Route t={t} route={route} />}
+      <TokenLimits t={t} />
       <About t={t} route={route} />
       <Grid templateColumns={TWO_COLUMNS} gap="4" alignItems="start" mt="8">
         <TopHolders t={t} />

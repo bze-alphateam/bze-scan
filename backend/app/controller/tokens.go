@@ -32,6 +32,7 @@ type TokenReader interface {
 	Tokens(ctx context.Context, kind *string, after *repository.TokenKey, limit int) ([]repository.TokenSummary, error)
 	Token(ctx context.Context, denom string) (*repository.Token, error)
 	TokenEvents(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.TokenEvent, error)
+	TokenSettings(ctx context.Context, denom string) (*repository.TokenSettings, error)
 	DenomTransfers(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.DenomTransfer, error)
 	TokenHolders(ctx context.Context, denom string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error)
 	// DenomVolume counts and sums the transfers of denom in the window
@@ -44,7 +45,10 @@ type TokenReader interface {
 // (factory%2Fbze1…%2Fuhoney) and the /token routes take it as ?denom=, the
 // chain's own convention.
 type TokenController struct {
-	repo TokenReader
+	repo  TokenReader
+	rates TokenRateLimits
+	// Pools adds the pool price state to an LP denom's page; nil leaves it out.
+	Pools PoolPriceReader
 }
 
 // NewTokenController returns a controller over repo.
@@ -117,7 +121,13 @@ func (h *TokenController) Token(c *echo.Context) error {
 		return err
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewToken(t, events, next, *volume))
+	resp := dto.NewToken(t, events, next, *volume)
+	resp.RateLimits = h.rateLimits(ctx, denom)
+	resp.Pool = h.poolPrice(ctx, t)
+	if resp.TokenSettings, err = h.tokenSettings(ctx, denom); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 // TokenEvents serves GET /api/v1/tokens/{denom}/events?cursor&limit and
