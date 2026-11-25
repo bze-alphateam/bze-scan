@@ -126,6 +126,11 @@ func txGovEvents(ents *Entities, b Block, txIndex int, txHash string, msgs []cha
 				if ev.Type == evProposalDeposit && ok {
 					addDeposit(ents, b, txIndex, id, ev, m.Signer)
 				}
+				if ev.Type == evSubmitProposal && ok {
+					// Also a submission run by a wrapper (an authz exec, a DAO):
+					// the state sync writes what its body would have.
+					ents.Dirty.Mark(statesync.Proposals, proposals.Key(id))
+				}
 			case evProposalVote:
 				addVote(ents, b, txIndex, j, id, ev, m.Signer)
 			case evCancelProposal:
@@ -140,8 +145,46 @@ func txGovEvents(ents *Entities, b Block, txIndex int, txHash string, msgs []cha
 				ents.Proposals = append(ents.Proposals, s)
 				ents.Dirty.Mark(statesync.Proposals, proposals.Key(s.ID))
 			}
+		} else if inner := innerMsgs(m); len(inner) > 0 {
+			for _, s := range nestedSubmissions(inner, events) {
+				s.Height, s.TxHash, s.Time = b.Height, txHash, b.Time
+				ents.Proposals = append(ents.Proposals, s)
+			}
 		}
 	}
+}
+
+// nestedSubmissions are the proposals rows of the submissions an authz
+// MsgExec or a dao MsgAdminExecute ran (inner, unwrapped): the k-th inner
+// submit message is the k-th submit_proposal event naming a proposal among
+// the wrapper's events (they run in order, each emitting its own).
+func nestedSubmissions(inner []chain.Msg, events []node.Event) []ProposalSubmission {
+	var named, starts []node.Event
+	for _, ev := range events {
+		if ev.Type != evSubmitProposal {
+			continue
+		}
+		if _, ok := proposalID(ev); ok {
+			named = append(named, ev)
+		} else if _, ok := ev.Get("voting_period_start"); ok {
+			starts = append(starts, ev)
+		}
+	}
+	var out []ProposalSubmission
+	k := 0
+	for _, m := range inner {
+		if m.TypeURL != msgSubmitProposal && m.TypeURL != msgSubmitProposalLegacy {
+			continue
+		}
+		if k >= len(named) {
+			break
+		}
+		if s, ok := submission(m, append([]node.Event{named[k]}, starts...)); ok {
+			out = append(out, s)
+		}
+		k++
+	}
+	return out
 }
 
 // blockGovEvents appends the resolutions of the block's finalize events.

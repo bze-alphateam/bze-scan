@@ -450,17 +450,9 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 			Sender: nullIfEmpty(m.Sender), Module: nullIfEmpty(m.Module), Events: events, Body: m.Body,
 		})
 	}
-	valRows := make([]validatorEventRow, 0, len(ents.ValidatorEvents))
-	for _, v := range ents.ValidatorEvents {
-		details, err := json.Marshal(v.Details)
-		if err != nil {
-			return nil, fmt.Errorf("write %d: validator_events: details: %w", top, err)
-		}
-		valRows = append(valRows, validatorEventRow{
-			Height: v.Height, TxIndex: v.TxIndex, Seq: v.Seq, OperatorAddress: v.Operator, Kind: v.Kind,
-			Details: details, Time: v.Time, ConsensusAddress: nullIfEmpty(v.ConsensusAddress),
-			CommissionFrom: v.CommissionFrom,
-		})
+	valRows, err := validatorEventRows(top, ents.ValidatorEvents)
+	if err != nil {
+		return nil, err
 	}
 	transferRows := make([]transferRow, 0, len(ents.Transfers))
 	for _, t := range ents.Transfers {
@@ -477,16 +469,9 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		}
 		eventRows = append(eventRows, blockEventRow{Height: e.Height, Seq: e.Seq, Type: e.Type, Attrs: attrs})
 	}
-	tokenRows := make([]tokenEventRow, 0, len(ents.TokenEvents))
-	for _, e := range ents.TokenEvents {
-		details, err := json.Marshal(e.Details)
-		if err != nil {
-			return nil, fmt.Errorf("write %d: token_events: details: %w", top, err)
-		}
-		tokenRows = append(tokenRows, tokenEventRow{
-			Height: e.Height, TxIndex: e.TxIndex, Seq: e.Seq, Denom: e.Denom, Kind: e.Kind,
-			Actor: nullIfEmpty(e.Actor), Amount: nullIfEmpty(e.Amount), Details: details, Time: e.Time,
-		})
+	tokenRows, err := tokenEventRows(top, ents.TokenEvents)
+	if err != nil {
+		return nil, err
 	}
 	activityRows := make([]activityRow, 0, len(ents.Activity))
 	for _, a := range ents.Activity {
@@ -559,6 +544,39 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 		return nil, err
 	}
 	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups, daos, daoProposals), nil
+}
+
+// validatorEventRows are the validator_events rows of events.
+func validatorEventRows(top int64, events []transform.ValidatorEvent) ([]validatorEventRow, error) {
+	out := make([]validatorEventRow, 0, len(events))
+	for _, v := range events {
+		details, err := json.Marshal(v.Details)
+		if err != nil {
+			return nil, fmt.Errorf("write %d: validator_events: details: %w", top, err)
+		}
+		out = append(out, validatorEventRow{
+			Height: v.Height, TxIndex: v.TxIndex, Seq: v.Seq, OperatorAddress: v.Operator, Kind: v.Kind,
+			Details: details, Time: v.Time, ConsensusAddress: nullIfEmpty(v.ConsensusAddress),
+			CommissionFrom: v.CommissionFrom,
+		})
+	}
+	return out, nil
+}
+
+// tokenEventRows are the token_events rows of events.
+func tokenEventRows(top int64, events []transform.TokenEvent) ([]tokenEventRow, error) {
+	out := make([]tokenEventRow, 0, len(events))
+	for _, e := range events {
+		details, err := json.Marshal(e.Details)
+		if err != nil {
+			return nil, fmt.Errorf("write %d: token_events: details: %w", top, err)
+		}
+		out = append(out, tokenEventRow{
+			Height: e.Height, TxIndex: e.TxIndex, Seq: e.Seq, Denom: e.Denom, Kind: e.Kind,
+			Actor: nullIfEmpty(e.Actor), Amount: nullIfEmpty(e.Amount), Details: details, Time: e.Time,
+		})
+	}
+	return out, nil
 }
 
 // chunked splits rows into statements of tbl with one JSON parameter each:

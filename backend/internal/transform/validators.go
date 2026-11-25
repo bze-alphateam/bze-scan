@@ -89,61 +89,83 @@ func slashEvents(ents *Entities, b Block, events []node.Event) {
 	}
 }
 
-// txValidatorEvents appends the rows of the validator messages of a
-// successful transaction. byIndex are its events by message.
-func txValidatorEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byIndex map[int][]node.Event) {
-	seq := 0
-	add := func(operator, kind string, details map[string]any, commissionFrom bool) {
-		if operator == "" {
-			return
-		}
-		ents.ValidatorEvents = append(ents.ValidatorEvents, ValidatorEvent{
-			Height: b.Height, TxIndex: txIndex, Seq: seq, Operator: operator, Kind: kind,
-			Details: details, CommissionFrom: commissionFrom, Time: b.Time,
-		})
-		seq++
+// validatorRows appends the validator events of one transaction with
+// consecutive seq.
+type validatorRows struct {
+	ents    *Entities
+	height  int64
+	txIndex int
+	time    time.Time
+	seq     int
+}
+
+func (r *validatorRows) add(operator, kind string, details map[string]any, commissionFrom bool) {
+	if operator == "" {
+		return
 	}
+	r.ents.ValidatorEvents = append(r.ents.ValidatorEvents, ValidatorEvent{
+		Height: r.height, TxIndex: r.txIndex, Seq: r.seq, Operator: operator, Kind: kind,
+		Details: details, CommissionFrom: commissionFrom, Time: r.time,
+	})
+	r.seq++
+}
+
+// txValidatorEvents appends the rows of the validator messages of a
+// successful transaction, also those an authz MsgExec or a dao
+// MsgAdminExecute runs. byIndex are its events by message.
+func txValidatorEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byIndex map[int][]node.Event) {
+	rows := &validatorRows{ents: ents, height: b.Height, txIndex: txIndex, time: b.Time}
 	for j, m := range msgs {
-		var body map[string]any
-		_ = json.Unmarshal(m.Body, &body) // an undecodable body leaves it nil
-		switch m.TypeURL {
-		case msgCreateValidator:
-			operator := str(body, "validator_address")
-			if operator == "" {
-				operator = eventAttr(byIndex[j], "create_validator", "validator")
-			}
-			details := map[string]any{}
-			if d, ok := body["description"].(map[string]any); ok {
-				details["moniker"] = str(d, "moniker")
-			}
-			if c, ok := body["commission"].(map[string]any); ok {
-				details["commission_rate"] = str(c, "rate")
-			}
-			if v, ok := body["value"].(map[string]any); ok {
-				details["self_bond"] = str(v, "amount") + str(v, "denom")
-			} else if amount := eventAttr(byIndex[j], "create_validator", "amount"); amount != "" {
-				details["self_bond"] = amount
-			}
-			add(operator, ValidatorCreated, details, false)
-		case msgEditValidator:
-			operator := str(body, "validator_address")
-			if d, ok := body["description"].(map[string]any); ok {
-				changed := map[string]any{}
-				for _, f := range []string{"moniker", "identity", "website", "security_contact", "details"} {
-					if v, ok := d[f].(string); ok && v != doNotModify {
-						changed[f] = v
-					}
-				}
-				if len(changed) > 0 {
-					add(operator, ValidatorDescriptionChanged, map[string]any{"to": changed}, false)
-				}
-			}
-			if rate := str(body, "commission_rate"); rate != "" {
-				add(operator, ValidatorCommissionChanged, map[string]any{"to": rate}, true)
-			}
-		case msgUnjail:
-			add(str(body, "validator_addr"), ValidatorUnjailed, nil, false)
+		bodyValidatorRows(rows, m, byIndex[j])
+		for _, in := range innerMsgs(m) {
+			bodyValidatorRows(rows, in, byIndex[j])
 		}
+	}
+}
+
+// bodyValidatorRows appends the rows of one validator message read from its
+// body. events are the events of the transaction's message that ran it,
+// read when the body lacks a fact.
+func bodyValidatorRows(rows *validatorRows, m chain.Msg, events []node.Event) {
+	var body map[string]any
+	_ = json.Unmarshal(m.Body, &body) // an undecodable body leaves it nil
+	switch m.TypeURL {
+	case msgCreateValidator:
+		operator := str(body, "validator_address")
+		if operator == "" {
+			operator = eventAttr(events, "create_validator", "validator")
+		}
+		details := map[string]any{}
+		if d, ok := body["description"].(map[string]any); ok {
+			details["moniker"] = str(d, "moniker")
+		}
+		if c, ok := body["commission"].(map[string]any); ok {
+			details["commission_rate"] = str(c, "rate")
+		}
+		if v, ok := body["value"].(map[string]any); ok {
+			details["self_bond"] = str(v, "amount") + str(v, "denom")
+		} else if amount := eventAttr(events, "create_validator", "amount"); amount != "" {
+			details["self_bond"] = amount
+		}
+		rows.add(operator, ValidatorCreated, details, false)
+	case msgEditValidator:
+		operator := str(body, "validator_address")
+		if d, ok := body["description"].(map[string]any); ok {
+			changed := map[string]any{}
+			for _, f := range []string{"moniker", "identity", "website", "security_contact", "details"} {
+				if v, ok := d[f].(string); ok && v != doNotModify {
+					changed[f] = v
+				}
+			}
+			if len(changed) > 0 {
+				rows.add(operator, ValidatorDescriptionChanged, map[string]any{"to": changed}, false)
+			}
+		}
+		if rate := str(body, "commission_rate"); rate != "" {
+			rows.add(operator, ValidatorCommissionChanged, map[string]any{"to": rate}, true)
+		}
+	case msgUnjail:
+		rows.add(str(body, "validator_addr"), ValidatorUnjailed, nil, false)
 	}
 }
 
@@ -171,8 +193,12 @@ func markValidators(d *statesync.Dirty, ev node.Event) {
 }
 
 // markValidatorMsg marks the validator of the messages whose events do not
-// name it: an edit (description, commission) and an unjail.
+// name it: an edit (description, commission) and an unjail, also run by an
+// authz MsgExec or a dao MsgAdminExecute.
 func markValidatorMsg(d *statesync.Dirty, m chain.Msg) {
+	for _, in := range innerMsgs(m) {
+		markValidatorMsg(d, in)
+	}
 	var body map[string]any
 	if json.Unmarshal(m.Body, &body) != nil {
 		return
