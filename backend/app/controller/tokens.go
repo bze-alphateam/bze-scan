@@ -44,7 +44,8 @@ type TokenReader interface {
 // (factory%2Fbze1…%2Fuhoney) and the /token routes take it as ?denom=, the
 // chain's own convention.
 type TokenController struct {
-	repo TokenReader
+	repo  TokenReader
+	rates TokenRateLimits
 }
 
 // NewTokenController returns a controller over repo.
@@ -117,7 +118,9 @@ func (h *TokenController) Token(c *echo.Context) error {
 		return err
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewToken(t, events, next, *volume))
+	resp := dto.NewToken(t, events, next, *volume)
+	resp.RateLimits = h.rateLimits(ctx, denom)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // TokenEvents serves GET /api/v1/tokens/{denom}/events?cursor&limit and

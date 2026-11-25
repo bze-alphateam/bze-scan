@@ -89,6 +89,9 @@
 #     The e2e tests' DAO fixtures (daos_test.go) are hand-written until a node
 #     with DAOs is recorded.
 #
+#   ratelimits (the IBC rate limits, chain v8.3.0 on; record from a v8.3.0 node):
+#     ratelimit/AllRateLimits.json, ratelimit/AllBlacklistedDenoms.json
+#
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]
 #         [PROPOSALS="47 …"] [HOLDERS="factory/…/GGE"] [HOLDERS_PAGE_LIMIT=2] [OWNERS="bze1…"]
@@ -297,6 +300,11 @@ if has orderbooks; then
       "tradebin/MarketAggregatedOrders.$(esc "${m}").sell.json"
   done
   PIN=""
+fi
+
+if has ratelimits; then
+  fetch "Stride-Labs/ibc-rate-limiting/ratelimit/ratelimits" ratelimit/AllRateLimits.json
+  fetch "Stride-Labs/ibc-rate-limiting/ratelimit/blacklisted_denoms" ratelimit/AllBlacklistedDenoms.json
 fi
 
 if has chain; then
