@@ -687,6 +687,8 @@ export interface TokenEvent {
 
 /** The token page: the list item plus its origin, first sight, admin, markets, metadata and newest events. */
 export interface Token extends TokenSummary {
+  /** An LP token's pool price state (see pool-price.ts); null for other kinds or when unreadable. */
+  pool?: import("./pool-price").PoolPrice | null;
   description: string | null;
   origin_chain_id: string | null;
   ibc_base_denom: string | null;

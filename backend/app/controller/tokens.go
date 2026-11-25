@@ -47,6 +47,8 @@ type TokenReader interface {
 type TokenController struct {
 	repo  TokenReader
 	rates TokenRateLimits
+	// Pools adds the pool price state to an LP denom's page; nil leaves it out.
+	Pools PoolPriceReader
 }
 
 // NewTokenController returns a controller over repo.
@@ -121,6 +123,7 @@ func (h *TokenController) Token(c *echo.Context) error {
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	resp := dto.NewToken(t, events, next, *volume)
 	resp.RateLimits = h.rateLimits(ctx, denom)
+	resp.Pool = h.poolPrice(ctx, t)
 	if resp.TokenSettings, err = h.tokenSettings(ctx, denom); err != nil {
 		return err
 	}
