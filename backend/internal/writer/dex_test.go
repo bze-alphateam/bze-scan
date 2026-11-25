@@ -42,6 +42,9 @@ func statementsOf(tx *mockTx, sqlPart string) []statement {
 
 const fillDeltaSQL = "filled_amount = o.filled_amount + d.amount"
 
+// cancelSQL is in the statement that closes cancelled and merged orders.
+const cancelSQL = "UPDATE explorer.orders AS o SET status = r.status"
+
 // Only the fills an insert returned move filled_amount, merged per order
 // and in order id order, whatever order the heights come in.
 func TestFillDeltasCountOnlyTheInsertedFills(t *testing.T) {
@@ -105,17 +108,17 @@ func TestOrderBookStatementOrder(t *testing.T) {
 			var order []string
 			for _, st := range db.txs[0].stmts {
 				for _, part := range []string{"INSERT INTO explorer.order_messages", "UPDATE explorer.orders AS o SET\n\t\tmarket_id",
-					"INSERT INTO explorer.orders", "INSERT INTO explorer.order_fills", "status = 'cancelled'", fillDeltaSQL} {
+					"INSERT INTO explorer.orders", "INSERT INTO explorer.order_fills", cancelSQL, fillDeltaSQL} {
 					if strings.Contains(st.sql, part) {
 						order = append(order, part)
 					}
 				}
 			}
 			want := []string{"INSERT INTO explorer.order_messages", "INSERT INTO explorer.orders",
-				"INSERT INTO explorer.order_fills", "status = 'cancelled'", fillDeltaSQL}
+				"INSERT INTO explorer.order_fills", cancelSQL, fillDeltaSQL}
 			if mode == writer.ModeUpdate {
 				want = []string{"INSERT INTO explorer.order_messages", "UPDATE explorer.orders AS o SET\n\t\tmarket_id",
-					"INSERT INTO explorer.orders", "INSERT INTO explorer.order_fills", "status = 'cancelled'", fillDeltaSQL}
+					"INSERT INTO explorer.orders", "INSERT INTO explorer.order_fills", cancelSQL, fillDeltaSQL}
 			}
 			assert.Equal(t, want, order)
 
@@ -137,7 +140,10 @@ func TestOrdersInsertReadsTheStoredFillsAndCancel(t *testing.T) {
 	for _, part := range []string{
 		"coalesce(sum(f.amount), 0) AS filled",
 		"e.type = 'bze.tradebin.OrderCanceledEvent' AND e.attrs->>'id' = r.order_id",
-		"WHEN c.height IS NOT NULL THEN 'cancelled' WHEN s.filled >= r.amount THEN 'filled' ELSE 'open'",
+		"CASE WHEN c.reason = 'merged' THEN 'merged' ELSE 'cancelled' END",
+		"WHEN s.filled >= r.amount THEN 'filled' ELSE 'open'",
+		"SELECT k.height, k.time, k.reason FROM explorer.order_closures k",
+		"r.merged_from, r.added_amount",
 		"ON CONFLICT (order_id) DO NOTHING",
 	} {
 		assert.Contains(t, sql, part)
@@ -153,12 +159,61 @@ func TestCancelsAreMergedPerOrder(t *testing.T) {
 	}
 	db := newMockDB(49)
 	require.NoError(t, writer.NewLiveWriter(db).WriteBlock(context.Background(), ents))
-	stmts := statementsOf(db.txs[0], "status = 'cancelled'")
+	stmts := statementsOf(db.txs[0], cancelSQL)
 	require.Len(t, stmts, 1)
 	rows := payload(t, stmts[0])
 	require.Len(t, rows, 2)
 	assert.Equal(t, "A", rows[0]["order_id"])
 	assert.Equal(t, "B", rows[1]["order_id"])
+}
+
+// A merge (chain v8.3.0) writes the merged order with what it replaced and
+// added, the closure of the replaced order, and closes that order as merged
+// next to the cancels, which keep their status.
+func TestMergesAreWrittenAsOrderClosureAndMergedStatus(t *testing.T) {
+	ents := block(100)
+	at := time.Unix(100, 0)
+	ents.Orders = []transform.Order{
+		{OrderID: "N", Height: 100, Time: at, Amount: "140", CreatedTxHash: "T", MergedFrom: "P", AddedAmount: "40"},
+		{OrderID: "S", Height: 100, Time: at, Amount: "5", CreatedTxHash: "T"},
+	}
+	ents.OrderClosures = []transform.OrderClosure{
+		{OrderID: "P", Height: 100, Time: at, TxHash: "T", Reason: transform.OrderClosureMerged, MergedInto: "N"},
+		{OrderID: "C", Height: 100, Time: at, TxHash: "T2", Reason: transform.OrderClosureCancelled},
+	}
+	ents.OrderCancels = []transform.OrderCancel{{OrderID: "C", Height: 100, Time: at}}
+	for _, mode := range []writer.Mode{writer.ModeInsert, writer.ModeUpdate} {
+		t.Run(mode.String(), func(t *testing.T) {
+			db := newMockDB(49)
+			w := writer.NewBatchWriter(db)
+			require.NoError(t, w.Write(context.Background(), []*transform.Entities{ents}, mode))
+
+			orders := payload(t, statementsOf(db.txs[0], "INSERT INTO explorer.orders")[0])
+			require.Len(t, orders, 2)
+			assert.Equal(t, "N", orders[0]["order_id"])
+			assert.Equal(t, "P", orders[0]["merged_from"])
+			assert.Equal(t, "40", orders[0]["added_amount"])
+			assert.Equal(t, "140", orders[0]["amount"], "the merged total")
+			assert.Nil(t, orders[1]["merged_from"], "a plain order has no merge")
+			assert.Nil(t, orders[1]["added_amount"])
+
+			closures := payload(t, statementsOf(db.txs[0], "explorer.order_closures")[0])
+			require.Len(t, closures, 2)
+			assert.Equal(t, "C", closures[0]["order_id"])
+			assert.Nil(t, closures[0]["merged_into"])
+			assert.Equal(t, "P", closures[1]["order_id"])
+			assert.Equal(t, "merged", closures[1]["reason"])
+			assert.Equal(t, "N", closures[1]["merged_into"])
+
+			closes := payload(t, statementsOf(db.txs[0], cancelSQL)[0])
+			require.Len(t, closes, 2)
+			assert.Equal(t, "C", closes[0]["order_id"])
+			assert.Equal(t, "cancelled", closes[0]["status"])
+			assert.Equal(t, "P", closes[1]["order_id"])
+			assert.Equal(t, "merged", closes[1]["status"], "closed like a cancel, with its own status")
+			assert.Equal(t, float64(100), closes[1]["height"])
+		})
+	}
 }
 
 // The live writer runs its hooks in the block's transaction, after the

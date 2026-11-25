@@ -167,13 +167,19 @@ export interface Order {
   price: string;
   amount: string;
   filled_amount: string;
-  status: "open" | "filled" | "cancelled";
+  status: "open" | "filled" | "cancelled" | "merged";
   created_height: number;
   created_time: string;
   created_tx_hash: string | null;
   message_id: string | null;
   closed_height: number | null;
   closed_time: string | null;
+  /** The resting order this one replaced when it was merged into it (chain v8.3.0); absent or null otherwise. */
+  merged_from?: string | null;
+  /** What this order added to the order it replaced; its `amount` is the merged total. */
+  added_amount?: string | null;
+  /** The order that replaced this one, when its status is `merged`. */
+  merged_into?: string | null;
 }
 
 export interface Fill {
@@ -192,13 +198,21 @@ export interface Fill {
   taker_order_id?: string | null;
 }
 
-/** Why the order book sent part of a message back (chain v8.3.0). */
-export type RefundReason = "no_match" | "unfilled_remainder" | "below_min_amount";
+/**
+ * Why the order book sent part of an order back (chain v8.3.0): `max_fills_reached` when one order took the
+ * most fills it may, `upgrade` for a message still queued at the v8.3.0 upgrade.
+ */
+export type RefundReason = "no_match" | "unfilled_remainder" | "below_min_amount" | "max_fills_reached" | "upgrade";
 
-/** The part of a queue message that was not executed and went back to its owner (chain v8.3.0). */
+/**
+ * The part of an order that was not executed and went back to its owner (chain v8.3.0). A refund of the
+ * transaction's own events names the taker order (`order_id`) and has no `message_id`; the upgrade block's
+ * refund of a v8.2.x transaction names its queue message in both; a pre-release build's has `message_id` only.
+ */
 export interface Refund {
   height: number;
-  message_id: string;
+  message_id?: string;
+  order_id?: string;
   market_id: string;
   order_type: string;
   /** Base amount not executed. */
@@ -208,32 +222,12 @@ export interface Refund {
   reason: RefundReason | string;
 }
 
-/** A cancel that found no order: filled or cancelled meanwhile (chain v8.3.0). */
-export interface SkippedCancel {
-  height: number;
-  message_id: string;
-  market_id: string;
-  order_type: string;
-  order_id: string;
-  reason: string;
-}
-
-/** A queue message the order book failed to process; it stays queued and is retried every block (chain v8.3.0). */
-export interface FailedOrderMessage {
-  message_id: string;
-  message_type: string;
-  /** The latest block it failed in. */
-  height: number;
-}
-
 export interface TxDex {
   placed: Order[];
   fills: Fill[];
   cancelled: Order[];
   /** Empty before chain v8.3.0; absent from older API answers. */
   refunds?: Refund[];
-  skipped_cancels?: SkippedCancel[];
-  failed?: FailedOrderMessage[];
   pending: boolean;
 }
 

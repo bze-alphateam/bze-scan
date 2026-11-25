@@ -32,7 +32,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 30
+const latestVersion = 31
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -334,4 +334,39 @@ func TestMigrateDropsTheProposalsThatNeverReachedAVote(t *testing.T) {
 	migrateUp(t, dbURL)
 	assert.Equal(t, []string{"1 dropped", "2 rejected", "3 deposit_period"}, queryStrings(t, db,
 		`SELECT concat_ws(' ', id, status) FROM explorer.proposals ORDER BY id`))
+}
+
+// Migration 000031 adds the merge columns and swaps the block-event index of
+// the order outcomes; the down migration brings the old one back.
+func TestMigrationMergedOrders(t *testing.T) {
+	dbURL := freshDatabase(t, true)
+	db := connect(t, dbURL)
+	migrateUp(t, dbURL)
+	cols := func() []string {
+		return queryStrings(t, db, `SELECT column_name FROM information_schema.columns
+			WHERE table_schema = 'explorer' AND table_name = 'orders' AND column_name IN ('merged_from', 'added_amount')`)
+	}
+	indexes := func() []string {
+		return queryStrings(t, db, `SELECT indexname FROM pg_indexes WHERE schemaname = 'explorer'
+			AND tablename = 'block_events' AND indexname IN ('idx_block_events_order_outcome', 'idx_block_events_order_refund')`)
+	}
+	assert.Equal(t, []string{"added_amount", "merged_from"}, cols())
+	assert.Equal(t, []string{"idx_block_events_order_refund"}, indexes())
+	assert.Equal(t, []string{"merged_into"}, queryStrings(t, db, `SELECT column_name FROM information_schema.columns
+		WHERE table_schema = 'explorer' AND table_name = 'order_closures' AND column_name = 'merged_into'`))
+
+	// A status the old list never had needs no change to the table.
+	_, err := db.Exec(`INSERT INTO explorer.orders (order_id, market_id, owner, side, price, amount, status, created_height,
+		created_time, updated_at) VALUES ('1', 'm', 'o', 'buy', 1, 1, 'merged', 1, now(), now())`)
+	require.NoError(t, err)
+
+	mg := openMigrator(t, dbURL)
+	_, err = mg.Down(1)
+	require.NoError(t, err)
+	assert.Empty(t, cols())
+	assert.Equal(t, []string{"idx_block_events_order_outcome"}, indexes())
+
+	migrateUp(t, dbURL)
+	assert.Equal(t, []string{"added_amount", "merged_from"}, cols())
+	assert.Equal(t, []string{"idx_block_events_order_refund"}, indexes())
 }

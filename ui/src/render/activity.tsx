@@ -316,7 +316,12 @@ const SENTENCES: Record<string, Sentence> = {
   ica: () => ["Used an interchain account"],
   relay: () => ["Relayed cross-chain packets"],
 
-  dex_order: () => ["Placed an order on the DEX"],
+  dex_order: (i) => {
+    // A create that merged into the owner's resting order carries the amend (chain v8.3.0).
+    const d = ownEvent(i.row, "bze.tradebin.OrderAmendedEvent", "owner", i.address);
+    const market = d ? attr(d, "market_id") : null;
+    return [market ? `Added to your order on ${marketName(market, i.ctx)}` : "Placed an order on the DEX"];
+  },
   dex_cancel: (i) => {
     const d = ownEvent(i.row, "bze.tradebin.OrderCanceledEvent", "owner", i.address);
     return [d ? `Order cancelled on ${marketName(attr(d, "market_id"), i.ctx)}` : "Cancelled an order"];
@@ -351,8 +356,6 @@ const SENTENCES: Record<string, Sentence> = {
     if (!d) return ["Refunded by the DEX"];
     return [back ? `Refunded · ${coinText(back, i.ctx)}${on}` : `Refund too small to send back${on}`];
   },
-  dex_cancel_skipped: () => ["Cancel skipped, the order was gone"],
-  dex_failed: () => ["The DEX could not process an order yet"],
   dex_swap: (i) => {
     if (i.losses.length && i.gains.length) return [`Swapped ${amounts(i.losses, i.ctx)} for ${amounts(i.gains, i.ctx)}`];
     return ["Swapped on the DEX"];

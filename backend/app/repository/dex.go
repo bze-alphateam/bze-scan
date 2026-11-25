@@ -25,6 +25,12 @@ type Order struct {
 	MessageID     *string
 	ClosedHeight  *int64
 	ClosedTime    *time.Time
+	// MergedFrom is the id of the resting order this one replaced and
+	// AddedAmount what it added to it (chain v8.3.0); MergedInto is the id
+	// of the order that replaced this one, when its status is merged.
+	MergedFrom  *string
+	AddedAmount *string
+	MergedInto  *string
 }
 
 // OrderFill is an order_fills row.
@@ -58,24 +64,26 @@ type FillKey struct {
 }
 
 // TxDex is the order book outcome of one transaction: the orders it placed,
-// the fills it took, the orders it cancelled, what was sent back, the
-// cancels that found no order, the messages the engine failed to process,
-// and whether an order message it queued has no outcome indexed yet.
+// the fills it took, the orders it cancelled, what was sent back, and
+// whether an order message it queued has no outcome indexed yet.
 type TxDex struct {
-	Placed         []Order
-	Fills          []OrderFill
-	Cancelled      []Order
-	Refunds        []OrderRefund
-	SkippedCancels []CancelSkip
-	Failed         []OrderFailure
-	Pending        bool
+	Placed    []Order
+	Fills     []OrderFill
+	Cancelled []Order
+	Refunds   []OrderRefund
+	Pending   bool
 }
 
-// OrderRefund is an OrderMessageRefundedEvent (chain v8.3.0): the part of a
-// queue message that was not executed went back to its owner.
+// OrderRefund is an OrderMessageRefundedEvent (chain v8.3.0): the part of an
+// order that was not executed went back to its owner. A transaction's own
+// event names the taker order (OrderID); a refund of the upgrade block names
+// the queue message of a transaction before the upgrade (OrderID and
+// MessageID are that id), and a pre-release build's block-level refund has a
+// MessageID only.
 type OrderRefund struct {
 	Height    int64
 	MessageID string
+	OrderID   string
 	MarketID  string
 	OrderType string
 	Owner     string
@@ -87,30 +95,11 @@ type OrderRefund struct {
 	Reason string
 }
 
-// CancelSkip is an OrderCancelSkippedEvent (chain v8.3.0): a cancel found
-// no order, which was filled or cancelled meanwhile.
-type CancelSkip struct {
-	Height    int64
-	MessageID string
-	MarketID  string
-	OrderType string
-	OrderID   string
-	Owner     string
-	Reason    string
-}
-
-// OrderFailure is the latest OrderMessageFailedEvent of a queue message
-// (chain v8.3.0): the engine could not process it at Height; it stays
-// queued and is retried every block.
-type OrderFailure struct {
-	MessageID   string
-	MessageType string
-	Height      int64
-}
-
 const (
 	orderCols = `o.order_id, o.market_id, o.owner, o.side, o.price::text, o.amount::text, o.filled_amount::text,
-		o.status, o.created_height, o.created_time, o.created_tx_hash, o.message_id, o.closed_height, o.closed_time`
+		o.status, o.created_height, o.created_time, o.created_tx_hash, o.message_id, o.closed_height, o.closed_time,
+		o.merged_from, o.added_amount::text,
+		CASE WHEN o.status = 'merged' THEN (SELECT k.merged_into FROM explorer.order_closures k WHERE k.order_id = o.order_id) END`
 	fillCols = `f.height, f.seq, f.order_id, f.market_id, f.side, f.price::text, f.amount::text, f.maker, f.taker,
 		f.taker_message_id, f.taker_tx_hash, f.time, f.taker_order_id`
 )
@@ -118,7 +107,8 @@ const (
 func scanOrder(row pgx.CollectableRow) (Order, error) {
 	var o Order
 	err := row.Scan(&o.OrderID, &o.MarketID, &o.Owner, &o.Side, &o.Price, &o.Amount, &o.FilledAmount, &o.Status,
-		&o.CreatedHeight, &o.CreatedTime, &o.CreatedTxHash, &o.MessageID, &o.ClosedHeight, &o.ClosedTime)
+		&o.CreatedHeight, &o.CreatedTime, &o.CreatedTxHash, &o.MessageID, &o.ClosedHeight, &o.ClosedTime,
+		&o.MergedFrom, &o.AddedAmount, &o.MergedInto)
 	return o, err
 }
 
@@ -235,41 +225,33 @@ const cancelledIDs = `SELECT e->'attrs'->>'orderId' FROM explorer.messages m, js
 const cancelledByEvent = `SELECT e->'attrs'->>'id' FROM explorer.messages m, jsonb_array_elements(m.events) e
 	WHERE m.height = $1 AND m.tx_index = $2 AND e->>'type' = 'bze.tradebin.OrderCanceledEvent'`
 
-// Since chain v8.3.0 the engine also reports the queue messages that end
-// without an order or a fill. Those events are only kept as block_events
-// rows; one belongs to an order message of the transaction (at $1, $2)
-// when it carries its message id at or above its height and no later
-// order message took the id before it: the ids are reused once the queue
-// empties, never while a message holding one is queued (see
-// writer.AttributeOrders). A failure repeats every block the message stays
-// queued; the read keeps the latest.
-const (
-	evRefunded      = "bze.tradebin.OrderMessageRefundedEvent"
-	evCancelSkipped = "bze.tradebin.OrderCancelSkippedEvent"
-	evFailed        = "bze.tradebin.OrderMessageFailedEvent"
-)
+// A refund of chain v8.3.0 is an OrderMessageRefundedEvent. A transaction's
+// own events carry it with the taker order id; the upgrade block, which sends
+// back what a transaction of chain v8.2.x still had queued, emits it as a
+// block event whose order_id is that queue message id (builds before the
+// release keyed their block events by message_id). Those block events belong
+// to an order message of the transaction (at $1, $2) when they carry its
+// message id at or above its height and no later order message took the id
+// before them: the ids are reused once the queue empties, never while a
+// message holding one is queued (see writer.AttributeOrders).
+const evRefunded = "bze.tradebin.OrderMessageRefundedEvent"
 
-// txOutcomeEvents selects the events of type $3 of the transaction's order
-// messages; a query adds its own columns and ordering.
-const txOutcomeEvents = ` FROM explorer.order_messages om
-	  JOIN explorer.block_events e ON e.type = $3 AND e.attrs->>'message_id' = om.message_id AND e.height >= $1
-	 WHERE om.height = $1 AND om.tx_index = $2
-	   AND NOT EXISTS (SELECT 1 FROM explorer.order_messages n
-	                    WHERE n.message_id = om.message_id AND n.height > om.height AND n.height <= e.height)`
+// blockRefundKey is the queue message id a block-level refund names; the
+// expression of idx_block_events_order_refund.
+const blockRefundKey = `COALESCE(e.attrs->>'message_id', e.attrs->>'order_id')`
 
-// settledByEvent is true when the order message om has a refund or a
-// skipped cancel (chain v8.3.0).
+// settledByEvent is true when the order message om has a block-level refund.
 const settledByEvent = `EXISTS (SELECT 1 FROM explorer.block_events e
-	 WHERE e.type IN ('` + evRefunded + `', '` + evCancelSkipped + `')
-	   AND e.attrs->>'message_id' = om.message_id AND e.height >= om.height
+	 WHERE e.type = '` + evRefunded + `' AND ` + blockRefundKey + ` = om.message_id AND e.height >= om.height
 	   AND NOT EXISTS (SELECT 1 FROM explorer.order_messages n
 	                    WHERE n.message_id = om.message_id AND n.height > om.height AND n.height <= e.height))`
 
 // txPendingSQL is true when an order message of the transaction has no
-// outcome indexed: a create or fill message (chain v8.2.0 and later) with
-// no fill, no order and no refund attributed to it, a cancel whose order is
-// still open, or (chain v8.3.0) a cancel with neither its cancel nor a
-// skip. A failure is no outcome: the message is retried.
+// outcome indexed: a create or fill message (chain v8.2.0) with no fill, no
+// order and no refund attributed to it, or a cancel whose order is still
+// open. A queued cancel that an upgrade came after is final: the v8.3.0
+// upgrade refunds no cancel and its order stays on the book. Chain v8.3.0 queues nothing: its transactions never have order
+// messages.
 const txPendingSQL = `SELECT EXISTS (
 		SELECT 1 FROM explorer.order_messages om
 		 WHERE om.height = $1 AND om.tx_index = $2 AND om.kind <> 'cancel'
@@ -278,23 +260,32 @@ const txPendingSQL = `SELECT EXISTS (
 		   AND NOT EXISTS (SELECT 1 FROM explorer.orders o
 		                    WHERE o.created_tx_hash = $3 AND o.message_id = om.message_id)
 		   AND NOT ` + settledByEvent + `)
-	OR EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))`
+	OR (EXISTS (SELECT 1 FROM explorer.orders o WHERE o.status = 'open' AND o.order_id IN (` + cancelledIDs + `))
+	    AND NOT EXISTS (SELECT 1 FROM explorer.upgrades u
+	                     WHERE u.height > $1 AND u.height <= (SELECT max(height) FROM explorer.blocks)))`
 
-// txRefundsSQL, txSkippedCancelsSQL and txFailuresSQL read the
-// transaction's v8.3.0 outcome events.
-const (
-	txRefundsSQL = `SELECT e.height, om.message_id, coalesce(e.attrs->>'market_id', ''),
-		coalesce(e.attrs->>'order_type', ''), coalesce(e.attrs->>'owner', ''), coalesce(e.attrs->>'amount', ''),
-		coalesce(e.attrs->>'refund', ''), coalesce(e.attrs->>'reason', '')` + txOutcomeEvents + `
-	 ORDER BY e.height, e.seq`
-	txSkippedCancelsSQL = `SELECT e.height, om.message_id, coalesce(e.attrs->>'market_id', ''),
-		coalesce(e.attrs->>'order_type', ''), coalesce(e.attrs->>'order_id', ''), coalesce(e.attrs->>'owner', ''),
-		coalesce(e.attrs->>'reason', '')` + txOutcomeEvents + `
-	 ORDER BY e.height, e.seq`
-	txFailuresSQL = `SELECT DISTINCT ON (om.message_id) om.message_id, coalesce(e.attrs->>'message_type', ''), e.height` +
-		txOutcomeEvents + `
-	 ORDER BY om.message_id, e.height DESC`
-)
+// txRefundsSQL reads the refunds of the transaction: the OrderMessageRefundedEvents
+// of its own messages (message_id empty), then the block-level ones its order
+// messages are linked to.
+const txRefundsSQL = `SELECT height, message_id, order_id, market_id, order_type, owner, amount, refund, reason FROM (
+	SELECT m.height, '' AS message_id, coalesce(x.e->'attrs'->>'order_id', '') AS order_id,
+		coalesce(x.e->'attrs'->>'market_id', '') AS market_id, coalesce(x.e->'attrs'->>'order_type', '') AS order_type,
+		coalesce(x.e->'attrs'->>'owner', '') AS owner, coalesce(x.e->'attrs'->>'amount', '') AS amount,
+		coalesce(x.e->'attrs'->>'refund', '') AS refund, coalesce(x.e->'attrs'->>'reason', '') AS reason,
+		0 AS src, m.msg_index AS a, x.i AS b
+	  FROM explorer.messages m, jsonb_array_elements(m.events) WITH ORDINALITY AS x(e, i)
+	 WHERE m.height = $1 AND m.tx_index = $2 AND x.e->>'type' = '` + evRefunded + `'
+	UNION ALL
+	SELECT e.height, om.message_id, coalesce(e.attrs->>'order_id', om.message_id),
+		coalesce(e.attrs->>'market_id', ''), coalesce(e.attrs->>'order_type', ''), coalesce(e.attrs->>'owner', ''),
+		coalesce(e.attrs->>'amount', ''), coalesce(e.attrs->>'refund', ''), coalesce(e.attrs->>'reason', ''),
+		1, e.height, e.seq
+	  FROM explorer.order_messages om
+	  JOIN explorer.block_events e ON e.type = '` + evRefunded + `' AND ` + blockRefundKey + ` = om.message_id AND e.height >= $1
+	 WHERE om.height = $1 AND om.tx_index = $2
+	   AND NOT EXISTS (SELECT 1 FROM explorer.order_messages n
+	                    WHERE n.message_id = om.message_id AND n.height > om.height AND n.height <= e.height)
+	) u ORDER BY src, a, b`
 
 // TxDex returns the order book outcome of the transaction with hash at
 // (height, txIndex).
@@ -316,23 +307,10 @@ func (r *Explorer) TxDex(ctx context.Context, height, txIndex int64, hash string
 	}
 	if out.Refunds, err = collect(ctx, r.db, "refunds of "+hash, func(row pgx.CollectableRow) (OrderRefund, error) {
 		var x OrderRefund
-		err := row.Scan(&x.Height, &x.MessageID, &x.MarketID, &x.OrderType, &x.Owner, &x.Amount, &x.Refund, &x.Reason)
+		err := row.Scan(&x.Height, &x.MessageID, &x.OrderID, &x.MarketID, &x.OrderType, &x.Owner, &x.Amount, &x.Refund,
+			&x.Reason)
 		return x, err
-	}, txRefundsSQL, height, txIndex, evRefunded); err != nil {
-		return nil, err
-	}
-	if out.SkippedCancels, err = collect(ctx, r.db, "skipped cancels of "+hash, func(row pgx.CollectableRow) (CancelSkip, error) {
-		var x CancelSkip
-		err := row.Scan(&x.Height, &x.MessageID, &x.MarketID, &x.OrderType, &x.OrderID, &x.Owner, &x.Reason)
-		return x, err
-	}, txSkippedCancelsSQL, height, txIndex, evCancelSkipped); err != nil {
-		return nil, err
-	}
-	if out.Failed, err = collect(ctx, r.db, "failed messages of "+hash, func(row pgx.CollectableRow) (OrderFailure, error) {
-		var x OrderFailure
-		err := row.Scan(&x.MessageID, &x.MessageType, &x.Height)
-		return x, err
-	}, txFailuresSQL, height, txIndex, evFailed); err != nil {
+	}, txRefundsSQL, height, txIndex); err != nil {
 		return nil, err
 	}
 	err = r.db.QueryRow(ctx, txPendingSQL, height, txIndex, hash).Scan(&out.Pending)

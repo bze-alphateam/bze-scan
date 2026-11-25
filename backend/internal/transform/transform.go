@@ -68,8 +68,8 @@ type Entities struct {
 	Orders        []Order
 	OrderFills    []OrderFill
 	OrderCancels  []OrderCancel
-	// OrderClosures are the order_closures rows of the heights' cancels made
-	// by transactions (chain v8.3.0).
+	// OrderClosures are the order_closures rows of the heights' cancels and
+	// merges made by transactions (chain v8.3.0).
 	OrderClosures []OrderClosure
 	// Swaps are the swaps rows of the heights' liquidity-pool swaps; they
 	// and OrderFills carry the trades' ids.

@@ -4,7 +4,7 @@ import NextLink from "next/link";
 import { LuClock } from "react-icons/lu";
 
 import { AppLink } from "@/components/layout/app-link";
-import type { Coin, Order, Refund, SkippedCancel, Transfer } from "@/api/types";
+import type { Coin, Order, Refund, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { shortOrderId } from "@/lib/format";
 
@@ -20,9 +20,11 @@ import {
   priceText,
   refundTotals,
   returnedCoin,
+  SPECIAL_REFUND_REASONS,
   splitMarket,
   type MessageOutcome,
 } from "./dex";
+import { FillCap } from "./fill-cap";
 import { renderer, type BodyProps, type MessageRenderer, type RenderContext, type RenderMessage } from "./types";
 
 const DEX_MODULE = "DEX";
@@ -56,18 +58,6 @@ function PendingLine() {
   );
 }
 
-/** A message the order book failed to process (chain v8.3.0): it stays queued and is retried. */
-function FailedLine() {
-  return (
-    <HStack gap="2" color="orange.fg" fontSize="sm" align="start" role="status" data-testid="dex-failed">
-      <Box as="span" display="inline-flex" mt="0.5" aria-hidden>
-        <LuClock />
-      </Box>
-      <Text>The order book could not process this yet; it retries every block.</Text>
-    </HStack>
-  );
-}
-
 /** "16,087 BZE sent back", or that it was too small to send. */
 function sentBackText(refunds: Refund[], ctx: RenderContext): string {
   const t = refundTotals(refunds);
@@ -85,11 +75,37 @@ function BelowMinLine({ refunds, ctx }: { refunds: Refund[]; ctx: RenderContext 
   );
 }
 
-/** A cancel that found its order gone (chain v8.3.0). */
-function SkippedCancelLine({ c }: { c: SkippedCancel }) {
+/** The coins a set of refunds sent back, as "17,000 BZE"; null when every one was only dust. */
+function backText(refunds: Refund[], ctx: RenderContext): string | null {
+  const coins = refundTotals(refunds).coins.map((c) => coinText(c, ctx));
+  return coins.length > 0 ? coins.join(" and ") : null;
+}
+
+const isSpecialRefund = (r: Refund) => SPECIAL_REFUND_REASONS.includes(r.reason);
+
+/**
+ * An order stopped at the most fills one order can take (chain v8.3.0): the rest was sent back in the same
+ * transaction and never rested. The cap is the tradebin parameter, left out while it is not known.
+ */
+function MaxFillsLine({ refunds, marketId, ctx }: { refunds: Refund[]; marketId: string | null; ctx: RenderContext }) {
+  const back = backText(refunds, ctx);
+  const notFilled = baseText(marketId ?? refunds[0]?.market_id ?? null, refundTotals(refunds).base, ctx);
   return (
-    <Text fontSize="sm" data-testid="dex-cancel-skipped">
-      Order <OrderId id={c.order_id} /> was already filled or cancelled; nothing to cancel.
+    <Text fontSize="sm" color="orange.fg" role="status" data-testid="dex-max-fills">
+      Stopped after the most fills one order can take
+      <FillCap />; {notFilled} was not filled
+      {back ? ` and ${back} was sent back` : " (too small to send back, kept as dust)"}. Send another order for the rest.
+    </Text>
+  );
+}
+
+/** A message still queued when the chain upgraded to v8.3.0 (the upgrade block sent it back). */
+function UpgradeLine({ refunds, ctx }: { refunds: Refund[]; ctx: RenderContext }) {
+  const back = backText(refunds, ctx);
+  return (
+    <Text fontSize="sm" color="orange.fg" role="status" data-testid="dex-upgrade">
+      This order was still waiting when the chain upgraded to v8.3.0 and was sent back: {back ?? "too small to send back, kept as dust"}. Place it
+      again.
     </Text>
   );
 }
@@ -132,15 +148,39 @@ function orderLink(o: Order) {
   );
 }
 
+/** How a placed order ended, for the sentence that says it rested. */
+function sinceText(o: Order): string {
+  switch (o.status) {
+    case "filled":
+      return "since filled";
+    case "cancelled":
+      return "since cancelled";
+    case "merged":
+      return "since merged into a later order";
+    default:
+      return "";
+  }
+}
+
 /** One placed order's line: what is still on the book, or what became of it. */
 function PlacedLine({ o, ctx }: { o: Order; ctx: RenderContext }) {
+  if (o.merged_from) {
+    // The create's remainder was added to the order its owner already rested at this price (chain v8.3.0).
+    const since = sinceText(o);
+    return (
+      <Text fontSize="sm" data-testid="dex-placed" data-status={o.status}>
+        Added {baseText(o.market_id, o.added_amount ?? null, ctx)} to your order at this price; it now rests as {orderLink(o)} (total{" "}
+        {baseText(o.market_id, o.amount, ctx)}), at the back of the queue{since && `; ${since}`}
+      </Text>
+    );
+  }
   const rest = BigNumber.max(new BigNumber(o.amount).minus(o.filled_amount), 0).toFixed();
   const text =
     o.status === "open"
       ? `${baseText(o.market_id, rest, ctx)} still waiting on the order book`
       : o.status === "filled"
         ? `${baseText(o.market_id, o.amount, ctx)} rested on the order book, since filled`
-        : `${baseText(o.market_id, rest, ctx)} rested on the order book, since cancelled`;
+        : `${baseText(o.market_id, rest, ctx)} rested on the order book, ${sinceText(o)}`;
   return (
     <Text fontSize="sm" data-testid="dex-placed" data-status={o.status}>
       {text} · {orderLink(o)}
@@ -188,14 +228,13 @@ export function DexOutcome({ msg, ctx, final = false }: BodyProps & { final?: bo
   const market = str(msg, "market_id");
   // A fill message's refunds are its not-filled line (NotFilledLine); a create's say why its rest did not rest.
   const belowMin = outcome.refunds.filter((r) => r.reason === "below_min_amount");
+  const maxFills = outcome.refunds.filter((r) => r.reason === "max_fills_reached");
+  const upgraded = outcome.refunds.filter((r) => r.reason === "upgrade");
   const empty =
-    outcome.fills.length + outcome.placed.length + outcome.cancelled.length + belowMin.length + outcome.skippedCancels.length === 0;
-  // Failed and retried (chain v8.3.0): the outcome is still to come, whatever else the transaction settled.
-  const stuck = isStuck(outcome);
+    outcome.fills.length + outcome.placed.length + outcome.cancelled.length + belowMin.length + maxFills.length + upgraded.length === 0;
   // A final message's outcome is complete once settled, whatever the transaction's pending flag says.
-  const pending = outcome.pending && (stuck || !(final && ctx.dexSettled));
-  const waiting = stuck ? <FailedLine /> : <PendingLine />;
-  if (pending && empty) return waiting;
+  const pending = outcome.pending && !(final && ctx.dexSettled);
+  if (pending && empty) return <PendingLine />;
   return (
     <Stack gap="1.5" data-testid="dex-outcome">
       <FillsLine outcome={outcome} marketId={market} ctx={ctx} />
@@ -205,17 +244,13 @@ export function DexOutcome({ msg, ctx, final = false }: BodyProps & { final?: bo
       {outcome.cancelled.map((o) => (
         <CancelledLine key={o.order_id} o={o} ctx={ctx} />
       ))}
-      {outcome.skippedCancels.map((c) => (
-        <SkippedCancelLine key={c.message_id} c={c} />
-      ))}
       {belowMin.length > 0 && <BelowMinLine refunds={belowMin} ctx={ctx} />}
-      {pending && waiting}
+      {maxFills.length > 0 && <MaxFillsLine refunds={maxFills} marketId={market} ctx={ctx} />}
+      {upgraded.length > 0 && <UpgradeLine refunds={upgraded} ctx={ctx} />}
+      {pending && <PendingLine />}
     </Stack>
   );
 }
-
-/** A message the order book failed to process and has not processed since. */
-const isStuck = (outcome: MessageOutcome) => outcome.pending && outcome.failed.length > 0;
 
 /** "60% filled", the bar and its label. */
 function FilledBar({ pct }: { pct: number }) {
@@ -385,16 +420,19 @@ function fillItems(msg: RenderMessage): FillItem[] {
  * before, it is inferred from the fills. Fill messages never rest and settle
  * in the block of their transaction, so nothing comes later: a pending flag
  * here is the chain leaving a refund without an event (v8.2.0 gives the
- * message an id, its refund none), not an outcome still to come, unless the
- * order book failed to process it (v8.3.0).
+ * message an id, its refund none), not an outcome still to come. The refunds
+ * with a sentence of their own (the fill cap, the upgrade) are said by
+ * DexOutcome, so this line leaves them out.
  */
 function NotFilledLine({ msg, ctx }: BodyProps) {
   if (!ctx.dexSettled) return null;
   const outcome = outcomeOf(msg, ctx);
-  if (outcome && isStuck(outcome)) return null;
   const market = str(msg, "market_id");
   const filled = new BigNumber(fillTotals(outcome?.fills ?? []).base);
-  const refunds = (outcome?.refunds ?? []).filter((r) => r.reason !== "below_min_amount");
+  const all = (outcome?.refunds ?? []).filter((r) => r.reason !== "below_min_amount");
+  const refunds = all.filter((r) => !isSpecialRefund(r));
+  // Everything that was not filled has a sentence of its own.
+  if (refunds.length === 0 && all.length > 0) return null;
   let text: string;
   if (refunds.length > 0) {
     const back = sentBackText(refunds, ctx);

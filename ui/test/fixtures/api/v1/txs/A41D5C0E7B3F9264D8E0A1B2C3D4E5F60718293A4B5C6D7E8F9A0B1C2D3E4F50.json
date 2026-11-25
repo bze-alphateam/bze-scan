@@ -1,0 +1,101 @@
+{
+  "height": 26100030,
+  "tx_index": 0,
+  "hash": "A41D5C0E7B3F9264D8E0A1B2C3D4E5F60718293A4B5C6D7E8F9A0B1C2D3E4F50",
+  "time": "2026-11-24T10:05:03Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/bze.tradebin.MsgCreateOrder"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/bze.tradebin.MsgCreateOrder",
+    "module": "tradebin",
+    "body": {
+      "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "order_type": "buy",
+      "amount": "400000000",
+      "price": "0.0125",
+      "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 300000,
+  "gas_used": 212004,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/bze.tradebin.MsgCreateOrder",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "tradebin",
+      "body": {
+        "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "order_type": "buy",
+        "amount": "400000000",
+        "price": "0.0125",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4"
+      },
+      "events": [
+        {
+          "type": "bze.tradebin.OrderAmendedEvent",
+          "attrs": {
+            "id": "000000000000000006714620",
+            "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+            "order_type": "buy",
+            "price": "0.0125",
+            "owner": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+            "added_amount": "400000000",
+            "amount": "1000000000",
+            "previous_id": "000000000000000006714500",
+            "order_id": "000000000000000006714620"
+          }
+        }
+      ]
+    }
+  ],
+  "transfers": [],
+  "dex": {
+    "placed": [
+      {
+        "order_id": "000000000000000006714620",
+        "market_id": "ubze/ibc/6490A7EAB61059BFC1CDDEB05917DD70BDF3A611654162A1A47DB930D40D8AF4",
+        "owner": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "side": "buy",
+        "price": "0.0125",
+        "amount": "1000000000",
+        "filled_amount": "0",
+        "status": "open",
+        "created_height": 26100030,
+        "created_time": "2026-11-24T10:05:03Z",
+        "created_tx_hash": "A41D5C0E7B3F9264D8E0A1B2C3D4E5F60718293A4B5C6D7E8F9A0B1C2D3E4F50",
+        "message_id": null,
+        "closed_height": null,
+        "closed_time": null,
+        "merged_from": "000000000000000006714500",
+        "added_amount": "400000000",
+        "merged_into": null
+      }
+    ],
+    "fills": [],
+    "cancelled": [],
+    "refunds": [],
+    "skipped_cancels": [],
+    "failed": [],
+    "pending": false
+  },
+  "ibc_transfers": null
+}
