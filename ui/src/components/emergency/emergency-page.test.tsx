@@ -16,6 +16,7 @@ const api = (e: Emergency | Error, actions: EmergencyAction[] = []) =>
       return e;
     },
     stats: async () => stats,
+    liveHalt: async () => ({ halted: false }) as never,
     emergencyActions: async () => ({ items: actions, next_cursor: null }),
     tokens: async () => ({ items: [], next_cursor: null }),
     validators: async () => ({ items: [] }) as never,
@@ -50,6 +51,7 @@ describe("EmergencyPage status", () => {
     expect(halt).toHaveTextContent("Chain halt scheduled at block 25,120,900");
     expect(halt).toHaveTextContent("pool drain under way");
     expect(halt).toHaveTextContent("in about 37 min (450 blocks)");
+    expect(halt).not.toHaveTextContent("stopped");
     expect(screen.queryByTestId("emergency-normal")).toBeNull();
   });
 
@@ -65,9 +67,31 @@ describe("EmergencyPage status", () => {
 
   it("links a DAO guardian to its page", async () => {
     renderWithProviders(<EmergencyPage />, {
-      api: api({ ...(clear as Emergency), guardian: { address: "bze1dao", label: "DAO #3 · Ops" } }),
+      api: api({ ...(clear as Emergency), guardian: { address: "bze1dao", label: "DAO #3 · Ops", label_kind: "dao" } }),
     });
     expect(await screen.findByRole("link", { name: "DAO #3 · Ops" })).toHaveAttribute("href", "/daos/3");
+    expect(screen.getByTestId("emergency-status-card")).toHaveTextContent("DAO");
+  });
+
+  it("does not take a label that merely looks like a DAO for one", async () => {
+    renderWithProviders(<EmergencyPage />, {
+      api: api({ ...(clear as Emergency), guardian: { address: "bze1x", label: "DAO #3 · Ops", label_kind: "known" } }),
+    });
+    expect(await screen.findByRole("link", { name: "DAO #3 · Ops" })).toHaveAttribute("href", "/accounts/bze1x");
+  });
+
+  it("says the chain is stopped once the halt height is reached", async () => {
+    renderWithProviders(<EmergencyPage />, { api: api({ ...(active as Emergency), height: 25120900 }) });
+    const halt = await screen.findByTestId("emergency-halt");
+    expect(halt).toHaveTextContent("The chain is stopped at block 25,120,900");
+    expect(halt).not.toHaveTextContent("scheduled");
+    expect(halt).not.toHaveTextContent("The chain stops");
+  });
+
+  it("says the chain is stopped when the live watch sees the emergency halt", async () => {
+    const live = { halted: true, kind: "emergency" } as never;
+    renderWithProviders(<EmergencyPage />, { api: Object.assign(api(active as Emergency), { liveHalt: async () => live }) });
+    expect(await screen.findByText("The chain is stopped at block 25,120,900")).toBeInTheDocument();
   });
 
   it("says the switches arrive with v8.3.0 on an older node", async () => {

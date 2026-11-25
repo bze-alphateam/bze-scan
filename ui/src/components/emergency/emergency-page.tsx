@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useState, type ReactNode } from "react";
 import { LuCircleCheck, LuTriangleAlert } from "react-icons/lu";
 
-import { useEmergency, useEmergencyActions, useStats } from "@/api/hooks";
+import { useEmergency, useEmergencyActions, useLiveHalt, useStats } from "@/api/hooks";
 import type { Emergency, EmergencyAction, EmergencyDenom } from "@/api/types";
 import { Callout } from "@/components/ui/callout";
 import { Chip } from "@/components/ui/chip";
@@ -24,7 +24,9 @@ import {
   emergencyTokenName,
   guardianDao,
   haltCountdown,
+  haltReached,
   hasScheduledHalt,
+  IBC_PAGE,
   measureCount,
   ownTitle,
 } from "@/render/emergency";
@@ -89,7 +91,7 @@ function StatusTab() {
 
 function StatusCard({ e }: { e: Emergency }) {
   const n = measureCount(e);
-  const dao = guardianDao(e.guardian?.label);
+  const dao = guardianDao(e.guardian);
   return (
     <Callout
       tone={e.active ? "warn" : "ok"}
@@ -158,6 +160,8 @@ function TokenLinks({ denoms }: { denoms: EmergencyDenom[] }) {
 
 function Sections({ e, avgBlockMs }: { e: Emergency; avgBlockMs: number | null }) {
   const normal: string[] = [];
+  const liveHalt = useLiveHalt().data;
+  const stopped = haltReached(e, liveHalt?.halted === true && liveHalt.kind === "emergency");
   const countdown = haltCountdown(e, avgBlockMs);
   const halt = hasScheduledHalt(e) ? e.plan! : null;
   const sections: ReactNode[] = [];
@@ -177,7 +181,7 @@ function Sections({ e, avgBlockMs }: { e: Emergency; avgBlockMs: number | null }
         <Text color="fg.muted">
           These tokens cannot be sent to or received from other chains. See{" "}
           <Link asChild color="accent.fg">
-            <NextLink href="/ibc">cross-chain transfers</NextLink>
+            <NextLink href={IBC_PAGE}>cross-chain transfers</NextLink>
           </Link>
           .
         </Text>
@@ -197,7 +201,7 @@ function Sections({ e, avgBlockMs }: { e: Emergency; avgBlockMs: number | null }
         <Text color="fg.muted">
           Transfers in both directions are refused; incoming ones are refunded by the sending chain. See{" "}
           <Link asChild color="accent.fg">
-            <NextLink href="/ibc">cross-chain transfers</NextLink>
+            <NextLink href={IBC_PAGE}>cross-chain transfers</NextLink>
           </Link>
           .
         </Text>
@@ -227,9 +231,15 @@ function Sections({ e, avgBlockMs }: { e: Emergency; avgBlockMs: number | null }
   } else normal.push("Fee conversion and burning");
   if (halt) {
     sections.push(
-      <Section key="halt" title={`Chain halt scheduled at block ${formatCount(halt.height)}`} testId="emergency-halt">
+      <Section
+        key="halt"
+        title={stopped ? `The chain is stopped at block ${formatCount(halt.height)}` : `Chain halt scheduled at block ${formatCount(halt.height)}`}
+        testId="emergency-halt"
+      >
         {halt.info && <Text>Reason: {halt.info}</Text>}
-        <Text color="fg.muted">{countdown ? `The chain stops ${countdown}.` : "The chain stops at that block."}</Text>
+        <Text color="fg.muted">
+          {stopped ? "No new blocks are produced until validators restart the chain." : countdown ? `The chain stops ${countdown}.` : "The chain stops at that block."}
+        </Text>
       </Section>,
     );
   } else normal.push("The chain");

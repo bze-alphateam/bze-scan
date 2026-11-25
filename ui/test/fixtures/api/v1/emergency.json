@@ -2,7 +2,7 @@
   "supported": true,
   "height": 25120450,
   "active": false,
-  "guardian": { "address": "bze1guardian0000000000000000000000000q4xk7a", "label": null },
+  "guardian": { "address": "bze1guardian0000000000000000000000000q4xk7a", "label": null, "label_kind": null },
   "automation_paused": false,
   "closed_channels": [],
   "blocked_denoms": [],

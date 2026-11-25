@@ -54,6 +54,11 @@ export function bannerText(parts: string[], max = 3): string {
   return more > 0 ? `${shown} + ${more} more` : shown;
 }
 
+/** Whether the chain has stopped at the scheduled emergency halt: the node's height reached it, or the live halt watch says so. */
+export function haltReached(e: Pick<Emergency, "height" | "plan">, liveHalted: boolean): boolean {
+  return liveHalted || (e.plan !== null && e.height >= e.plan.height);
+}
+
 /** The time left to a block, from the average block time; null when it cannot be told. */
 export function haltCountdown(e: Pick<Emergency, "height" | "plan">, avgBlockMs: number | null): string | null {
   if (!e.plan || !avgBlockMs || avgBlockMs <= 0) return null;
@@ -62,9 +67,10 @@ export function haltCountdown(e: Pick<Emergency, "height" | "plan">, avgBlockMs:
   return `in about ${durationText(blocks * avgBlockMs)} (${formatCount(blocks)} blocks)`;
 }
 
-/** The DAO the guardian is, from a label like "DAO #3 · Ops"; null for any other. */
-export function guardianDao(label: string | null | undefined): { id: number; name: string | null } | null {
-  const m = label?.match(/^DAO #(\d+)(?:\s*·\s*(.+))?$/);
+/** The DAO the guardian is: a label of kind `dao` reading "DAO #3 · Ops"; null for any other. */
+export function guardianDao(guardian: Emergency["guardian"] | undefined): { id: number; name: string | null } | null {
+  if (guardian?.label_kind !== "dao") return null;
+  const m = guardian.label?.match(/^DAO #(\d+)(?:\s*·\s*(.+))?$/);
   return m ? { id: Number(m[1]), name: m[2] ?? null } : null;
 }
 
@@ -150,4 +156,5 @@ export function actionLinkText(a: EmergencyAction): string {
   return `Block ${formatCount(a.height)}`;
 }
 
+/** The cross-chain page, where closed channels and blocked tokens are read. */
 export const IBC_PAGE = "/ibc";

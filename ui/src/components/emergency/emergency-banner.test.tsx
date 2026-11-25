@@ -1,5 +1,5 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Emergency, Halted } from "@/api/types";
 import { ChainBanner } from "@/components/layout/chain-banner";
@@ -12,22 +12,30 @@ import { EmergencyBanner } from "./emergency-banner";
 const api = (emergency: () => Promise<Emergency>, liveHalt: () => Promise<Halted | { halted: false }> = async () => ({ halted: false })) =>
   fakeApi({ emergency, liveHalt, status: async () => ({ live_fill: { healthy: true } }) as never });
 
+/** Renders and waits until the emergency read has answered (or failed), so an absent banner is the answer, not a pending query. */
+async function renderSettled(emergency: () => Promise<Emergency>, liveHalt?: () => Promise<Halted | { halted: false }>) {
+  const read = vi.fn(emergency);
+  const result = renderWithProviders(<EmergencyBanner />, { api: api(read, liveHalt) });
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(result.queryClient.getQueryState(["emergency"])?.fetchStatus).toBe("idle"));
+  await waitFor(() => expect(result.queryClient.getQueryState(["upgrade", "live"])?.fetchStatus ?? "idle").toBe("idle"));
+  return result;
+}
+
 describe("EmergencyBanner", () => {
   it("shows nothing while no measure is in force", async () => {
-    renderWithProviders(<EmergencyBanner />, { api: api(async () => clear as Emergency) });
-    await new Promise((r) => setTimeout(r, 20));
+    await renderSettled(async () => clear as Emergency);
     expect(screen.queryByTestId("emergency-banner")).toBeNull();
   });
 
   it("shows nothing when the state cannot be read", async () => {
-    renderWithProviders(<EmergencyBanner />, { api: api(() => Promise.reject(new Error("502"))) });
-    await new Promise((r) => setTimeout(r, 20));
+    const { queryClient } = await renderSettled(() => Promise.reject(new Error("502")));
+    expect(queryClient.getQueryState(["emergency"])?.status).toBe("error");
     expect(screen.queryByTestId("emergency-banner")).toBeNull();
   });
 
   it("shows nothing on a node without the switches", async () => {
-    renderWithProviders(<EmergencyBanner />, { api: api(async () => ({ ...(clear as Emergency), supported: false })) });
-    await new Promise((r) => setTimeout(r, 20));
+    await renderSettled(async () => ({ ...(clear as Emergency), supported: false, active: true, halted_denoms: active.halted_denoms }));
     expect(screen.queryByTestId("emergency-banner")).toBeNull();
   });
 
@@ -52,8 +60,7 @@ describe("EmergencyBanner", () => {
   it("leaves a chain halt that has stopped the chain to the pause strip", async () => {
     const paused = { halted: true, kind: "emergency", height: 25120899, halt_height: 25120900 } as unknown as Halted;
     const only = { ...(clear as Emergency), active: true, plan: active.plan };
-    renderWithProviders(<EmergencyBanner />, { api: api(async () => only, async () => paused) });
-    await new Promise((r) => setTimeout(r, 20));
+    await renderSettled(async () => only, async () => paused);
     expect(screen.queryByTestId("emergency-banner")).toBeNull();
   });
 

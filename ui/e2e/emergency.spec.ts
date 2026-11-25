@@ -23,6 +23,12 @@ test.describe("emergency status", () => {
     await noHorizontalScroll(page);
   });
 
+  test("a DAO guardian is shown as the DAO", async ({ page }) => {
+    await mockApi(page, { "v1/emergency": { ...active, guardian: { address: "bze1dao", label: "DAO #3 · Ops", label_kind: "dao" } } });
+    await page.goto("/emergency");
+    await expect(page.getByTestId("emergency-status-card").getByRole("link", { name: "DAO #3 · Ops" })).toHaveAttribute("href", "/daos/3");
+  });
+
   test("the banner shows on the home page when active and leads to the page", async ({ page }) => {
     await mockApi(page, { "v1/emergency": active });
     await page.goto("/");

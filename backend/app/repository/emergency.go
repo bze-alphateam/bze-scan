@@ -190,15 +190,21 @@ func (r *Explorer) EmergencyChannels(ctx context.Context, ids []string) (map[str
 	return out, nil
 }
 
-// EmergencyLabel returns the label name of address, or nil when it has none.
-func (r *Explorer) EmergencyLabel(ctx context.Context, address string) (*string, error) {
-	var name string
-	err := r.db.QueryRow(ctx, `SELECT name FROM explorer.labels WHERE address = $1`, address).Scan(&name)
+// EmergencyLabel is the label of the guardian address: its name and kind.
+type EmergencyLabel struct {
+	Name string
+	Kind string
+}
+
+// EmergencyLabel returns the label of address, or nil when it has none.
+func (r *Explorer) EmergencyLabel(ctx context.Context, address string) (*EmergencyLabel, error) {
+	var l EmergencyLabel
+	err := r.db.QueryRow(ctx, `SELECT name, kind FROM explorer.labels WHERE address = $1`, address).Scan(&l.Name, &l.Kind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("emergency label: %w", err)
 	}
-	return &name, nil
+	return &l, nil
 }

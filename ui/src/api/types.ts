@@ -1116,7 +1116,8 @@ export interface Emergency {
   supported: boolean;
   height: number;
   active: boolean;
-  guardian: { address: string; label: string | null } | null;
+  /** `label_kind` is `dao` for a DAO (its label reads "DAO #id · name"). */
+  guardian: { address: string; label: string | null; label_kind: string | null } | null;
   automation_paused: boolean;
   closed_channels: EmergencyChannel[];
   blocked_denoms: EmergencyDenom[];
