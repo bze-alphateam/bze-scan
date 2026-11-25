@@ -40,7 +40,7 @@ type DaoFilter struct {
 
 const daoCols = `d.id, d.address, d.type, d.name, d.admin, la.name, la.kind, d.self_governed, d.created_height,
 	d.created_time, d.created_tx_hash, d.creator, lc.name, lc.kind, d.updated_height,
-	(SELECT count(*) FROM explorer.dao_proposals p WHERE p.dao_id = d.id AND p.status = 'voting')`
+	(SELECT count(*) FROM explorer.dao_proposals p WHERE p.dao_id = d.id AND p.status = 'voting' AND p.cleaned_height IS NULL)`
 
 const daoFrom = ` FROM explorer.daos d
 	LEFT JOIN explorer.labels la ON la.address = d.admin

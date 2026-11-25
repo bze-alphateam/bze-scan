@@ -21,6 +21,8 @@ import (
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/daoproposals"
+	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
@@ -67,8 +69,8 @@ func daoSettledEvents(id, status, yes, den string, ran *bool, early bool) []node
 }
 
 // daoTxBlock transforms block h: one transaction per message, each with its
-// events.
-func daoTxBlock(t *testing.T, h int64, txs []sdk.Msg, events [][]node.Event) *transform.Entities {
+// events, and the block's own finalize events.
+func daoTxBlock(t *testing.T, h int64, txs []sdk.Msg, events [][]node.Event, finalize ...node.Event) *transform.Entities {
 	t.Helper()
 	raws := make([]string, len(txs))
 	results := make([]node.TxResult, len(txs))
@@ -79,7 +81,7 @@ func daoTxBlock(t *testing.T, h int64, txs []sdk.Msg, events [][]node.Event) *tr
 	in := transform.Input{
 		Block: &node.Block{Height: h, Time: time.Date(2026, 12, 1, 9, 0, int(h%60), 0, time.UTC), Hash: fmt.Sprintf("%064X", h),
 			ProposerAddress: "AA", Raw: json.RawMessage(`{}`), Txs: raws},
-		Results: &node.BlockResults{Height: h, TxsResults: results},
+		Results: &node.BlockResults{Height: h, TxsResults: results, FinalizeBlockEvents: finalize},
 		Commit:  &node.Commit{Height: h},
 	}
 	ents, err := newTransformer(t).Transform(in)
@@ -209,7 +211,7 @@ func TestDaoProposalsAreIndexedSyncedAndServed(t *testing.T) {
 	p := into[dto.DaoProposal](t, r)
 	assert.Equal(t, &dto.DaoRef{ID: 2, Name: "Stakers club", Type: "stake"}, p.Dao)
 	assert.Equal(t, "Fund the hive", *p.Title)
-	assert.Equal(t, "voting", p.Status)
+	assert.Equal(t, strp("voting"), p.Status)
 	assert.False(t, p.VotingEnded)
 	assert.Equal(t, int64(2), p.VotesCount)
 	assert.Equal(t, "800000", *p.Yes)
@@ -224,7 +226,7 @@ func TestDaoProposalsAreIndexedSyncedAndServed(t *testing.T) {
 		`","amount":[{"denom":"ubze","amount":"500000"}]}]`, string(p.Msgs))
 
 	settledP := into[dto.DaoProposal](t, fetch(t, base+"/dao-proposals/2"))
-	assert.Equal(t, "executed", settledP.Status)
+	assert.Equal(t, strp("executed"), settledP.Status)
 	assert.Equal(t, boolPtr(true), settledP.Executed)
 	assert.Equal(t, boolPtr(true), settledP.ExpeditedEarly)
 	assert.Equal(t, boolPtr(true), settledP.DepositRefunded)
@@ -359,4 +361,156 @@ func TestDaoSettleFactsMergeInAnyOrder(t *testing.T) {
 				`SELECT settled_height::text FROM explorer.dao_proposals WHERE id = $1`, id), "the latest settle's height")
 		}
 	}
+}
+
+// writeDaoBlocks writes blocks one flush each, in order.
+func writeDaoBlocks(t *testing.T, pool *pgxpool.Pool, blocks ...*transform.Entities) {
+	t.Helper()
+	for _, b := range blocks {
+		require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), []*transform.Entities{b}, writer.ModeInsert))
+	}
+}
+
+func daoPool(t *testing.T, e *syncEnv) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// A reduction of the block's own events (tx_index -1) comes after a ballot
+// cast by a transaction of the same block.
+func TestBlockLevelReductionAfterASameBlockVote(t *testing.T) {
+	e := newSyncEnv(t)
+	pool := daoPool(t, e)
+	const h = int64(25_400_000)
+	writeDaoBlocks(t, pool,
+		daoTxBlock(t, h, []sdk.Msg{&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 1, Title: "Same block"}},
+			[][]node.Event{{daoSubmittedEvent("40", "1", "100", "1764666002", false)}}),
+		daoTxBlock(t, h+1, []sdk.Msg{&daotypes.MsgVote{Voter: daoAdmin, ProposalId: 40, Option: daotypes.VoteOption_YES}},
+			[][]node.Event{{daoVoteEvent("40", daoAdmin, "YES", "100")}},
+			rawDaoEvent("bze.dao.EventBallotReduced", "", "proposal_id", q("40"), "voter", q(daoAdmin), "source", q("sr:sr-1"),
+				"amount", q("30"))),
+	)
+	assert.Equal(t, []string{"-1"}, queryStrings(t, e.db, `SELECT tx_index::text FROM explorer.dao_ballot_reductions`))
+	votes := into[dto.DaoVoteList](t, fetch(t, e.serveAPI(t)+"/dao-proposals/40/votes"))
+	require.Len(t, votes.Items, 1)
+	assert.Equal(t, "70", votes.Items[0].EffectiveWeight, "the EndBlocker's reduction follows the transaction's vote")
+}
+
+// A deposit release or a cleanup indexed alone writes a placeholder without
+// a status: not open, not polled; the settle sets the status later. A
+// submission does not reopen a cleaned-up proposal. A cancel closes one.
+func TestDaoPlaceholderRowsAreNotOpen(t *testing.T) {
+	e := newSyncEnv(t)
+	indexTheDaos(t, e)
+	pool := daoPool(t, e)
+	store := daoproposals.NewPGStore(pool)
+	const h = int64(25_500_000)
+	settleMsg := func(id uint64) []sdk.Msg {
+		return []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: id}}
+	}
+	submitMsg := func(dao uint64) []sdk.Msg {
+		return []sdk.Msg{&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: dao, Title: "T"}}
+	}
+
+	// Proposal 50: cleaned up, then (the backfill walks down) its submission.
+	// Proposal 51: its deposit release alone.
+	writeDaoBlocks(t, pool,
+		daoTxBlock(t, h+9, []sdk.Msg{&daotypes.MsgCleanupProposal{Sender: daoAdmin, ProposalId: 50}},
+			[][]node.Event{{rawDaoEvent("bze.dao.EventProposalCleaned", "0", "id", q("50"), "processed", q("3"), "completed", "true")}}),
+		daoTxBlock(t, h+8, settleMsg(51),
+			[][]node.Event{{rawDaoEvent("bze.dao.EventDepositReleased", "0", "id", q("51"), "refunded", "false",
+				"destination", q(daoTwo), "amount", q("5ubze"))}}),
+		daoTxBlock(t, h, submitMsg(2), [][]node.Event{{daoSubmittedEvent("50", "2", "100", "1764666002", false)}}),
+	)
+	assert.Equal(t, []string{"50 2 null 25500009", "51 - null -"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', id, COALESCE(dao_id::text, '-'), COALESCE(status, 'null'), COALESCE(cleaned_height::text, '-'))
+		   FROM explorer.dao_proposals ORDER BY id`))
+	ids, err := store.Voting(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, ids, "no placeholder is polled as voting")
+	base := e.serveAPI(t)
+	assert.Equal(t, int64(0), into[dto.Dao](t, fetch(t, base+"/daos/2")).ProposalsOpen)
+	assert.Empty(t, into[dto.List[dto.DaoProposalSummary]](t, fetch(t, base+"/daos/2/proposals?status=voting")).Items)
+	assert.Nil(t, into[dto.DaoProposal](t, fetch(t, base+"/dao-proposals/51")).Status)
+
+	// The settles set the statuses.
+	writeDaoBlocks(t, pool,
+		daoTxBlock(t, h+5, settleMsg(50), [][]node.Event{daoSettledEvents("50", "REJECTED", "1", "100", nil, false)}),
+		daoTxBlock(t, h+6, settleMsg(51), [][]node.Event{daoSettledEvents("51", "EXECUTED", "9", "10", boolPtr(true), false)}),
+	)
+	assert.Equal(t, []string{"50 rejected", "51 executed 1"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', id, status, deposit_refunded::int + 1) FROM explorer.dao_proposals ORDER BY id`))
+
+	// Proposal 52: submitted, then cancelled.
+	writeDaoBlocks(t, pool,
+		daoTxBlock(t, h+10, submitMsg(2), [][]node.Event{{daoSubmittedEvent("52", "2", "100", "4070908800", false)}}),
+	)
+	assert.Equal(t, int64(1), into[dto.Dao](t, fetch(t, base+"/daos/2")).ProposalsOpen)
+	writeDaoBlocks(t, pool,
+		daoTxBlock(t, h+11, []sdk.Msg{&daotypes.MsgCancelProposal{Proposer: daoAdmin, ProposalId: 52}},
+			[][]node.Event{{daoEvent("bze.dao.EventProposalCancelled", "0", "id", "52")}}),
+	)
+	assert.Equal(t, []string{"cancelled 25500011"}, queryStrings(t, e.db,
+		`SELECT concat_ws(' ', status, cancelled_height) FROM explorer.dao_proposals WHERE id = 52`))
+	assert.Equal(t, int64(0), into[dto.Dao](t, fetch(t, base+"/daos/2")).ProposalsOpen)
+}
+
+// The state sync never moves an indexed settle back: a node answer of
+// voting read before the settle was indexed leaves the status, the
+// settle's tally and its height. Over a status the sync set (no height)
+// an older settle cannot move it back either; the matching settle takes
+// it over.
+func TestDaoSyncNeverRegressesAStatus(t *testing.T) {
+	t.Run("over an indexed settle", func(t *testing.T) {
+		e := newSyncEnv(t)
+		indexTheDaos(t, e)
+		pool := daoPool(t, e)
+		const h = int64(25_600_000)
+		writeDaoBlocks(t, pool,
+			daoTxBlock(t, h, []sdk.Msg{&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Fund the hive"}},
+				[][]node.Event{{daoSubmittedEvent("1", "2", "1250000", "1764666002", false)}}),
+			daoTxBlock(t, h+1, []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: 1}},
+				[][]node.Event{daoSettledEvents("1", "EXECUTED", "900000", "1250000", boolPtr(true), false)}),
+		)
+		code, _ := e.syncState(t) // the fixture still says VOTING, 800000 yes
+		require.Equal(t, 0, code)
+		assert.Equal(t, []string{"executed 25600001 900000 1"}, queryStrings(t, e.db,
+			`SELECT concat_ws(' ', status, status_height, yes, (pinned_config IS NOT NULL)::int) FROM explorer.dao_proposals`))
+	})
+	t.Run("over a status the sync set", func(t *testing.T) {
+		e := newSyncEnv(t)
+		indexTheDaos(t, e)
+		pool := daoPool(t, e)
+		const h = int64(25_700_000)
+		var answer map[string]any
+		require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, "dao", "Proposal", "1"), &answer))
+		answer["proposal"].(map[string]any)["status"] = "EXECUTED"
+		body, err := json.Marshal(answer)
+		require.NoError(t, err)
+		e.grpc.SetResponse("dao", "Proposal", "1", body)
+
+		// A deposit placeholder, which the sync turns executed (no height).
+		writeDaoBlocks(t, pool, daoTxBlock(t, h+5, []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: 1}},
+			[][]node.Event{{rawDaoEvent("bze.dao.EventDepositReleased", "0", "id", q("1"), "refunded", "true",
+				"destination", q(daoAdmin), "amount", q("1ubze"))}}))
+		code, _ := e.syncState(t)
+		require.Equal(t, 0, code)
+		row := func() []string {
+			return queryStrings(t, e.db, `SELECT concat_ws(' ', status, COALESCE(status_height::text, '-'))
+				FROM explorer.dao_proposals WHERE id = 1`)
+		}
+		assert.Equal(t, []string{"executed -"}, row())
+
+		// An older failed settle does not move it back; the executed one
+		// takes it over with its height.
+		writeDaoBlocks(t, pool, daoTxBlock(t, h+1, []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: 1}},
+			[][]node.Event{daoSettledEvents("1", "EXECUTION_FAILED", "9", "10", boolPtr(false), false)}))
+		assert.Equal(t, []string{"executed -"}, row())
+		writeDaoBlocks(t, pool, daoTxBlock(t, h+3, []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: 1}},
+			[][]node.Event{daoSettledEvents("1", "EXECUTED", "9", "10", boolPtr(true), false)}))
+		assert.Equal(t, []string{"executed 25700003"}, row())
+	})
 }

@@ -3,6 +3,7 @@ package writer
 import (
 	"cmp"
 	"encoding/json"
+	"math"
 	"slices"
 	"time"
 
@@ -15,7 +16,10 @@ import (
 //
 //   - every write is an upsert: a settle indexed before its submission
 //     writes a row the submission fills later;
-//   - the submission only fills what is missing, never the status;
+//   - the submission only fills what is missing; it opens (voting) only a
+//     row without a status that was not cleaned up;
+//   - a deposit release or a cleanup alone writes a placeholder without a
+//     status (not open);
 //   - a status change applies only over an older one (status_height), or,
 //     over a status the state sync set (no height), only forward.
 
@@ -38,9 +42,9 @@ type daoProposalRow struct {
 // daoProposalsSQL fills the submission facts of the proposals; a row that
 // exists (written by a later event or the state sync) keeps what it has.
 const daoProposalsSQL = `INSERT INTO explorer.dao_proposals AS p (id, dao_id, proposer, title, summary, msgs, expedited,
-		submit_height, submit_time, submit_tx_hash, voting_end, denominator, updated_at)
+		submit_height, submit_time, submit_tx_hash, voting_end, denominator, status, updated_at)
 	SELECT r.id, r.dao_id, r.proposer, r.title, r.summary, NULLIF(r.msgs, 'null'::jsonb), r.expedited,
-	       r.height, r.time, r.tx_hash, r.voting_end, r.denominator, now()
+	       r.height, r.time, r.tx_hash, r.voting_end, r.denominator, 'voting', now()
 	  FROM jsonb_to_recordset($1::jsonb) AS r(id bigint, dao_id bigint, proposer text, title text, summary text,
 	       msgs jsonb, expedited boolean, height bigint, time timestamptz, tx_hash text, voting_end timestamptz,
 	       denominator numeric)
@@ -53,8 +57,9 @@ const daoProposalsSQL = `INSERT INTO explorer.dao_proposals AS p (id, dao_id, pr
 		submit_time = COALESCE(p.submit_time, EXCLUDED.submit_time),
 		submit_tx_hash = COALESCE(p.submit_tx_hash, EXCLUDED.submit_tx_hash),
 		voting_end = COALESCE(p.voting_end, EXCLUDED.voting_end),
-		denominator = COALESCE(p.denominator, EXCLUDED.denominator), updated_at = now()
-	WHERE (p.dao_id, p.proposer, p.title, p.summary, p.msgs, p.expedited, p.submit_height, p.submit_time,
+		denominator = COALESCE(p.denominator, EXCLUDED.denominator),
+		status = COALESCE(p.status, CASE WHEN p.cleaned_height IS NULL THEN 'voting' END), updated_at = now()
+	WHERE p.status IS NULL OR (p.dao_id, p.proposer, p.title, p.summary, p.msgs, p.expedited, p.submit_height, p.submit_time,
 	       p.submit_tx_hash, p.voting_end, p.denominator) IS DISTINCT FROM
 	      (COALESCE(p.dao_id, EXCLUDED.dao_id), COALESCE(p.proposer, EXCLUDED.proposer),
 	       COALESCE(p.title, EXCLUDED.title), COALESCE(p.summary, EXCLUDED.summary), COALESCE(p.msgs, EXCLUDED.msgs),
@@ -123,7 +128,7 @@ var daoOutcomesSQL = `INSERT INTO explorer.dao_proposals AS p (id, status, statu
 
 // outcomeApplies is true when the change's status replaces the stored one.
 const outcomeApplies = `(CASE WHEN p.status_height IS NOT NULL THEN p.status_height <= EXCLUDED.status_height
-	ELSE p.status IN ('voting', EXCLUDED.status)
+	ELSE p.status IS NULL OR p.status IN ('voting', EXCLUDED.status)
 	     OR (p.status = 'execution_failed' AND EXCLUDED.status IN ('executed', 'expired')) END)`
 
 // latestOr is column from the change when it applies, else the stored one
@@ -178,7 +183,8 @@ type daoVoteRow struct {
 	Time       time.Time `json:"time"`
 }
 
-// daoVotesSQL keeps each voter's latest ballot: an earlier one (the backfill
+// daoVotesSQL keeps each voter's latest ballot (a block-level one, tx_index
+// -1, comes after the block's transactions): an earlier one (the backfill
 // walks down) never replaces it, the same one written again (a reindex) only
 // when it differs.
 const daoVotesSQL = `INSERT INTO explorer.dao_votes AS v (proposal_id, voter, option, weight, height, tx_index, msg_index, tx_hash, time)
@@ -189,7 +195,8 @@ const daoVotesSQL = `INSERT INTO explorer.dao_votes AS v (proposal_id, voter, op
 	ON CONFLICT (proposal_id, voter) DO UPDATE SET
 		option = EXCLUDED.option, weight = EXCLUDED.weight, height = EXCLUDED.height, tx_index = EXCLUDED.tx_index,
 		msg_index = EXCLUDED.msg_index, tx_hash = EXCLUDED.tx_hash, time = EXCLUDED.time
-	WHERE (EXCLUDED.height, EXCLUDED.tx_index, EXCLUDED.msg_index) >= (v.height, v.tx_index, v.msg_index)
+	WHERE (EXCLUDED.height, COALESCE(NULLIF(EXCLUDED.tx_index, -1), 2147483647), EXCLUDED.msg_index) >=
+	      (v.height, COALESCE(NULLIF(v.tx_index, -1), 2147483647), v.msg_index)
 	  AND (v.option, v.weight, v.height, v.tx_index, v.msg_index, v.tx_hash, v.time) IS DISTINCT FROM
 	      (EXCLUDED.option, EXCLUDED.weight, EXCLUDED.height, EXCLUDED.tx_index, EXCLUDED.msg_index,
 	       EXCLUDED.tx_hash, EXCLUDED.time)`
@@ -341,7 +348,16 @@ func lastPerID[T any](rows []T, id func(T) int64) []T {
 }
 
 func outcomePos(o transform.DaoProposalOutcome) []int64 {
-	return []int64{o.Height, int64(o.TxIndex), int64(o.MsgIndex), int64(o.Seq)}
+	return []int64{o.Height, txOrder(o.TxIndex), int64(o.MsgIndex), int64(o.Seq)}
+}
+
+// txOrder places a row within its block: by transaction, the block's own
+// events (tx_index -1, the EndBlocker) after every transaction.
+func txOrder(txIndex int) int64 {
+	if txIndex < 0 {
+		return math.MaxInt32
+	}
+	return int64(txIndex)
 }
 
 // latestOutcomes keeps one status change per proposal: the latest by
@@ -382,7 +398,7 @@ func latestDaoVotes(votes []transform.DaoVote) []transform.DaoVote {
 	for _, v := range votes {
 		k := key{v.ProposalID, v.Voter}
 		cur, ok := latest[k]
-		if !ok || cmp.Or(cmp.Compare(v.Height, cur.Height), cmp.Compare(v.TxIndex, cur.TxIndex),
+		if !ok || cmp.Or(cmp.Compare(v.Height, cur.Height), cmp.Compare(txOrder(v.TxIndex), txOrder(cur.TxIndex)),
 			cmp.Compare(v.MsgIndex, cur.MsgIndex), cmp.Compare(v.Seq, cur.Seq)) > 0 {
 			latest[k] = v
 		}

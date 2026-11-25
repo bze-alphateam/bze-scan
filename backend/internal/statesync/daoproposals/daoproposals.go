@@ -126,9 +126,6 @@ func (s *Set) Name() string { return statesync.DaoProposals }
 // Interval is the period of the voting refresh.
 func (s *Set) Interval() time.Duration { return s.interval }
 
-// Key is the set key of proposal id.
-func Key(id uint64) string { return strconv.FormatUint(id, 10) }
-
 // errUnsupported ends a run on a node without x/dao.
 var errUnsupported = errors.New("x/dao not supported")
 
@@ -270,7 +267,7 @@ func (s *Set) row(resp *daotypes.QueryProposalResponse) (Proposal, error) {
 		ID: p.Id, DaoID: p.DaoId, Proposer: p.Proposer, Title: p.Title, Summary: p.Summary, Msgs: fields.Msgs,
 		Expedited: p.Expedited, SubmitHeight: p.SubmitHeight, SubmitTime: time.Unix(p.SubmitTime, 0).UTC(),
 		VotingEnd: time.Unix(p.VotingEnd, 0).UTC(), Denominator: intOrZero(p.PinnedDenominator.String()),
-		PinnedConfig: fields.PinnedConfig, Status: StatusOf(p.Status),
+		PinnedConfig: fields.PinnedConfig, Status: statusOf(p.Status),
 		Yes: intOrZero(p.Yes.String()), No: intOrZero(p.No.String()), Abstain: intOrZero(p.Abstain.String()),
 		TallyAt: s.deps.Now().UTC(), ExpediteSettleable: resp.ExpediteSettleable,
 	}
@@ -284,8 +281,8 @@ func (s *Set) row(resp *daotypes.QueryProposalResponse) (Proposal, error) {
 	return row, nil
 }
 
-// StatusOf is the status column value of a chain status.
-func StatusOf(st daotypes.ProposalStatus) string {
+// statusOf is the status column value of a chain status.
+func statusOf(st daotypes.ProposalStatus) string {
 	return strings.ToLower(st.String())
 }
 
