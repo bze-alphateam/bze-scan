@@ -17,13 +17,15 @@ func TestModulesListsTheModuleAccounts(t *testing.T) {
 	f := &fakeReader{modules: []repository.ModuleAccount{
 		{Address: "bze1qyqszqgpqyqszqgpqyqszqgpqyqszqgpjnp7du", Name: "Burner", Module: "burner"},
 		{Address: "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp", Name: "DEX", Module: "tradebin"},
+		{Address: "bze1hr93qzcjspaa32px0qqywlh9hf9a8plgju2a4s", Name: "NFT (retired in v8.3.0)", Module: "nft"},
 	}}
 	rec := get(t, newAPI(f), "/modules")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, controller.CacheIndexed, rec.Header().Get(echo.HeaderCacheControl), "reference data, cached")
 	assert.JSONEq(t, `{"items":[
-		{"address":"bze1qyqszqgpqyqszqgpqyqszqgpqyqszqgpjnp7du","name":"Burner","module":"burner"},
-		{"address":"bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp","name":"DEX","module":"tradebin"}]}`, rec.Body.String())
+		{"address":"bze1qyqszqgpqyqszqgpqyqszqgpqyqszqgpjnp7du","name":"Burner","module":"burner","retired":false},
+		{"address":"bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp","name":"DEX","module":"tradebin","retired":false},
+		{"address":"bze1hr93qzcjspaa32px0qqywlh9hf9a8plgju2a4s","name":"NFT (retired in v8.3.0)","module":"nft","retired":true}]}`, rec.Body.String())
 }
 
 func TestModulesIsAnEmptyListWithoutLabels(t *testing.T) {

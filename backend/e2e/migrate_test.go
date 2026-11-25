@@ -290,6 +290,38 @@ func TestReclassifyUnknown(t *testing.T) {
 	}, queryStrings(t, db, `SELECT address || ' ' || category || ' ' || kind FROM explorer.account_activity`))
 }
 
+// Activity stored as "other" before the v8.3.0 messages were classified (an
+// explorer that indexed the upgrade ahead of this release) is reclassified
+// by the next `migrate up`, which mirrors the classification first.
+func TestMigrateUpReclassifiesTheV830MessagesStoredAsOther(t *testing.T) {
+	dbURL := freshDatabase(t, true)
+	db := connect(t, dbURL)
+	migrateUp(t, dbURL)
+
+	_, err := db.Exec(`DELETE FROM explorer.message_kinds WHERE type_url LIKE '/bze.dao.%' OR type_url LIKE '/bze.guardian.%'
+		OR type_url IN ('/bze.tokenfactory.MsgDisableMinting', '/bze.tokenfactory.MsgSetDenomConfig')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO explorer.account_activity
+		(address, height, tx_index, time, category, kind, is_signer, msg_types) VALUES
+		('bze1creator', 100, 0, now(), 'other', 'other', true,  '{/bze.dao.MsgCreateDao}'),
+		('bze1halter',  101, 0, now(), 'other', 'other', true,  '{/bze.guardian.v1.MsgHaltTradingDenoms}'),
+		('bze1admin',   102, 0, now(), 'other', 'other', true,  '{/bze.tokenfactory.MsgDisableMinting}'),
+		('bze1gov',     103, 0, now(), 'other', 'other', true,  '{/bze.tradebin.MsgUpdatePools}')`)
+	require.NoError(t, err)
+
+	res := migrateUp(t, dbURL)
+	assert.False(t, res.Applied, "no schema migration is pending; the post-migration steps still run")
+	assert.Contains(t, res.Steps, "classification")
+
+	assert.Equal(t, []string{
+		"bze1admin tokens token_admin",
+		"bze1creator governance dao_create",
+		"bze1gov other other",
+		"bze1halter governance guardian",
+	}, queryStrings(t, db, `SELECT address || ' ' || category || ' ' || kind FROM explorer.account_activity`),
+		"gov-only messages stay other")
+}
+
 // TestMigrateCommand runs the real binary's migrate subcommands.
 func TestMigrateCommand(t *testing.T) {
 	dbURL := freshDatabase(t, true)

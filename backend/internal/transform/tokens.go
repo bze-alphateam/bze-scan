@@ -3,6 +3,7 @@ package transform
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
@@ -24,6 +25,11 @@ const (
 	TokenUnhalted        = "unhalted"
 	TokenMarketCreated   = "market_created"
 	TokenPoolCreated     = "pool_created"
+	// Chain v8.3.0.
+	TokenMintingDisabled = "minting_disabled"
+	TokenConfigChanged   = "config_changed"
+	TokenAdminSetByGov   = "admin_set_by_governance"
+	TokenPoolFeesUpdated = "pool_fees_updated"
 )
 
 // Type URLs of the tokenfactory messages.
@@ -34,6 +40,7 @@ const (
 	msgChangeAdmin      = "/bze.tokenfactory.MsgChangeAdmin"
 	msgSetDenomMetadata = "/bze.tokenfactory.MsgSetDenomMetadata"
 	msgSetDenomBranding = "/bze.tokenfactory.MsgSetDenomBranding"
+	msgSetDenomAdmin    = "/bze.tokenfactory.MsgSetDenomAdmin"
 )
 
 // Typed events that name denoms.
@@ -41,6 +48,9 @@ const (
 	evDenomAdminChange    = "bze.tokenfactory.DenomAdminChangeEvent"
 	evDenomBrandingChange = "bze.tokenfactory.DenomBrandingChangeEvent"
 	evDenomMetadataChange = "bze.tokenfactory.DenomMetadataChangeEvent"
+	evMintingDisabled     = "bze.tokenfactory.DenomMintingDisabledEvent"
+	evConfigChange        = "bze.tokenfactory.DenomConfigChangeEvent"
+	evPoolFeesUpdated     = "bze.tradebin.PoolFeesUpdatedEvent"
 	evMarketCreated       = "bze.tradebin.MarketCreatedEvent"
 	evPoolCreated         = "bze.tradebin.PoolCreatedEvent"
 	evDenomHalted         = "bze.tradebin.DenomHaltedEvent"
@@ -119,7 +129,11 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 			for _, c := range coins {
 				rows.add(c.Denom, kind, actor, c.Amount, details)
 			}
-		case msgChangeAdmin:
+		case msgChangeAdmin, msgSetDenomAdmin:
+			kind := TokenAdminChanged
+			if m.TypeURL == msgSetDenomAdmin {
+				kind = TokenAdminSetByGov
+			}
 			details := map[string]any{"to": str(body, "newAdmin")}
 			for _, ev := range byIndex[j] {
 				if ev.Type == evDenomAdminChange {
@@ -128,7 +142,7 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 					break
 				}
 			}
-			rows.add(str(body, "denom"), TokenAdminChanged, actor, "", details)
+			rows.add(str(body, "denom"), kind, actor, "", details)
 		case msgSetDenomMetadata:
 			md, _ := body["metadata"].(map[string]any)
 			rows.add(str(md, "base"), TokenMetadataChanged, actor, "",
@@ -144,7 +158,8 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 }
 
 // blockTokenEvents appends the token events of the block's finalize events:
-// the halts governance enacts in EndBlock.
+// the halts, denom admin changes and pool fee updates governance enacts in
+// EndBlock.
 func blockTokenEvents(ents *Entities, b Block, events []node.Event) {
 	rows := &tokenRows{ents: ents, height: b.Height, txIndex: -1, time: b.Time}
 	for _, ev := range events {
@@ -185,9 +200,62 @@ func typedTokenEvents(rows *tokenRows, ev node.Event, actor string) {
 		rows.add(base, TokenPoolCreated, actor, "", details)
 		rows.add(quote, TokenPoolCreated, actor, "", details)
 		rows.add(lp, TokenPoolCreated, actor, "", details)
-	case evDenomAdminChange, evDenomBrandingChange, evDenomMetadataChange:
+	case evMintingDisabled:
+		if actor == "" {
+			actor = attrString(ev, "admin")
+		}
+		rows.add(attrString(ev, "denom"), TokenMintingDisabled, actor, "", nil)
+	case evConfigChange:
+		attrs := storedEvent(ev).Attrs
+		rows.add(attrString(ev, "denom"), TokenConfigChanged, actor, "", map[string]any{
+			"community_pool": anyString(attrs["community_pool"]),
+			"transfer_fee":   anyString(attrs["transfer_fee"]),
+			"gas_surcharge":  anyString(attrs["gas_surcharge"]),
+		})
+	case evPoolFeesUpdated:
+		attrs := storedEvent(ev).Attrs
+		pool := anyString(attrs["pool_id"])
+		base, quote, ok := splitPoolID(pool)
+		if !ok {
+			return
+		}
+		details := map[string]any{
+			"pool_id": pool, "old_fee": anyString(attrs["old_fee"]), "new_fee": anyString(attrs["new_fee"]),
+		}
+		rows.add(base, TokenPoolFeesUpdated, actor, "", details)
+		rows.add(quote, TokenPoolFeesUpdated, actor, "", details)
+	case evDenomAdminChange:
+		// A block-level admin change is governance's MsgSetDenomAdmin (the
+		// event carries the previous admin); a transaction's is the row of
+		// its MsgChangeAdmin already.
+		if rows.txIndex == BlockTxIndex {
+			attrs := storedEvent(ev).Attrs
+			rows.add(anyString(attrs["denom"]), TokenAdminSetByGov, actor, "",
+				map[string]any{"from": anyString(attrs["admin"]), "to": anyString(attrs["new_admin"])})
+		}
+		rows.ents.Dirty.Mark(statesync.Denoms, attrString(ev, "denom"))
+	case evDenomBrandingChange, evDenomMetadataChange:
 		rows.ents.Dirty.Mark(statesync.Denoms, attrString(ev, "denom"))
 	}
+}
+
+// splitPoolID splits a pool id, the pool's two denoms joined by "_". A denom
+// may hold an underscore itself; then the split is the one where the second
+// denom is a factory or IBC one, and a pool id with no such split is not
+// resolved.
+func splitPoolID(id string) (base, quote string, ok bool) {
+	if parts := strings.Split(id, "_"); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+		return parts[0], parts[1], true
+	}
+	for i := 1; i < len(id)-1; i++ {
+		if id[i] != '_' {
+			continue
+		}
+		if r := id[i+1:]; strings.HasPrefix(r, "factory/") || strings.HasPrefix(r, "ibc/") {
+			return id[:i], r, true
+		}
+	}
+	return "", "", false
 }
 
 // markSeenDenoms marks every denom the heights' transfers moved, for the

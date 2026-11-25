@@ -126,7 +126,6 @@ describe("ParametersPage", () => {
     expect(rows.map((r) => within(r).getAllByRole("link")[0].textContent)).toEqual([
       "FCFee collector",
       "SFStakers fee collector",
-      "BFBurner fee collector",
       "CFCP fee collector",
     ]);
     const address = within(rows[0]).getByTestId("module-account-address");

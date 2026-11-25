@@ -352,7 +352,20 @@ function ModuleView({ a, initialTab }: { a: Account; initialTab?: string }) {
             Module account
           </Chip>
         }
-        meta={facts ? <Text as="span" data-testid="module-owner"><WithCode text={facts.owner} /></Text> : null}
+        meta={
+          facts ? (
+            <>
+              <Text as="span" data-testid="module-owner">
+                <WithCode text={facts.owner} />
+              </Text>
+              {facts.retired && (
+                <Text as="span" display="block" mt="1" data-testid="module-retired">
+                  {facts.retired}
+                </Text>
+              )}
+            </>
+          ) : null
+        }
         side={<ModuleSwitcher address={a.address} modules={modules.data} />}
       />
       <ModuleTiles a={a} facts={facts} moduleName={moduleName} />

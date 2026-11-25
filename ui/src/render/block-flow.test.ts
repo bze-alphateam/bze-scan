@@ -81,6 +81,10 @@ describe("groupOf", () => {
     expect(groupOf({ ...base, sender_label: moduleLabel("Fee collector"), recipient_label: moduleLabel("Distribution") }).group).toBe("staking");
     expect(groupOf({ ...base, sender_label: moduleLabel("Burner fee collector"), recipient_label: moduleLabel("Burner") }).group).toBe("burner");
     expect(groupOf({ ...base, recipient_label: moduleLabel("Unbonding tokens pool") })).toEqual({ group: "staking", side: "in" });
+    // The retired fee collector keeps its place in the history of old blocks.
+    expect(
+      groupOf({ ...base, sender_label: moduleLabel("Burner fee collector (retired in v8.3.0)"), recipient_label: moduleLabel("Burner") }).group,
+    ).toBe("burner");
     expect(groupOf({ ...base, sender_label: moduleLabel("Governance") })).toEqual({ group: "governance", side: "out" });
   });
 

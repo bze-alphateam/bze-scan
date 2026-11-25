@@ -37,30 +37,50 @@ type Label struct {
 	// Module is the module name of a module account; empty otherwise.
 	Module string `json:"module"`
 	URL    string `json:"url"`
+	// Retired marks a module account the chain dropped (v8.3.0). The label
+	// stays: history names the address, and the seed's stale-row delete must
+	// not turn it into an ordinary account.
+	Retired bool `json:"retired"`
 }
 
 // modules are the module accounts the chain's app declares (its module
-// account permissions), with the names the explorer shows.
-var modules = []struct{ module, name string }{
-	{"fee_collector", "Fee collector"},
-	{"distribution", "Distribution"},
-	{"mint", "Mint"},
-	{"bonded_tokens_pool", "Bonded tokens pool"},
-	{"not_bonded_tokens_pool", "Unbonding tokens pool"},
-	{"gov", "Governance"},
-	{"nft", "NFT"},
-	{"transfer", "Cross-chain transfer"},
-	{"feeibc", "Cross-chain relayer fees"},
-	{"interchainaccounts", "Interchain accounts"},
-	{"rewards", "Rewards"},
-	{"burner", "Burner"},
-	{"burner_black_hole", "Burner black hole"},
-	{"burner_raffle", "Burner raffle"},
-	{"tokenfactory", "Factory"},
-	{"tradebin", "DEX"},
-	{"txfeecollector", "Stakers fee collector"},
-	{"txfeecollector_burner", "Burner fee collector"},
-	{"txfeecollector_cp", "CP fee collector"},
+// account permissions, v8.3.0 included: guardian and ratelimit have none),
+// with the names the explorer shows. The retired ones (nft, feeibc,
+// txfeecollector_burner) are kept on purpose.
+var modules = []struct {
+	module, name string
+	retired      bool
+}{
+	{"fee_collector", "Fee collector", false},
+	{"distribution", "Distribution", false},
+	{"mint", "Mint", false},
+	{"bonded_tokens_pool", "Bonded tokens pool", false},
+	{"not_bonded_tokens_pool", "Unbonding tokens pool", false},
+	{"gov", "Governance", false},
+	{"dao", "DAO module (proposal deposits)", false},
+	{"nft", "NFT (retired in v8.3.0)", true},
+	{"transfer", "Cross-chain transfer", false},
+	{"feeibc", "Cross-chain relayer fees (retired in v8.3.0)", true},
+	{"interchainaccounts", "Interchain accounts", false},
+	{"rewards", "Rewards", false},
+	{"burner", "Burner", false},
+	{"burner_black_hole", "Burner black hole", false},
+	{"burner_raffle", "Burner raffle", false},
+	{"tokenfactory", "Factory", false},
+	{"tradebin", "DEX", false},
+	{"txfeecollector", "Stakers fee collector", false},
+	{"txfeecollector_burner", "Burner fee collector (retired in v8.3.0)", true},
+	{"txfeecollector_cp", "CP fee collector", false},
+}
+
+// IsRetired reports whether a module account was retired by the chain.
+func IsRetired(module string) bool {
+	for _, m := range modules {
+		if m.module == module {
+			return m.retired
+		}
+	}
+	return false
 }
 
 // known are the known accounts (treasuries, exchanges). Rows are added here,
@@ -72,7 +92,7 @@ var known []Label
 func Modules() []Label {
 	out := make([]Label, 0, len(modules))
 	for _, m := range modules {
-		out = append(out, Label{Address: chain.ModuleAddress(m.module), Name: m.name, Kind: KindModule, Module: m.module})
+		out = append(out, Label{Address: chain.ModuleAddress(m.module), Name: m.name, Kind: KindModule, Module: m.module, Retired: m.retired})
 	}
 	return out
 }

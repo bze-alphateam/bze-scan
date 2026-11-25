@@ -74,6 +74,8 @@ export interface ModuleFacts {
   owner: string;
   moves: string;
   movesSub: string;
+  /** One line of history, only for a module account the chain retired (v8.3.0). */
+  retired?: string;
 }
 
 const MODULES: Record<string, ModuleFacts> = {
@@ -111,6 +113,7 @@ const MODULES: Record<string, ModuleFacts> = {
     owner: "Owned by BZE's fee module. Collects the fees that go to the Burner.",
     moves: "fees are paid",
     movesSub: "passed on to the Burner",
+    retired: "Until v8.3.0 it collected fees bound for the Burner; the v8.3.0 upgrade sent its coins to the Burner.",
   },
   txfeecollector_cp: {
     owner: "Owned by BZE's fee module. Collects the fees that go to the community pool.",
@@ -152,6 +155,11 @@ const MODULES: Record<string, ModuleFacts> = {
     moves: "tokens are created",
     movesSub: "creation fees, minting and burning",
   },
+  dao: {
+    owner: "Owned by the DAO module. Holds the deposits of open DAO proposals until they settle.",
+    moves: "DAO proposals open or settle",
+    movesSub: "deposits come in, are returned or kept",
+  },
   transfer: {
     owner: "Owned by the cross-chain transfer module.",
     moves: "cross-chain transfers",
@@ -161,6 +169,7 @@ const MODULES: Record<string, ModuleFacts> = {
     owner: "Owned by the cross-chain relayer fee module.",
     moves: "relayer fees are paid",
     movesSub: "fees escrowed for relayers",
+    retired: "Relayer fee escrow of the removed IBC fee middleware (never used on BZE).",
   },
   interchainaccounts: {
     owner: "Owned by the interchain accounts module.",
@@ -171,6 +180,7 @@ const MODULES: Record<string, ModuleFacts> = {
     owner: "Owned by the NFT module.",
     moves: "rarely",
     movesSub: "not used on BZE",
+    retired: "NFT module, removed in v8.3.0 (never used on BZE).",
   },
 };
 

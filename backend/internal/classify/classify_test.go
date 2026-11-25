@@ -20,46 +20,6 @@ var categories = map[string]bool{
 	classify.CrossChain: true, classify.Other: true,
 }
 
-// pendingBFE348 are messages the chain registers (v8.3.0) that BFE-348
-// classifies; until then they are accepted unclassified.
-// TODO(BFE-348): classify them and delete this list.
-var pendingBFE348 = []string{
-	"/bze.dao.MsgAcceptAdminNomination",
-	"/bze.dao.MsgAdminExecute",
-	"/bze.dao.MsgCancelProposal",
-	"/bze.dao.MsgCleanupProposal",
-	"/bze.dao.MsgCreateDao",
-	"/bze.dao.MsgNominateAdmin",
-	"/bze.dao.MsgSettleProposal",
-	"/bze.dao.MsgSubmitProposal",
-	"/bze.dao.MsgUpdateDaoConfig",
-	"/bze.dao.MsgUpdateElectorate",
-	"/bze.dao.MsgUpdateMembers",
-	"/bze.dao.MsgUpdateMetadata",
-	"/bze.dao.MsgUpdateParams",
-	"/bze.dao.MsgVote",
-	"/bze.dao.MsgWithdrawAdminNomination",
-	"/bze.guardian.v1.MsgBlockDenom",
-	"/bze.guardian.v1.MsgCloseChannel",
-	"/bze.guardian.v1.MsgDisableMessages",
-	"/bze.guardian.v1.MsgHaltChain",
-	"/bze.guardian.v1.MsgHaltTradingDenoms",
-	"/bze.guardian.v1.MsgPauseAutomation",
-	"/bze.guardian.v1.MsgReopenChannel",
-	"/bze.guardian.v1.MsgResumeAutomation",
-	"/bze.guardian.v1.MsgTightenRateLimit",
-	"/bze.guardian.v1.MsgUnblockDenom",
-	"/bze.guardian.v1.MsgUpdateParams",
-	"/bze.tokenfactory.MsgDisableMinting",
-	"/bze.tokenfactory.MsgSetDenomAdmin",
-	"/bze.tokenfactory.MsgSetDenomConfig",
-	"/bze.tradebin.MsgUpdatePools",
-	"/ratelimit.v1.MsgAddRateLimit",
-	"/ratelimit.v1.MsgRemoveRateLimit",
-	"/ratelimit.v1.MsgResetRateLimit",
-	"/ratelimit.v1.MsgUpdateRateLimit",
-}
-
 // Every message type the chain accepts is either classified or deliberately
 // left out, and every entry names a type the chain really registers, except
 // the retired ones, which it no longer registers.
@@ -75,17 +35,11 @@ func TestEveryRegisteredMessageIsClassifiedOrAllowListed(t *testing.T) {
 		retired[u] = true
 		assert.False(t, registered[u], "%s is retired but the chain codec still registers it", u)
 	}
-	pending := map[string]bool{}
-	for _, u := range pendingBFE348 {
-		pending[u] = true
-		assert.True(t, registered[u], "%s is pending BFE-348 but not registered by the chain", u)
-	}
 
 	classified := map[string]bool{}
 	for _, m := range classify.Messages() {
 		classified[m.TypeURL] = true
 		assert.True(t, registered[m.TypeURL] || retired[m.TypeURL], "%s is classified but not registered by the chain", m.TypeURL)
-		assert.False(t, pending[m.TypeURL], "%s is classified: drop it from pendingBFE348", m.TypeURL)
 	}
 	allowed := map[string]bool{}
 	for _, u := range classify.Unclassified {
@@ -94,7 +48,7 @@ func TestEveryRegisteredMessageIsClassifiedOrAllowListed(t *testing.T) {
 		assert.False(t, classified[u], "%s is both classified and allow-listed", u)
 	}
 	for u := range registered {
-		assert.True(t, classified[u] || allowed[u] || pending[u], "%s has no classification entry and is not allow-listed", u)
+		assert.True(t, classified[u] || allowed[u], "%s has no classification entry and is not allow-listed", u)
 	}
 }
 
@@ -214,22 +168,52 @@ func TestBZEBlockEventsAreTheChainsBlockLevelEmitters(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []string{
-		"bze.burner.CoinsBurnedEvent",                // periodic burn, raffle clean-up
-		"bze.burner.RaffleFinishedEvent",             // raffle clean-up hook
-		"bze.burner.RaffleLostEvent",                 // EndBlock draw
-		"bze.burner.RaffleWinnerEvent",               // EndBlock draw
-		"bze.epochs.EpochEndEvent",                   // BeginBlock
-		"bze.epochs.EpochStartEvent",                 // BeginBlock
-		"bze.rewards.DenomRewardScheduleFinishEvent", // daily distribution queue
-		"bze.rewards.StakingRewardDistributionEvent", // daily distribution queue
-		"bze.rewards.TradingRewardDistributionEvent", // hourly hook
-		"bze.rewards.TradingRewardExpireEvent",       // hourly hook
-		"bze.tradebin.LiquidityAddedEvent",           // periodic burn: locked coins into BZE liquidity
-		"bze.tradebin.OrderCanceledEvent",            // EndBlock queue
-		"bze.tradebin.OrderExecutedEvent",            // EndBlock queue
-		"bze.tradebin.OrderMessageRefundedEvent",     // the v8.3.0 upgrade block
-		"bze.tradebin.OrderSavedEvent",               // EndBlock queue
-		"bze.tradebin.SwapEvent",                     // fee collector's conversion to BZE
+		"bze.burner.CoinsBurnedEvent",                  // periodic burn, raffle clean-up
+		"bze.burner.RaffleFinishedEvent",               // raffle clean-up hook
+		"bze.burner.RaffleLostEvent",                   // EndBlock draw
+		"bze.burner.RaffleWinnerEvent",                 // EndBlock draw
+		"bze.dao.EventAdminChanged",                    // gov-executed DAO message
+		"bze.dao.EventAdminExecuted",                   // gov-executed DAO message
+		"bze.dao.EventAdminNominated",                  // gov-executed DAO message
+		"bze.dao.EventAdminNominationWithdrawn",        // gov-executed DAO message
+		"bze.dao.EventBallotReduced",                   // gov-executed DAO message
+		"bze.dao.EventDaoConfigUpdated",                // gov-executed DAO message
+		"bze.dao.EventDaoCreated",                      // gov-executed DAO message
+		"bze.dao.EventDaoElectorateUpdated",            // gov-executed DAO message
+		"bze.dao.EventDaoMembersUpdated",               // gov-executed DAO message
+		"bze.dao.EventDaoMetadataUpdated",              // gov-executed DAO message
+		"bze.dao.EventDepositReleased",                 // gov-executed DAO message
+		"bze.dao.EventProposalCancelled",               // gov-executed DAO message
+		"bze.dao.EventProposalCleaned",                 // gov-executed DAO message
+		"bze.dao.EventProposalExecuted",                // gov-executed DAO message
+		"bze.dao.EventProposalSettled",                 // gov-executed DAO message
+		"bze.dao.EventProposalSubmitted",               // gov-executed DAO message
+		"bze.dao.EventVote",                            // gov-executed DAO message
+		"bze.epochs.EpochEndEvent",                     // BeginBlock
+		"bze.epochs.EpochStartEvent",                   // BeginBlock
+		"bze.guardian.v1.AutomationPausedEvent",        // gov-executed guardian message
+		"bze.guardian.v1.AutomationResumedEvent",       // gov-executed guardian message
+		"bze.guardian.v1.ChainHaltScheduledEvent",      // gov-executed guardian message
+		"bze.guardian.v1.ChannelClosedEvent",           // gov-executed guardian message
+		"bze.guardian.v1.ChannelReopenedEvent",         // gov-executed guardian message
+		"bze.guardian.v1.DenomBlockedEvent",            // gov-executed guardian message
+		"bze.guardian.v1.DenomUnblockedEvent",          // gov-executed guardian message
+		"bze.guardian.v1.MessagesDisabledEvent",        // gov-executed guardian message
+		"bze.guardian.v1.TightenRateLimitEvent",        // gov-executed guardian message
+		"bze.guardian.v1.TradingDenomsHaltedEvent",     // gov-executed guardian message
+		"bze.rewards.DenomRewardScheduleFinishEvent",   // daily distribution queue
+		"bze.rewards.StakingRewardDistributionEvent",   // daily distribution queue
+		"bze.rewards.TradingRewardDistributionEvent",   // hourly hook
+		"bze.rewards.TradingRewardExpireEvent",         // hourly hook
+		"bze.tokenfactory.DenomAdminChangeEvent",       // gov MsgSetDenomAdmin
+		"bze.tradebin.LiquidityAddedEvent",             // periodic burn: locked coins into BZE liquidity
+		"bze.tradebin.OrderCanceledEvent",              // EndBlock queue
+		"bze.tradebin.OrderExecutedEvent",              // EndBlock queue
+		"bze.tradebin.OrderMessageRefundedEvent",       // the v8.3.0 upgrade block
+		"bze.tradebin.OrderSavedEvent",                 // EndBlock queue
+		"bze.tradebin.PoolFeesUpdatedEvent",            // gov MsgUpdatePools
+		"bze.tradebin.SwapEvent",                       // fee collector's conversion to BZE
+		"bze.txfeecollector.CommunityPoolFeePaidEvent", // EndBlock community pool payout
 	}, got)
 
 	for _, txOnly := range []string{
@@ -247,5 +231,86 @@ func TestNeverShippedOrderEventsAreUnclassified(t *testing.T) {
 	for _, typ := range []string{"bze.tradebin.OrderCancelSkippedEvent", "bze.tradebin.OrderMessageFailedEvent"} {
 		_, ok := classify.LookupBlockEvent(typ)
 		assert.False(t, ok, typ)
+	}
+}
+
+// Chain v8.3.0 messages: the activity kind of every one, in governance
+// unless it belongs to tokens; gov-only types stay "other".
+func TestV830MessageKinds(t *testing.T) {
+	kinds := map[string]string{
+		"/bze.dao.MsgCreateDao":                 "dao_create",
+		"/bze.dao.MsgSubmitProposal":            "dao_proposal",
+		"/bze.dao.MsgVote":                      "dao_vote",
+		"/bze.dao.MsgCancelProposal":            "dao_proposal",
+		"/bze.dao.MsgSettleProposal":            "dao_proposal",
+		"/bze.dao.MsgCleanupProposal":           "dao_proposal",
+		"/bze.dao.MsgAdminExecute":              "dao_admin_execute",
+		"/bze.dao.MsgNominateAdmin":             "dao_admin",
+		"/bze.dao.MsgAcceptAdminNomination":     "dao_admin",
+		"/bze.dao.MsgWithdrawAdminNomination":   "dao_admin",
+		"/bze.dao.MsgUpdateDaoConfig":           "dao_update",
+		"/bze.dao.MsgUpdateMetadata":            "dao_update",
+		"/bze.dao.MsgUpdateElectorate":          "dao_update",
+		"/bze.dao.MsgUpdateMembers":             "dao_update",
+		"/bze.guardian.v1.MsgTightenRateLimit":  "guardian",
+		"/bze.guardian.v1.MsgBlockDenom":        "guardian",
+		"/bze.guardian.v1.MsgDisableMessages":   "guardian",
+		"/bze.guardian.v1.MsgHaltTradingDenoms": "guardian",
+		"/bze.guardian.v1.MsgHaltChain":         "guardian",
+		"/bze.guardian.v1.MsgPauseAutomation":   "guardian",
+		"/bze.guardian.v1.MsgCloseChannel":      "guardian",
+		"/bze.tokenfactory.MsgDisableMinting":   "token_admin",
+		"/bze.tokenfactory.MsgSetDenomConfig":   "token_update",
+	}
+	for url, kind := range kinds {
+		m := classify.Lookup(url)
+		assert.Equal(t, kind, m.Kind, url)
+		want := classify.Governance
+		if strings.HasPrefix(url, "/bze.tokenfactory.") {
+			want = classify.Tokens
+		}
+		assert.Equal(t, want, m.SignerCategory, url)
+		assert.Equal(t, want, m.ParticipantCategory, url)
+	}
+	for _, url := range []string{
+		"/bze.dao.MsgUpdateParams", "/bze.guardian.v1.MsgUnblockDenom", "/bze.guardian.v1.MsgResumeAutomation",
+		"/bze.guardian.v1.MsgReopenChannel", "/bze.guardian.v1.MsgUpdateParams", "/ratelimit.v1.MsgAddRateLimit",
+		"/ratelimit.v1.MsgUpdateRateLimit", "/ratelimit.v1.MsgRemoveRateLimit", "/ratelimit.v1.MsgResetRateLimit",
+		"/bze.tokenfactory.MsgSetDenomAdmin", "/bze.tradebin.MsgUpdatePools",
+	} {
+		assert.Equal(t, classify.KindOther, classify.Lookup(url).Kind, "%s is gov only", url)
+	}
+}
+
+func TestV830BlockEvents(t *testing.T) {
+	e, ok := classify.LookupBlockEvent("bze.txfeecollector.CommunityPoolFeePaidEvent")
+	require.True(t, ok)
+	assert.Equal(t, classify.BlockEventKind{
+		EventType: "bze.txfeecollector.CommunityPoolFeePaidEvent", Kind: "community_pool_fee",
+		Category: classify.Tokens, AddressAttrs: []string{"recipient"},
+	}, e)
+	for _, g := range []string{"TightenRateLimit", "DenomBlocked", "DenomUnblocked", "MessagesDisabled", "TradingDenomsHalted",
+		"ChainHaltScheduled", "AutomationPaused", "AutomationResumed", "ChannelClosed", "ChannelReopened"} {
+		e, ok := classify.LookupBlockEvent("bze.guardian.v1." + g + "Event")
+		require.True(t, ok, g)
+		assert.Equal(t, "guardian", e.Kind, g)
+		assert.Equal(t, classify.Governance, e.Category, g)
+		assert.Empty(t, e.AddressAttrs, g)
+	}
+	e, ok = classify.LookupBlockEvent("bze.tokenfactory.DenomAdminChangeEvent")
+	require.True(t, ok)
+	assert.Equal(t, "token_admin", e.Kind)
+	assert.Equal(t, []string{"new_admin"}, e.AddressAttrs)
+	e, ok = classify.LookupBlockEvent("bze.tradebin.PoolFeesUpdatedEvent")
+	require.True(t, ok)
+	assert.Equal(t, "dex_pool", e.Kind)
+	assert.Equal(t, classify.DEX, e.Category)
+	e, ok = classify.LookupBlockEvent("bze.dao.EventVote")
+	require.True(t, ok)
+	assert.Equal(t, []string{"voter"}, e.AddressAttrs)
+	// Emitted inside transactions only.
+	for _, tx := range []string{"bze.txfeecollector.GasSurchargePaidEvent", "bze.rewards.TradingRewardStartEvent"} {
+		_, ok := classify.LookupBlockEvent(tx)
+		assert.False(t, ok, tx)
 	}
 }
