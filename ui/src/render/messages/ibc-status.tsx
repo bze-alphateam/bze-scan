@@ -5,6 +5,7 @@ import { ExternalLink } from "@/components/ui/external-link";
 import type { IbcTransfer } from "@/api/types";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { shortHash } from "@/lib/format";
+import { refusalText } from "@/render/ibc-refusal";
 
 import { eventAttr, obj, str } from "./common";
 import type { RenderContext, RenderMessage } from "./types";
@@ -89,7 +90,7 @@ function look(t: IbcTransfer): Look {
       return {
         label: "Rejected",
         palette: "red",
-        detail: t.ack_error ?? "rejected by BZE",
+        detail: refusalText(t.ack_error) ?? t.ack_error ?? "rejected by BZE",
       };
   }
 }
