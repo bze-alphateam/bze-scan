@@ -24,4 +24,3 @@ CREATE TABLE explorer.order_closures (
   reason      TEXT        NOT NULL,            -- cancelled
   merged_into TEXT
 );
-CREATE INDEX idx_order_closures_tx ON explorer.order_closures (tx_hash);

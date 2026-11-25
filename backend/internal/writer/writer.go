@@ -158,7 +158,7 @@ func (w *LiveWriter) write(ctx context.Context, ents *transform.Entities, top in
 			return err
 		}
 	}
-	swaps, err := swapStatements(top, ents, ModeInsert, false)
+	swaps, err := swapStatements(top, ents, ModeInsert, nil)
 	if err != nil {
 		return err
 	}

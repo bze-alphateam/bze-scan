@@ -197,15 +197,9 @@ func blockOrders(ents *Entities, b Block, events []node.Event) []outcome {
 // txOrders appends the order book outcomes of a successful transaction's own
 // events (chain v8.3.0): an OrderSavedEvent is an order placed by the
 // transaction, an OrderExecutedEvent a fill it took (Seq numbers the block's
-// such fills in transaction, message and event order) and an
+// such fills in transaction, message and event order; txFills counts them) and an
 // OrderCanceledEvent closes an order. They carry no message id.
-func txOrders(ents *Entities, b Block, txIndex int, txHash string, msgCount int, byIndex map[int][]node.Event) {
-	seq := TxFillSeqBase
-	for _, f := range ents.OrderFills {
-		if f.TxIndex != nil {
-			seq++
-		}
-	}
+func txOrders(ents *Entities, b Block, txFills *int, txIndex int, txHash string, msgCount int, byIndex map[int][]node.Event) {
 	for j := range msgCount {
 		pos := StoredPositions(byIndex[j])
 		for k, ev := range byIndex[j] {
@@ -225,12 +219,12 @@ func txOrders(ents *Entities, b Block, txIndex int, txHash string, msgCount int,
 			case evOrderExecuted:
 				ti, mi, ei := txIndex, j, pos[k]
 				ents.OrderFills = append(ents.OrderFills, OrderFill{
-					Height: b.Height, Seq: seq, OrderID: get("id"), MarketID: get("market_id"), Side: get("order_type"),
+					Height: b.Height, Seq: TxFillSeqBase + *txFills, OrderID: get("id"), MarketID: get("market_id"), Side: get("order_type"),
 					Price: get("price"), Amount: get("amount"), Maker: get("maker"), Taker: get("taker"),
 					TakerTxHash: txHash, Time: b.Time, TxIndex: &ti, MsgIndex: &mi, MsgEventIndex: &ei,
 					TakerOrderID: get("order_id"),
 				})
-				seq++
+				*txFills++
 			case evOrderCanceled:
 				ents.OrderCancels = append(ents.OrderCancels, OrderCancel{OrderID: get("id"), Height: b.Height, Time: b.Time})
 				ents.OrderClosures = append(ents.OrderClosures, OrderClosure{

@@ -261,6 +261,62 @@ func TestCatchUpWithNothingToDo(t *testing.T) {
 // Fills left without a trade id below the cursor (written by the previous
 // release after the cursor passed them) are numbered one height at a time,
 // the cursor left alone; the block's swaps and fills are numbered together.
+// A fill of a transaction's own events (chain v8.3.0) numbers with the swaps
+// of its message by the event's position, and the write drops the rows of
+// the range's old numbering.
+func TestCatchUpNumbersATransactionsFillsWithItsSwaps(t *testing.T) {
+	at := time.Unix(100, 0).UTC()
+	swap := `{"creator":"bze1c","in":{"denom":"ubze","amount":"5"},"out":{"denom":"uatom","amount":"2"},"pool_id":"uatom_ubze"}`
+	zero, three := 0, 3
+	d := &db{cursor: int64(500), top: int64p(499), results: map[string][][]any{
+		"trade_id IS NULL": {{int64(70)}},
+		// The fee swap sits at position 1, between the fills at 0 and 3.
+		"FROM explorer.messages": {{int64(70), 0, 0, "HASH", at, []byte(swap), int64(1)}},
+		"msg_event_index FROM explorer.order_fills": {
+			{int64(70), 1_000_000, &zero, &zero, &zero}, {int64(70), 1_000_001, &zero, &zero, &three}},
+	}}
+	_, err := trades.CatchUp(context.Background(), d, nil)
+	require.NoError(t, err)
+	require.Len(t, committed(d), 1)
+
+	var swaps, fills, prune []map[string]any
+	for _, e := range committed(d)[0].execs {
+		if len(e.args) == 0 {
+			continue
+		}
+		raw, ok := e.args[0].([]byte)
+		if !ok {
+			continue
+		}
+		var payload []map[string]any
+		switch {
+		case strings.Contains(e.sql, "DELETE FROM explorer.swaps"):
+			var p struct {
+				Ranges [][]int64        `json:"ranges"`
+				Keys   []map[string]any `json:"keys"`
+			}
+			require.NoError(t, json.Unmarshal(raw, &p))
+			assert.Equal(t, [][]int64{{70, 71}}, p.Ranges)
+			prune = p.Keys
+			continue
+		case json.Unmarshal(raw, &payload) != nil:
+			continue
+		case strings.Contains(e.sql, "INSERT INTO explorer.swaps"):
+			swaps = payload
+		case strings.Contains(e.sql, "UPDATE explorer.order_fills"):
+			fills = payload
+		}
+	}
+	require.Len(t, swaps, 1)
+	assert.Equal(t, float64(70_000_002), swaps[0]["trade_id"], "between the two fills")
+	assert.Equal(t, []map[string]any{
+		{"height": float64(70), "seq": float64(1_000_000), "trade_id": float64(70_000_001)},
+		{"height": float64(70), "seq": float64(1_000_001), "trade_id": float64(70_000_003)},
+	}, fills)
+	require.Len(t, prune, 1, "the keys the range keeps")
+	assert.Equal(t, float64(70_000_002), prune[0]["trade_id"])
+}
+
 func TestCatchUpNumbersFillsBelowTheCursor(t *testing.T) {
 	at := time.Unix(100, 0).UTC()
 	swap := `{"creator":"bze1c","in":{"denom":"ubze","amount":"5"},"out":{"denom":"uatom","amount":"2"},"pool_id":"uatom_ubze"}`

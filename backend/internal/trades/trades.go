@@ -316,7 +316,7 @@ func Range(ctx context.Context, tx Tx, lo, hi int64, hook Hook) (int, error) {
 	// deadlocking.
 	slices.SortFunc(swaps, func(a, b transform.Swap) int { return cmp.Compare(a.TradeID, b.TradeID) })
 	slices.SortFunc(fills, func(a, b transform.OrderFill) int { return cmp.Compare(a.TradeID, b.TradeID) })
-	if err := writer.WriteTrades(ctx, tx, hi-1, swaps, fills); err != nil {
+	if err := writer.WriteTrades(ctx, tx, hi-1, lo, hi, swaps, fills); err != nil {
 		return 0, err
 	}
 	if hook != nil {

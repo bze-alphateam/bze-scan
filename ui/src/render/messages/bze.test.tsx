@@ -246,6 +246,18 @@ describe("DEX outcome", () => {
       expect(screen.getByTestId("dex-cancelled")).toHaveTextContent("Order #1042 cancelled, 5 USDC returned");
     });
 
+    it("reads a v8.2.x message with only its queue events, or a refund event, as before", () => {
+      const queued = msgOf(create, [event("OrderCreateMessageEvent", { message_id: "000000000000000000000003" })]);
+      const dex = dexCtx({ placed: [order({})], fills: [fill({}), ownFill()], cancelled: [], pending: true });
+      const out = outcomeOf(queued, dex);
+      expect(out?.placed).toHaveLength(1);
+      expect(out?.fills).toHaveLength(1);
+      expect(out?.pending).toBe(true);
+      // Not an outcome event of this chain version: the old matching still applies.
+      const refunded = msgOf(create, [event("OrderMessageRefundedEvent", { message_id: "000000000000000000000003" })]);
+      expect(outcomeOf(refunded, dex)?.pending).toBe(true);
+    });
+
     it("keeps the old paths for a message without these events", () => {
       const out = outcomeOf(create, dexCtx({ placed: [order({})], fills: [fill({}), ownFill()], cancelled: [], pending: true }));
       expect(out?.fills).toHaveLength(1);

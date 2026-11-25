@@ -150,7 +150,7 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 		"transactions update", "transactions", "messages update", "messages",
 		"transfers update", "transfers", "block_events update", "block_events",
 		"token_events update", "token_events", "account_activity update", "account_activity",
-		"order_messages update", "order_messages", "order_fills update", "order_fills", "block update", "block", "block times", "resolve failures", "accounts",
+		"order_messages update", "order_messages", "order_fills update", "order_fills", "block update", "block", "block times", "resolve failures", "stale swaps", "accounts",
 	}, sqlOf(tx), "each table's update before its insert, both in the flush's transaction")
 
 	for _, tc := range writtenTables {
@@ -172,7 +172,46 @@ func TestBatchWriteInUpdateModeOverwritesEveryTable(t *testing.T) {
 			assert.Contains(t, insert, "RETURNING "+tc.keys, "the inserted keys drive the counters")
 		})
 	}
-	assert.Equal(t, []any{[]int64{104, 103}}, tx.stmts[len(tx.stmts)-2].args, "the flush's heights are resolved")
+	assert.Equal(t, []any{[]int64{104, 103}}, tx.stmts[len(tx.stmts)-3].args, "the flush's heights are resolved")
+}
+
+// A reindex recomputes the swaps of its heights whole: it drops the rows of
+// the heights it writes that it numbers no more, also when none is left.
+func TestBatchWriteInUpdateModePrunesTheSwapsOfItsHeights(t *testing.T) {
+	prune := func(mode writer.Mode, heights ...int64) []string {
+		db := newMockDB(49)
+		var ents []*transform.Entities
+		for _, h := range heights {
+			ents = append(ents, block(h))
+		}
+		require.NoError(t, writer.NewBatchWriter(db).Write(context.Background(), ents, mode))
+		var out []string
+		for _, st := range db.txs[0].stmts {
+			if strings.Contains(st.sql, "DELETE FROM explorer.swaps") {
+				out = append(out, string(st.args[0].([]byte)))
+			}
+		}
+		return out
+	}
+	assert.Equal(t, []string{`{"ranges":[[103,105]],"keys":[]}`}, prune(writer.ModeUpdate, 104, 103),
+		"no swap left at either height: the rows go all the same")
+	assert.Equal(t, []string{`{"ranges":[[100,101],[103,105]],"keys":[]}`}, prune(writer.ModeUpdate, 104, 100, 103),
+		"only the heights written")
+	assert.Empty(t, prune(writer.ModeInsert, 104, 103), "an insert never deletes")
+}
+
+// Renumbering stored trades drops the swaps of its range that it numbers no
+// more, also when none is left.
+func TestWriteTradesPrunesTheRange(t *testing.T) {
+	tx := &mockTx{db: newMockDB(49)}
+	require.NoError(t, writer.WriteTrades(context.Background(), tx, 109, 100, 110, nil, nil))
+	var payloads []string
+	for _, st := range tx.stmts {
+		if strings.Contains(st.sql, "DELETE FROM explorer.swaps") {
+			payloads = append(payloads, string(st.args[0].([]byte)))
+		}
+	}
+	assert.Equal(t, []string{`{"ranges":[[100,110]],"keys":[]}`}, payloads)
 }
 
 func TestBatchWriteInInsertModeNeverUpdates(t *testing.T) {

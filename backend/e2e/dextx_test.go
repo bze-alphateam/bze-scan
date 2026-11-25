@@ -226,6 +226,31 @@ func TestDexTxLevelOutcomesInEitherDirection(t *testing.T) {
 	require.NoError(t, tx.Commit(ctx))
 	assert.Equal(t, fills, v830Fills(t, up), "trades.Range gives the transformer's trade ids")
 	assert.Equal(t, swaps, swapRows(t, up))
+
+	// A height rewritten with no swap left loses its old rows, in a reindex and
+	// in the renumbering; heights outside what is recomputed keep theirs.
+	stale := func(h int64) {
+		_, err := e2eExec(up, fmt.Sprintf(`INSERT INTO explorer.swaps (height, trade_id, time, pool_id, base, quote, side,
+			base_amount, quote_amount, creator, block_seq) VALUES (%d, %d, now(), 'a_b', 'a', 'b', 'sell', 1, 1, 'c', 0)`,
+			h, h*transform.TradeIDsPerBlock+1))
+		require.NoError(t, err)
+	}
+	count := func(h int64) []string {
+		return queryStrings(t, up.db, `SELECT count(*)::text FROM explorer.swaps WHERE height = $1`, h)
+	}
+	stale(dexH + 1)
+	stale(dexH + 5)
+	stale(dexH + 20)
+	require.NoError(t, batchWriter(t, up.url).Write(ctx, []*transform.Entities{dexBlock(dexH + 1)}, writer.ModeUpdate))
+	assert.Equal(t, []string{"0"}, count(dexH+1), "reindex of a height with no swaps")
+	assert.Equal(t, []string{"1"}, count(dexH+5), "another height is not recomputed")
+	rtx2, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	_, err = trades.Range(ctx, rtx2, dexH+2, dexH+10, candles.Default)
+	require.NoError(t, err)
+	require.NoError(t, rtx2.Commit(ctx))
+	assert.Equal(t, []string{"0"}, count(dexH+5), "the renumbered range")
+	assert.Equal(t, []string{"1"}, count(dexH+20), "outside it")
 }
 
 func e2eExec(e *syncEnv, q string) (any, error) { return e.db.Exec(q) }

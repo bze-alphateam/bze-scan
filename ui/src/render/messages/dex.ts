@@ -126,15 +126,12 @@ const SAVED_EVENT = "bze.tradebin.OrderSavedEvent";
 const EXECUTED_EVENT = "bze.tradebin.OrderExecutedEvent";
 const CANCELED_EVENT = "bze.tradebin.OrderCanceledEvent";
 
-/**
- * Whether the message's own events carry the order book's outcome (chain
- * v8.3.0 runs the engine inside the message): any typed order event but the
- * two queue messages, which only the older chain emits.
- */
+/** The outcome events a v8.3.0 message carries; the queue messages are the older chain's. */
+const TX_LEVEL_EVENTS: readonly string[] = [SAVED_EVENT, EXECUTED_EVENT, CANCELED_EVENT];
+
+/** Whether the message's own events carry the order book's outcome (chain v8.3.0 runs the engine inside the message). */
 function ranOrderBook(msg: RenderMessage): boolean {
-  return (msg.events ?? []).some(
-    (e) => e.type.startsWith("bze.tradebin.Order") && e.type !== CREATE_EVENT && e.type !== CANCEL_EVENT,
-  );
+  return (msg.events ?? []).some((e) => TX_LEVEL_EVENTS.includes(e.type));
 }
 
 /** The string attribute `key` of the message's own events of `type`. */

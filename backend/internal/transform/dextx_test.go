@@ -1,6 +1,7 @@
 package transform_test
 
 import (
+	"slices"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -143,16 +144,97 @@ func TestTxLevelOrdersAreStable(t *testing.T) {
 	assert.Equal(t, first.Swaps, second.Swaps)
 }
 
-// A block with a transaction-level order book and a block-level fill of the
-// queue heuristics: the heuristic leaves the transaction's rows alone.
+// A block with both kinds of outcome, as the v8.3.0 upgrade block can look: a
+// queued message of tx 0 with its block-level fill, and tx 1's own fee swap and
+// fill. The queue attribution keeps to the block-level rows, the tx rows keep
+// their hashes, and the trade ids number the transaction's trades by position,
+// then the block-level ones.
 func TestQueueHeuristicLeavesTxLevelOutcomesAlone(t *testing.T) {
-	in := v830Input(t)
+	in := baseInput()
+	in.Block.Txs = []string{
+		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "10", Price: "2", MarketId: market}),
+		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "20", Price: "2", MarketId: market}),
+	}
+	in.Results.TxsResults = []node.TxResult{
+		{Events: one(typed("bze.tradebin.OrderCreateMessageEvent", "0", "creator", trader, "market_id", market,
+			"order_type", "buy", "amount", "10", "price", "2", "message_id", msgID(1)))},
+		{Events: orderEvents(one(swapEvent("0", trader, "3", uhoney, "1", "ubze")),
+			one(txExecuted("0", msgID(902), msgID(1001), "20", "2")))},
+	}
+	in.Results.FinalizeBlockEvents = []node.Event{
+		typed("bze.tradebin.OrderExecutedEvent", "", "id", msgID(905), "market_id", market, "order_type", "sell",
+			"amount", "10", "price", "2", "maker", maker1, "taker", trader, "message_id", msgID(1)),
+		swapEvent("", burnerAcc, "300", uhoney, "5", "ubze"),
+	}
 	ents, err := realTransformer(t).Transform(in)
 	require.NoError(t, err)
+	require.Len(t, ents.OrderFills, 2)
+	byOrder := map[string]transform.OrderFill{}
 	for _, f := range ents.OrderFills {
-		assert.Equal(t, ents.Transactions[*f.TxIndex].Hash, f.TakerTxHash)
+		byOrder[f.OrderID] = f
 	}
-	assert.Equal(t, ents.Transactions[0].Hash, ents.Orders[0].CreatedTxHash)
+	queued, own := byOrder[msgID(905)], byOrder[msgID(902)]
+	assert.Nil(t, queued.TxIndex, "a block-level fill has no position")
+	assert.Nil(t, queued.MsgEventIndex)
+	assert.Equal(t, 0, queued.Seq)
+	assert.Equal(t, msgID(1), queued.TakerMessageID)
+	assert.Equal(t, ents.Transactions[0].Hash, queued.TakerTxHash, "attributed by its message id")
+	assert.Equal(t, transform.TxFillSeqBase, own.Seq)
+	assert.Empty(t, own.TakerMessageID)
+	assert.Equal(t, ents.Transactions[1].Hash, own.TakerTxHash)
+	require.Len(t, ents.OrderMessages, 1)
+
+	id := func(n int64) int64 { return 10*transform.TradeIDsPerBlock + n }
+	assert.Equal(t, id(1), ents.Swaps[0].TradeID, "tx 1's swap sits before its fill")
+	assert.Equal(t, id(2), own.TradeID)
+	assert.Equal(t, id(3), queued.TradeID, "then the block-level trades, by seq")
+	assert.Equal(t, id(4), ents.Swaps[1].TradeID)
+}
+
+// The seqs of the fills of a block's transactions run on across them.
+func TestTxLevelFillSeqsRunAcrossTransactions(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs = []string{
+		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "10", Price: "2", MarketId: market}),
+		encodedTx(t, &tradebintypes.MsgCreateOrder{Creator: trader, OrderType: "buy", Amount: "20", Price: "2", MarketId: market}),
+	}
+	in.Results.TxsResults = []node.TxResult{
+		{Events: orderEvents(one(txExecuted("0", msgID(900), msgID(1000), "5", "2")), one(txExecuted("0", msgID(901), msgID(1000), "5", "2")))},
+		{Events: orderEvents(one(txExecuted("0", msgID(902), msgID(1001), "10", "2")), one(txExecuted("0", msgID(903), msgID(1001), "10", "2")))},
+	}
+	ents, err := realTransformer(t).Transform(in)
+	require.NoError(t, err)
+	var seqs []int
+	for _, f := range ents.OrderFills {
+		seqs = append(seqs, f.Seq)
+	}
+	assert.Equal(t, []int{1_000_000, 1_000_001, 1_000_002, 1_000_003}, seqs)
+}
+
+// NumberTrades needs the positions of the transaction's trades.
+func TestNumberTradesNeedsPositions(t *testing.T) {
+	_, err := transform.NumberTrades(10, []transform.Swap{{TxIndex: intp(0), MsgIndex: intp(0)}}, nil, nil)
+	require.ErrorContains(t, err, "transaction swap 0 has no position")
+	_, err = transform.NumberTrades(10, nil, nil, []transform.OrderFill{{TxIndex: intp(0)}})
+	require.ErrorContains(t, err, "transaction fill 0 has no position")
+	_, err = transform.NumberTrades(10, nil, []transform.Swap{{}}, nil)
+	require.ErrorContains(t, err, "block-level swap 0 has no seq")
+}
+
+// The trade count of a block counts the fills of its transactions' events.
+func TestTradeCountCountsTxLevelFills(t *testing.T) {
+	build := func(n int, code uint32) transform.Input {
+		in := baseInput()
+		in.Block.Txs = []string{"YQ=="}
+		in.Results.TxsResults = []node.TxResult{{Code: code,
+			Events: slices.Repeat([]node.Event{txExecuted("0", msgID(900), msgID(1000), "1", "2")}, n)}}
+		return in
+	}
+	tr, _ := mockTransformer(mockDecoder{})
+	_, err := tr.Transform(build(transform.TradeIDsPerBlock, 0))
+	require.ErrorContains(t, err, "1000000 trades in the block, more than 999999")
+	_, err = tr.Transform(build(transform.TradeIDsPerBlock, 5))
+	require.NoError(t, err, "a failed transaction's events count for nothing")
 }
 
 // Trade ids follow the transaction, then the message, then the event's
