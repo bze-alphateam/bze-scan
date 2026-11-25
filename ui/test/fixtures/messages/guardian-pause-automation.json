@@ -1,0 +1,9 @@
+{
+  "type_url": "/bze.guardian.v1.MsgPauseAutomation",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  },
+  "events": []
+}

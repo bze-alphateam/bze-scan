@@ -1,0 +1,25 @@
+{
+  "type_url": "/bze.dao.MsgCreateDao",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "creator": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "admin": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "type": "DAO_TYPE_STATIC_LIST",
+    "name": "Hive Council",
+    "description": "Decides how the hive spends",
+    "config": {
+      "min_quorum": "0.3",
+      "threshold": "0.5",
+      "voting_period": "259200s"
+    },
+    "members": [
+      "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "bze1a",
+      "bze1b"
+    ]
+  },
+  "events": []
+}

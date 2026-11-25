@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.dao.MsgAcceptAdminNomination",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "nominee": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+    "dao_id": "3"
+  },
+  "events": []
+}

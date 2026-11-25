@@ -1,0 +1,13 @@
+{
+  "type_url": "/bze.guardian.v1.MsgHaltTradingDenoms",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denoms": [
+      "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+      "ubze"
+    ]
+  },
+  "events": []
+}
