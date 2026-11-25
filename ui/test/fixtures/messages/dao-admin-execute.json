@@ -1,0 +1,28 @@
+{
+  "type_url": "/bze.dao.MsgAdminExecute",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "admin": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "msgs": [
+      {
+        "@type": "/cosmos.bank.v1beta1.MsgSend",
+        "from_address": "bze1daoaccount",
+        "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+        "amount": [
+          {
+            "denom": "ubze",
+            "amount": "5000000"
+          }
+        ]
+      },
+      {
+        "@type": "/bze.tokenfactory.MsgMint",
+        "creator": "bze1daoaccount",
+        "coins": "1000000factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney"
+      }
+    ]
+  },
+  "events": []
+}

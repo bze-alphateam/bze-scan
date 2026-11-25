@@ -1,0 +1,10 @@
+{
+  "type_url": "/bze.dao.MsgCancelProposal",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "proposal_id": "12"
+  },
+  "events": []
+}

@@ -1,0 +1,75 @@
+{
+  "height": 25120460,
+  "tx_index": 1,
+  "hash": "E1A2B3C4D5E6F708192A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4C5D6E7F80",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/bze.guardian.v1.MsgHaltTradingDenoms"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/bze.guardian.v1.MsgHaltTradingDenoms",
+    "module": "guardian",
+    "body": {
+      "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "denoms": [
+        "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+        "ubze"
+      ]
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 200000,
+  "gas_used": 81234,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/bze.guardian.v1.MsgHaltTradingDenoms",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "guardian",
+      "body": {
+        "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "denoms": [
+          "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+          "ubze"
+        ]
+      },
+      "events": []
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": null
+}

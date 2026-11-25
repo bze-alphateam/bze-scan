@@ -1,0 +1,14 @@
+{
+  "type_url": "/ratelimit.v1.MsgUpdateRateLimit",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "ratelimit",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "channel_or_client_id": "channel-0",
+    "max_percent_send": "2",
+    "max_percent_recv": "2",
+    "duration_hours": "24"
+  },
+  "events": []
+}

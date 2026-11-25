@@ -37,6 +37,41 @@ const TXFEECOLLECTOR: Record<number, string> = {
   1140: "Transfers on this channel are stopped.",
 };
 
+// Chain v8.3.0 modules: x/tokenfactory, x/tradebin and x/dao (codes from each module's `types/errors.go`).
+const TOKENFACTORY: Record<number, string> = {
+  1112: "Minting of this token is turned off for good.",
+};
+const TRADEBIN: Record<number, string> = {
+  4018: "The pool's price moved too far from its recent average; try again in a few blocks.",
+};
+const DAO: Record<number, string> = {
+  1129: "One of the DAO's actions failed unexpectedly.",
+  1133: "This kind of action is not allowed in a DAO execution.",
+  1134: "The DAO's actions are nested too deep.",
+  1135: "This admin nomination is out of date: control of the nominating DAO changed since it was made.",
+};
+
+// x/circuit refuses a disabled message type in the ante handler with a plain error (no registered code).
+const CIRCUIT_LOG = /tx type not allowed/;
+const CIRCUIT_WORDS = "This action is switched off by an emergency measure.";
+
+function moduleWords(tx: FailedTx): string | undefined {
+  switch (tx.codespace) {
+    case "ratelimit":
+      return RATE_LIMIT[tx.code];
+    case "txfeecollector":
+      return TXFEECOLLECTOR[tx.code];
+    case "tokenfactory":
+      return TOKENFACTORY[tx.code];
+    case "tradebin":
+      return TRADEBIN[tx.code];
+    case "dao":
+      return DAO[tx.code];
+    default:
+      return undefined;
+  }
+}
+
 /**
  * The plain-word reason of a failed transaction; `feeDenom` names the coin
  * when the log does not.
@@ -44,8 +79,9 @@ const TXFEECOLLECTOR: Record<number, string> = {
 export function failureReason(tx: FailedTx, symbolOf: SymbolOf = () => null, feeDenom: string | null = null): string {
   const known = tx.codespace === "sdk" ? SDK[tx.code] : undefined;
   if (known) return known(tx, symbolOf, feeDenom);
-  const words = tx.codespace === "ratelimit" ? RATE_LIMIT[tx.code] : tx.codespace === "txfeecollector" ? TXFEECOLLECTOR[tx.code] : undefined;
+  const words = moduleWords(tx);
   if (words) return words;
+  if (tx.error_log && CIRCUIT_LOG.test(tx.error_log)) return CIRCUIT_WORDS;
   if (tx.error_log) return tx.error_log;
   return `Failed with code ${tx.code}${tx.codespace ? ` (${tx.codespace})` : ""}`;
 }

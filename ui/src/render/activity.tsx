@@ -392,12 +392,76 @@ const SENTENCES: Record<string, Sentence> = {
   token_mint: (i) => [i.gains.length ? `Minted ${amounts(i.gains, i.ctx)}` : "Minted tokens"],
   token_burn: (i) => [i.losses.length ? `Burned ${amounts(i.losses, i.ctx)}` : "Burned tokens"],
   token_admin: by(
-    (i) => withParty(i, "Handed a token's admin to", "Changed a token's admin"),
+    (i) =>
+      firstType(i.row, "MsgDisableMinting")
+        ? ["Turned off minting of a token for good"]
+        : withParty(i, "Handed a token's admin to", "Changed a token's admin"),
     (i) => withParty(i, "Became a token's admin, from", "Became a token's admin"),
   ),
-  token_update: ({ row }) => [
-    firstType(row, "MsgSetDenomBranding") ? "Updated a token's branding" : "Updated a token's name, symbol and decimals",
-  ],
+  token_update: ({ row }) => {
+    const type = firstType(row, "MsgSetDenomBranding", "MsgSetDenomConfig");
+    if (type === "MsgSetDenomConfig") return ["Changed a token's community pool, transfer fee and gas surcharge"];
+    return [type ? "Updated a token's branding" : "Updated a token's name, symbol and decimals"];
+  },
+  // The txfeecollector forwards a token's fee coins to its community pool at the end of a block (chain v8.3.0).
+  community_pool_fee: (i) => {
+    const got = i.gains[0];
+    if (!got) return ["Received trading fees for a token's community pool"];
+    const symbol = got.symbol ?? i.ctx.denom(got.denom).symbol ?? got.denom;
+    return [`Received ${amounts(i.gains, i.ctx)} of trading fees for the ${symbol} community pool`];
+  },
+
+  // x/dao (chain v8.3.0).
+  dao_create: () => ["Created a DAO"],
+  dao_proposal: ({ row }) => {
+    const words: Record<string, string> = {
+      MsgSubmitProposal: "Proposed a change in a DAO",
+      MsgCancelProposal: "Cancelled a DAO proposal",
+      MsgSettleProposal: "Settled a DAO proposal",
+      MsgCleanupProposal: "Cleaned up a DAO proposal",
+    };
+    const name = firstType(row, ...Object.keys(words));
+    return [name ? words[name] : "A DAO proposal changed"];
+  },
+  dao_vote: () => ["Voted on a DAO proposal"],
+  dao_admin_execute: () => ["Ran actions as a DAO"],
+  dao_admin: ({ row }) => {
+    const words: Record<string, string> = {
+      MsgNominateAdmin: "Nominated an admin of a DAO",
+      MsgAcceptAdminNomination: "Accepted the admin role of a DAO",
+      MsgWithdrawAdminNomination: "Withdrew a DAO admin nomination",
+    };
+    const name = firstType(row, ...Object.keys(words));
+    return [name ? words[name] : "A DAO's admin changed"];
+  },
+  dao_update: ({ row }) => {
+    const words: Record<string, string> = {
+      MsgUpdateDaoConfig: "Changed the rules of a DAO",
+      MsgUpdateMetadata: "Changed the name or description of a DAO",
+      MsgUpdateElectorate: "Changed the voters of a DAO",
+      MsgUpdateMembers: "Changed the members of a DAO",
+    };
+    const name = firstType(row, ...Object.keys(words));
+    return [name ? words[name] : "A DAO was changed"];
+  },
+
+  // The guardian's emergency powers and the governance messages that undo them (chain v8.3.0).
+  guardian: ({ row }) => {
+    const words: Record<string, string> = {
+      MsgTightenRateLimit: "Emergency: lowered an IBC limit",
+      MsgBlockDenom: "Emergency: blocked a token from crossing chains",
+      MsgDisableMessages: "Emergency: switched off some kinds of actions",
+      MsgHaltTradingDenoms: "Emergency: halted trading of tokens",
+      MsgHaltChain: "Emergency: scheduled a chain halt",
+      MsgPauseAutomation: "Emergency: paused fee conversion and burning",
+      MsgCloseChannel: "Emergency: closed a channel",
+      MsgUnblockDenom: "Unblocked a token for crossing chains",
+      MsgResumeAutomation: "Resumed fee conversion and burning",
+      MsgReopenChannel: "Reopened a channel",
+    };
+    const name = firstType(row, ...Object.keys(words));
+    return [name ? words[name] : "An emergency measure changed"];
+  },
 
   reward_join: (i) => [i.losses.length ? `Joined a reward program · ${amounts(i.losses, i.ctx)} locked` : "Joined a reward program"],
   reward_exit: () => ["Left a reward program"],

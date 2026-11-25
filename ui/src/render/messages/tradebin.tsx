@@ -8,6 +8,7 @@ import type { Coin, Order, Refund, Transfer } from "@/api/types";
 import { AccountChip } from "@/components/ui/account-chip";
 import { shortOrderId } from "@/lib/format";
 
+import { eventsOf, ratioPct } from "./v830-common";
 import { Account, accountName, coin, coinText, Coins, Fields, obj, str, transfersOf } from "./common";
 import {
   dexMarketUrl,
@@ -719,6 +720,41 @@ const createMarket = renderer({
   },
 });
 
+/** A pool's fee: "0.3%", the split of a fee destination object when the event carries one. */
+function feeText(fee: unknown, dest: unknown): string {
+  const pct = ratioPct(typeof fee === "string" || typeof fee === "number" ? fee : null) ?? "?";
+  const d = typeof dest === "string" ? (() => { try { return JSON.parse(dest) as unknown; } catch { return null; } })() : dest;
+  const o = obj(d);
+  const split = o && typeof o.treasury !== "undefined" && typeof o.burner !== "undefined" ? ` (${ratioPct(String(o.treasury))} to the treasury, ${ratioPct(String(o.burner))} burned)` : "";
+  return `${pct}${split}`;
+}
+
+/** The pools the proposal's message listed, `{pool_id, fee}` each. */
+function poolUpdates(msg: RenderMessage): { pool_id: string; fee: string | null }[] {
+  const list = msg.body?.updates;
+  return Array.isArray(list) ? list.map(obj).filter((u) => u !== null).map((u) => ({ pool_id: String(u.pool_id ?? ""), fee: typeof u.fee === "string" ? u.fee : null })) : [];
+}
+
+const updatePools = renderer({
+  category: "dex",
+  title: (msg) => {
+    const n = poolUpdates(msg).length;
+    return `Changed the fees of ${n} ${n === 1 ? "pool" : "pools"}`;
+  },
+  Body: function UpdatePoolsBody({ msg, ctx }: BodyProps) {
+    const changed = eventsOf(msg, "bze.tradebin.PoolFeesUpdatedEvent");
+    // A pool whose entry equalled its current values has no event: it is listed as unchanged.
+    const rows = poolUpdates(msg).map((u) => {
+      const e = changed.find((c) => String(c.pool_id) === u.pool_id);
+      return {
+        label: `${poolName(u.pool_id, ctx)} pool`,
+        value: e ? `${feeText(e.old_fee, e.old_fee_dest)} → ${feeText(e.new_fee, e.new_fee_dest)}` : changed.length > 0 ? "unchanged" : `new fee ${feeText(u.fee, null)}`,
+      };
+    });
+    return <Fields rows={[{ label: "Decided by", value: <Account address={str(msg, "authority")} ctx={ctx} /> }, ...rows]} />;
+  },
+});
+
 const T = "/bze.tradebin.";
 
 export const tradebinRenderers: Record<string, MessageRenderer> = {
@@ -730,4 +766,5 @@ export const tradebinRenderers: Record<string, MessageRenderer> = {
   [`${T}MsgRemoveLiquidity`]: removeLiquidity,
   [`${T}MsgCreateLiquidityPool`]: createPool,
   [`${T}MsgCreateMarket`]: createMarket,
+  [`${T}MsgUpdatePools`]: updatePools,
 };

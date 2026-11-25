@@ -1,0 +1,101 @@
+{
+  "height": 25120461,
+  "tx_index": 2,
+  "hash": "D4A0C3B2A1F0E9D8C7B6A5F4E3D2C1B0A9F8E7D6C5B4A3F2E1D0C9B8A7F6E5D4",
+  "time": "2026-10-11T09:15:02Z",
+  "success": true,
+  "msg_count": 1,
+  "msg_types": [
+    "/bze.dao.MsgSubmitProposal"
+  ],
+  "fee": [
+    {
+      "denom": "ubze",
+      "amount": "2000"
+    }
+  ],
+  "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "first_message": {
+    "type_url": "/bze.dao.MsgSubmitProposal",
+    "module": "dao",
+    "body": {
+      "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "dao_id": "3",
+      "title": "Fund the market maker",
+      "summary": "Pay 5 BZE to the market maker",
+      "msgs": [
+        {
+          "@type": "/cosmos.bank.v1beta1.MsgSend",
+          "from_address": "bze1daoaccount",
+          "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+          "amount": [
+            {
+              "denom": "ubze",
+              "amount": "5000000"
+            }
+          ]
+        }
+      ],
+      "expedited": false
+    }
+  },
+  "code": 0,
+  "codespace": null,
+  "error_log": null,
+  "gas_wanted": 200000,
+  "gas_used": 81234,
+  "fee_payer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "signers": [
+    "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw"
+  ],
+  "memo": null,
+  "messages": [
+    {
+      "msg_index": 0,
+      "type_url": "/bze.dao.MsgSubmitProposal",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "module": "dao",
+      "body": {
+        "proposer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "dao_id": "3",
+        "title": "Fund the market maker",
+        "summary": "Pay 5 BZE to the market maker",
+        "msgs": [
+          {
+            "@type": "/cosmos.bank.v1beta1.MsgSend",
+            "from_address": "bze1daoaccount",
+            "to_address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+            "amount": [
+              {
+                "denom": "ubze",
+                "amount": "5000000"
+              }
+            ]
+          }
+        ],
+        "expedited": false
+      },
+      "events": []
+    }
+  ],
+  "transfers": [
+    {
+      "seq": 0,
+      "msg_index": null,
+      "kind": "transfer",
+      "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+      "sender_label": null,
+      "recipient": "bze17xpfvakm2amg962yls6f84z3kell8c5l6s5ye9",
+      "recipient_label": {
+        "name": "Fee collector",
+        "kind": "module"
+      },
+      "denom": "ubze",
+      "amount": "2000",
+      "symbol": "BZE",
+      "exponent": 6
+    }
+  ],
+  "dex": null,
+  "ibc_transfers": null
+}

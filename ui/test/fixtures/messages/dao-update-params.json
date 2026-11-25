@@ -1,0 +1,13 @@
+{
+  "type_url": "/bze.dao.MsgUpdateParams",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "params": {
+      "max_sr_per_dao": "4",
+      "max_open_proposals": "20"
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,12 @@
+{
+  "type_url": "/bze.dao.MsgUpdateMetadata",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "authority": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "dao_id": "3",
+    "name": "Hive Council",
+    "description": "Decides how the hive spends"
+  },
+  "events": []
+}
