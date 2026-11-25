@@ -1,0 +1,26 @@
+{
+  "type_url": "/bze.guardian.v1.MsgTightenRateLimit",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "guardian",
+  "body": {
+    "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+    "channel_id": "channel-3",
+    "max_percent_send": "1",
+    "max_percent_recv": "0"
+  },
+  "events": [
+    {
+      "type": "bze.guardian.v1.TightenRateLimitEvent",
+      "attrs": {
+        "signer": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+        "denom": "factory/bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw/uhoney",
+        "channel_id": "channel-3",
+        "old_send": "10",
+        "old_recv": "10",
+        "new_send": "1",
+        "new_recv": "0"
+      }
+    }
+  ]
+}

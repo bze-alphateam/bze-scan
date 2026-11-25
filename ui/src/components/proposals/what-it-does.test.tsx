@@ -32,4 +32,39 @@ describe("ActionView", () => {
     expect(screen.getByText("Native denom")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "see all DEX parameters" })).toHaveAttribute("href", "/parameters?group=dex");
   });
+
+  it("draws a governance-only message with its renderer's title and body", () => {
+    renderWithProviders(
+      <ActionView
+        a={{
+          type: "message",
+          typeUrl: "/bze.guardian.v1.MsgReopenChannel",
+          body: { "@type": "/bze.guardian.v1.MsgReopenChannel", authority: "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw", channel_id: "channel-3" },
+        }}
+        p={proposal as Proposal}
+        upgradeEta={null}
+      />,
+      { api: fakeApi() },
+    );
+    const action = screen.getByTestId("action");
+    expect(action).toHaveTextContent("Reopened channel-3");
+    expect(action).toHaveTextContent("Decided by");
+  });
+
+  it("names the pools of a fee proposal", () => {
+    renderWithProviders(
+      <ActionView
+        a={{
+          type: "message",
+          typeUrl: "/bze.tradebin.MsgUpdatePools",
+          body: { "@type": "/bze.tradebin.MsgUpdatePools", updates: [{ pool_id: "p1", fee: "0.005", fee_dest: { treasury: "1", burner: "0" } }] },
+        }}
+        p={proposal as Proposal}
+        upgradeEta={null}
+      />,
+      { api: fakeApi() },
+    );
+    expect(screen.getByText("Changed the fees of 1 pool")).toBeInTheDocument();
+    expect(screen.getByText("new fee 0.5% (100% to the treasury, 0% burned)")).toBeInTheDocument();
+  });
 });

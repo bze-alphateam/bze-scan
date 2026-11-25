@@ -47,6 +47,7 @@ var Services = map[string]string{
 	"guardian":       "bze.guardian.v1.Query",
 	"circuit":        "cosmos.circuit.v1.Query",
 	"upgrade":        "cosmos.upgrade.v1beta1.Query",
+	"ratelimit":      "ratelimit.v1.Query",
 }
 
 // GRPC is a stand-in for the node's gRPC server: a real grpc.Server on a free

@@ -1,0 +1,11 @@
+{
+  "type_url": "/bze.dao.MsgVote",
+  "sender": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+  "module": "dao",
+  "body": {
+    "voter": "bze18uf09nx6tnyaalrruegljgwgfz88vyeq5k9zhw",
+    "proposal_id": "12",
+    "option": "YES"
+  },
+  "events": []
+}
