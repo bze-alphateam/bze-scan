@@ -393,7 +393,7 @@ func TestMigrationMergedOrders(t *testing.T) {
 	require.NoError(t, err)
 
 	mg := openMigrator(t, dbURL)
-	_, err = mg.Down(1)
+	_, err = mg.Down(latestVersion - 30) // back to before 000031
 	require.NoError(t, err)
 	assert.Empty(t, cols())
 	assert.Equal(t, []string{"idx_block_events_order_outcome"}, indexes())

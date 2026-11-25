@@ -41,7 +41,7 @@ func TestMigrateEmergencyHaltsKeepsTheGovernanceUpgrades(t *testing.T) {
 	dbURL := freshDatabase(t, true)
 	db := connect(t, dbURL)
 	migrateUp(t, dbURL)
-	_, err := openMigrator(t, dbURL).Down(1)
+	_, err := openMigrator(t, dbURL).Down(latestVersion - 31) // back to before 000032
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO explorer.upgrades (height, proposal_id, name, computed_at) VALUES (22551810, 40, 'v8.1.0', now())`)
@@ -62,7 +62,7 @@ func TestMigrateEmergencyHaltsKeepsTheGovernanceUpgrades(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO explorer.upgrade_recovery (upgrade_height, consensus_address, voting_power) VALUES (30000002, 'AA', 1)`)
 	require.NoError(t, err)
-	_, err = openMigrator(t, dbURL).Down(1)
+	_, err = openMigrator(t, dbURL).Down(latestVersion - 31) // back to before 000032
 	require.NoError(t, err)
 	assert.Equal(t, []string{"22551810 40", "30000002 41"}, queryStrings(t, db, `SELECT concat_ws(' ', height, proposal_id) FROM explorer.upgrades`))
 	assert.Equal(t, []string{"22551810", "30000002"}, queryStrings(t, db, `SELECT upgrade_height::text FROM explorer.upgrade_recovery`))
