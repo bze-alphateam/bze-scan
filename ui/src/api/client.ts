@@ -5,6 +5,10 @@ import type {
   Block,
   BlockListParams,
   ChainParams,
+  Dao,
+  DaoEvent,
+  DaoList,
+  DaoListParams,
   BlockEvent,
   BlockSummary,
   BlockTransfer,
@@ -92,6 +96,9 @@ export interface ExplorerApi {
   upgrade(height: number, signal?: AbortSignal): Promise<Upgrade>;
   liveHalt(signal?: AbortSignal): Promise<LiveHalt>;
 
+  daos(params: DaoListParams, signal?: AbortSignal): Promise<DaoList>;
+  dao(id: number, signal?: AbortSignal): Promise<Dao>;
+  daoHistory(id: number, params: PageParams, signal?: AbortSignal): Promise<Page<DaoEvent>>;
   /** The emergency switches in force (chain v8.3.0). */
   emergency(signal?: AbortSignal): Promise<Emergency>;
   emergencyActions(params: PageParams, signal?: AbortSignal): Promise<Page<EmergencyAction>>;
@@ -224,6 +231,9 @@ export function createHttpApi({ baseUrl, fetch }: HttpApiOptions): ExplorerApi {
     upgrade: (height, signal) => get(`/upgrades/${seg(String(height))}`, {}, signal),
     liveHalt: (signal) => get("/upgrades/live", {}, signal),
 
+    daos: (params, signal) => get("/daos", { ...page(params), type: params.type, admin: params.admin }, signal),
+    dao: (id, signal) => get(`/daos/${seg(String(id))}`, {}, signal),
+    daoHistory: (id, params, signal) => get(`/daos/${seg(String(id))}/history`, page(params), signal),
     emergency: (signal) => get("/emergency", {}, signal),
     emergencyActions: (params, signal) => get("/emergency/actions", page(params), signal),
 

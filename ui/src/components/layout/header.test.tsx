@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { appIconsIn, renderWithProviders } from "@/test/render";
+import { appIconsIn, fakeApi, renderWithProviders } from "@/test/render";
 
 import { Header } from "./header";
 
@@ -24,9 +24,18 @@ describe("Header", () => {
     const names = within(nav)
       .getAllByRole("link", { hidden: true })
       .map((a) => a.textContent);
-    expect(names).toEqual(["Blocks", "Transactions", "Validators", "Tokens", "Cross-chain", "Proposals", "Parameters"]);
+    expect(names).toEqual(["Blocks", "Transactions", "Validators", "Tokens", "Cross-chain", "Proposals", "DAOs", "Parameters"]);
     expect(within(nav).getByText("Blocks")).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByText("Tokens")).not.toHaveAttribute("aria-current");
+  });
+
+  it("hides the DAOs entry once the API says the chain has none yet", async () => {
+    renderWithProviders(<Header />, {
+      api: fakeApi({ daos: () => Promise.resolve({ items: [], next_cursor: null, supported: false }) }),
+    });
+    const nav = screen.getByLabelText("Explorer");
+    await waitFor(() => expect(within(nav).queryByText("DAOs", { ignore: "" })).toBeNull());
+    expect(within(nav).getByText("Proposals")).toBeInTheDocument();
   });
 
   it("submits a search to /search?q=", async () => {

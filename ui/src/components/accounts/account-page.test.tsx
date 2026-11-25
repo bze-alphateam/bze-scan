@@ -86,6 +86,15 @@ describe("AccountPage", () => {
     expect(screen.getByTestId("activity-range")).toHaveTextContent("Activity 1–25 of 1,530");
   });
 
+  it("calls a DAO's treasury address a DAO treasury, with its banner", async () => {
+    const dao = { ...plain, label: { name: "DAO #1 · Honey Council", kind: "dao" } };
+    renderWithProviders(<AccountPage address={ADDR} />, {
+      api: api(dao, { accountOpenOrders: () => Promise.resolve({ source: "index", height: 1, orders_count: 0, markets_count: 0, assets: [] } as never), daos: () => Promise.resolve({ items: [], next_cursor: null, supported: true }) }),
+    });
+    expect(await screen.findByTestId("kind-chip")).toHaveTextContent("DAO treasury");
+    expect(screen.getByTestId("dao-banner")).toHaveTextContent("This is the treasury of DAO #1 · Honey Council");
+  });
+
   it("offers no module menu on an account that is not a module", async () => {
     const modulesCall = vi.fn(() => Promise.resolve(modules as { items: ModuleAccount[] }));
     renderWithProviders(<AccountPage address={ADDR} />, { api: api(plain, { modules: modulesCall }) });
