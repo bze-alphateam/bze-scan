@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync"
@@ -40,7 +42,6 @@ const (
 	msgChangeAdmin      = "/bze.tokenfactory.MsgChangeAdmin"
 	msgSetDenomMetadata = "/bze.tokenfactory.MsgSetDenomMetadata"
 	msgSetDenomBranding = "/bze.tokenfactory.MsgSetDenomBranding"
-	msgSetDenomAdmin    = "/bze.tokenfactory.MsgSetDenomAdmin"
 )
 
 // Typed events that name denoms.
@@ -84,6 +85,7 @@ type tokenRows struct {
 	txIndex int
 	time    time.Time
 	seq     int
+	log     logrus.FieldLogger
 }
 
 func (r *tokenRows) add(denom, kind, actor, amount string, details map[string]any) {
@@ -101,8 +103,8 @@ func (r *tokenRows) add(denom, kind, actor, amount string, details map[string]an
 // txTokenEvents appends the token events of a successful transaction: the
 // tokenfactory messages, then the typed events of each message. byIndex are
 // its events by message.
-func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byIndex map[int][]node.Event) error {
-	rows := &tokenRows{ents: ents, height: b.Height, txIndex: txIndex, time: b.Time}
+func txTokenEvents(log logrus.FieldLogger, ents *Entities, b Block, txIndex int, msgs []chain.Msg, byIndex map[int][]node.Event) error {
+	rows := &tokenRows{ents: ents, height: b.Height, txIndex: txIndex, time: b.Time, log: log}
 	for j, m := range msgs {
 		var body map[string]any
 		_ = json.Unmarshal(m.Body, &body) // an undecodable body leaves it nil
@@ -129,11 +131,9 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 			for _, c := range coins {
 				rows.add(c.Denom, kind, actor, c.Amount, details)
 			}
-		case msgChangeAdmin, msgSetDenomAdmin:
-			kind := TokenAdminChanged
-			if m.TypeURL == msgSetDenomAdmin {
-				kind = TokenAdminSetByGov
-			}
+		case msgChangeAdmin:
+			// MsgSetDenomAdmin is governance's: it only runs in EndBlock, so
+			// its row comes from the block-level DenomAdminChangeEvent.
 			details := map[string]any{"to": str(body, "newAdmin")}
 			for _, ev := range byIndex[j] {
 				if ev.Type == evDenomAdminChange {
@@ -142,7 +142,7 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 					break
 				}
 			}
-			rows.add(str(body, "denom"), kind, actor, "", details)
+			rows.add(str(body, "denom"), TokenAdminChanged, actor, "", details)
 		case msgSetDenomMetadata:
 			md, _ := body["metadata"].(map[string]any)
 			rows.add(str(md, "base"), TokenMetadataChanged, actor, "",
@@ -160,8 +160,8 @@ func txTokenEvents(ents *Entities, b Block, txIndex int, msgs []chain.Msg, byInd
 // blockTokenEvents appends the token events of the block's finalize events:
 // the halts, denom admin changes and pool fee updates governance enacts in
 // EndBlock.
-func blockTokenEvents(ents *Entities, b Block, events []node.Event) {
-	rows := &tokenRows{ents: ents, height: b.Height, txIndex: -1, time: b.Time}
+func blockTokenEvents(log logrus.FieldLogger, ents *Entities, b Block, events []node.Event) {
+	rows := &tokenRows{ents: ents, height: b.Height, txIndex: -1, time: b.Time, log: log}
 	for _, ev := range events {
 		typedTokenEvents(rows, ev, "")
 	}
@@ -217,6 +217,8 @@ func typedTokenEvents(rows *tokenRows, ev node.Event, actor string) {
 		pool := anyString(attrs["pool_id"])
 		base, quote, ok := splitPoolID(pool)
 		if !ok {
+			rows.log.WithFields(logrus.Fields{"height": rows.height, "pool_id": pool}).
+				Warn("transform: pool id does not split into two denoms, pool fee update not stored as token events")
 			return
 		}
 		details := map[string]any{
@@ -239,23 +241,14 @@ func typedTokenEvents(rows *tokenRows, ev node.Event, actor string) {
 	}
 }
 
-// splitPoolID splits a pool id, the pool's two denoms joined by "_". A denom
-// may hold an underscore itself; then the split is the one where the second
-// denom is a factory or IBC one, and a pool id with no such split is not
-// resolved.
+// splitPoolID splits a pool id, the pool's two denoms joined by "_" (the
+// chain forbids "_" in subdenoms, so a valid id has exactly one).
 func splitPoolID(id string) (base, quote string, ok bool) {
-	if parts := strings.Split(id, "_"); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		return parts[0], parts[1], true
+	parts := strings.Split(id, "_")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
 	}
-	for i := 1; i < len(id)-1; i++ {
-		if id[i] != '_' {
-			continue
-		}
-		if r := id[i+1:]; strings.HasPrefix(r, "factory/") || strings.HasPrefix(r, "ibc/") {
-			return id[:i], r, true
-		}
-	}
-	return "", "", false
+	return parts[0], parts[1], true
 }
 
 // markSeenDenoms marks every denom the heights' transfers moved, for the

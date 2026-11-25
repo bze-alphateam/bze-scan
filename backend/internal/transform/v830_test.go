@@ -121,13 +121,16 @@ func TestV830TokenEvents(t *testing.T) {
 	assert.Empty(t, hook.AllEntries())
 }
 
-func TestV830PoolFeesOfAPoolIDWithoutASplitAreSkipped(t *testing.T) {
+func TestV830PoolFeesOfAPoolIDWithoutASplitAreSkippedWithAWarning(t *testing.T) {
 	in := baseInput()
 	in.Block.Txs, in.Results.TxsResults = nil, nil
 	in.Results.FinalizeBlockEvents = []node.Event{
 		typed("bze.tradebin.PoolFeesUpdatedEvent", "", "pool_id", "a_b_c", "old_fee", "0.01", "new_fee", "0.02"),
 	}
-	ents, err := realTransformer(t).Transform(in)
+	tr, hook := transformerWithLog(t)
+	ents, err := tr.Transform(in)
 	require.NoError(t, err)
 	assert.Empty(t, ents.TokenEvents)
+	require.Len(t, hook.AllEntries(), 1)
+	assert.Contains(t, hook.LastEntry().Message, "does not split")
 }

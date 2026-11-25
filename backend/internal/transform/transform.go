@@ -278,7 +278,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	if err := blockActivity(ents, b, in.Results.FinalizeBlockEvents); err != nil {
 		return nil, fmt.Errorf("transform %d: %w", h, err)
 	}
-	blockTokenEvents(ents, b, in.Results.FinalizeBlockEvents)
+	blockTokenEvents(t.log, ents, b, in.Results.FinalizeBlockEvents)
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	emergencyHalts(ents, b, "", in.Results.FinalizeBlockEvents)
 	var queue []queued
@@ -380,7 +380,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int,
 	byIndex := eventsByMsgIndex(res.Events)
 	if tx.Success {
 		txValidatorEvents(ents, b, i, decoded.Msgs, byIndex)
-		if err := txTokenEvents(ents, b, i, decoded.Msgs, byIndex); err != nil {
+		if err := txTokenEvents(t.log, ents, b, i, decoded.Msgs, byIndex); err != nil {
 			return err
 		}
 		txGovEvents(ents, b, i, tx.Hash, decoded.Msgs, byIndex)
