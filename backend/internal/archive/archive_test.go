@@ -112,6 +112,9 @@ func TestTestnet3Generations(t *testing.T) {
 		{2_254_400, "v8.1.1", false},
 		{3_626_000, "v8.2.0", false},
 		{3_757_152, "v8.2.0", false},
+		{4_405_154, "v8.2.0", false},
+		{4_405_155, "v8.3.0", false},
+		{5_000_000, "v8.3.0", false},
 	}
 	for _, c := range cases {
 		g := archive.Testnet3.At(c.height)

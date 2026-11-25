@@ -48,10 +48,13 @@
 //	v8.1.0   600,000      0.50.15     CometBFT 0.38.21   8.7.0   current
 //	v8.1.1   2,254,400    0.50.15     CometBFT 0.38.23   8.8.0   current
 //	v8.2.0   3,626,000    0.50.15     CometBFT 0.38.26   8.8.0   current
+//	v8.3.0   4,405,155    0.53.8      CometBFT 0.38.26   10.7.0  current
 //
 // Verified 2026-10-15 from the testnet's applied plans
 // (/cosmos/upgrade/v1beta1/applied_plan/<name> on testnet REST), the genesis
-// file in the chain repository and the go.mod of each release tag.
+// file in the chain repository and the go.mod of each release tag. The v8.3.0
+// row (2026-11-25) is the height the node applied the plan at, with the
+// libraries of the v8.3.0-rc1 tag the testnet runs.
 //
 // # Order of the gov and staking EndBlockers
 //
@@ -217,6 +220,7 @@ var Testnet3 = Chain{ID: "bzetestnet-3", Generations: []Generation{
 	{Release: "v8.1.0", From: 600_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.21", IBC: "8.7.0", Format: FormatCurrent},
 	{Release: "v8.1.1", From: 2_254_400, SDK: "0.50.15", Consensus: "CometBFT 0.38.23", IBC: "8.8.0", Format: FormatCurrent},
 	{Release: "v8.2.0", From: 3_626_000, SDK: "0.50.15", Consensus: "CometBFT 0.38.26", IBC: "8.8.0", Format: FormatCurrent},
+	{Release: "v8.3.0", From: 4_405_155, SDK: "0.53.8", Consensus: "CometBFT 0.38.26", IBC: "10.7.0", Format: FormatCurrent},
 }}
 
 // Chains are the chains the adapter knows, by chain id.
