@@ -79,12 +79,16 @@ type daoOutcomeRow struct {
 	ExecutionError *string   `json:"execution_error"`
 }
 
-// daoOutcomesSQL applies the settles and cancels. settled_height and
-// settled_tx_hash are those of the latest settle (the one that set the
-// status: a retry's, an expiry's); a status change never goes back to an
-// older one, and one the state sync set without a height only moves
-// forward (voting → any, execution_failed → executed | expired).
-const daoOutcomesSQL = `INSERT INTO explorer.dao_proposals AS p (id, status, status_height, settled_height,
+// daoOutcomesSQL applies the settles and cancels. The status columns
+// (status, status_height, settled_height, settled_tx_hash, the tally) take
+// the latest settle's (a retry's, an expiry's): a change applies only over
+// an older one, and over a status the state sync set without a height only
+// forward (voting → any, execution_failed → executed | expired). The facts
+// of earlier settles merge in whatever the order: expedited_early stays true
+// once a settle says so (only the early first settle does), and the outcome
+// of the latest run fills executed/execution_error left empty by a settle
+// that ran nothing (an expiry).
+var daoOutcomesSQL = `INSERT INTO explorer.dao_proposals AS p (id, status, status_height, settled_height,
 		settled_tx_hash, yes, no, abstain, denominator, tally_updated_at, expedited_early, executed, execution_error,
 		cancelled_height, updated_at)
 	SELECT r.id, r.status, r.height,
@@ -96,30 +100,38 @@ const daoOutcomesSQL = `INSERT INTO explorer.dao_proposals AS p (id, status, sta
 	       executed boolean, execution_error text)
 	 ORDER BY r.id
 	ON CONFLICT (id) DO UPDATE SET
-		status = EXCLUDED.status, status_height = EXCLUDED.status_height,
-		settled_height = COALESCE(EXCLUDED.settled_height, p.settled_height),
-		settled_tx_hash = CASE WHEN EXCLUDED.settled_height IS NULL THEN p.settled_tx_hash ELSE EXCLUDED.settled_tx_hash END,
-		yes = COALESCE(EXCLUDED.yes, p.yes), no = COALESCE(EXCLUDED.no, p.no),
-		abstain = COALESCE(EXCLUDED.abstain, p.abstain), denominator = COALESCE(EXCLUDED.denominator, p.denominator),
-		tally_updated_at = COALESCE(EXCLUDED.tally_updated_at, p.tally_updated_at),
-		expedited_early = COALESCE(EXCLUDED.expedited_early, p.expedited_early),
-		executed = COALESCE(EXCLUDED.executed, p.executed),
-		execution_error = CASE WHEN EXCLUDED.executed IS NULL THEN p.execution_error ELSE EXCLUDED.execution_error END,
+		status = CASE WHEN ` + outcomeApplies + ` THEN EXCLUDED.status ELSE p.status END,
+		status_height = CASE WHEN ` + outcomeApplies + ` THEN EXCLUDED.status_height ELSE p.status_height END,
+		settled_height = CASE WHEN ` + outcomeApplies + ` THEN COALESCE(EXCLUDED.settled_height, p.settled_height)
+		                      ELSE p.settled_height END,
+		settled_tx_hash = CASE WHEN ` + outcomeApplies + ` AND EXCLUDED.settled_height IS NOT NULL
+		                       THEN EXCLUDED.settled_tx_hash ELSE p.settled_tx_hash END,
+		yes = ` + latestOr("yes") + `, no = ` + latestOr("no") + `, abstain = ` + latestOr("abstain") + `,
+		denominator = ` + latestOr("denominator") + `, tally_updated_at = ` + latestOr("tally_updated_at") + `,
+		expedited_early = CASE WHEN p.expedited_early IS NULL AND EXCLUDED.expedited_early IS NULL THEN NULL
+		                       ELSE COALESCE(p.expedited_early, false) OR COALESCE(EXCLUDED.expedited_early, false) END,
+		executed = CASE WHEN ` + outcomeApplies + ` AND EXCLUDED.executed IS NOT NULL THEN EXCLUDED.executed
+		                ELSE COALESCE(p.executed, EXCLUDED.executed) END,
+		execution_error = CASE WHEN ` + outcomeApplies + ` AND EXCLUDED.executed IS NOT NULL THEN EXCLUDED.execution_error
+		                       WHEN p.executed IS NULL THEN EXCLUDED.execution_error
+		                       ELSE p.execution_error END,
 		cancelled_height = COALESCE(EXCLUDED.cancelled_height, p.cancelled_height),
-		expedite_settleable = false,
-		retry_deadline = CASE WHEN EXCLUDED.status = 'execution_failed' THEN p.retry_deadline END,
-		updated_at = now()
-	WHERE CASE WHEN p.status_height IS NOT NULL THEN p.status_height <= EXCLUDED.status_height
-	           ELSE p.status IN ('voting', EXCLUDED.status)
-	                OR (p.status = 'execution_failed' AND EXCLUDED.status IN ('executed', 'expired')) END
-	  AND (p.status, p.status_height, p.settled_height, p.settled_tx_hash, p.yes, p.no, p.abstain, p.expedited_early,
-	       p.executed, p.execution_error, p.cancelled_height) IS DISTINCT FROM
-	      (EXCLUDED.status, EXCLUDED.status_height, COALESCE(EXCLUDED.settled_height, p.settled_height),
-	       CASE WHEN EXCLUDED.settled_height IS NULL THEN p.settled_tx_hash ELSE EXCLUDED.settled_tx_hash END,
-	       COALESCE(EXCLUDED.yes, p.yes), COALESCE(EXCLUDED.no, p.no), COALESCE(EXCLUDED.abstain, p.abstain),
-	       COALESCE(EXCLUDED.expedited_early, p.expedited_early), COALESCE(EXCLUDED.executed, p.executed),
-	       CASE WHEN EXCLUDED.executed IS NULL THEN p.execution_error ELSE EXCLUDED.execution_error END,
-	       COALESCE(EXCLUDED.cancelled_height, p.cancelled_height))`
+		expedite_settleable = CASE WHEN ` + outcomeApplies + ` THEN false ELSE p.expedite_settleable END,
+		retry_deadline = CASE WHEN NOT ` + outcomeApplies + ` THEN p.retry_deadline
+		                      WHEN EXCLUDED.status = 'execution_failed' THEN p.retry_deadline END,
+		updated_at = now()`
+
+// outcomeApplies is true when the change's status replaces the stored one.
+const outcomeApplies = `(CASE WHEN p.status_height IS NOT NULL THEN p.status_height <= EXCLUDED.status_height
+	ELSE p.status IN ('voting', EXCLUDED.status)
+	     OR (p.status = 'execution_failed' AND EXCLUDED.status IN ('executed', 'expired')) END)`
+
+// latestOr is column from the change when it applies, else the stored one
+// (an older settle's fills it when empty: the final tally is the same).
+func latestOr(column string) string {
+	return `CASE WHEN ` + outcomeApplies + ` THEN COALESCE(EXCLUDED.` + column + `, p.` + column + `)
+		ELSE COALESCE(p.` + column + `, EXCLUDED.` + column + `) END`
+}
 
 // daoDepositRow is the JSON shape of the deposit releases upsert.
 type daoDepositRow struct {
@@ -334,7 +346,8 @@ func outcomePos(o transform.DaoProposalOutcome) []int64 {
 
 // latestOutcomes keeps one status change per proposal: the latest by
 // height, transaction, message and event. A later settle that ran nothing
-// (an expiry) keeps the outcome of the earlier run in the same flush.
+// (an expiry) keeps the outcome of the earlier run in the same flush, and an
+// early first settle keeps expedited_early through its retries.
 func latestOutcomes(outcomes []transform.DaoProposalOutcome) []transform.DaoProposalOutcome {
 	sorted := slices.Clone(outcomes)
 	slices.SortStableFunc(sorted, func(a, b transform.DaoProposalOutcome) int {
@@ -342,8 +355,11 @@ func latestOutcomes(outcomes []transform.DaoProposalOutcome) []transform.DaoProp
 	})
 	latest := map[int64]transform.DaoProposalOutcome{}
 	for _, o := range sorted {
-		if cur, ok := latest[o.ID]; ok && o.Executed == nil && !o.Cancelled {
-			o.Executed, o.ExecutionError = cur.Executed, cur.ExecutionError
+		if cur, ok := latest[o.ID]; ok && !o.Cancelled {
+			if o.Executed == nil {
+				o.Executed, o.ExecutionError = cur.Executed, cur.ExecutionError
+			}
+			o.ExpeditedEarly = o.ExpeditedEarly || cur.ExpeditedEarly
 		}
 		latest[o.ID] = o
 	}

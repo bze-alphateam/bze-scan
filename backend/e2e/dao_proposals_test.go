@@ -308,3 +308,55 @@ func TestDaoProposalHistoryWrittenInAnyOrder(t *testing.T) {
 	assert.Equal(t, "60", votes.Items[0].Weight)
 	assert.Equal(t, "50", votes.Items[0].EffectiveWeight, "only the reduction after the revote")
 }
+
+// The facts of every settle merge whatever the order the backfill writes
+// them in: an early first settle that failed stays early after its retry;
+// an expiry keeps the failed run's outcome.
+func TestDaoSettleFactsMergeInAnyOrder(t *testing.T) {
+	e := newSyncEnv(t)
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	type settle struct {
+		status string
+		ran    *bool
+		early  bool
+	}
+	scenarios := []struct {
+		name  string
+		steps []settle
+		want  string
+	}{
+		{"early failure then retry", []settle{{"EXECUTION_FAILED", boolPtr(false), true}, {"EXECUTED", boolPtr(true), false}},
+			"executed 1 1"},
+		{"failure then expiry", []settle{{"EXECUTION_FAILED", boolPtr(false), false}, {"EXPIRED", nil, false}},
+			"expired 0 0 insufficient funds"},
+	}
+	h := int64(25_300_000)
+	id := 20
+	for _, sc := range scenarios {
+		for _, newestFirst := range []bool{false, true} {
+			id++
+			pid := fmt.Sprint(id)
+			var blocks []*transform.Entities
+			for _, st := range sc.steps {
+				blocks = append(blocks, daoTxBlock(t, h, []sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoAdmin, ProposalId: uint64(id)}},
+					[][]node.Event{daoSettledEvents(pid, st.status, "9", "10", st.ran, st.early)}))
+				h++
+			}
+			if newestFirst {
+				for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
+					blocks[i], blocks[j] = blocks[j], blocks[i]
+				}
+			}
+			for _, b := range blocks {
+				require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), []*transform.Entities{b}, writer.ModeInsert))
+			}
+			got := queryStrings(t, e.db, `SELECT concat_ws(' ', status, executed::int, expedited_early::int, execution_error)
+				FROM explorer.dao_proposals WHERE id = $1`, id)
+			assert.Equal(t, []string{sc.want}, got, "%s, newest first: %v", sc.name, newestFirst)
+			assert.Equal(t, []string{fmt.Sprint(h - 1)}, queryStrings(t, e.db,
+				`SELECT settled_height::text FROM explorer.dao_proposals WHERE id = $1`, id), "the latest settle's height")
+		}
+	}
+}

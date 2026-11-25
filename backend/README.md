@@ -1678,7 +1678,11 @@ so their history comes from the events (migration 000035,
   down) writes the row the submission fills later. A status change applies
   only over an older one (`status_height`), or over one the state sync set
   (no height) only forward (voting → any; execution_failed → executed or
-  expired): a reindex never reopens or regresses a proposal.
+  expired): a reindex never reopens or regresses a proposal. The other
+  settle facts merge in any order: `expedited_early` stays true once a
+  settle says so (only an early first settle does; its retries and expiry
+  say false), and a settle that ran nothing (an expiry) keeps the failed
+  run's `executed`/`execution_error`.
 - `explorer.dao_votes`, each voter's latest ballot, forward-only by
   (height, tx_index, msg_index) like `proposal_votes`.
 - `explorer.dao_ballot_reductions` (partitioned by height), one row per

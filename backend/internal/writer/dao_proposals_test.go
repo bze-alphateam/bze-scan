@@ -60,10 +60,31 @@ func TestOneDaoOutcomePerProposalTheLatest(t *testing.T) {
 	assert.Equal(t, "cancelled", rows[2]["status"])
 	assert.Equal(t, true, rows[2]["cancelled"])
 	assert.Nil(t, rows[2]["yes"], "a cancel has no tally")
-	assert.Contains(t, st.sql, "p.status_height <= EXCLUDED.status_height", "an older change never replaces a newer one")
+	assert.Contains(t, st.sql, "p.status_height <= EXCLUDED.status_height", "an older change never replaces a newer status")
+	assert.Contains(t, st.sql, "COALESCE(p.expedited_early, false) OR COALESCE(EXCLUDED.expedited_early, false)",
+		"an early first settle stays early whatever the order")
 	assert.Contains(t, st.sql, "p.status = 'execution_failed' AND EXCLUDED.status IN ('executed', 'expired')",
 		"over a status the sync set, only forward")
 	assert.True(t, strings.HasPrefix(strings.TrimSpace(st.sql), "INSERT"), "a settle indexed before its submission writes a row")
+}
+
+// An early first settle that failed, then its retry in the same flush: the
+// retry's status, the first settle's expedited_early.
+func TestEarlySettleSurvivesItsRetry(t *testing.T) {
+	db := newMockDB(49)
+	a := block(100)
+	a.DaoProposalOutcomes = []transform.DaoProposalOutcome{
+		{ID: 3, Status: "execution_failed", Height: 100, TxIndex: 0, Yes: "9", No: "0", Abstain: "0", Denominator: "10",
+			ExpeditedEarly: true, Executed: boolp(false), ExecutionError: "boom"},
+		{ID: 3, Status: "executed", Height: 100, TxIndex: 1, Yes: "9", No: "0", Abstain: "0", Denominator: "10",
+			Executed: boolp(true)},
+	}
+	require.NoError(t, writer.NewBatchWriter(db).Write(context.Background(), []*transform.Entities{a}, writer.ModeInsert))
+	rows := payload(t, daoStatement(t, db.txs[0], "cancelled_height, updated_at)"))
+	require.Len(t, rows, 1)
+	assert.Equal(t, "executed", rows[0]["status"])
+	assert.Equal(t, true, rows[0]["expedited_early"])
+	assert.Equal(t, true, rows[0]["executed"])
 }
 
 // The submission only fills: it never writes the status.
