@@ -55,6 +55,8 @@ type Deps struct {
 	// Tokens reads the denoms and their history; nil leaves /api/v1/tokens
 	// and /api/v1/token out.
 	Tokens controller.TokenReader
+	// PoolPrices adds the pool price state to LP token pages; nil leaves it out.
+	PoolPrices controller.PoolPriceReader
 	// RateLimits reads the live IBC rate limits and RateLimitNames names
 	// their denoms and channels; nil RateLimits leaves
 	// /api/v1/ibc/rate-limits out and the tokens' rate_limits empty.
@@ -203,6 +205,7 @@ func New(deps Deps) *echo.Echo {
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)
+		tokens.Pools = deps.PoolPrices
 		if rateLimits != nil {
 			tokens.WithRateLimits(rateLimits)
 		}

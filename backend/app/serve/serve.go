@@ -29,6 +29,7 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/indexer/live"
 	"github.com/bze-alphateam/bze-scan/backend/internal/node"
 	"github.com/bze-alphateam/bze-scan/backend/internal/ordercoverage"
+	"github.com/bze-alphateam/bze-scan/backend/internal/poolprice"
 	"github.com/bze-alphateam/bze-scan/backend/internal/rawcache"
 	"github.com/bze-alphateam/bze-scan/backend/internal/stakeflow"
 	"github.com/bze-alphateam/bze-scan/backend/internal/statesync/upgrades"
@@ -220,6 +221,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	var compatOrders controller.OrderBooks
 	var compatIntervals controller.Intervals
 	var compatTickers controller.Tickers
+	var tickerPools poolprice.Pools
 	if cfg.NodeGRPCAddr != "" {
 		books, closeBooks, err := NewOrderBook(cfg, codec, apiPool)
 		if err != nil {
@@ -234,7 +236,18 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			return err
 		}
 		defer closeTickers()
-		compatTickers = tk
+		compatTickers, tickerPools = tk, tk
+	}
+
+	// The LP token page's pool price state needs the node and the live params.
+	var poolPrices controller.PoolPriceReader
+	if cfg.NodeGRPCAddr != "" {
+		pp, closePools, err := NewPoolPrices(cfg, codec, tickerPools, apiPool, liveParams)
+		if err != nil {
+			return err
+		}
+		defer closePools()
+		poolPrices = pp
 	}
 
 	explorerRepo := repository.NewExplorer(apiPool)
@@ -265,6 +278,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Explorer:        explorerRepo,
 		Accounts:        explorerRepo,
 		Tokens:          explorerRepo,
+		PoolPrices:      poolPrices,
 		Prices:          explorerRepo,
 		Proposals:       explorerRepo,
 		Upgrades:        explorerRepo,
