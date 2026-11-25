@@ -166,12 +166,14 @@ const NestedSeqBase = 1000
 // distinct seqs. The mints and burns are not here: the settle's events give
 // them. The rows are those the same messages give at the top level, with
 // the DAO as their actor. Dirty marks the denoms and validators they change
-// (the token rows mark their denoms).
-func NestedActions(msgs json.RawMessage, height int64, txIndex int, t time.Time, ordinal int) *Entities {
-	ents := &Entities{}
+// (the token rows mark their denoms). A proposal's rows must fit in its
+// range of NestedSeqBase seqs per table: dropped counts the rows past it,
+// which are left out (the chain caps a proposal's messages far below).
+func NestedActions(msgs json.RawMessage, height int64, txIndex int, t time.Time, ordinal int) (ents *Entities, dropped int) {
+	ents = &Entities{}
 	inner := msgsOf(msgs, 0)
 	if len(inner) == 0 {
-		return ents
+		return ents, 0
 	}
 	first := NestedSeqBase * (ordinal + 1)
 	rows := &tokenRows{ents: ents, height: height, txIndex: txIndex, time: t, seq: first}
@@ -182,17 +184,21 @@ func NestedActions(msgs json.RawMessage, height int64, txIndex int, t time.Time,
 		markValidatorMsg(&ents.Dirty, m)
 	}
 	// The rows of one proposal stay in its range.
-	ents.TokenEvents = keepBelow(ents.TokenEvents, first+NestedSeqBase, func(e TokenEvent) int { return e.Seq })
-	ents.ValidatorEvents = keepBelow(ents.ValidatorEvents, first+NestedSeqBase, func(e ValidatorEvent) int { return e.Seq })
-	return ents
+	var n int
+	ents.TokenEvents, n = keepBelow(ents.TokenEvents, first+NestedSeqBase, func(e TokenEvent) int { return e.Seq })
+	dropped += n
+	ents.ValidatorEvents, n = keepBelow(ents.ValidatorEvents, first+NestedSeqBase, func(e ValidatorEvent) int { return e.Seq })
+	dropped += n
+	return ents, dropped
 }
 
-func keepBelow[T any](rows []T, limit int, seq func(T) int) []T {
+// keepBelow keeps the rows whose seq is below limit and counts the others.
+func keepBelow[T any](rows []T, limit int, seq func(T) int) ([]T, int) {
 	out := rows[:0]
 	for _, r := range rows {
 		if seq(r) < limit {
 			out = append(out, r)
 		}
 	}
-	return out
+	return out, len(rows) - len(out)
 }

@@ -2,6 +2,7 @@ package transform_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
+	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,7 +157,7 @@ func TestSettleBurnAndMetadata(t *testing.T) {
 		&tokenfactorytypes.MsgSetDenomMetadata{Creator: dao, Metadata: banktypes.Metadata{Base: h, Symbol: "HNY", Name: "Honey", Display: "HNY"}},
 	)
 	at := time.Unix(200, 0).UTC()
-	nested := transform.NestedActions(msgs, 10, 0, at, 1)
+	nested, _ := transform.NestedActions(msgs, 10, 0, at, 1)
 	assert.Equal(t, []transform.TokenEvent{{Height: 10, TxIndex: 0, Seq: 2000, Denom: h, Kind: "metadata_changed", Actor: dao,
 		Details: map[string]any{"symbol": "HNY", "name": "Honey", "display": "HNY"}, Time: at}}, nested.TokenEvents,
 		"the second proposal settled in the transaction: seqs from 2000, no burn")
@@ -169,14 +171,16 @@ func TestNestedActionsOfValidatorMessagesInsideAnAuthzExec(t *testing.T) {
 			Moniker: "[do-not-modify]", Identity: "[do-not-modify]", Website: "https://dao.example",
 			SecurityContact: "[do-not-modify]", Details: "[do-not-modify]"}},
 	)})
-	nested := transform.NestedActions(msgs, 12, 3, time.Unix(1, 0).UTC(), 0)
+	nested, _ := transform.NestedActions(msgs, 12, 3, time.Unix(1, 0).UTC(), 0)
 	require.Len(t, nested.ValidatorEvents, 1)
 	v := nested.ValidatorEvents[0]
 	assert.Equal(t, 1000, v.Seq)
 	assert.Equal(t, 3, v.TxIndex)
 	assert.Equal(t, map[string]any{"to": map[string]any{"website": "https://dao.example"}}, v.Details)
 	assert.Contains(t, nested.Dirty.Keys(statesync.Validators), operator)
-	assert.Empty(t, transform.NestedActions(nil, 12, 3, time.Unix(1, 0), 0).TokenEvents, "no msgs, no rows")
+	empty, dropped := transform.NestedActions(nil, 12, 3, time.Unix(1, 0), 0)
+	assert.Empty(t, empty.TokenEvents, "no msgs, no rows")
+	assert.Zero(t, dropped)
 }
 
 // proposalMsgs is a proposal's msgs as the explorer stores them: proto JSON
@@ -264,7 +268,7 @@ func TestNestedActionsNumberTokenAndValidatorRowsApart(t *testing.T) {
 			Moniker: "DAO node", Identity: "[do-not-modify]", Website: "[do-not-modify]",
 			SecurityContact: "[do-not-modify]", Details: "[do-not-modify]"}},
 	)
-	nested := transform.NestedActions(msgs, 12, 0, time.Unix(1, 0).UTC(), 0)
+	nested, _ := transform.NestedActions(msgs, 12, 0, time.Unix(1, 0).UTC(), 0)
 	require.Len(t, nested.TokenEvents, 1)
 	require.Len(t, nested.ValidatorEvents, 1)
 	assert.Equal(t, 1000, nested.TokenEvents[0].Seq)
@@ -301,4 +305,108 @@ func TestSettleDepositRefundIsReceived(t *testing.T) {
 	}
 	assert.Equal(t, "received", byAddr[newAdmin].Category)
 	assert.Equal(t, "governance", byAddr[creator].Category, "the settler signs: unchanged")
+}
+
+// branding is a stored proposal message that gives one token row.
+const branding = `{"@type":"/bze.tokenfactory.MsgSetDenomBranding","creator":"` + creator + `","denom":"` + honey + `"}`
+
+// wrapped puts msg inside n authz execs.
+func wrapped(msg string, n int) string {
+	for i := 0; i < n; i++ {
+		msg = `{"@type":"/cosmos.authz.v1beta1.MsgExec","grantee":"` + creator + `","msgs":[` + msg + `]}`
+	}
+	return msg
+}
+
+func TestNestedActionsStopAtTheDepthBound(t *testing.T) {
+	at := time.Unix(1, 0).UTC()
+	deep, _ := transform.NestedActions(json.RawMessage(`[`+wrapped(branding, 15)+`]`), 1, 0, at, 0)
+	assert.Len(t, deep.TokenEvents, 1, "fifteen wrappers deep: read")
+	tooDeep, _ := transform.NestedActions(json.RawMessage(`[`+wrapped(branding, 16)+`]`), 1, 0, at, 0)
+	assert.Empty(t, tooDeep.TokenEvents, "sixteen wrappers deep: not unwrapped")
+}
+
+func TestNestedActionsSkipMalformedMessages(t *testing.T) {
+	at := time.Unix(1, 0).UTC()
+	for _, raw := range []string{`{"msgs":[]}`, `"x"`, `[1,`, `null`} {
+		ents, dropped := transform.NestedActions(json.RawMessage(raw), 1, 0, at, 0)
+		assert.Empty(t, ents.TokenEvents, raw)
+		assert.Zero(t, dropped, raw)
+	}
+	ents, _ := transform.NestedActions(json.RawMessage(`[{"creator":"x"},{"@type":5},"str",{"@type":""},`+
+		`{"@type":"/cosmos.authz.v1beta1.MsgExec","msgs":{"not":"an array"}},`+branding+`]`), 1, 0, at, 0)
+	assert.Len(t, ents.TokenEvents, 1, "only the well-formed message")
+}
+
+// The inner messages of an admin execution or an authz exec in a
+// transaction's body, when malformed, give nothing and no panic.
+func TestMalformedWrapperBodiesInATransaction(t *testing.T) {
+	raw := encodedTx(t, &authz.MsgExec{Grantee: creator})
+	ents := transformDaoTx(t, nil, raw)
+	assert.Empty(t, ents.TokenEvents)
+}
+
+// A proposal's range holds NestedSeqBase rows per table; the next is
+// dropped and counted.
+func TestNestedActionsRangeBoundary(t *testing.T) {
+	rows := func(n int) json.RawMessage {
+		items := make([]string, n)
+		for i := range items {
+			items[i] = branding
+		}
+		return json.RawMessage("[" + strings.Join(items, ",") + "]")
+	}
+	at := time.Unix(1, 0).UTC()
+	full, dropped := transform.NestedActions(rows(transform.NestedSeqBase), 1, 0, at, 0)
+	assert.Len(t, full.TokenEvents, transform.NestedSeqBase)
+	assert.Equal(t, 2*transform.NestedSeqBase-1, full.TokenEvents[len(full.TokenEvents)-1].Seq)
+	assert.Zero(t, dropped)
+	over, dropped := transform.NestedActions(rows(transform.NestedSeqBase+1), 1, 0, at, 0)
+	assert.Len(t, over.TokenEvents, transform.NestedSeqBase)
+	assert.Equal(t, 1, dropped)
+}
+
+// A failed transaction runs nothing: no rows through the wrappers.
+func TestFailedWrapperTransactionsGiveNoRows(t *testing.T) {
+	dao := daoAddress(t, 3)
+	h := "factory/" + dao + "/uhoney"
+	for name, msg := range map[string]sdk.Msg{
+		"authz exec": &authz.MsgExec{Grantee: creator, Msgs: anys(t,
+			&tokenfactorytypes.MsgMint{Creator: granter, Coins: "9" + honey},
+			&tokenfactorytypes.MsgSetDenomBranding{Creator: granter, Denom: honey},
+			&slashingtypes.MsgUnjail{ValidatorAddr: operator},
+			&govv1.MsgSubmitProposal{Proposer: granter, Title: "x"})},
+		"admin execute": &daotypes.MsgAdminExecute{Admin: creator, DaoId: 3, Msgs: anys(t,
+			&tokenfactorytypes.MsgMint{Creator: dao, Coins: "9" + h},
+			&tokenfactorytypes.MsgSetDenomBranding{Creator: dao, Denom: h},
+			&slashingtypes.MsgUnjail{ValidatorAddr: operator})},
+	} {
+		in := baseInput()
+		in.Block.Txs = []string{encodedTx(t, msg)}
+		events := append(mintEvents("0", granter, "9"+honey), withIndex(node.Event{Type: "submit_proposal",
+			Attributes: []node.Attribute{{Key: "proposal_id", Value: "51"}}}, "0"))
+		in.Results.TxsResults = []node.TxResult{{Code: 5, Events: events}}
+		ents, err := realTransformer(t).Transform(in)
+		require.NoError(t, err, name)
+		assert.Empty(t, ents.TokenEvents, name)
+		assert.Empty(t, ents.ValidatorEvents, name)
+		assert.Empty(t, ents.Proposals, name)
+		assert.NotContains(t, ents.Dirty.Keys(statesync.Validators), operator, name)
+	}
+}
+
+// The chain's Burn moves the coins from the creator to the module first:
+// inside an authz exec the burner is the granter.
+func TestAuthzExecBurnIsTheGranters(t *testing.T) {
+	raw := encodedTx(t, &authz.MsgExec{Grantee: creator, Msgs: anys(t,
+		&tokenfactorytypes.MsgMint{Creator: granter, Coins: "9" + honey},
+		&tokenfactorytypes.MsgBurn{Creator: granter, Coins: "4" + honey})})
+	ents := transformDaoTx(t, append(mintEvents("0", granter, "9"+honey), burnEvents("0", granter, "4"+honey)...), raw)
+	require.Len(t, ents.TokenEvents, 2)
+	assert.Equal(t, "minted", ents.TokenEvents[0].Kind)
+	assert.Equal(t, granter, ents.TokenEvents[0].Actor)
+	assert.Equal(t, "burned", ents.TokenEvents[1].Kind)
+	assert.Equal(t, granter, ents.TokenEvents[1].Actor)
+	assert.Equal(t, "4", ents.TokenEvents[1].Amount)
+	assert.Equal(t, 1, ents.TokenEvents[1].Seq)
 }

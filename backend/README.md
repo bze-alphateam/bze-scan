@@ -1165,6 +1165,22 @@ the proposal's stored `dao_proposals.msgs`); an authz grantee through
   submission's flush). A proposal whose `msgs` only the state sync fills
   (a nested submission) gets no rows when its settle was written first.
 
+Consequences of the rule:
+
+- On the settle path there are no message events to read, so a settle's
+  `admin_changed` rows have no `from` (the previous admin), unlike those of
+  `MsgExec` and `MsgAdminExecute`.
+- Inside an authz `MsgExec`, body rows and mints/burns name the granter
+  (the inner creator, the denom admin, as the chain does), while typed
+  events (halt, minting disabled, config change, market/pool created
+  without a creator attribute) keep the transaction's signer (the grantee),
+  as before.
+- A settle's proposal gets its seq range from its rank among the executed
+  proposals of that transaction the database holds when the hook runs. All
+  of them are written by the settle's own flush, so the ranks are final
+  once the settle is indexed. A proposal past its range's 1000 rows per
+  table loses the overflow, and the hook logs a warning with its id.
+
 ### Governance
 
 Proposals, votes and deposits are kept forever; the gov module deletes the

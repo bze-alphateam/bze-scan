@@ -11,6 +11,8 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -63,7 +65,7 @@ func TestSettledProposalActionsWhenTheSubmissionComesLater(t *testing.T) {
 	t.Cleanup(pool.Close)
 	const h = int64(25_300_000)
 	submit, settle := nestedProposalBlocks(t, h)
-	w := writer.NewBatchWriter(pool, writer.SettledProposalActions)
+	w := writer.NewBatchWriter(pool, writer.SettledProposalActions(nullLog()))
 
 	require.NoError(t, w.Write(context.Background(), []*transform.Entities{settle}, writer.ModeInsert))
 	assert.Empty(t, queryStrings(t, e.db, nestedRowsSQL), "no msgs yet: nothing to run")
@@ -88,7 +90,7 @@ func TestSettledProposalActionsOnTheLivePath(t *testing.T) {
 	t.Cleanup(pool.Close)
 	const h = int64(25_300_100)
 	submit, settle := nestedProposalBlocks(t, h)
-	w := writer.NewLiveWriter(pool, writer.SettledProposalActions)
+	w := writer.NewLiveWriter(pool, writer.SettledProposalActions(nullLog()))
 	require.NoError(t, w.WriteBlock(context.Background(), submit))
 	assert.Empty(t, queryStrings(t, e.db, nestedRowsSQL))
 	require.NoError(t, w.WriteBlock(context.Background(), settle))
@@ -96,4 +98,39 @@ func TestSettledProposalActionsOnTheLivePath(t *testing.T) {
 		"token 25300101 0 1000 metadata_changed " + daoTwo,
 		"validator 25300101 0 1000 description_changed bzevaloper1daonodedaonodedaonodedaonodedaonod",
 	}, queryStrings(t, e.db, nestedRowsSQL))
+}
+
+// Two proposals executed by one transaction (an authz exec of two settles
+// leaves both under one message): each gets its own seq range, by id.
+func TestTwoProposalsSettledInOneTransaction(t *testing.T) {
+	e := newSyncEnv(t)
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	const h = int64(25_300_200)
+	denom := "factory/" + daoTwo + "/uhoney"
+	brand, err := codectypes.NewAnyWithValue(&tokenfactorytypes.MsgSetDenomBranding{Creator: daoTwo, Denom: denom})
+	require.NoError(t, err)
+	submit := daoTxBlock(t, h,
+		[]sdk.Msg{
+			&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Brand", Msgs: []*codectypes.Any{brand}},
+			&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Brand again", Msgs: []*codectypes.Any{brand}},
+		},
+		[][]node.Event{{daoSubmittedEvent("11", "2", "100", "1764666002", false)}, {daoSubmittedEvent("12", "2", "100", "1764666002", false)}})
+	settle := daoTxBlock(t, h+1,
+		[]sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoMember, ProposalId: 11}},
+		[][]node.Event{append(daoSettledEvents("11", "EXECUTED", "60", "100", boolPtr(true), false),
+			daoSettledEvents("12", "EXECUTED", "60", "100", boolPtr(true), false)...)})
+	w := writer.NewLiveWriter(pool, writer.SettledProposalActions(nullLog()))
+	require.NoError(t, w.WriteBlock(context.Background(), submit))
+	require.NoError(t, w.WriteBlock(context.Background(), settle))
+	assert.Equal(t, []string{
+		"token 25300201 0 1000 branding_changed " + daoTwo,
+		"token 25300201 0 2000 branding_changed " + daoTwo,
+	}, queryStrings(t, e.db, nestedRowsSQL))
+}
+
+func nullLog() logrus.FieldLogger {
+	log, _ := logtest.NewNullLogger()
+	return log
 }

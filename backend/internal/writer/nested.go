@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
 )
@@ -38,14 +39,21 @@ const settledActionsSQL = `WITH s AS (
 	 WHERE p.status = 'executed'
 	 ORDER BY p.id`
 
-// SettledProposalActions is the PostFlush hook that writes the token_events
+// SettledProposalActions returns the PostFlush hook that writes the token_events
 // and validator_events rows of the messages the flush's executed DAO
 // proposals ran (see above), in the flush's mode: running it again rewrites
 // the same rows (transform.NestedActions numbers them from
 // transform.NestedSeqBase by the proposal's rank in its settle), so a reindex
 // or a second trigger changes nothing. The denoms and validators they change
-// are marked in the flush's Dirty.
-func SettledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush) error {
+// are marked in the flush's Dirty. A proposal whose rows overflow its seq
+// range is written without the overflow, and log warns about it.
+func SettledProposalActions(log logrus.FieldLogger) PostFlush {
+	return func(ctx context.Context, tx pgx.Tx, f *Flush) error {
+		return settledProposalActions(ctx, tx, f, log)
+	}
+}
+
+func settledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush, log logrus.FieldLogger) error {
 	if f == nil || f.Entities == nil {
 		return nil
 	}
@@ -87,7 +95,11 @@ func SettledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush) error {
 			if msgs == "" {
 				continue
 			}
-			ents := transform.NestedActions(json.RawMessage(msgs), height, txIndex, at, ordinal)
+			ents, dropped := transform.NestedActions(json.RawMessage(msgs), height, txIndex, at, ordinal)
+			if dropped > 0 {
+				log.WithFields(logrus.Fields{"proposal_id": id, "height": height, "tx_index": txIndex, "dropped": dropped}).
+					Warn("settled proposal actions: more rows than the proposal's seq range holds, the rest not stored")
+			}
 			all.TokenEvents = append(all.TokenEvents, ents.TokenEvents...)
 			all.ValidatorEvents = append(all.ValidatorEvents, ents.ValidatorEvents...)
 			for set, keys := range ents.Dirty {

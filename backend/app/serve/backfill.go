@@ -50,7 +50,7 @@ func newHistory(ctx context.Context, cfg *config.Config, opts Options, codec *ch
 	if cfg.ArchiveRPCRetryURL != "" {
 		retry = node.New(cfg.ArchiveRPCRetryURL)
 	}
-	w := writer.NewBatchWriter(pool, append([]writer.PostFlush{writer.AttributeOrders, writer.SettledProposalActions,
+	w := writer.NewBatchWriter(pool, append([]writer.PostFlush{writer.AttributeOrders, writer.SettledProposalActions(log.StandardLogger()),
 		candles.Default.PostFlush}, hooks...)...)
 	limit := rate.Limit(cfg.BackfillRateLimit)
 	if limit <= 0 {

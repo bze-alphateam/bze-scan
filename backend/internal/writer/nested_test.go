@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,7 +37,7 @@ func statementsWith(tx *mockTx, frag string) []statement {
 
 func settledFlush(t *testing.T, db *mockDB, mode writer.Mode, ents *transform.Entities) *mockTx {
 	t.Helper()
-	require.NoError(t, writer.NewBatchWriter(db, writer.SettledProposalActions).
+	require.NoError(t, writer.NewBatchWriter(db, writer.SettledProposalActions(nullLog())).
 		Write(context.Background(), []*transform.Entities{ents}, mode))
 	return db.txs[0]
 }
@@ -110,6 +112,38 @@ func TestSettledProposalActionsMarkTheirDenomsOnTheLivePath(t *testing.T) {
 	ents := block(10)
 	ok := true
 	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Executed: &ok}}
-	require.NoError(t, writer.NewLiveWriter(db, writer.SettledProposalActions).WriteBlock(context.Background(), ents))
+	require.NoError(t, writer.NewLiveWriter(db, writer.SettledProposalActions(nullLog())).WriteBlock(context.Background(), ents))
 	assert.Contains(t, ents.Dirty.Keys(statesync.Denoms), nestedDenom)
+}
+
+func nullLog() logrus.FieldLogger {
+	log, _ := logtest.NewNullLogger()
+	return log
+}
+
+// A proposal with more rows than its seq range holds: the overflow is not
+// written and the hook warns with the proposal id.
+func TestSettledProposalActionsWarnAboutAnOverflow(t *testing.T) {
+	var items []string
+	for i := 0; i < transform.NestedSeqBase+2; i++ {
+		items = append(items, `{"@type":"/bze.tokenfactory.MsgSetDenomBranding","creator":"`+nestedDao+`","denom":"`+nestedDenom+`"}`)
+	}
+	db := newMockDB(49)
+	db.returning = map[string][][]any{"WITH s AS (": {{6, "[" + strings.Join(items, ",") + "]", 10, 0, time.Unix(1, 0), 0}}}
+	ents := block(10)
+	ok := true
+	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Executed: &ok}}
+	log, hook := logtest.NewNullLogger()
+	require.NoError(t, writer.NewBatchWriter(db, writer.SettledProposalActions(log)).
+		Write(context.Background(), []*transform.Entities{ents}, writer.ModeInsert))
+
+	var written int
+	for _, st := range statementsWith(db.txs[0], "INSERT INTO explorer.token_events") {
+		written += len(payload(t, st))
+	}
+	assert.Equal(t, transform.NestedSeqBase, written)
+	require.Len(t, hook.AllEntries(), 1)
+	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level)
+	assert.EqualValues(t, 6, hook.LastEntry().Data["proposal_id"])
+	assert.Equal(t, 2, hook.LastEntry().Data["dropped"])
 }
