@@ -42,6 +42,7 @@ import {
 } from "@/render/account";
 import { BOND, bondCompact } from "@/render/validators";
 
+import { AdminOfDaos, DaoBanner } from "./dao-notes";
 import { ActivityTab, EmptyPanel } from "./activity-tab";
 import { OrdersTab } from "./orders-tab";
 import { StakingTab } from "./staking-tab";
@@ -126,7 +127,7 @@ function PersonalHead({ a }: { a: Account }) {
       title={a.label?.name ?? "Account"}
       chips={
         <>
-          <Chip data-testid="kind-chip">{escrow ? "Cross-chain escrow" : "Personal account"}</Chip>
+          <Chip data-testid="kind-chip">{escrow ? "Cross-chain escrow" : a.label?.kind === "dao" ? "DAO treasury" : "Personal account"}</Chip>
           {a.label?.kind === "validator_owner" && (
             <Chip variant="acc" data-testid="label-chip">
               {owned ? (
@@ -237,6 +238,8 @@ function PersonalView({
   return (
     <Box>
       <PersonalHead a={a} />
+      <DaoBanner a={a} />
+      <AdminOfDaos address={a.address} />
       <PersonalTiles a={a} />
       <VTabsBar mt="8">
         <VTabs
