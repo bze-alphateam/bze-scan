@@ -264,3 +264,36 @@ func TestDaosAgainstANodeWithoutThem(t *testing.T) {
 	assert.Equal(t, "Stakers club", d.Name, "the indexed part answers")
 	assert.False(t, d.Live.Available)
 }
+
+// A DAO the state sync wrote first (no creation facts) gets them when its
+// creation is indexed: created_* and creator are filled, a name the sync
+// read stays, the event's name fills only an empty one; a reindex corrects a
+// creator.
+func TestDaoCreatedAfterTheSyncRowFillsOnlyWhatIsMissing(t *testing.T) {
+	e := newSyncEnv(t)
+	_, err := e.db.Exec(`INSERT INTO explorer.daos (id, address, type, name, admin, self_governed) VALUES
+		(1, $1, 'static_list', '', $1, true),
+		(2, $2, 'stake', 'Synced name', $3, false)`, daoOne, daoTwo, daoAdmin)
+	require.NoError(t, err)
+
+	ents := indexTheDaos(t, e)
+	rows := func() []string {
+		return queryStrings(t, e.db, `SELECT concat_ws(' ', id, name, created_height, created_tx_hash IS NOT NULL, coalesce(creator, '-'))
+			FROM explorer.daos ORDER BY id`)
+	}
+	assert.Equal(t, []string{
+		"1 Founders 25100000 true " + daoAdmin,
+		"2 Synced name 25100000 true " + daoAdmin,
+	}, rows())
+
+	other := "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk"
+	ents[0].Daos[0].Creator = other
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	defer pool.Close()
+	require.NoError(t, writer.NewBatchWriter(pool).Write(context.Background(), ents, writer.ModeUpdate))
+	assert.Equal(t, []string{
+		"1 Founders 25100000 true " + other,
+		"2 Synced name 25100000 true " + daoAdmin,
+	}, rows(), "a reindex corrects the creator")
+}

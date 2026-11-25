@@ -303,3 +303,25 @@ func TestLiveOverTheFakeGRPC(t *testing.T) {
 	_, err = r.Live(context.Background(), 99)
 	assert.ErrorIs(t, err, daostate.ErrUnsupported, "the fake node answers Unimplemented for a DAO it has no fixture of")
 }
+
+// A node outage is not "no x/dao": the next look asks again.
+func TestSupportedDoesNotRememberAnOutage(t *testing.T) {
+	dao := fixtureDAO()
+	dao.err = status.Error(codes.Unavailable, "down")
+	now := time.Unix(1000, 0)
+	r := daostate.New(daostate.Config{Now: func() time.Time { return now }}, daostate.Deps{DAO: dao, Rewards: fixtureRewards()})
+	assert.False(t, r.Supported(context.Background()))
+	dao.err = nil
+	assert.True(t, r.Supported(context.Background()), "the node is back within the TTL")
+}
+
+// Every source gone: the stake is zero in the bond denom, not in "".
+func TestStakeOfASetOfVanishedSourcesIsZeroBze(t *testing.T) {
+	s, err := newReader(fixtureDAO(), &fakeRewards{}).Stake(context.Background(),
+		daostate.Electorate{SrIDs: []string{"a", "b"}, DrDenom: "ubze"})
+	require.NoError(t, err)
+	assert.Equal(t, daostate.Coin{Denom: "ubze", Amount: "0"}, s.VotingStake)
+	for _, src := range s.Sources {
+		assert.Equal(t, daostate.Coin{Denom: "ubze", Amount: "0"}, src.StakedAmount)
+	}
+}

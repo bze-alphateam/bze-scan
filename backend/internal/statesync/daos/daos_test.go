@@ -85,7 +85,6 @@ func TestSetIdentity(t *testing.T) {
 	set := newSet(&fakeClient{}, &memStore{})
 	assert.Equal(t, statesync.Daos, set.Name())
 	assert.Equal(t, daos.DefaultInterval, set.Interval())
-	assert.Equal(t, "42", daos.Key(42))
 }
 
 // A full resync reads every page and saves the DAOs with their type and

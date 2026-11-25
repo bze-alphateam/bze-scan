@@ -1654,6 +1654,9 @@ current state is read live (`internal/daostate`, 5 s cache, behind
   `daos` set (see State sync), which refreshes name, admin and type and
   inserts a DAO the index missed (created below the live floor) with NULL
   creation fields. `self_governed` is admin = address.
+- A `MsgCreateDao` nested in a `MsgAdminExecute` or an authz `MsgExec` gets
+  no creator from the index (the creation row only reads a top-level
+  message); its name comes from the state sync.
 - Reindex rewrites `dao_events` in place like the other history tables; the
   `daos` creation upsert is idempotent.
 
