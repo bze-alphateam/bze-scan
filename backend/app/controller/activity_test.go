@@ -58,13 +58,13 @@ func TestActivityPage(t *testing.T) {
 
 	next := dto.EncodeActivityCursor(repository.Activity{Height: 30, TxIndex: -1})
 	assert.JSONEq(t, `{"items":[
-		{"time":"2026-10-08T17:00:00Z","height":30,"tx_hash":"ABCD","kind":"delegate","category":"staking",
+		{"time":"2026-10-08T17:00:00Z","height":30,"tx_index":2,"tx_hash":"ABCD","kind":"delegate","category":"staking",
 		 "is_signer":true,"success":true,
 		 "counterparty":{"address":"`+valoper+`","label":null,"moniker":"Vidulum"},
 		 "deltas":[{"denom":"ubze","amount":"-1002000","symbol":"BZE","exponent":6}],
 		 "msg_types":["/cosmos.staking.v1beta1.MsgDelegate"],"details":null,
 		 "fee":[{"denom":"ubze","amount":"2000","symbol":"BZE","exponent":6}]},
-		{"time":"2026-10-08T17:00:00Z","height":30,"tx_hash":null,"kind":"dex_fill","category":"dex",
+		{"time":"2026-10-08T17:00:00Z","height":30,"tx_index":-1,"tx_hash":null,"kind":"dex_fill","category":"dex",
 		 "is_signer":false,"success":true,"counterparty":null,
 		 "deltas":[{"denom":"factory/x/uvdl","amount":"5","symbol":null,"exponent":null}],
 		 "msg_types":[],"details":[{"type":"bze.tradebin.OrderExecutedEvent","attrs":{"maker":"bze1x"}}],
