@@ -1,7 +1,9 @@
 // Package fakenode is a stand-in for a CometBFT RPC node in tests. It serves
 // the URI form of the by-height routes the backend uses (GET /status,
 // /block?height=N, /block_results?height=N, /commit?height=N) from recorded
-// mainnet responses under testdata/, byte for byte.
+// mainnet responses under testdata/, byte for byte (the gRPC fixtures of
+// testdata/grpc are the REST gateway's answers; the tradebin, burner, dao and
+// guardian Params come from a v8.3.0 testnet node).
 //
 // Layout of testdata/ (recorded by scripts/record-fixtures.sh):
 //

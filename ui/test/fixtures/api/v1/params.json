@@ -107,14 +107,14 @@
       "makerFeeDestination": "burner",
       "takerFeeDestination": "burner",
       "native_denom": "ubze",
-      "priceLevelOwnersWindow": "100",
+      "priceLevelOwnersWindow": "500",
       "priceLevelExtraGas": "25000",
       "fillOrdersExtraGas": "5000",
       "minNativeLiquidityForModuleSwap": "100000000000",
       "maxFillsPerOrder": "500",
-      "poolPriceHalfLifeBlocks": "0",
-      "feeMaxPriceDrift": "0.000000000000000000",
-      "moduleMaxPriceDrift": "0.000000000000000000"
+      "poolPriceHalfLifeBlocks": "20",
+      "feeMaxPriceDrift": "0.100000000000000000",
+      "moduleMaxPriceDrift": "0.030000000000000000"
     },
     "last_change": {
       "height": 20250000,
@@ -168,8 +168,8 @@
   "burner": {
     "params": {
       "periodic_burning_weeks": "4",
-      "ibc_move_max_reserve_ratio": "0.000000000000000000",
-      "ibc_move_cooldown_blocks": "0"
+      "ibc_move_max_reserve_ratio": "0.030000000000000000",
+      "ibc_move_cooldown_blocks": "1000"
     },
     "last_change": null
   },
@@ -186,5 +186,37 @@
       }
     },
     "last_change": null
+  },
+  "dao": {
+    "params": {
+      "max_sr_per_dao": "5",
+      "max_static_members": "128",
+      "max_open_proposals": "10",
+      "max_msgs_per_proposal": "16",
+      "max_proposal_bytes": "20000",
+      "max_title_len": "140",
+      "max_summary_len": "5000",
+      "min_voting_period": "3600s",
+      "max_voting_period": "7776000s",
+      "execution_window": "1209600s",
+      "cleanup_batch_size": "100",
+      "dao_creation_fee": {
+        "denom": "ubze",
+        "amount": "50000000000"
+      },
+      "dao_creation_fee_destination": "burner",
+      "min_electorate_lock_days": 5,
+      "min_expedite_delay": "86400s"
+    },
+    "last_change": null
+  },
+  "guardian": {
+    "params": {
+      "guardian": "bze1jx4x3kn8mlz2s03zdpf2a38x9gl66llvjqdd55"
+    },
+    "last_change": null
+  },
+  "chain": {
+    "v830": true
   }
 }

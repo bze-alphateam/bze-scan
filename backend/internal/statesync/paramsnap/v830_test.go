@@ -15,19 +15,30 @@ import (
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
 )
 
+// What a v8.2.x node answers for the two modules whose shape v8.3.0 changed:
+// the old names and values, no x/dao or x/guardian.
+const (
+	v82Tradebin = `{"params":{"createMarketFee":{"denom":"ubze","amount":"25000000000"},"marketMakerFee":{"denom":"ubze","amount":"1000"},
+		"marketTakerFee":{"denom":"ubze","amount":"100000"},"makerFeeDestination":"burner","takerFeeDestination":"burner",
+		"native_denom":"ubze","orderBookExtraGasWindow":"100","orderBookQueueExtraGas":"25000","fillOrdersExtraGas":"5000",
+		"minNativeLiquidityForModuleSwap":"100000000000","orderBookPerBlockMessages":"500","orderBookQueueMessageScanExtraGas":"5000"}}`
+	v82Burner = `{"params":{"periodic_burning_weeks":"4"}}`
+	notThere  = `{"code":12,"message":"unknown service","details":[]}`
+)
+
 // storedBeforeV830 is what the params set stored for tradebin and burner
-// with a build on the v8.2.x types: the recorded answers of a v8.2.x node
-// under their old names.
+// with a build on the v8.2.x types: the answers of a v8.2.x node under their
+// old names.
 func storedBeforeV830(t *testing.T) map[string]json.RawMessage {
 	t.Helper()
 	var tradebin struct {
 		Params json.RawMessage `json:"params"`
 	}
-	require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, "tradebin", "Params", ""), &tradebin))
+	require.NoError(t, json.Unmarshal([]byte(v82Tradebin), &tradebin))
 	var burner struct {
 		Params json.RawMessage `json:"params"`
 	}
-	require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, "burner", "Params", ""), &burner))
+	require.NoError(t, json.Unmarshal([]byte(v82Burner), &burner))
 	return map[string]json.RawMessage{"tradebin": tradebin.Params, "burner": burner.Params}
 }
 
@@ -39,13 +50,17 @@ func TestTheV830TypesDoNotLookLikeAParameterChange(t *testing.T) {
 	codec, err := chain.NewCodec()
 	require.NoError(t, err)
 	g := fakenode.NewGRPC(t)
+	g.SetResponse("tradebin", "Params", "", []byte(v82Tradebin))
+	g.SetResponse("burner", "Params", "", []byte(v82Burner))
+	g.SetResponse("dao", "Params", "", []byte(notThere))
+	g.SetResponse("guardian", "Params", "", []byte(notThere))
 	conn, err := grpcclient.Dial(grpcclient.Config{Addr: g.Addr}, codec.GRPC())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
 	live, err := params.NewGRPC(conn, codec).Params(context.Background())
 	require.NoError(t, err)
-	require.Len(t, live, len(params.Modules))
+	require.Len(t, live, len(params.Modules)-2, "a v8.2.x node has no x/dao or x/guardian")
 
 	var tradebin map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(live["tradebin"], &tradebin))

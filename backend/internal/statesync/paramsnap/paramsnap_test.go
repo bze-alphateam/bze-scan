@@ -179,6 +179,33 @@ func TestAChangeAfterAnUpgradeIsAttributedToIt(t *testing.T) {
 	assert.Equal(t, id(44), got[1].ProposalID, "planned after the previous snapshot, at or before this one")
 }
 
+// x/dao and x/guardian answer for the first time after the upgrade: their
+// first snapshot is the upgrade's, like a key the upgrade changed.
+func TestAModuleThatAnswersForTheFirstTimeAfterAnUpgradeIsAttributedToIt(t *testing.T) {
+	r := &fakeReader{params: map[string]json.RawMessage{"burner": json.RawMessage(`{"periodic_burning_weeks":"4"}`)}}
+	n := &fakeNode{height: 100}
+	store := &fakeStore{upgrades: map[int64]uint64{150: 44}}
+	s := paramsnap.New(paramsnap.Deps{Params: r, Node: n, Store: store}, 0)
+	require.NoError(t, s.FullResync(context.Background()))
+	assert.Empty(t, store.byModule("guardian"), "a module that does not answer has no row")
+
+	r.params["guardian"] = json.RawMessage(`{"guardian":"bze1abc"}`)
+	n.height = 200
+	require.NoError(t, s.FullResync(context.Background()))
+	got := store.byModule("guardian")
+	require.Len(t, got, 1)
+	assert.Equal(t, id(44), got[0].ProposalID)
+	assert.Equal(t, []string{}, got[0].ChangedKeys)
+	assert.Len(t, store.byModule("burner"), 1, "the module that did not change writes nothing")
+
+	// Without an upgrade in between, a late first answer has no cause.
+	r.params["dao"] = json.RawMessage(`{"max_sr_per_dao":"5"}`)
+	n.height = 300
+	require.NoError(t, s.FullResync(context.Background()))
+	require.Len(t, store.byModule("dao"), 1)
+	assert.Nil(t, store.byModule("dao")[0].ProposalID)
+}
+
 func TestAModuleThatFailsKeepsTheOthers(t *testing.T) {
 	r := &fakeReader{params: map[string]json.RawMessage{"burner": json.RawMessage(`{"periodic_burning_weeks":"4"}`)},
 		err: errors.New("staking params: unavailable")}

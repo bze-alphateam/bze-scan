@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,7 @@ import { fakeApi, pendingApi, renderWithProviders } from "@/test/render";
 
 import modules from "../../../test/fixtures/api/v1/modules.json";
 import params from "../../../test/fixtures/api/v1/params.json";
+import paramsV82 from "../../../test/fixtures/api/v1/params-v82-node.json";
 import halted from "../../../test/fixtures/api/v1/params/halted-denoms.json";
 import stats from "../../../test/fixtures/api/v1/stats.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
@@ -39,7 +40,7 @@ describe("ParametersPage", () => {
   it("lists every group in the nav and shows the selected one's header while loading", () => {
     renderWithProviders(<ParametersPage />, { api: pendingApi() });
     expect(screen.getByTestId("parameters-skeleton")).toHaveTextContent("Fees");
-    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(11);
+    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(13);
     expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
   });
 
@@ -156,8 +157,65 @@ describe("ParametersPage", () => {
   it("says not available for a module the chain did not answer", async () => {
     const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as ChainParams;
     renderWithProviders(<ParametersPage group="dex" />, { api: api({ params: () => Promise.resolve(rest) }) });
-    expect(await screen.findAllByText("not available")).toHaveLength(7);
+    expect(await screen.findAllByText("not available")).toHaveLength(11);
     expect(screen.queryByTestId("parameters-skeleton")).not.toBeInTheDocument();
+  });
+
+  it("shows the DAOs and Emergency groups of a v8.3.0 node, selectable by ?group= and #anchor", async () => {
+    const { unmount } = renderWithProviders(<ParametersPage group="dao" />, { api: api() });
+    expect(await shown()).toBe("dao");
+    expect(navItem("DAOs")).toHaveAttribute("href", "/parameters?group=dao");
+    expect(row("Fee to create a DAO")).toHaveTextContent("50,000 BZE, burned");
+    expect(row("Voting period a DAO may choose")).toHaveTextContent("1 hour to 90 days");
+    expect(row("Earliest early finish")).toHaveTextContent("1 day");
+    expect(row("Votes cleaned per call")).toHaveAttribute("data-advanced", "true");
+    expect(await within(await screen.findByTestId("module-accounts")).findAllByTestId("module-account-row")).toHaveLength(1);
+    unmount();
+
+    renderWithProviders(<ParametersPage group="emergency" />, { api: api() });
+    expect(await shown()).toBe("emergency");
+    expect(row("Emergency key holder")).toHaveTextContent("bze1jx4");
+    await userEvent.click(within(row("Emergency key holder")).getByRole("button"));
+    expect(screen.getByTestId("param-info")).toHaveTextContent(/^Emergency key holder: bze1jx4.* only governance can undo\./);
+    unmount();
+    cleanup();
+
+    window.history.replaceState(null, "", "/parameters#emergency");
+    renderWithProviders(<ParametersPage />, { api: api() });
+    expect(await shown()).toBe("emergency");
+    expect(replace).toHaveBeenCalledWith("/parameters?group=emergency", { scroll: false });
+  });
+
+  it("says nobody holds the emergency key when the guardian is empty", async () => {
+    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as ChainParams;
+    renderWithProviders(<ParametersPage group="emergency" />, { api: api({ params: () => Promise.resolve(empty) }) });
+    await shown();
+    expect(row("Emergency key holder")).toHaveTextContent("Nobody");
+    await userEvent.click(within(row("Emergency key holder")).getByRole("button"));
+    expect(screen.getByTestId("param-info")).toHaveTextContent("Nobody: only governance can use the emergency switches.");
+  });
+
+  it("hides the v8.3.0 rows and groups on a v8.2.x node and never says the chain did not answer", async () => {
+    const v82 = () => Promise.resolve(paramsV82 as ChainParams);
+    renderWithProviders(<ParametersPage group="dex" />, { api: api({ params: v82 }) });
+    await shown();
+    expect(screen.queryByText("not available")).not.toBeInTheDocument();
+    expect(screen.queryByText("The chain did not answer for this value right now.")).not.toBeInTheDocument();
+    for (const name of ["Pool price average", "Fee price guard", "Automatic swap price guard"]) {
+      expect(screen.queryByText(name)).not.toBeInTheDocument();
+    }
+    expect(screen.getByText("Price level crowding")).toBeInTheDocument();
+    expect(screen.getByText("Most fills per order")).toBeInTheDocument();
+    expect(screen.queryByText("native_denom")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("param-nav-item")).toHaveLength(11);
+    expect(within(screen.getByTestId("param-nav")).queryByRole("link", { name: /^DAOs/ })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("param-nav")).queryByRole("link", { name: /^Emergency/ })).not.toBeInTheDocument();
+  });
+
+  it("falls back to the first group when ?group= names one a v8.2.x node does not have", async () => {
+    renderWithProviders(<ParametersPage group="dao" />, { api: api({ params: () => Promise.resolve(paramsV82 as ChainParams) }) });
+    expect(await shown()).toBe("fees");
+    expect(navItem("Fees")).toHaveAttribute("aria-current", "true");
   });
 
   it("renders without /stats when it fails", async () => {

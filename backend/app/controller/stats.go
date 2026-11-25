@@ -131,6 +131,8 @@ func validatorsSummary(ctx context.Context, repo StatsReader) (*dto.ValidatorsSu
 // others. Implemented by params.Cached.
 type LiveParams interface {
 	Params(ctx context.Context) (map[string]json.RawMessage, error)
+	// V830 is false only when the node does not have chain v8.3.0's modules.
+	V830(ctx context.Context) (bool, error)
 }
 
 // ParamChangeReader reads each module's latest parameter change.
@@ -165,8 +167,19 @@ type LastChange struct {
 	ProposalID *int64    `json:"proposal_id"`
 }
 
+// ChainKey is the key of GET /api/v1/params that holds ChainInfo beside the
+// modules (no module has that name).
+const ChainKey = "chain"
+
+// ChainInfo says what the node the explorer reads runs.
+type ChainInfo struct {
+	// V830 is false only when the node answers the guardian params query,
+	// which exists from chain v8.3.0 on, Unimplemented.
+	V830 bool `json:"v830"`
+}
+
 // Params serves every module's live parameters, keyed by module, with its
-// last change. A module the node failed to answer is left out; when none
+// last change, and a "chain" object next to them (ChainInfo). A module the node failed to answer is left out; when none
 // answered it is a 502.
 func (h *ParamsController) Params(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -182,7 +195,7 @@ func (h *ParamsController) Params(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	out := make(map[string]ModuleParams, len(live))
+	out := make(map[string]any, len(live)+1)
 	for m, raw := range live {
 		mp := ModuleParams{Params: raw}
 		if ch, ok := changes[m]; ok {
@@ -190,6 +203,11 @@ func (h *ParamsController) Params(c *echo.Context) error {
 		}
 		out[m] = mp
 	}
+	v830, err := h.live.V830(ctx)
+	if err != nil {
+		return err
+	}
+	out[ChainKey] = ChainInfo{V830: v830}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, out)
 }

@@ -139,6 +139,10 @@ func (s *Set) snapshot(ctx context.Context, trigger *uint64) error {
 	if err != nil {
 		return errors.Join(readErr, err)
 	}
+	var latestHeight int64
+	for _, l := range latest {
+		latestHeight = max(latestHeight, l.Height)
+	}
 	var snaps []Snapshot
 	var errs []error
 	for _, module := range params.Modules {
@@ -159,6 +163,14 @@ func (s *Set) snapshot(ctx context.Context, trigger *uint64) error {
 			}
 			snap.ChangedKeys = keys
 			if snap.ProposalID, err = s.cause(ctx, trigger, prev.Height, st.LatestBlockHeight); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		} else if len(latest) > 0 {
+			// A module that answers for the first time while others have
+			// history: its params came with an upgrade (x/dao and x/guardian
+			// with chain v8.3.0), so it is attributed like any change.
+			if snap.ProposalID, err = s.cause(ctx, trigger, latestHeight, st.LatestBlockHeight); err != nil {
 				errs = append(errs, err)
 				continue
 			}

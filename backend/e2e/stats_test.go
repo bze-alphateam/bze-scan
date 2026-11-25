@@ -90,10 +90,12 @@ func TestChainStateParamsAndStats(t *testing.T) {
 	r = fetch(t, base+"/api/v1/params")
 	require.Equal(t, http.StatusOK, r.status, string(r.body))
 	mods := into[map[string]struct {
+		V830       bool                       `json:"v830"`
 		Params     map[string]json.RawMessage `json:"params"`
 		LastChange json.RawMessage            `json:"last_change"`
 	}](t, r)
-	assert.Len(t, mods, len(params.Modules))
+	assert.Len(t, mods, len(params.Modules)+1, "every module and the chain object")
+	assert.True(t, mods["chain"].V830, "the node answers the guardian params")
 	for _, m := range params.Modules {
 		assert.NotEmpty(t, mods[m].Params, m)
 		assert.JSONEq(t, "null", string(mods[m].LastChange), "a first snapshot is no change: %s", m)
@@ -148,7 +150,7 @@ func TestParamsSnapshotOnlyWhatChanged(t *testing.T) {
 	// A change seen after a passed upgrade's plan height is attributed to
 	// it: proposal 47 upgraded the chain at 23855000.
 	_, err = e.db.Exec(`UPDATE explorer.param_snapshots SET height = 23000000, params = '{"periodic_burning_weeks":"2",
-		"ibc_move_max_reserve_ratio":"0.000000000000000000","ibc_move_cooldown_blocks":"0"}'
+		"ibc_move_max_reserve_ratio":"0.030000000000000000","ibc_move_cooldown_blocks":"1000"}'
 		WHERE module = 'burner'`)
 	require.NoError(t, err)
 	code, _ = e.syncState(t)
@@ -163,18 +165,31 @@ func TestParamsSnapshotOnlyWhatChanged(t *testing.T) {
 // after the deploy, against a node that has not upgraded, records no change.
 func TestV830DeployDoesNotRecordTheExplorersOwnTypesAsAChange(t *testing.T) {
 	e := newSyncEnv(t)
+	// A node that has not upgraded: the old names and values, and no x/dao
+	// or x/guardian.
+	oldTradebin := `{"params":{"createMarketFee":{"denom":"ubze","amount":"25000000000"},"marketMakerFee":{"denom":"ubze","amount":"1000"},
+		"marketTakerFee":{"denom":"ubze","amount":"100000"},"makerFeeDestination":"burner","takerFeeDestination":"burner",
+		"native_denom":"ubze","orderBookExtraGasWindow":"100","orderBookQueueExtraGas":"25000","fillOrdersExtraGas":"5000",
+		"minNativeLiquidityForModuleSwap":"100000000000","orderBookPerBlockMessages":"500","orderBookQueueMessageScanExtraGas":"5000"}}`
+	oldBurner := `{"params":{"periodic_burning_weeks":"4"}}`
+	e.grpc.SetResponse("tradebin", "Params", "", []byte(oldTradebin))
+	e.grpc.SetResponse("burner", "Params", "", []byte(oldBurner))
+	for _, m := range []string{"dao", "guardian"} {
+		e.grpc.SetResponse(m, "Params", "", []byte(`{"code":12,"message":"unknown service","details":[]}`))
+	}
 	code, out := e.syncState(t)
 	require.Equal(t, 0, code, out)
 	first := e.count(t, `SELECT count(*) FROM explorer.param_snapshots`)
+	assert.Equal(t, len(params.Modules)-2, first, "no row for a module the node does not have")
 
 	// What the previous build stored for the two modules: the node's answer
 	// under the v8.2.x names.
-	for module, fixture := range map[string]string{"tradebin": "tradebin", "burner": "burner"} {
-		var answer struct {
+	for module, answer := range map[string]string{"tradebin": oldTradebin, "burner": oldBurner} {
+		var doc struct {
 			Params json.RawMessage `json:"params"`
 		}
-		require.NoError(t, json.Unmarshal(fakenode.ReadGRPCFixture(t, fixture, "Params", ""), &answer))
-		_, err := e.db.Exec(`UPDATE explorer.param_snapshots SET params = $2::jsonb WHERE module = $1`, module, string(answer.Params))
+		require.NoError(t, json.Unmarshal([]byte(answer), &doc))
+		_, err := e.db.Exec(`UPDATE explorer.param_snapshots SET params = $2::jsonb WHERE module = $1`, module, string(doc.Params))
 		require.NoError(t, err)
 	}
 	e.node.SetStatusHeight(recordedStatusHeight + 100)

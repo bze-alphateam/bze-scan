@@ -74,7 +74,8 @@
 #     mint/Inflation.json, mint/AnnualProvisions.json, distribution/CommunityPool.json,
 #     and <module>/Params.json of every module the parameters page shows (staking,
 #     mint, distribution, slashing, gov, tradebin, tokenfactory, rewards, burner,
-#     cointrunk, txfeecollector)
+#     cointrunk, txfeecollector; dao and guardian exist from chain v8.3.0 and
+#     are not recorded here: take them, and tradebin/burner, from a v8.3.0 node)
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]

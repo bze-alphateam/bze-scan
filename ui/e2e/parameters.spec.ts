@@ -85,7 +85,7 @@ test.describe("chain parameters on a phone", () => {
   test("shows the groups as chips and stays within the screen", async ({ page }) => {
     await page.goto("/parameters?group=burner");
     await expect(page.getByTestId("param-group")).toHaveAttribute("id", "burner");
-    await expect(page.getByTestId("param-nav-item")).toHaveCount(11);
+    await expect(page.getByTestId("param-nav-item")).toHaveCount(13);
     // Below c3 the short form shows; the full address stays hidden (and in the title).
     const address = page.getByTestId("module-account-address").first();
     await expect(address.getByText("bze1v7u…5qun")).toBeVisible();

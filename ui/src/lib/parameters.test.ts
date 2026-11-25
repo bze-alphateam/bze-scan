@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { ChainParams, Stats } from "@/api/types";
 
 import fixture from "../../test/fixtures/api/v1/params.json";
+import fixtureV82 from "../../test/fixtures/api/v1/params-v82-node.json";
 import statsFixture from "../../test/fixtures/api/v1/stats.json";
 
 import {
   aboutDuration,
+  chainV830,
   describeParam,
   formatDecimalPct,
   formatDuration,
@@ -120,17 +122,35 @@ describe("the dictionary", () => {
       marketMakerFee: "0.001 BZE per order",
       marketTakerFee: "0.1 BZE per order",
       "makerFeeDestination · takerFeeDestination": "Burner module",
-      maxFillsPerOrder: "500",
+      maxFillsPerOrder: "500 orders",
       minNativeLiquidityForModuleSwap: "100,000 BZE",
-      "priceLevelOwnersWindow · priceLevelExtraGas · fillOrdersExtraGas": "100 · 25,000 · 5,000",
+      "priceLevelOwnersWindow · priceLevelExtraGas": "above 500 traders: 25,000 gas each",
+      fillOrdersExtraGas: "5,000",
+      poolPriceHalfLifeBlocks: "20 blocks",
+      feeMaxPriceDrift: "10%",
+      moduleMaxPriceDrift: "3%",
       create_denom_fee: "25,000 BZE",
       createStakingRewardFee: "25,000 BZE",
       createTradingRewardFee: "50,000 BZE",
       extraGasForExitStake: "1,000,000",
       periodic_burning_weeks: "every 4 weeks",
+      ibc_move_max_reserve_ratio: "3%",
+      ibc_move_cooldown_blocks: "1,000 blocks",
       anon_article_limit: "5",
       anon_article_cost: "25,000 BZE",
       "publisher_respect_params.tax · publisher_respect_params.denom": "20%, in BZE",
+      "dao_creation_fee · dao_creation_fee_destination": "50,000 BZE, burned",
+      "min_voting_period · max_voting_period": "1 hour to 90 days",
+      execution_window: "14 days",
+      min_expedite_delay: "1 day",
+      max_open_proposals: "10 per DAO",
+      "max_msgs_per_proposal · max_proposal_bytes": "16 messages · 20,000 bytes",
+      "max_title_len · max_summary_len": "140 · 5,000 bytes",
+      max_static_members: "128",
+      max_sr_per_dao: "5",
+      min_electorate_lock_days: "5 days",
+      cleanup_batch_size: "100",
+      guardian: "bze1jx4…dd55",
     });
     expect(row(groups, "unbonding_time").raw).toBe("1814400s");
     expect(row(groups, "min_deposit").raw).toBe("100000000000 ubze");
@@ -155,6 +175,47 @@ describe("the dictionary", () => {
     );
     expect(row(groups, "unbonding_time").explain).toMatch(/^Unstaked BZE stays locked for 21 days before/);
     expect(row(groups, "makerFeeDestination · takerFeeDestination").explain).toMatch(/^Both fees are sent to the Burner/);
+  });
+
+  it("words the v8.3.0 rows", () => {
+    expect(row(groups, "priceLevelOwnersWindow · priceLevelExtraGas").explain).toBe(
+      "A new trader joining a price where more than 500 traders already wait pays 25,000 extra gas per trader above 500. Adding to your own order costs nothing extra.",
+    );
+    expect(row(groups, "maxFillsPerOrder").explain).toBe(
+      "One order matches at most 500 resting orders; the rest is sent back and can be sent again.",
+    );
+    expect(row(groups, "poolPriceHalfLifeBlocks").explain).toMatch(/half-life of 20 blocks, about 2 minutes\./);
+    expect(row(parameterGroups(params, null), "poolPriceHalfLifeBlocks").explain).toMatch(/half-life of 20 blocks\./);
+    expect(row(groups, "feeMaxPriceDrift").explain).toMatch(/more than 10% away from its average price.*charged in BZE instead\.$/);
+    expect(row(groups, "moduleMaxPriceDrift").explain).toMatch(/^Beyond 3% away.*refused and retried later\.$/);
+    expect(row(groups, "ibc_move_max_reserve_ratio").explain).toBe("One move of locked cross-chain coins takes at most 3% of the pool's reserve.");
+    expect(row(groups, "ibc_move_cooldown_blocks").explain).toMatch(/waits 1,000 blocks \(about 2 hours\) before/);
+    expect(row(groups, "dao_creation_fee · dao_creation_fee_destination").explain).toBe(
+      "Paid once by whoever creates a DAO. It is sent to the Burner and destroyed.",
+    );
+    expect(row(groups, "guardian").explain).toMatch(/^Emergency key holder: bze1jx4…dd55\. It can tighten IBC limits.*only governance can undo\.$/);
+    const empty = { ...params, guardian: { params: { guardian: "" }, last_change: null } } as ChainParams;
+    expect(row(parameterGroups(empty, stats), "guardian").value).toBe("Nobody");
+    expect(row(parameterGroups(empty, stats), "guardian").explain).toBe("Nobody: only governance can use the emergency switches.");
+    const free = { ...params, dao: { params: { ...params.dao?.params, dao_creation_fee: { denom: "ubze", amount: "0" } }, last_change: null } } as ChainParams;
+    expect(row(parameterGroups(free, stats), "dao_creation_fee · dao_creation_fee_destination").value).toBe("Free");
+  });
+
+  it("hides every v8.3.0-only row and group while the node runs an older chain", () => {
+    const old = parameterGroups(fixtureV82 as ChainParams, stats);
+    expect(old.map((g) => g.group)).not.toContain("dao");
+    expect(old.map((g) => g.group)).not.toContain("emergency");
+    const rows = old.flatMap((g) => g.rows);
+    expect(rows.filter((r) => r.value === null)).toEqual([]);
+    const names = rows.map((r) => r.chainName);
+    for (const hidden of ["poolPriceHalfLifeBlocks", "feeMaxPriceDrift", "moduleMaxPriceDrift", "ibc_move_max_reserve_ratio", "ibc_move_cooldown_blocks"]) {
+      expect(names).not.toContain(hidden);
+    }
+    expect(rowsOf(old, "dex").filter((r) => r.advanced).map((r) => r.chainName)).toEqual(["fillOrdersExtraGas", "native_denom"]);
+    expect(rowsOf(old, "burner").map((r) => r.chainName)).toEqual(["periodic_burning_weeks"]);
+    expect(chainV830(fixtureV82 as ChainParams)).toBe(false);
+    expect(chainV830(params)).toBe(true);
+    expect(chainV830({} as ChainParams)).toBe(false);
   });
 
   it("drops the sentences that need /stats when it is missing", () => {
@@ -186,23 +247,18 @@ describe("the dictionary", () => {
     const burner = rowsOf(parameterGroups(withUnknown, stats), "burner");
     expect(burner.map((r) => [r.chainName, r.value, r.advanced])).toEqual([
       ["periodic_burning_weeks", "every 4 weeks", false],
+      ["ibc_move_max_reserve_ratio", null, false],
+      ["ibc_move_cooldown_blocks", null, false],
       ["brand_new", '{"a":1}', true],
     ]);
-    // A row the dictionary flags as advanced covers its keys; the keys v8.3.0
-    // added (zero until the network upgrades) show raw until their rows exist.
-    expect(rowsOf(groups, "dex").filter((r) => r.advanced).map((r) => r.chainName)).toEqual([
-      "priceLevelOwnersWindow · priceLevelExtraGas · fillOrdersExtraGas",
-      "native_denom",
-      "poolPriceHalfLifeBlocks",
-      "feeMaxPriceDrift",
-      "moduleMaxPriceDrift",
-    ]);
+    // A row the dictionary flags as advanced covers its keys.
+    expect(rowsOf(groups, "dex").filter((r) => r.advanced).map((r) => r.chainName)).toEqual(["fillOrdersExtraGas", "native_denom"]);
   });
 
   it("renders a module the chain did not answer as not available", () => {
     const rest = Object.fromEntries(Object.entries(params).filter(([m]) => m !== "tradebin")) as ChainParams;
     const dex = rowsOf(parameterGroups(rest, stats), "dex");
-    expect(dex).toHaveLength(7);
+    expect(dex).toHaveLength(11);
     expect(dex.every((r) => r.value === null && r.explain === "The chain did not answer for this value right now.")).toBe(true);
     const partial: ChainParams = { ...params, burner: { params: {}, last_change: null } };
     expect(rowsOf(parameterGroups(partial, stats), "burner")[0].value).toBeNull();
@@ -223,6 +279,8 @@ describe("changes", () => {
       rewards: 44,
       burner: null,
       cointrunk: null,
+      dao: null,
+      emergency: null,
     });
   });
 
