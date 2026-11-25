@@ -17,6 +17,7 @@ import { LIMITS_EXPLAINER, limitsByChannel, limitSymbol } from "@/render/rate-li
 import { tokenHref } from "@/render/tokens";
 
 import { LimitBars } from "./limit-bars";
+import { useNow } from "./use-now";
 
 const STATE: Record<string, { text: string; look: ChipVariant }> = {
   open: { text: "Open", look: "ok" },
@@ -34,7 +35,7 @@ function LimitsHelp() {
   return (
     <Popover.Root positioning={{ placement: "bottom-start" }} lazyMount unmountOnExit>
       <Popover.Trigger asChild>
-        <button type="button" aria-label="How limits work" title={LIMITS_EXPLAINER} data-testid="limits-help">
+        <button type="button" aria-label="How limits work" data-testid="limits-help">
           <LuCircleHelp size={16} />
         </button>
       </Popover.Trigger>
@@ -52,19 +53,19 @@ function LimitsHelp() {
   );
 }
 
-function LimitRow({ l }: { l: RateLimit }) {
+function LimitRow({ l, now, withChannel = false }: { l: RateLimit; now: Date; withChannel?: boolean }) {
   return (
     <Box py="3" borderTopWidth="1px" borderColor="border.panel" data-testid="limit-row">
       <Link asChild fontWeight="500" color="accent.fg" display="inline-block" mb="2">
-        <NextLink href={tokenHref(l.denom)}>{limitSymbol(l)}</NextLink>
+        <NextLink href={tokenHref(l.denom)}>{withChannel ? `${limitSymbol(l)} · ${l.channel_id}` : limitSymbol(l)}</NextLink>
       </Link>
-      <LimitBars limit={l} />
+      <LimitBars limit={l} now={now} />
     </Box>
   );
 }
 
-function ChannelCard({ channel, limits, showLimits }: { channel: IbcChannel; limits: RateLimit[]; showLimits: boolean }) {
-  const state = STATE[channel.state] ?? { text: channel.state, look: "default" as ChipVariant };
+function ChannelCard({ channel, limits, showLimits, now }: { channel: IbcChannel; limits: RateLimit[]; showLimits: boolean; now: Date }) {
+  const state = (channel.state && STATE[channel.state]) || { text: channel.state ?? "Unknown", look: "default" as ChipVariant };
   const client = channel.client_status ? CLIENT[channel.client_status] : null;
   const name = channel.counterparty.pretty_name ?? channel.counterparty.chain_id ?? "Unknown chain";
   return (
@@ -93,7 +94,7 @@ function ChannelCard({ channel, limits, showLimits }: { channel: IbcChannel; lim
       {showLimits && limits.length > 0 && (
         <Box px="4" pb="1">
           {limits.map((l) => (
-            <LimitRow key={l.denom} l={l} />
+            <LimitRow key={l.denom} l={l} now={now} />
           ))}
         </Box>
       )}
@@ -112,7 +113,7 @@ function Blocked({ denoms }: { denoms: string[] }) {
     <Card title="Blocked from crossing chains" meta="These tokens cannot be sent over IBC at all." data-testid="blocked-denoms">
       <HStack gap="2" wrap="wrap">
         {denoms.map((d) => (
-          <Chip key={d} variant="bad">
+          <Chip key={d} variant="bad" maxW="full" whiteSpace="normal" wordBreak="break-all">
             <Link asChild color="inherit">
               <NextLink href={tokenHref(d)}>{tokens.data?.get(d)?.symbol ?? d}</NextLink>
             </Link>
@@ -124,11 +125,24 @@ function Blocked({ denoms }: { denoms: string[] }) {
 }
 
 /** The loaded page: the channels, each with its limits when the chain has them, and the blocked tokens. */
-export function IbcView({ channels, limits }: { channels: IbcChannel[]; limits: RateLimitList | undefined }) {
+function IbcView({ channels, limits, limitsFailed, retryLimits }: { channels: IbcChannel[]; limits: RateLimitList | undefined; limitsFailed: boolean; retryLimits: () => void }) {
+  const now = useNow();
   const supported = limits?.supported === true;
   const byChannel = limitsByChannel(limits?.items ?? []);
+  const known = new Set(channels.map((c) => c.channel_id));
+  const others = (limits?.items ?? []).filter((l) => !known.has(l.channel_id));
   return (
     <Stack gap="4">
+      {limitsFailed && !limits && (
+        <Callout tone="warn" title="The limits could not be loaded" data-testid="limits-error">
+          The channels below are shown without their limits.{" "}
+          <Link asChild color="accent.fg">
+            <button type="button" onClick={retryLimits}>
+              Try again
+            </button>
+          </Link>
+        </Callout>
+      )}
       {limits && !supported && (
         <Callout tone="acc" title="IBC limits arrive with chain v8.3.0" data-testid="limits-unsupported">
           Until then the channels are listed without limits.
@@ -145,7 +159,16 @@ export function IbcView({ channels, limits }: { channels: IbcChannel[]; limits: 
           The explorer has not seen a channel yet.
         </StateBox>
       ) : (
-        channels.map((c) => <ChannelCard key={c.channel_id} channel={c} limits={byChannel.get(c.channel_id) ?? []} showLimits={supported} />)
+        channels.map((c) => <ChannelCard key={c.channel_id} channel={c} limits={byChannel.get(c.channel_id) ?? []} showLimits={supported} now={now} />)
+      )}
+      {supported && others.length > 0 && (
+        <Card title="Other channels" meta="Limits on channels the explorer has not listed above." data-testid="other-channels" p="0">
+          <Box px="4" pb="1">
+            {others.map((l) => (
+              <LimitRow key={`${l.channel_id}/${l.denom}`} l={l} now={now} withChannel />
+            ))}
+          </Box>
+        </Card>
       )}
       {supported && limits.blacklisted_denoms.length > 0 && <Blocked denoms={limits.blacklisted_denoms} />}
     </Stack>
@@ -160,7 +183,7 @@ export function IbcPage() {
     <Box>
       <PageTitle title="Cross-chain" intro="BZE's IBC channels, and how much of each token may still cross them today." />
       {channels.data ? (
-        <IbcView channels={channels.data.items} limits={limits.data} />
+        <IbcView channels={channels.data.items} limits={limits.data} limitsFailed={limits.isError} retryLimits={() => void limits.refetch()} />
       ) : channels.error ? (
         <StateBox
           tone="error"

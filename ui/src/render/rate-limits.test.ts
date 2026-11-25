@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { RateLimit, RateLimitDirection } from "@/api/types";
 
-import { barTone, directionView, limitsByChannel, resetText } from "./rate-limits";
+import { directionView, limitsByChannel, resetText } from "./rate-limits";
 
 import limitsJson from "../../test/fixtures/api/v1/ibc/rate-limits.json";
 
@@ -24,6 +24,16 @@ describe("directionView", () => {
       tone: "ok",
       note: null,
     });
+  });
+
+  it("turns the bar orange from 75% and red from 90%", () => {
+    const tones = [0, 74.9, 75, 89.9, 90, 100].map((p) => (directionView(limit({ used_pct: p }), "send") as { tone: string }).tone);
+    expect(tones).toEqual(["ok", "ok", "warn", "warn", "bad", "bad"]);
+  });
+
+  it("refuses an enforced direction whose threshold rounds to zero instead of showing 0 of 0", () => {
+    const view = directionView(limit({ max_percent: "2", threshold: "0", used_pct: null, enforced: true, remaining: "0" }), "send");
+    expect(view).toMatchObject({ kind: "blocked", text: "The limit rounds to zero: no transfers this way" });
   });
 
   it("shows an empty bar at 0% used", () => {
@@ -67,12 +77,6 @@ describe("directionView", () => {
   });
 });
 
-describe("barTone", () => {
-  it("turns orange from 75% and red from 90%", () => {
-    expect([0, 74.9, 75, 89.9, 90, 100].map(barTone)).toEqual(["ok", "ok", "warn", "warn", "bad", "bad"]);
-  });
-});
-
 describe("resetText", () => {
   const now = new Date("2099-10-11T18:48:00Z");
   it("counts down to the next reset with its UTC clock time", () => {
@@ -80,6 +84,9 @@ describe("resetText", () => {
   });
   it("counts minutes alone under an hour", () => {
     expect(resetText({ next_reset: "2099-10-11T19:05:00Z", window_hours: 24 }, now)).toBe("resets in 17 m (19:05 UTC)");
+  });
+  it("says a reset in the past is happening now", () => {
+    expect(resetText({ next_reset: "2099-10-11T18:00:00Z", window_hours: 24 }, now)).toBe("resetting now");
   });
   it("names the window without a clock time when the next reset is unknown", () => {
     expect(resetText({ next_reset: null, window_hours: 7 }, now)).toBe("resets every 7 h");

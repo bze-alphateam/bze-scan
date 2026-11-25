@@ -21,6 +21,14 @@ test.describe("cross-chain", () => {
     await noHorizontalScroll(page);
   });
 
+  test("a long unknown blocked denom does not widen the page", async ({ page }) => {
+    const long = `factory/bze1${"q".repeat(38)}/${"u".repeat(40)}`;
+    await mockApi(page, { "v1/ibc/rate-limits": { supported: true, items: [], blacklisted_denoms: [long] } });
+    await page.goto("/ibc");
+    await expect(page.getByTestId("blocked-denoms")).toContainText(long);
+    await noHorizontalScroll(page);
+  });
+
   test("lists the channels without limits before chain v8.3.0", async ({ page }) => {
     await mockApi(page, { "v1/ibc/rate-limits": { supported: false, items: [], blacklisted_denoms: [] } });
     await page.goto("/ibc");

@@ -1094,15 +1094,15 @@ export interface IbcChannel {
   channel_id: string;
   port_id: string;
   /** `open`, `closed`, `init`, `tryopen`… */
-  state: string;
+  state: string | null;
   /** Its light client; null until asked. */
   client_status: "active" | "expired" | "frozen" | null;
   client_id: string | null;
   connection_id: string | null;
   counterparty_channel_id: string | null;
   counterparty: CounterpartyChain;
-  escrow_address: string | null;
-  updated_at: string | null;
+  escrow_address: string;
+  updated_at: string;
 }
 
 /** One direction of a rate limit in its current window; amounts are base units. */

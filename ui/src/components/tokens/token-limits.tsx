@@ -5,10 +5,12 @@ import NextLink from "next/link";
 
 import type { Token } from "@/api/types";
 import { LimitBars } from "@/components/ibc/limit-bars";
+import { useNow } from "@/components/ibc/use-now";
 import { Card } from "@/components/ui/card";
 
 /** The token page's "Cross-chain limits" card: one row per channel with its two bars; nothing when the token has no limits. */
 export function TokenLimits({ t }: { t: Token }) {
+  const now = useNow();
   const limits = t.rate_limits ?? [];
   if (limits.length === 0) return null;
   return (
@@ -23,7 +25,7 @@ export function TokenLimits({ t }: { t: Token }) {
                   {l.channel_id}
                 </Text>
               </Text>
-              <LimitBars limit={l} />
+              <LimitBars limit={l} now={now} />
             </Box>
           ))}
         </Flex>

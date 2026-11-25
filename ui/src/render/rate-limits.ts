@@ -10,7 +10,7 @@ export const LIMITS_EXPLAINER =
 /** Bars turn orange from 75% used and red from 90%. */
 export type BarTone = "ok" | "warn" | "bad";
 
-export function barTone(pct: number): BarTone {
+function barTone(pct: number): BarTone {
   if (pct >= 90) return "bad";
   if (pct >= 75) return "warn";
   return "ok";
@@ -51,7 +51,11 @@ export function directionView(l: RateLimit, side: "send" | "recv"): DirectionVie
   if (isFull(d.max_percent)) {
     return { kind: "unlimited", label, text: "No practical limit" };
   }
-  const pct = d.used_pct ?? 0;
+  // An enforced limit whose threshold truncated to 0 refuses any positive flow.
+  if (d.used_pct == null) {
+    return { kind: "blocked", label, text: "The limit rounds to zero: no transfers this way" };
+  }
+  const pct = d.used_pct;
   const net = new BigNumber(d.net_flow);
   const note = net.isNegative() ? `net inflow ${formatAmount(net.negated().toFixed(0), l.exponent, sym, { compact: true })}, room above the limit` : null;
   return {
@@ -68,7 +72,8 @@ export function directionView(l: RateLimit, side: "send" | "recv"): DirectionVie
 export function resetText(l: Pick<RateLimit, "next_reset" | "window_hours">, now: Date = new Date()): string {
   if (!l.next_reset) return `resets every ${l.window_hours} h`;
   const at = new Date(l.next_reset);
-  const minutes = Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 60000));
+  const minutes = Math.ceil((at.getTime() - now.getTime()) / 60000);
+  if (minutes <= 0) return "resetting now";
   const left = minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} m` : `${minutes} m`;
   const clock = `${String(at.getUTCHours()).padStart(2, "0")}:${String(at.getUTCMinutes()).padStart(2, "0")} UTC`;
   return `resets in ${left} (${clock})`;

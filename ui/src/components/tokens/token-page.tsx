@@ -25,7 +25,6 @@ import { Breadcrumb as Breadcrumbs, DetailMeta, DetailTitle, PanelHead } from "@
 import { CardSkeleton, ListSkeleton, TileSkeleton } from "@/components/ui/skeleton";
 import { StateBox } from "@/components/ui/state-box";
 import { Tag } from "@/components/ui/status-pill";
-import { TokenLimits } from "./token-limits";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { formatAmount, formatCount, formatDate, formatPct } from "@/lib/format";
@@ -64,6 +63,7 @@ import {
   type SupplyState,
 } from "@/render/tokens";
 
+import { TokenLimits } from "./token-limits";
 import { TokenLogo } from "./tokens-page";
 
 // Custom breakpoints are not in Chakra's generated types, so responsive objects using them are hoisted.

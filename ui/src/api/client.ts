@@ -92,7 +92,7 @@ export interface ExplorerApi {
 
   search(q: string, signal?: AbortSignal): Promise<SearchResponse>;
 
-  ibcChannels(signal?: AbortSignal): Promise<Page<IbcChannel>>;
+  ibcChannels(signal?: AbortSignal): Promise<{ items: IbcChannel[] }>;
   rateLimits(signal?: AbortSignal): Promise<RateLimitList>;
 
   stats(signal?: AbortSignal): Promise<Stats>;
