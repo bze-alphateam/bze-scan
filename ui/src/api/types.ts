@@ -1085,3 +1085,70 @@ export interface Halted {
 }
 
 export type LiveHalt = NotHalted | Halted;
+
+
+// Emergency (chain v8.3.0, x/guardian)
+
+export interface EmergencyDenom {
+  denom: string;
+  symbol: string | null;
+  exponent: number;
+  logo_url: string | null;
+}
+
+export interface EmergencyChannel {
+  channel_id: string;
+  counterparty_chain_id: string | null;
+  counterparty_chain_name: string | null;
+}
+
+export interface EmergencyPlan {
+  name: string;
+  height: number;
+  info: string;
+  /** The plan of an emergency halt, not a governance upgrade. */
+  emergency: boolean;
+}
+
+/** `GET /emergency`: every emergency switch at `height`. */
+export interface Emergency {
+  /** False on a node from before chain v8.3.0 (every list is then empty). */
+  supported: boolean;
+  height: number;
+  active: boolean;
+  guardian: { address: string; label: string | null } | null;
+  automation_paused: boolean;
+  closed_channels: EmergencyChannel[];
+  blocked_denoms: EmergencyDenom[];
+  /** Type URLs the circuit breaker switched off. */
+  disabled_messages: string[];
+  halted_denoms: EmergencyDenom[];
+  plan: EmergencyPlan | null;
+}
+
+export type EmergencyActionName =
+  | "tighten_rate_limit"
+  | "block_denom"
+  | "unblock_denom"
+  | "disable_messages"
+  | "enable_messages"
+  | "halt_trading"
+  | "unhalt_trading"
+  | "halt_chain"
+  | "pause_automation"
+  | "resume_automation"
+  | "close_channel"
+  | "reopen_channel"
+  | "set_guardian";
+
+/** One item of `GET /emergency/actions`. `tx_hash` is null for a block-level row and a proposal's message. */
+export interface EmergencyAction {
+  height: number;
+  time: string;
+  tx_hash: string | null;
+  action: EmergencyActionName | (string & {});
+  by: "guardian" | "governance";
+  signer: string | null;
+  details: Record<string, unknown>;
+  proposal_id: number | null;
+}

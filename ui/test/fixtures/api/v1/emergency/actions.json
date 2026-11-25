@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "height": 25120300,
+      "time": "2026-11-20T10:00:00Z",
+      "tx_hash": null,
+      "action": "unhalt_trading",
+      "by": "governance",
+      "signer": "bze10d07y265gmmuvt4z0w9aw880jnsr700j5xwkxz",
+      "details": { "denoms": ["factory/bze1abc/uusdc"], "proposal_id": 52 },
+      "proposal_id": 52
+    },
+    {
+      "height": 25120100,
+      "time": "2026-11-19T09:00:00Z",
+      "tx_hash": "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666AAAA1111BBBB2222",
+      "action": "halt_trading",
+      "by": "guardian",
+      "signer": "bze1guardian0000000000000000000000000q4xk7a",
+      "details": { "denoms": ["factory/bze1abc/uusdc"] },
+      "proposal_id": null
+    }
+  ],
+  "next_cursor": null
+}

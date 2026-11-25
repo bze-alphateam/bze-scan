@@ -14,6 +14,7 @@ const FOOTER_LINKS = [
   { label: "Staking", href: externalLinks.staking },
   { label: "Future block", href: "/blocks/future", internal: true },
   { label: "Parameters", href: "/parameters", internal: true },
+  { label: "Emergency status", href: "/emergency", internal: true },
   { label: "Ping.pub explorer", href: externalLinks.pingPub },
 ];
 

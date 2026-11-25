@@ -1,0 +1,17 @@
+{
+  "supported": true,
+  "height": 25120450,
+  "active": true,
+  "guardian": { "address": "bze1guardian0000000000000000000000000q4xk7a", "label": "Emergency key" },
+  "automation_paused": true,
+  "closed_channels": [
+    { "channel_id": "channel-0", "counterparty_chain_id": "osmosis-1", "counterparty_chain_name": "Osmosis" }
+  ],
+  "blocked_denoms": [{ "denom": "ibc/ABCDEF", "symbol": "ATOM", "exponent": 6, "logo_url": null }],
+  "disabled_messages": ["/cosmos.bank.v1beta1.MsgSend"],
+  "halted_denoms": [
+    { "denom": "factory/bze1abc/uusdc", "symbol": "USDC", "exponent": 6, "logo_url": null },
+    { "denom": "factory/bze1abc/uother", "symbol": null, "exponent": 0, "logo_url": null }
+  ],
+  "plan": { "name": "emergency-halt-25120900", "height": 25120900, "info": "pool drain under way", "emergency": true }
+}
