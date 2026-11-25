@@ -57,10 +57,15 @@ func TestMigrateEmergencyHaltsKeepsTheGovernanceUpgrades(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO explorer.upgrade_recovery (upgrade_height, consensus_address, voting_power) VALUES (30000001, 'AA', 1)`)
 	require.NoError(t, err)
+	// An emergency halt that took over a governance row keeps its proposal.
+	_, err = db.Exec(`INSERT INTO explorer.upgrades (height, proposal_id, name, kind) VALUES (30000002, 41, 'emergency-halt-30000002', 'emergency')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO explorer.upgrade_recovery (upgrade_height, consensus_address, voting_power) VALUES (30000002, 'AA', 1)`)
+	require.NoError(t, err)
 	_, err = openMigrator(t, dbURL).Down(1)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"22551810 40"}, queryStrings(t, db, `SELECT concat_ws(' ', height, proposal_id) FROM explorer.upgrades`))
-	assert.Equal(t, []string{"22551810"}, queryStrings(t, db, `SELECT upgrade_height::text FROM explorer.upgrade_recovery`))
+	assert.Equal(t, []string{"22551810 40", "30000002 41"}, queryStrings(t, db, `SELECT concat_ws(' ', height, proposal_id) FROM explorer.upgrades`))
+	assert.Equal(t, []string{"22551810", "30000002"}, queryStrings(t, db, `SELECT upgrade_height::text FROM explorer.upgrade_recovery`))
 }
 
 // indexSynthetic indexes block h with the finalize events.

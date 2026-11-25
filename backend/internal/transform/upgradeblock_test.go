@@ -155,3 +155,33 @@ func label(names map[string]string, addr string) string {
 	}
 	return addr
 }
+
+// The rule behind chain_transfer rows: a block-level transfer sent by a
+// module account names nobody; one sent by any other account, labelled or
+// not, gives both sides a row.
+func TestBlockTransferFromAModuleAccountGivesNoRow(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs, in.Results.TxsResults = nil, nil
+	in.Results.FinalizeBlockEvents = send(chain.ModuleAddress(chain.Distribution), migratedTo, "5ubze")
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	assert.Empty(t, ents.Activity)
+}
+
+func TestBlockTransferFromAnUnlabelledAccountGivesBothSidesARow(t *testing.T) {
+	in := baseInput()
+	in.Block.Txs, in.Results.TxsResults = nil, nil
+	in.Results.FinalizeBlockEvents = send(refundOwner, migratedTo, "5ubze")
+	tr, _ := transformerWithLog(t)
+	ents, err := tr.Transform(in)
+	require.NoError(t, err)
+	require.Len(t, ents.Activity, 2)
+	category := map[string]string{}
+	for _, a := range ents.Activity {
+		assert.Equal(t, "chain_transfer", a.Kind)
+		assert.Equal(t, transform.BlockTxIndex, a.TxIndex)
+		category[a.Address] = a.Category
+	}
+	assert.Equal(t, map[string]string{refundOwner: "sent", migratedTo: "received"}, category)
+}
