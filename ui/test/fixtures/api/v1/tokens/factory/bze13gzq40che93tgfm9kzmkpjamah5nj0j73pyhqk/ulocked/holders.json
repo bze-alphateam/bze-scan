@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "rank": 1,
+      "address": "bze18mhtjwczlzqqgvw84uz8lrdv4hqule3jp8allp",
+      "label": {
+        "name": "DEX",
+        "kind": "module"
+      },
+      "balance": "250000000000",
+      "share_pct": "50.00000"
+    },
+    {
+      "rank": 2,
+      "address": "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk",
+      "label": null,
+      "balance": "100000000000",
+      "share_pct": "20.00000"
+    },
+    {
+      "rank": 3,
+      "address": "bze1m3kq7xzx2c0w6wyd5ys8xhzm8wxdq0p9fz9ds4",
+      "label": null,
+      "balance": "50000000000",
+      "share_pct": "10.00000"
+    },
+    {
+      "rank": 4,
+      "address": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "label": null,
+      "balance": "25000000000",
+      "share_pct": "5.00000"
+    },
+    {
+      "rank": 5,
+      "address": "bze1w9e8r7t6y5u4i3o2p0a9s8d7f6g5h4j3k2l0zx",
+      "label": {
+        "name": "BZE team",
+        "kind": "known"
+      },
+      "balance": "12500000000",
+      "share_pct": "2.50000"
+    },
+    {
+      "rank": 6,
+      "address": "bze1z0x9c8v7b6n5m4a3s2d0f9g8h7j6k5l4q3w2er",
+      "label": null,
+      "balance": "5000000000",
+      "share_pct": "1.00000"
+    }
+  ],
+  "next_cursor": "eyJiIjoiNTAwMDAwMDAwMCJ9"
+}

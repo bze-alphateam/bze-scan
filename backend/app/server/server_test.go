@@ -314,6 +314,10 @@ func (noTokens) TokenEvents(context.Context, string, *repository.EventKey, int) 
 	return nil, nil
 }
 
+func (noTokens) TokenSettings(context.Context, string) (*repository.TokenSettings, error) {
+	return &repository.TokenSettings{}, nil
+}
+
 func (noTokens) DenomTransfers(context.Context, string, *repository.EventKey, int) ([]repository.DenomTransfer, error) {
 	return nil, nil
 }
