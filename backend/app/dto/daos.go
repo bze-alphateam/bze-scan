@@ -20,6 +20,8 @@ type DaoSummary struct {
 	AdminLabel   *Label     `json:"admin_label"`
 	SelfGoverned bool       `json:"self_governed"`
 	CreatedTime  *time.Time `json:"created_time"`
+	// ProposalsOpen is the number of the DAO's proposals in voting.
+	ProposalsOpen int64 `json:"proposals_open"`
 }
 
 // DaoList is the response of GET /api/v1/daos. Supported is false on a node
@@ -35,7 +37,7 @@ type DaoList struct {
 func NewDaoSummary(d repository.Dao) DaoSummary {
 	s := DaoSummary{
 		ID: d.ID, Name: d.Name, Type: d.Type, Address: d.Address, Admin: d.Admin, AdminLabel: newLabel(d.AdminLabel),
-		SelfGoverned: d.SelfGoverned,
+		SelfGoverned: d.SelfGoverned, ProposalsOpen: d.ProposalsOpen,
 	}
 	if d.CreatedTime != nil {
 		t := d.CreatedTime.UTC()

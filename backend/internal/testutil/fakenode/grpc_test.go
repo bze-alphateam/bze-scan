@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
+
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
 	"github.com/bze-alphateam/bze-scan/backend/internal/grpcclient"
 	"github.com/bze-alphateam/bze-scan/backend/internal/testutil/fakenode"
@@ -167,4 +169,30 @@ func TestGRPCOverridesAndStop(t *testing.T) {
 	_, err = staking.Validators(ctx, &stakingtypes.QueryValidatorsRequest{})
 	assert.Equal(t, codes.Unavailable, status.Code(err))
 	g.Stop()
+}
+
+// The hand-written DAO proposal fixtures parse and are keyed by the DAO id
+// (the statuses filter is a repeated field: no key) and the proposal id.
+func TestGRPCServesDaoProposals(t *testing.T) {
+	g := fakenode.NewGRPC(t)
+	dao := daotypes.NewQueryClient(dial(t, g))
+	ctx := context.Background()
+
+	list, err := dao.Proposals(ctx, &daotypes.QueryProposalsRequest{DaoId: 2,
+		Statuses: []daotypes.ProposalStatus{daotypes.ProposalStatus_VOTING, daotypes.ProposalStatus_EXECUTION_FAILED}})
+	require.NoError(t, err)
+	require.Len(t, list.Proposals, 1)
+	assert.Equal(t, uint64(1), list.Proposals[0].Id)
+	empty, err := dao.Proposals(ctx, &daotypes.QueryProposalsRequest{DaoId: 1})
+	require.NoError(t, err)
+	assert.Empty(t, empty.Proposals)
+
+	p, err := dao.Proposal(ctx, &daotypes.QueryProposalRequest{Id: 1})
+	require.NoError(t, err)
+	assert.Equal(t, "Fund the hive", p.Proposal.Title)
+	assert.Equal(t, "800000", p.Proposal.Yes.String())
+	assert.Equal(t, "1250000", p.Proposal.PinnedDenominator.String())
+	assert.Equal(t, "0.400000000000000000", p.Proposal.PinnedConfig.MinQuorum.String())
+	require.Len(t, p.Proposal.Msgs, 1)
+	assert.Equal(t, "/cosmos.bank.v1beta1.MsgSend", p.Proposal.Msgs[0].TypeUrl)
 }

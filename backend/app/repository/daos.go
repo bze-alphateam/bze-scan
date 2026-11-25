@@ -25,6 +25,8 @@ type Dao struct {
 	Creator       *string
 	CreatorLabel  *Label
 	UpdatedHeight *int64
+	// ProposalsOpen is the number of the DAO's proposals in voting.
+	ProposalsOpen int64
 }
 
 // DaoFilter narrows the DAOs list.
@@ -37,7 +39,8 @@ type DaoFilter struct {
 }
 
 const daoCols = `d.id, d.address, d.type, d.name, d.admin, la.name, la.kind, d.self_governed, d.created_height,
-	d.created_time, d.created_tx_hash, d.creator, lc.name, lc.kind, d.updated_height`
+	d.created_time, d.created_tx_hash, d.creator, lc.name, lc.kind, d.updated_height,
+	(SELECT count(*) FROM explorer.dao_proposals p WHERE p.dao_id = d.id AND p.status = 'voting')`
 
 const daoFrom = ` FROM explorer.daos d
 	LEFT JOIN explorer.labels la ON la.address = d.admin
@@ -47,7 +50,7 @@ func scanDao(row pgx.Row) (Dao, error) {
 	var d Dao
 	var adminName, adminKind, creatorName, creatorKind *string
 	err := row.Scan(&d.ID, &d.Address, &d.Type, &d.Name, &d.Admin, &adminName, &adminKind, &d.SelfGoverned,
-		&d.CreatedHeight, &d.CreatedTime, &d.CreatedTxHash, &d.Creator, &creatorName, &creatorKind, &d.UpdatedHeight)
+		&d.CreatedHeight, &d.CreatedTime, &d.CreatedTxHash, &d.Creator, &creatorName, &creatorKind, &d.UpdatedHeight, &d.ProposalsOpen)
 	if err != nil {
 		return Dao{}, err
 	}

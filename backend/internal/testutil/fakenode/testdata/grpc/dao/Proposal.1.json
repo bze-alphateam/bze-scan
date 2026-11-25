@@ -1,0 +1,66 @@
+{
+    "proposal": {
+        "id": "1",
+        "dao_id": "2",
+        "proposer": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+        "title": "Fund the hive",
+        "summary": "Pay the beekeeper from the treasury",
+        "msgs": [
+            {
+                "@type": "/cosmos.bank.v1beta1.MsgSend",
+                "from_address": "bze1xv5cjjf4lmfn2akksfel9e5q3kuufd62qugncgswz75nr8mr3qysyz5k8w",
+                "to_address": "bze19fgph876c3rqxrn6xk5ch6wd73r3g05w690uls",
+                "amount": [
+                    {
+                        "denom": "ubze",
+                        "amount": "500000"
+                    }
+                ]
+            }
+        ],
+        "expedited": false,
+        "status": "VOTING",
+        "submit_height": "25100002",
+        "submit_time": "1764579602",
+        "voting_end": "4070908800",
+        "pinned_config": {
+            "min_quorum": "0.400000000000000000",
+            "threshold": "0.500000000000000000",
+            "voting_period": "259200s",
+            "allow_expedite": true,
+            "expedited_period": "86400s",
+            "expedite_quorum": "0.600000000000000000",
+            "expedite_threshold": "0.700000000000000000",
+            "open_submission": false,
+            "proposal_cost": {
+                "denom": "ubze",
+                "amount": "5000000"
+            },
+            "proposal_deposit": {
+                "denom": "ubze",
+                "amount": "100000000"
+            },
+            "deposit_refund_policy": "ONLY_PASSED",
+            "cost_destination": "TREASURY",
+            "kept_deposit_destination": "BURN"
+        },
+        "pinned_electorate": {
+            "sr_ids": [
+                "sr-1"
+            ],
+            "dr_denom": "ubze"
+        },
+        "pinned_denominator": "1250000",
+        "pinned_deposit": {
+            "denom": "ubze",
+            "amount": "100000000"
+        },
+        "yes": "800000",
+        "no": "0",
+        "abstain": "0",
+        "cleanup_cursor": ""
+    },
+    "voting_ended": false,
+    "retry_deadline": "0",
+    "expedite_settleable": false
+}

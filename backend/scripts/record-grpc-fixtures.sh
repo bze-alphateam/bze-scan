@@ -22,6 +22,9 @@
 #     bank/AllBalances.<address>.json, staking/DelegatorDelegations.<address>.json,
 #     staking/DelegatorUnbondingDelegations.<address>.json,
 #     distribution/DelegationTotalRewards.<address>.json
+#   dao_proposals (the DAO proposals sync, chain v8.3.0): per DAO of
+#     dao/Daos.json, dao/Proposals.<dao id>.json (its VOTING and
+#     EXECUTION_FAILED proposals) and dao/Proposal.<id>.json of each
 #   denoms (the denoms sync):
 #     bank/TotalSupply.json, bank/DenomsMetadata.json, tradebin/AllMarkets.json
 #     per factory denom: tokenfactory/DenomAuthority.<denom>.json
@@ -245,6 +248,16 @@ if has daos; then
     if [[ -n "${dr}" ]]; then
       fetch "bze/rewards/denom_reward?denom=$(esc "${dr}")" "rewards/DenomReward.$(esc "${dr}").json" 404
     fi
+  done
+fi
+
+if has dao_proposals; then
+  [[ -f "${OUT}/dao/Daos.json" ]] || fetch "bze/dao/daos?pagination.limit=100" dao/Daos.json
+  for id in $(jq -r '.daos[].id' "${OUT}/dao/Daos.json"); do
+    fetch "bze/dao/proposals/${id}?statuses=VOTING&statuses=EXECUTION_FAILED&pagination.limit=100" "dao/Proposals.${id}.json"
+    for pid in $(jq -r '.proposals[].id' "${OUT}/dao/Proposals.${id}.json"); do
+      fetch "bze/dao/proposal/${pid}" "dao/Proposal.${pid}.json"
+    done
   done
 fi
 

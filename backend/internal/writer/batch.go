@@ -162,6 +162,12 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.EmergencyHalts = append(all.EmergencyHalts, e.EmergencyHalts...)
 		all.Daos = append(all.Daos, e.Daos...)
 		all.DaoEvents = append(all.DaoEvents, e.DaoEvents...)
+		all.DaoProposals = append(all.DaoProposals, e.DaoProposals...)
+		all.DaoProposalOutcomes = append(all.DaoProposalOutcomes, e.DaoProposalOutcomes...)
+		all.DaoProposalDeposits = append(all.DaoProposalDeposits, e.DaoProposalDeposits...)
+		all.DaoProposalsCleaned = append(all.DaoProposalsCleaned, e.DaoProposalsCleaned...)
+		all.DaoVotes = append(all.DaoVotes, e.DaoVotes...)
+		all.DaoBallotReductions = append(all.DaoBallotReductions, e.DaoBallotReductions...)
 	}
 	if len(all.Blocks) == 0 {
 		return nil

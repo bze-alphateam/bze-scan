@@ -395,6 +395,9 @@ every later route follows:
 | `GET /api/v1/daos?type=static_list\|stake&admin=<bze1…>&cursor&limit` | every DAO (chain v8.3.0 `x/dao`), newest first, from `explorer.daos`: id, name, type, address, admin (and `admin_label`), `self_governed` (the DAO is its own admin), created_time; member counts and the electorate are live data and not in the list. `admin` lists the DAOs an account administers, the self-governed ones left out. `supported` is false while the node does not run `x/dao` yet (a node before v8.3.0 answers Unimplemented): the list is then empty, not an error. `no-store` |
 | `GET /api/v1/daos/{id}` | the indexed row (address and its `address_label` "DAO #id · name", created_height, created_tx_hash, creator, updated_height) with the chain's DAO as `live` (`available`; admin, pending_admin, description, `config` with the ratios as decimal strings, durations in seconds and coins as `{denom, amount, symbol, exponent}`, members, electorate, created_at; a stake DAO also `electorate_stake`: `sources` (one per staking reward `sr_id` or denom reward `dr_denom`, with its staking denom and `staked_amount`) and `voting_stake`, their sum, the chain's electorate stake), `controller` (`{address, label, end_reason, path}` from the chain's DaoController, null while `live.available` is false) and `treasury` (the DAO address's balances, empty while unavailable). A failed or unsupported node read is a 200 with `live.available` false; 404 when the chain and the index both lack the DAO. `no-store` |
 | `GET /api/v1/daos/{id}/history?cursor&limit` | the changes made to a DAO, newest first, from `explorer.dao_events`: height, tx_index and msg_index (-1 at block level, a change governance made), seq, `type` (`EventDaoCreated`, `EventAdminExecuted`, `EventAdminNominated`, `EventAdminChanged`, `EventAdminNominationWithdrawn`, `EventDaoConfigUpdated`, `EventDaoMetadataUpdated`, `EventDaoElectorateUpdated`, `EventDaoMembersUpdated`), `attrs` (the event's attributes), tx_hash (null at block level), time; 404 when the DAO is unknown |
+| `GET /api/v1/daos/{id}/proposals?status=voting\|rejected\|executed\|execution_failed\|expired\|cancelled&cursor&limit` | a DAO's proposals, newest (highest id) first, from `explorer.dao_proposals`: id, dao_id, title, status, proposer (and `proposer_label`), expedited, submit_time, voting_end, yes/no/abstain and denominator (strings: base units of the stake denom for a stake DAO, member votes for a static-list DAO), settled_height and `message_types` (the `@type` of each message); 404 when the DAO is unknown. `no-store` |
+| `GET /api/v1/dao-proposals/{id}` | one DAO proposal (ids are global, not per DAO): the list item plus `dao` (`{id, name, type}`, null while its submission is not indexed), summary, `msgs` (the `MsgSubmitProposal` body's messages, proto JSON), submit_height, submit_tx_hash, `pinned_config` (the DaoConfig pinned at submission, proto JSON; null when the state sync never saw the proposal on chain), tally_updated_at, `voting_ended` (voting and now ≥ voting_end), `expedite_settleable` (the node's answer at the last refresh, false once not voting), retry_deadline (execution_failed), settled_tx_hash (of the latest settle: first settle, retry or expiry), expedited_early, executed and execution_error (the latest run), deposit_refunded/deposit_destination/deposit_amount, cancelled_height, cleaned_height, `votes_count`, `weight_denom` (`{denom, symbol, exponent}` of a stake DAO's voting stake, read live; null for a static-list DAO or when the node cannot tell) and `checks` (`{regular: {quorum_met, threshold_met, passes}, expedite: {quorum_met, yes_met, passes} \| null}` over the stored tally and the pinned config with the chain's exact rule, big-integer cross-multiplication; null without a pinned config or a tally). `no-store` |
+| `GET /api/v1/dao-proposals/{id}/votes?option=yes\|no\|abstain&cursor&limit` | a DAO proposal's ballots (one per voter: a revote replaces it), heaviest `effective_weight` first, then by voter: voter (and `voter_label`), option, `weight` (when cast), `effective_weight` (weight less the ballot reductions indexed after the ballot, floored at 0), height, tx_hash, time; `weight_denom` as on the proposal. The cursor is text (the weight may exceed int64). `no-store` |
 | `GET /api/v1/search?q=` | `{"results": [{"type", "id", "label"}]}`: digits find an indexed block, 64 hex characters an indexed transaction, a `bze1…` address an account (always returned, with `indexed` true or false), a `bzevaloper1…` address a known validator; any other text of two characters or more the validators whose moniker contains it and the labelled accounts whose name contains it (any case, five of each, validators first, accounts labelled by name); no match is an empty list; an empty `q` is a 400 |
 | `GET /api/v1/stats` | the home tiles, from the indexed blocks and transactions and the `chain_state` rows (no node call): `latest_height`, `latest_time`, `avg_block_time_ms` (the average `block_time_ms` of the last hour) and `txs_24h` (transactions of the last 24 hours), both windows measured back from the latest indexed block; `block_time_windows`, the average block time over the last 10,000, 30,000, 50,000 and 100,000 blocks in that order (`[{blocks, from_height, avg_block_time_ms}]`: (time of the latest indexed block − time of block `from_height`) ÷ `blocks`, whole milliseconds, read from the two blocks by height; `avg_block_time_ms` null when block `from_height` is not indexed or below 1; `[]` before the first block), for estimates further ahead than the one-hour `avg_block_time_ms`; `bonded_tokens`, `supply` and `community_pool` (whole base units of `ubze`), `staked_share` (bonded over supply), `inflation`, `reward_rate` (inflation × (1 − community tax) ÷ staked share: the yearly staking reward before commission), all three percentages with five decimals; `validators` (`{active, total}`), `max_validators`, `unbonding_period` (seconds), `price_usd` and `price_change_24h_pct` of `ubze` (null until the prices job); `daily`, the stored days of the last 30 closed UTC days (`?days=` from 1 to 365, otherwise a 400), oldest first, a day without indexed blocks absent; and `today`, the current UTC day so far computed live with the same query (null while it has no indexed block). Each day is `{day, blocks, txs, txs_failed, active_addresses, new_addresses, transfers, fees, avg_block_time_ms}` (see Daily statistics under State sync). Every chain-state field is null until its row exists |
 | `GET /api/v1/params` | the live parameters of every module the parameters page shows (txfeecollector, staking, mint, distribution, slashing, gov, tradebin, tokenfactory, rewards, burner, cointrunk, dao, guardian: 13 modules), keyed by module: `{"<module>": {"params": <proto JSON as the node answers>, "last_change": {"height", "time", "proposal_id"} \| null}, …, "chain": {"v830": bool}}`; `chain.v830` is true when the node answers the guardian params, which exist from chain v8.3.0 on. Values are read from the local node's gRPC through a 30 s in-process cache, so the page never disagrees with the chain; `last_change` is the module's latest recorded change (null before one), its `proposal_id` null for a change no proposal explains. A module the node fails to answer is left out, silently when the node does not have it (`dao` and `guardian` on a v8.2.x node answer Unimplemented); none answering is a 502 |
@@ -1647,7 +1650,7 @@ current state is read live (`internal/daostate`, 5 s cache, behind
   `EventDaoMembersUpdated`, with the event's attributes as `attrs`, `tx_index`
   and `msg_index` -1 at block level (governance running a DAO message) and
   `seq` the position among the message's DAO events (the block's events at
-  block level). The proposal and ballot events are the proposals story's.
+  block level). The proposal and ballot events have their own tables (below).
 - `explorer.daos` has one row per DAO. An `EventDaoCreated` writes id,
   address, type, admin, and from the `MsgCreateDao` the name and the creator;
   every DAO event raises `updated_height` and marks the DAO dirty for the
@@ -1656,6 +1659,35 @@ current state is read live (`internal/daostate`, 5 s cache, behind
   creation fields. `self_governed` is admin = address.
 - Reindex rewrites `dao_events` in place like the other history tables; the
   `daos` creation upsert is idempotent.
+
+The chain deletes a finished proposal and its ballots (`MsgCleanupProposal`),
+so their history comes from the events (migration 000035,
+`internal/transform/dao_proposals.go`, `internal/writer/dao_proposals.go`):
+
+- `explorer.dao_proposals`, one row per proposal. `EventProposalSubmitted`
+  plus the `MsgSubmitProposal` body (title, summary, `msgs`; a submission
+  nested in authz, an admin execution or another DAO's proposal has no body
+  the explorer reads, and the state sync fills it) fill the submission facts
+  only: they never touch the status. `EventProposalSettled` (with the same
+  message's `EventProposalExecuted`) and `EventProposalCancelled` set the
+  status, the final tally, `settled_height`/`settled_tx_hash` (the latest
+  settle), `executed`/`execution_error` (the latest run) and
+  `cancelled_height`; `EventDepositReleased` the deposit columns; a
+  completed `EventProposalCleaned` `cleaned_height`. Every write is an
+  upsert, so a settle indexed before its submission (the backfill walks
+  down) writes the row the submission fills later. A status change applies
+  only over an older one (`status_height`), or over one the state sync set
+  (no height) only forward (voting → any; execution_failed → executed or
+  expired): a reindex never reopens or regresses a proposal.
+- `explorer.dao_votes`, each voter's latest ballot, forward-only by
+  (height, tx_index, msg_index) like `proposal_votes`.
+- `explorer.dao_ballot_reductions` (partitioned by height), one row per
+  `EventBallotReduced` (a stake exit or a member removal), insert-only. The
+  effective weight is derived on read: the ballot's weight less the
+  reductions after it (a revote's weight already reflects the earlier
+  ones); `dao_votes.weight` is never lowered.
+- Every proposal event marks the proposal dirty for the `dao_proposals` set.
+  The checks of `GET /api/v1/dao-proposals/{id}` are `internal/daotally`.
 
 ## State sync
 
@@ -1673,7 +1705,7 @@ indexer) the state sync:
    key already queued is not queued twice, and a queued full resync absorbs
    the keys of its set;
 3. resyncs a set in full when none ran for its interval (validators,
-   proposals, proposals' non-voters, upgrade recovery, prices, chain state: one minute; denoms, holders, IBC
+   proposals, proposals' non-voters, DAO proposals, upgrade recovery, prices, chain state: one minute; denoms, holders, IBC
    channels, orders, DAOs, chain registry, asset list: one hour;
    params: one day; daily statistics: every night at
    00:10 UTC), the safety net for what no event announces. A full resync, from
@@ -1954,6 +1986,18 @@ before v8.3.0 answers Unimplemented: the set treats that as not supported
 live read unsupported and `GET /api/v1/daos` says `supported: false` (it turns
 true once a `Params` or `Daos` call has answered; BFE-364 removes the flag
 after mainnet runs v8.3.0).
+
+**DAO proposals.** The `dao_proposals` set's first run pages bze.dao `Daos`
+and, per DAO, `Proposals` with statuses VOTING and EXECUTION_FAILED, then
+reads `Proposal` for each (its `expedite_settleable` and `retry_deadline`);
+every minute after, it reads `Proposal` for the stored voting ones, and for
+one id the transformer marked. It writes the running tally (only while the
+row and the chain both say voting), `expedite_settleable`, `retry_deadline`,
+the pinned config, and fills the submission facts the events lacked; the
+status moves only forward from the stored one, and a sync-made status change
+clears `status_height`. A proposal the chain no longer has (cleaned up,
+NotFound) keeps its indexed values; Unimplemented (a node before v8.3.0) is
+not supported: no error, no rows, the first run retried next time.
 
 **Proposals.** The set's first run lists every proposal (gov `Proposals`,
 100 per page), so one submitted before the live floor exists too; every
