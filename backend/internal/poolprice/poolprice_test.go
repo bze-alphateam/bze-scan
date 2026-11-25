@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	tradebintypes "github.com/bze-alphateam/bze/x/tradebin/types"
+	"github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -20,60 +24,6 @@ import (
 )
 
 func dec(s string) sdkmath.LegacyDec { return sdkmath.LegacyMustNewDecFromStr(s) }
-
-func TestDriftedBoundaries(t *testing.T) {
-	avg := dec("2")
-	limit := dec("0.1") // 10%: the band is [1.8, 2.2]
-	for name, tc := range map[string]struct {
-		spot    string
-		drifted bool
-	}{
-		"equal":              {"2", false},
-		"exactly above":      {"2.2", false},
-		"exactly below":      {"1.8", false},
-		"just above":         {"2.200000000000000001", true},
-		"just below":         {"1.799999999999999999", true},
-		"far":                {"5", true},
-		"inside the band":    {"2.1", false},
-		"another side limit": {"0.1", true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.drifted, poolprice.Drifted(dec(tc.spot), true, avg, limit))
-		})
-	}
-}
-
-func TestDriftedWithoutAPriceOrAnAverage(t *testing.T) {
-	assert.True(t, poolprice.Drifted(sdkmath.LegacyDec{}, false, dec("2"), dec("0.1")), "no price")
-	assert.True(t, poolprice.Drifted(dec("2"), true, dec("0"), dec("0.1")), "average 0")
-	assert.True(t, poolprice.Drifted(dec("2"), true, sdkmath.LegacyDec{}, dec("0.1")), "average nil")
-}
-
-func TestSpotMirrorsTheChain(t *testing.T) {
-	p, ok := poolprice.Spot(sdkmath.NewInt(3), sdkmath.NewInt(1))
-	require.True(t, ok)
-	assert.Equal(t, "0.333333333333333333", p.String())
-	_, ok = poolprice.Spot(sdkmath.ZeroInt(), sdkmath.NewInt(1))
-	assert.False(t, ok)
-	_, ok = poolprice.Spot(sdkmath.NewInt(1), sdkmath.ZeroInt())
-	assert.False(t, ok)
-	_, ok = poolprice.Spot(sdkmath.Int{}, sdkmath.NewInt(1))
-	assert.False(t, ok)
-}
-
-func TestDriftPct(t *testing.T) {
-	pct, ok := poolprice.DriftPct(dec("2"), true, dec("1.8"))
-	require.True(t, ok)
-	assert.Equal(t, "11.1", pct)
-	pct, _ = poolprice.DriftPct(dec("2"), true, dec("2"))
-	assert.Equal(t, "0.0", pct)
-	pct, _ = poolprice.DriftPct(dec("1.8"), true, dec("2"))
-	assert.Equal(t, "10.0", pct)
-	_, ok = poolprice.DriftPct(dec("2"), true, dec("0"))
-	assert.False(t, ok, "average 0")
-	_, ok = poolprice.DriftPct(sdkmath.LegacyDec{}, false, dec("2"))
-	assert.False(t, ok, "no price")
-}
 
 type fakeNode struct {
 	res   *tradebintypes.QueryPoolPriceAverageResponse
@@ -299,4 +249,128 @@ func TestPoolUnknownLPAndErrors(t *testing.T) {
 	assert.Nil(t, p)
 	_, err = service(nativePool(1, 1), nil, errors.New("down")).Pool(context.Background(), lp)
 	assert.Error(t, err)
+}
+
+func bigPool(base, quote string) tickers.Pool {
+	b, _ := sdkmath.NewIntFromString(base)
+	q, _ := sdkmath.NewIntFromString(quote)
+	return tickers.Pool{ID: "x_ubze", Base: "x", Quote: "ubze", ReserveBase: b, ReserveQuote: q}
+}
+
+// The chain compares in LegacyDec (18 decimals): one unit of the last decimal
+// decides, which the reserves of 10^18 reach.
+func TestPoolFlagsAtTheLastDecimal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		base, quote string
+		avg         string
+		fees, held  bool
+	}{
+		"exactly 10%":             {"1000000000000000000", "1100000000000000000", "1", false, true},
+		"10% plus 1e-18":          {"1000000000000000000", "1100000000000000001", "1", true, true},
+		"10% minus 1e-18":         {"1000000000000000000", "1099999999999999999", "1", false, true},
+		"exactly 3%":              {"1000000000000000000", "1030000000000000000", "1", false, false},
+		"3% plus 1e-18":           {"1000000000000000000", "1030000000000000001", "1", false, true},
+		"3% minus 1e-18":          {"1000000000000000000", "1029999999999999999", "1", false, false},
+		"below by 3% + 1e-18":     {"1000000000000000000", "969999999999999999", "1", false, true},
+		"below by exactly 3%":     {"1000000000000000000", "970000000000000000", "1", false, false},
+		"average 1/3, on 3%":      {"1000000000000000000", "343333333333333333", "0.333333333333333333", false, false},
+		"average 1/3, 3% + 1e-18": {"1000000000000000000", "343333333333333334", "0.333333333333333333", false, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := service(bigPool(tc.base, tc.quote), &poolprice.Average{AvgPrice: dec(tc.avg), LastHeight: 9}, nil)
+			p, err := s.Pool(context.Background(), lp)
+			require.NoError(t, err)
+			fees, held := flags(t, p)
+			assert.Equal(t, tc.fees, fees, "fees in BZE")
+			assert.Equal(t, tc.held, held, "module swaps held")
+		})
+	}
+}
+
+func TestPoolDriftPctRoundsHalfUpToOneDecimal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		base, quote string
+		avg, want   string
+	}{
+		"0.05% rounds up":    {"10000", "10005", "1", "0.1"},
+		"0.04% rounds down":  {"10000", "10004", "1", "0.0"},
+		"below the average":  {"10000", "9995", "1", "0.1"},
+		"11.11%":             {"1000", "2000", "1.8", "11.1"},
+		"a third as average": {"1000000", "400000", "0.333333333333333333", "20.0"},
+		"on the average":     {"100", "100", "1", "0.0"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			base, _ := sdkmath.NewIntFromString(tc.base)
+			quote, _ := sdkmath.NewIntFromString(tc.quote)
+			pool := tickers.Pool{ID: "x_ubze", Base: "x", Quote: "ubze", ReserveBase: base, ReserveQuote: quote}
+			p, err := service(pool, &poolprice.Average{AvgPrice: dec(tc.avg), LastHeight: 1}, nil).Pool(context.Background(), lp)
+			require.NoError(t, err)
+			require.NotNil(t, p.DriftPct)
+			assert.Equal(t, tc.want, *p.DriftPct)
+		})
+	}
+}
+
+type blockingNode struct {
+	calls   atomic.Int32
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingNode) PoolPriceAverage(context.Context, *tradebintypes.QueryPoolPriceAverageRequest,
+	...grpc.CallOption) (*tradebintypes.QueryPoolPriceAverageResponse, error) {
+	if b.calls.Add(1) == 1 {
+		close(b.entered)
+	}
+	<-b.release
+	return &tradebintypes.QueryPoolPriceAverageResponse{AvgPrice: dec("1.5"), LastHeight: 3}, nil
+}
+
+func TestCachedConcurrentCallersShareOneFlight(t *testing.T) {
+	node := &blockingNode{entered: make(chan struct{}), release: make(chan struct{})}
+	c := poolprice.NewCached(node, 0, nil)
+	const callers = 8
+	var wg sync.WaitGroup
+	results := make([]*poolprice.Average, callers)
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			avg, err := c.Average(context.Background(), "p")
+			assert.NoError(t, err)
+			results[i] = avg
+		}()
+	}
+	<-node.entered
+	time.Sleep(100 * time.Millisecond) // the other callers join the flight
+	close(node.release)
+	wg.Wait()
+	assert.EqualValues(t, 1, node.calls.Load(), "one call on the node for every caller")
+	for _, r := range results {
+		require.NotNil(t, r)
+		assert.EqualValues(t, 3, r.LastHeight)
+	}
+}
+
+type failingMetas struct{}
+
+func (failingMetas) Metas(context.Context, []string) (map[string]poolprice.Meta, error) {
+	return nil, errors.New("db down")
+}
+
+func TestPoolWithoutMetadataIsStillServedAndTheFailureLogged(t *testing.T) {
+	logger, hook := logtest.NewNullLogger()
+	s := poolprice.New(poolprice.Deps{
+		Pools:    fakePools{pools: []tickers.Pool{func() tickers.Pool { p := nativePool(1000, 2000); p.LPDenom = lp; return p }()}},
+		Averages: fakeAverages{avg: &poolprice.Average{AvgPrice: dec("1.8"), LastHeight: 1}},
+		Params:   fakeParams{doc: map[string]json.RawMessage{"tradebin": json.RawMessage(tradebinParams)}},
+		Metas:    failingMetas{},
+		Log:      logger,
+	}, "ubze")
+	p, err := s.Pool(context.Background(), lp)
+	require.NoError(t, err)
+	assert.Nil(t, p.Reserves.Base.Symbol)
+	assert.Nil(t, p.Price.Display, "no exponents: chain units only")
+	require.Len(t, hook.AllEntries(), 1)
+	assert.Equal(t, logrus.WarnLevel, hook.LastEntry().Level)
 }

@@ -10,7 +10,7 @@ import { ListPanel } from "@/components/ui/list";
 import { PanelHead } from "@/components/ui/page-head";
 import { formatPct } from "@/lib/format";
 import { dexAssetUrl } from "@/render/account";
-import { poolPriceText, poolPriceUnit, poolStatus, poolTicker } from "@/render/pool-price";
+import { poolPriceText, poolPriceUnit, poolStatus } from "@/render/pool-price";
 
 const TONE_COLOR = { warn: "warn.fg", ok: "pos.fg", muted: "fg.muted" } as const;
 
@@ -31,8 +31,9 @@ function WhyHelp() {
             <Popover.Arrow />
             <Popover.Body>
               <Text fontSize="sm">
-                The chain keeps a moving average of every pool&apos;s price. When the pool price jumps away from it, the chain stops using the pool for fees and
-                burns, so a manipulated price cannot be used to drain them. It comes back by itself once the price settles.
+                The chain keeps a moving average of every pool&apos;s price. When the pool price jumps away from it, fees paid in the pool&apos;s token are charged in BZE
+                instead, and the automatic fee swaps and burner moves through the pool are held, so a manipulated price cannot be used to take advantage of them. They resume by
+                themselves once the price settles.
               </Text>
             </Popover.Body>
           </Popover.Content>
@@ -77,7 +78,9 @@ export function PoolPriceCard({ t }: { t: Token }) {
           <DetailRow label="Status" last>
             <Flex direction="column" gap="1" data-testid="pool-price-status">
               {lines.length === 0 ? (
-                <Text color="fg.muted">No fee rule applies to a pool without BZE.</Text>
+                <Text color="fg.muted" data-testid="pool-status-norule">
+                  No fee rule applies to a pool without BZE.
+                </Text>
               ) : (
                 lines.map((l) => (
                   <Text key={l.key} color={TONE_COLOR[l.tone]} data-testid={`pool-status-${l.key}`}>
@@ -90,7 +93,7 @@ export function PoolPriceCard({ t }: { t: Token }) {
         </DetailList>
         <Box px="4" py="3" borderTopWidth="1px" borderColor="border.panel" fontSize="sm">
           <Text as="span" color="fg.muted" data-testid="pool-price-trade">
-            Trade {poolTicker(pool)} on{" "}
+            Trade on the{" "}
             <AppLink app="dex" href={dexAssetUrl(poolTradeDenom(t))}>
               DEX
             </AppLink>

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdkmath "cosmossdk.io/math"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/bze-alphateam/bze-scan/backend/internal/dexunits"
 	"github.com/bze-alphateam/bze-scan/backend/internal/tickers"
@@ -89,17 +90,24 @@ type Deps struct {
 	Averages Averages
 	Params   Params
 	Metas    Metas
+	// Log receives the failures the page survives; nil is the standard logger.
+	Log log.FieldLogger
 }
 
 // Service builds the Pool of an LP denom.
 type Service struct {
 	deps   Deps
 	native string
+	log    log.FieldLogger
 }
 
 // New returns a Service; native is the chain's native denom.
 func New(deps Deps, native string) *Service {
-	return &Service{deps: deps, native: native}
+	lg := deps.Log
+	if lg == nil {
+		lg = log.StandardLogger()
+	}
+	return &Service{deps: deps, native: native, log: lg}
 }
 
 // Pool returns the price state of the pool whose LP denom is lpDenom; nil
@@ -127,7 +135,9 @@ func (s *Service) Pool(ctx context.Context, lpDenom string) (*Pool, error) {
 	}
 	metas, err := s.deps.Metas.Metas(ctx, []string{p.Base, p.Quote})
 	if err != nil {
-		metas = nil // display units are an extra
+		// Symbols and display units are an extra: the pool is shown without them.
+		s.log.WithError(err).WithField("pool", p.ID).Warn("pool price: denom metadata")
+		metas = nil
 	}
 	out := &Pool{
 		PoolID: p.ID,
@@ -136,9 +146,9 @@ func (s *Service) Pool(ctx context.Context, lpDenom string) (*Pool, error) {
 			Quote: asset(p.Quote, p.ReserveQuote, metas),
 		},
 	}
-	spot, hasSpot := Spot(p.ReserveBase, p.ReserveQuote)
+	sp, hasSpot := spot(p.ReserveBase, p.ReserveQuote)
 	if hasSpot {
-		out.Price = price(spot, out.Reserves)
+		out.Price = price(sp, out.Reserves)
 	}
 	if avg == nil {
 		return out, nil
@@ -146,7 +156,7 @@ func (s *Service) Pool(ctx context.Context, lpDenom string) (*Pool, error) {
 	out.AvgPrice = price(avg.AvgPrice, out.Reserves)
 	h := avg.LastHeight
 	out.AvgLastHeight = &h
-	if pct, ok := DriftPct(spot, hasSpot, avg.AvgPrice); ok {
+	if pct, ok := driftPct(sp, hasSpot, avg.AvgPrice); ok {
 		out.DriftPct = &pct
 	}
 	if p.Base != s.native && p.Quote != s.native {
@@ -156,8 +166,8 @@ func (s *Service) Pool(ctx context.Context, lpDenom string) (*Pool, error) {
 	if !ok {
 		return out, nil
 	}
-	fees := Drifted(spot, hasSpot, avg.AvgPrice, limits.fee)
-	held := Drifted(spot, hasSpot, avg.AvgPrice, limits.module)
+	fees := drifted(sp, hasSpot, avg.AvgPrice, limits.fee)
+	held := drifted(sp, hasSpot, avg.AvgPrice, limits.module)
 	out.FeesInBZE, out.ModuleSwapsHeld = &fees, &held
 	return out, nil
 }

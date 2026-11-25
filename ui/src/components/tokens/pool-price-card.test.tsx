@@ -22,7 +22,7 @@ describe("PoolPriceCard", () => {
     expect(screen.getByTestId("pool-price-drift")).toHaveTextContent("11.1% away");
     expect(screen.getByTestId("pool-status-fees")).toHaveTextContent("Fees paid in HONEY are charged in BZE for now");
     expect(screen.getByTestId("pool-status-module")).toHaveTextContent("burner moves through this pool are on hold: more than 3% away");
-    expect(screen.getByTestId("pool-price-trade")).toHaveTextContent("Trade HONEY on DEX");
+    expect(screen.getByTestId("pool-price-trade")).toHaveTextContent("Trade on the DEX");
   });
 
   it("says within limits", () => {
@@ -43,7 +43,25 @@ describe("PoolPriceCard", () => {
   it("explains itself in a pop-up", async () => {
     renderWithProviders(<PoolPriceCard t={lp} />);
     await userEvent.click(screen.getByTestId("pool-price-help"));
-    expect(await screen.findByText(/manipulated price/)).toBeInTheDocument();
+    expect(await screen.findByText(/charged in BZE\s+instead/)).toBeInTheDocument();
+  });
+
+  it("does not claim a BZE pool has no rule when its limits could not be read", () => {
+    renderWithProviders(<PoolPriceCard t={withPool({ fees_in_bze: null, module_swaps_held: null })} />);
+    expect(screen.getByTestId("pool-status-unchecked")).toHaveTextContent("could not be checked");
+    expect(screen.queryByTestId("pool-status-norule")).not.toBeInTheDocument();
+  });
+
+  it("says no rule applies only to a pool without BZE", () => {
+    const base = lp.pool as PoolPrice;
+    const other = { ...base.reserves, quote: { ...base.reserves.quote, denom: "uother", symbol: "OTHER" } };
+    renderWithProviders(<PoolPriceCard t={withPool({ reserves: other, fees_in_bze: null, module_swaps_held: null })} />);
+    expect(screen.getByTestId("pool-status-norule")).toBeInTheDocument();
+  });
+
+  it("shows a chain-unit price without trailing zeros", () => {
+    renderWithProviders(<PoolPriceCard t={withPool({ price: { chain: "2.000000000000000000", display: null } })} />);
+    expect(screen.getByTestId("pool-price-now")).toHaveTextContent(/^2$/);
   });
 
   it("draws nothing for a token without a pool", () => {

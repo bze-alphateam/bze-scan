@@ -48,7 +48,18 @@ describe("poolStatus", () => {
   });
 
   it("has no rule for a pool without BZE", () => {
-    expect(poolStatus(pool({ fees_in_bze: null, module_swaps_held: null }))).toEqual([]);
+    const other = pool({
+      reserves: { base: asset("uhoney", "HONEY"), quote: asset("uother", "OTHER") },
+      fees_in_bze: null,
+      module_swaps_held: null,
+    });
+    expect(poolStatus(other)).toEqual([]);
+  });
+
+  it("says the rules could not be checked for a BZE pool whose limits are unknown", () => {
+    const lines = poolStatus(pool({ fees_in_bze: null, module_swaps_held: null }));
+    expect(lines.map((l) => l.key)).toEqual(["unchecked"]);
+    expect(lines[0].text).toBe("The fee rules could not be checked for this pool right now.");
   });
 
   it("does not claim a percentage when the drift is unknown", () => {
@@ -67,7 +78,9 @@ describe("pool price helpers", () => {
 
   it("prefers the display price and falls back to the chain one", () => {
     expect(poolPriceText(pool(), "price")).toBe("2");
-    expect(poolPriceText(pool({ price: { chain: "2.0", display: null } }), "price")).toBe("2.0");
+    expect(poolPriceText(pool({ price: { chain: "2.000000000000000000", display: null } }), "price")).toBe("2");
+    expect(poolPriceText(pool({ price: { chain: "0.333333333333333300", display: null } }), "price")).toBe("0.3333333333333333");
+    expect(poolPriceText(pool({ price: { chain: "100", display: null } }), "price")).toBe("100");
     expect(poolPriceText(pool({ avg_price: null }), "avg_price")).toBeNull();
     expect(poolPriceUnit(pool())).toBe("BZE per HONEY");
   });

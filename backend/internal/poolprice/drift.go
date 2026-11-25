@@ -4,10 +4,10 @@ import (
 	sdkmath "cosmossdk.io/math"
 )
 
-// Spot is the pool's price in chain units, quote reserve over base reserve,
+// spot is the pool's price in chain units, quote reserve over base reserve,
 // as the chain's poolPrice computes it. ok is false for a pool without a
 // price (an empty or unknown reserve).
-func Spot(reserveBase, reserveQuote sdkmath.Int) (price sdkmath.LegacyDec, ok bool) {
+func spot(reserveBase, reserveQuote sdkmath.Int) (price sdkmath.LegacyDec, ok bool) {
 	if reserveBase.IsNil() || reserveQuote.IsNil() || !reserveBase.IsPositive() || !reserveQuote.IsPositive() {
 		return sdkmath.LegacyDec{}, false
 	}
@@ -18,11 +18,11 @@ func Spot(reserveBase, reserveQuote sdkmath.Int) (price sdkmath.LegacyDec, ok bo
 	return price, true
 }
 
-// Drifted is the chain's poolPriceDrifted: the spot is further from avg than
+// drifted is the chain's poolPriceDrifted: the spot is further from avg than
 // limit (relative to avg). Exactly at the limit is not drifted. A pool
 // without a price (hasSpot false) or without a positive average counts as
 // drifted.
-func Drifted(spot sdkmath.LegacyDec, hasSpot bool, avg, limit sdkmath.LegacyDec) bool {
+func drifted(spot sdkmath.LegacyDec, hasSpot bool, avg, limit sdkmath.LegacyDec) bool {
 	if !hasSpot {
 		return true
 	}
@@ -33,9 +33,9 @@ func Drifted(spot sdkmath.LegacyDec, hasSpot bool, avg, limit sdkmath.LegacyDec)
 	return spot.Sub(avg).Abs().GT(limit.Mul(avg))
 }
 
-// DriftPct is |spot − avg| / avg in percent with one decimal ("12.3"); false
+// driftPct is |spot − avg| / avg in percent with one decimal ("12.3"); false
 // when there is no price or the average is not positive.
-func DriftPct(spot sdkmath.LegacyDec, hasSpot bool, avg sdkmath.LegacyDec) (string, bool) {
+func driftPct(spot sdkmath.LegacyDec, hasSpot bool, avg sdkmath.LegacyDec) (string, bool) {
 	if !hasSpot || avg.IsNil() || !avg.IsPositive() {
 		return "", false
 	}

@@ -12,7 +12,7 @@ test("an LP token shows the pool price, its drift and what it means", async ({ p
   await expect(page.getByTestId("pool-status-fees")).toContainText("charged in BZE for now");
   await expect(page.getByTestId("pool-status-module")).toContainText("on hold");
   await page.getByTestId("pool-price-help").click();
-  await expect(page.getByRole("dialog")).toContainText("manipulated price");
+  await expect(page.getByRole("dialog")).toContainText("charged in BZE instead");
   await page.keyboard.press("Escape");
   await noHorizontalScroll(page);
 });

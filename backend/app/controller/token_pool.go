@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/repository"
 )
@@ -21,6 +23,7 @@ func (h *TokenController) poolPrice(ctx context.Context, t *repository.Token) *d
 	}
 	pool, err := h.Pools.Pool(ctx, t.Denom)
 	if err != nil {
+		log.WithError(err).WithField("denom", t.Denom).Warn("token page: pool price")
 		return nil
 	}
 	return pool
