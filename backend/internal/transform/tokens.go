@@ -101,8 +101,12 @@ func (r *tokenRows) add(denom, kind, actor, amount string, details map[string]an
 }
 
 // txTokenEvents appends the token events of a successful transaction: the
-// tokenfactory messages, then the typed events of each message. byIndex are
-// its events by message.
+// tokenfactory messages (also those an authz MsgExec or a dao
+// MsgAdminExecute runs), the mints and burns the events of a message that is
+// not itself a MsgMint or MsgBurn record (a wrapper's, a settle's), then the
+// typed events of each message. byIndex are its events by message. The
+// messages a settle executes are in the proposal, not in the transaction:
+// NestedActions gives their rows.
 func txTokenEvents(log logrus.FieldLogger, ents *Entities, b Block, txIndex int, msgs []chain.Msg, byIndex map[int][]node.Event) error {
 	rows := &tokenRows{ents: ents, height: b.Height, txIndex: txIndex, time: b.Time, log: log}
 	for j, m := range msgs {
@@ -113,11 +117,6 @@ func txTokenEvents(log logrus.FieldLogger, ents *Entities, b Block, txIndex int,
 			actor = str(body, "creator")
 		}
 		switch m.TypeURL {
-		case msgCreateDenom:
-			creator, sub := str(body, "creator"), str(body, "subdenom")
-			if creator != "" && sub != "" {
-				rows.add("factory/"+creator+"/"+sub, TokenCreated, actor, "", map[string]any{"subdenom": sub})
-			}
 		case msgMint, msgBurn:
 			kind, details := TokenBurned, map[string]any(nil)
 			if m.TypeURL == msgMint {
@@ -131,30 +130,68 @@ func txTokenEvents(log logrus.FieldLogger, ents *Entities, b Block, txIndex int,
 			for _, c := range coins {
 				rows.add(c.Denom, kind, actor, c.Amount, details)
 			}
-		case msgChangeAdmin:
-			// MsgSetDenomAdmin is governance's: it only runs in EndBlock, so
-			// its row comes from the block-level DenomAdminChangeEvent.
-			details := map[string]any{"to": str(body, "newAdmin")}
-			for _, ev := range byIndex[j] {
-				if ev.Type == evDenomAdminChange {
-					attrs := storedEvent(ev).Attrs
-					details["from"], details["to"] = attrs["admin"], attrs["new_admin"]
-					break
-				}
+		default:
+			bodyTokenRows(rows, m, byIndex[j])
+			for _, in := range innerMsgs(m) {
+				bodyTokenRows(rows, in, byIndex[j])
 			}
-			rows.add(str(body, "denom"), TokenAdminChanged, actor, "", details)
-		case msgSetDenomMetadata:
-			md, _ := body["metadata"].(map[string]any)
-			rows.add(str(md, "base"), TokenMetadataChanged, actor, "",
-				map[string]any{"symbol": str(md, "symbol"), "name": str(md, "name"), "display": str(md, "display")})
-		case msgSetDenomBranding:
-			rows.add(str(body, "denom"), TokenBrandingChanged, actor, "", nil)
+			if err := eventMintBurnRows(rows, byIndex[j]); err != nil {
+				return fmt.Errorf("msg %d: %s: %w", j, m.TypeURL, err)
+			}
+		}
+		if isWrapper(m) {
+			actor = wrapperActor(m, body)
 		}
 		for _, ev := range byIndex[j] {
 			typedTokenEvents(rows, ev, actor)
 		}
 	}
 	return nil
+}
+
+// bodyTokenRows appends the rows of one tokenfactory message read from its
+// body, other than a mint or a burn (whose events give their rows when the
+// message is not the transaction's own): a denom created, its admin,
+// metadata or branding changed. events are the events of the transaction's
+// message that ran it, for the previous admin of an admin change. The actor
+// is the signer, else the body's creator (a nested message has no signer).
+func bodyTokenRows(rows *tokenRows, m chain.Msg, events []node.Event) {
+	var body map[string]any
+	_ = json.Unmarshal(m.Body, &body) // an undecodable body leaves it nil
+	actor := m.Signer
+	if actor == "" {
+		actor = str(body, "creator")
+	}
+	switch m.TypeURL {
+	case msgCreateDenom:
+		creator, sub := str(body, "creator"), str(body, "subdenom")
+		if creator != "" && sub != "" {
+			rows.add("factory/"+creator+"/"+sub, TokenCreated, actor, "", map[string]any{"subdenom": sub})
+		}
+	case msgChangeAdmin:
+		// MsgSetDenomAdmin is governance's: it only runs in EndBlock, so
+		// its row comes from the block-level DenomAdminChangeEvent.
+		denom := str(body, "denom")
+		details := map[string]any{"to": str(body, "newAdmin")}
+		for _, ev := range events {
+			if ev.Type != evDenomAdminChange {
+				continue
+			}
+			attrs := storedEvent(ev).Attrs
+			if d := anyString(attrs["denom"]); d != "" && d != denom {
+				continue
+			}
+			details["from"], details["to"] = attrs["admin"], attrs["new_admin"]
+			break
+		}
+		rows.add(denom, TokenAdminChanged, actor, "", details)
+	case msgSetDenomMetadata:
+		md, _ := body["metadata"].(map[string]any)
+		rows.add(str(md, "base"), TokenMetadataChanged, actor, "",
+			map[string]any{"symbol": str(md, "symbol"), "name": str(md, "name"), "display": str(md, "display")})
+	case msgSetDenomBranding:
+		rows.add(str(body, "denom"), TokenBrandingChanged, actor, "", nil)
+	}
 }
 
 // blockTokenEvents appends the token events of the block's finalize events:

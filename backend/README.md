@@ -1121,6 +1121,69 @@ transaction (or per block, `tx_index = -1`), `actor` the message's signer:
 Every denom a token event names is marked dirty for the denoms set, and so
 are the tokenfactory change events.
 
+### Actions run by DAOs and authz
+
+A DAO runs messages as its own account through `MsgAdminExecute` (the
+admin; the inner messages in the body's `msgs`) and through a passed
+proposal executed inside `MsgSettleProposal` (whose body has none: they are
+the proposal's stored `dao_proposals.msgs`); an authz grantee through
+`MsgExec`. The inner messages leave their events under the wrapper's
+`msg_index`. The rule (`internal/transform/nested.go`):
+
+- **Events first.** A mint or a burn not made by a top-level
+  `MsgMint`/`MsgBurn` is read from the bank events: a `coinbase` minted by
+  the tokenfactory module gives `minted` (actor and details `recipient` =
+  the account the module's next transfer of that denom pays: the DAO, the
+  granter), a `burn` by the module gives `burned` (actor = the sender of
+  the previous transfer of that denom to the module). One row per coin per
+  event; a top-level `MsgMint`/`MsgBurn` keeps its body rows. Gov votes and
+  deposits take the voter/depositor from the `proposal_vote` /
+  `proposal_deposit` event (the signer only when absent), so a DAO's vote is
+  under the DAO. Every `submit_proposal` naming a proposal marks it dirty.
+  Account activity reads the events as for any message: a DAO and the
+  accounts it pays are participants of the wrapper; for `MsgSettleProposal`
+  and `MsgAdminExecute` their category is `sent` or `received` by the sign
+  of their balance change (the kind stays the wrapper's).
+- **Bodies of `MsgExec` and `MsgAdminExecute`** are unwrapped
+  (recursively, wrappers inside wrappers): their tokenfactory messages give
+  `created`, `admin_changed` (the previous admin from the
+  `DenomAdminChangeEvent` of that denom), `metadata_changed` and
+  `branding_changed` with the inner creator (the DAO, the granter) as
+  actor; their validator messages give the validator events and dirty
+  marks; their gov submissions give the proposals row (the k-th inner
+  submit is the k-th `submit_proposal` event naming a proposal). The typed
+  token events of a `MsgAdminExecute` take the DAO as actor; of a settle,
+  their own attributes' (`creator`, `admin`).
+- **Settles**: the `writer.SettledProposalActions` PostFlush hook (live and
+  batch writers) reads, for the flush's executed settles and the
+  submissions it brought a body for, every proposal whose status is
+  `executed` and whose settle transaction is indexed, and runs the same
+  body extractors over its `msgs` (`transform.NestedActions`, mints and
+  burns left to the events): token_events and validator_events rows at the
+  settle's height and `tx_index`, `seq` from 1000 × (rank + 1), the rank
+  being the proposal's by id among those the same transaction executed.
+  The rows are written in the flush's mode, so a reindex or the second
+  trigger rewrites the same rows. Whichever of the settle and the
+  submission is written second writes them (the backfill walks down: the
+  submission's flush). A proposal whose `msgs` only the state sync fills
+  (a nested submission) gets no rows when its settle was written first.
+
+Consequences of the rule:
+
+- On the settle path there are no message events to read, so a settle's
+  `admin_changed` rows have no `from` (the previous admin), unlike those of
+  `MsgExec` and `MsgAdminExecute`.
+- Inside an authz `MsgExec`, body rows and mints/burns name the granter
+  (the inner creator, the denom admin, as the chain does), while typed
+  events (halt, minting disabled, config change, market/pool created
+  without a creator attribute) keep the transaction's signer (the grantee),
+  as before.
+- A settle's proposal gets its seq range from its rank among the executed
+  proposals of that transaction the database holds when the hook runs. All
+  of them are written by the settle's own flush, so the ranks are final
+  once the settle is indexed. A proposal past its range's 1000 rows per
+  table loses the overflow, and the hook logs a warning with its id.
+
 ### Governance
 
 Proposals, votes and deposits are kept forever; the gov module deletes the

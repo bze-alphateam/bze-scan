@@ -400,9 +400,10 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			}
 
 			ix := live.New(opts.Live, live.Deps{
-				Listener:    live.NewPGListener(cfg.DatabaseURL),
-				Node:        nodeClient,
-				Store:       writer.NewLiveWriter(pool, writer.AttributeOrders, candles.Default.PostFlush, flows.PostFlush),
+				Listener: live.NewPGListener(cfg.DatabaseURL),
+				Node:     nodeClient,
+				Store: writer.NewLiveWriter(pool, writer.AttributeOrders, writer.SettledProposalActions(log.StandardLogger()),
+					candles.Default.PostFlush, flows.PostFlush),
 				Transformer: transform.New(codec, log.StandardLogger()),
 				Raw:         raw,
 				CatchUp:     hist.catchUp(),

@@ -336,6 +336,15 @@ func txActivity(ents *Entities, tx *Transaction, msgs []Message, events []node.E
 			if relayOnly && len(a.Deltas) == 0 {
 				continue
 			}
+			if (msgs[js[0]].TypeURL == msgDaoSettle || msgs[js[0]].TypeURL == msgDaoAdminExecute) && len(a.Deltas) > 0 {
+				// A DAO's messages run inside the wrapper: the DAO and the
+				// accounts it pays are participants whose direction the
+				// balances tell; the kind stays the wrapper's.
+				a.Category = classify.Sent
+				if hasPositive(a.Deltas) {
+					a.Category = classify.Received
+				}
+			}
 			if hasPositive(a.Deltas) {
 				switch msgs[js[0]].TypeURL {
 				case classify.MsgRecvPacket:
