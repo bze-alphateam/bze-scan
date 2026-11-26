@@ -179,6 +179,50 @@ describe("TokenPage", () => {
     expect(screen.queryByTestId("token-denom")).not.toBeInTheDocument();
   });
 
+  describe("the DAO header", () => {
+    const run = (token: Token) => renderWithProviders(<TokenPage denom={token.denom} />, { api: api(token) });
+    const daoLabel = { name: "DAO #7 · Honey Council", kind: "dao" };
+
+    it("says a DAO runs the token and links to it", async () => {
+      run({ ...honey, admin_label: daoLabel });
+      const header = await screen.findByTestId("token-dao");
+      expect(header).toHaveTextContent("Run byDAO #7 · Honey Council");
+      expect(within(header).getByRole("link")).toHaveAttribute("href", "/daos/7");
+    });
+
+    it("links a DAO without a name", async () => {
+      run({ ...honey, admin_label: { name: "DAO #7", kind: "dao" } });
+      const header = await screen.findByTestId("token-dao");
+      expect(header).toHaveTextContent("Run byDAO #7");
+      expect(within(header).getByRole("link")).toHaveAttribute("href", "/daos/7");
+    });
+
+    it("shows nothing for a person admin, an account without a label or a renounced token", async () => {
+      for (const token of [
+        { ...honey, admin_label: { name: "Alice", kind: "person" } },
+        { ...honey, admin_label: null },
+        { ...honey, admin: null, admin_label: null },
+      ]) {
+        const { unmount } = run(token);
+        await screen.findByRole("heading", { level: 1, name: "HONEY" });
+        expect(screen.queryByTestId("token-dao")).not.toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("shows nothing for a dao label without a parsable id", async () => {
+      run({ ...honey, admin_label: { name: "Honey Council", kind: "dao" } });
+      await screen.findByRole("heading", { level: 1, name: "HONEY" });
+      expect(screen.queryByTestId("token-dao")).not.toBeInTheDocument();
+    });
+
+    it("shows nothing for an IBC token", async () => {
+      run({ ...usdc, admin: null, admin_label: daoLabel });
+      await screen.findByTestId("ibc-route");
+      expect(screen.queryByTestId("token-dao")).not.toBeInTheDocument();
+    });
+  });
+
   it("lists the top holders and loads them all on request", async () => {
     const tokenHolders = vi.fn((_denom: string, p: { cursor?: string }) =>
       Promise.resolve(

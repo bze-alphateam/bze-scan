@@ -64,6 +64,7 @@ import {
   type SupplyState,
 } from "@/render/tokens";
 import { tokenSwitches } from "@/render/emergency";
+import { daoHref, daoOfLabel } from "@/render/daos";
 
 import { TokenLimits } from "./token-limits";
 import { TokenSettingsCard } from "./token-settings";
@@ -127,6 +128,7 @@ function Header({ t }: { t: Token }) {
   const denoms = useDenoms();
   const site = websiteLink(t.website);
   const symbol = tokenSymbol(t);
+  const dao = t.kind === "factory" && t.admin ? daoOfLabel(t.admin_label) : null;
   return (
     <Box>
       <Breadcrumb current={symbol} />
@@ -140,6 +142,14 @@ function Header({ t }: { t: Token }) {
               </Text>
             )}
           </DetailTitle>
+          {dao && (
+            <DetailMeta mt="6px" data-testid="token-dao">
+              <Text as="span">Run by</Text>
+              <Link asChild color="accent.fg">
+                <NextLink href={daoHref(dao.id)}>{dao.name ? `DAO #${dao.id} · ${dao.name}` : `DAO #${dao.id}`}</NextLink>
+              </Link>
+            </DetailMeta>
+          )}
           <DetailMeta data-testid="token-chips">
             <ExplainedBadges badges={headerChips(t)} />
             {site && (
