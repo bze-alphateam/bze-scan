@@ -52,6 +52,9 @@ type Deps struct {
 	Daos        controller.DaoReader
 	DaoState    controller.DaoState
 	DaoTreasury controller.DaoTreasury
+	// DaoProposals reads the DAO proposal tables; nil leaves the DAO
+	// proposal routes out.
+	DaoProposals controller.DaoProposalReader
 	// AccountState reads accounts live from the node; nil answers every
 	// account with the live part unavailable.
 	AccountState controller.AccountState
@@ -219,6 +222,12 @@ func New(deps Deps) *echo.Echo {
 		api.GET("/daos", daos.Daos)
 		api.GET("/daos/:id", daos.Dao)
 		api.GET("/daos/:id/history", daos.DaoHistory)
+	}
+	if deps.DaoProposals != nil {
+		proposals := controller.NewDaoProposalController(deps.DaoProposals, deps.DaoState, nil)
+		api.GET("/daos/:id/proposals", proposals.DaoProposals)
+		api.GET("/dao-proposals/:id", proposals.DaoProposal)
+		api.GET("/dao-proposals/:id/votes", proposals.DaoVotes)
 	}
 	if deps.Tokens != nil {
 		tokens := controller.NewTokenController(deps.Tokens)

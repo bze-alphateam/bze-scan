@@ -32,7 +32,36 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 34
+const latestVersion = 35
+
+// migrationVersions are the versions of the up migrations, ascending.
+func migrationVersions(t *testing.T) []int {
+	t.Helper()
+	files, err := filepath.Glob("../migrations/*.up.sql")
+	require.NoError(t, err)
+	var out []int
+	for _, f := range files {
+		v, err := strconv.Atoi(strings.SplitN(filepath.Base(f), "_", 2)[0])
+		require.NoError(t, err, f)
+		out = append(out, v)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// stepsBefore is the number of down steps from the latest migration back to
+// just before migration version: pinned to the migration a test means, so a
+// later migration (or a gap in the numbers) does not move it.
+func stepsBefore(t *testing.T, version int) int {
+	t.Helper()
+	n := 0
+	for _, v := range migrationVersions(t) {
+		if v >= version {
+			n++
+		}
+	}
+	return n
+}
 
 // sinkTables are the tables of the vendored sink schema.
 var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
@@ -41,7 +70,7 @@ var sinkTables = []string{"attributes", "blocks", "events", "tx_results"}
 // parents included, partitions excluded.
 var explorerTables = []string{
 	"account_activity", "accounts", "backfill_checkpoints", "block_event_kinds",
-	"block_events", "blocks", "candles", "chain_state", "chains", "daily_stats", "dao_events", "daos", "denoms",
+	"block_events", "blocks", "candles", "chain_state", "chains", "daily_stats", "dao_ballot_reductions", "dao_events", "dao_proposals", "dao_votes", "daos", "denoms",
 	"ibc_channels", "ibc_transfers", "index_failures", "indexer_state", "labels",
 	"message_kinds", "messages", "order_closures", "order_fills", "order_messages", "orders",
 	"param_snapshots", "pending_rewrites", "proposal_deposits", "proposal_non_voters", "proposal_votes", "proposals",
@@ -344,8 +373,10 @@ func TestMigrateCommand(t *testing.T) {
 	assert.Contains(t, first, `"applied":true`)
 	assert.Contains(t, run("up"), `"applied":false`)
 	assert.Equal(t, strconv.Itoa(latestVersion), strings.TrimSpace(run("version")))
-	assert.Contains(t, run("down", "2"), `"version":`+strconv.Itoa(latestVersion-2))
-	assert.Equal(t, strconv.Itoa(latestVersion-2), strings.TrimSpace(run("version")))
+	versions := migrationVersions(t)
+	twoDown := strconv.Itoa(versions[len(versions)-3])
+	assert.Contains(t, run("down", "2"), `"version":`+twoDown)
+	assert.Equal(t, twoDown, strings.TrimSpace(run("version")))
 }
 
 // Proposals dropped for lack of deposit were stored as rejected: the
@@ -355,7 +386,7 @@ func TestMigrateDropsTheProposalsThatNeverReachedAVote(t *testing.T) {
 	db := connect(t, dbURL)
 	migrateUp(t, dbURL)
 	mg := openMigrator(t, dbURL)
-	_, err := mg.Down(latestVersion - 12) // back to before 000013
+	_, err := mg.Down(stepsBefore(t, 13)) // back to before 000013
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO explorer.proposals (id, title, kind, status, submit_time, voting_start_time, updated_at)
 		VALUES (1, 'spam', 'text', 'rejected', now(), NULL, now()),
@@ -393,7 +424,7 @@ func TestMigrationMergedOrders(t *testing.T) {
 	require.NoError(t, err)
 
 	mg := openMigrator(t, dbURL)
-	_, err = mg.Down(latestVersion - 30) // back to before 000031
+	_, err = mg.Down(stepsBefore(t, 31)) // back to before 000031
 	require.NoError(t, err)
 	assert.Empty(t, cols())
 	assert.Equal(t, []string{"idx_block_events_order_outcome"}, indexes())
@@ -419,7 +450,7 @@ func TestMigrationTokenSettings(t *testing.T) {
 		VALUES ('factory/bze1x/uz', 'factory', 6, 0, true, 0.010000000000000000, 0, now())`)
 	require.NoError(t, err)
 
-	_, err = openMigrator(t, dbURL).Down(latestVersion - 32) // back to before 000033
+	_, err = openMigrator(t, dbURL).Down(stepsBefore(t, 33)) // back to before 000033
 	require.NoError(t, err)
 	assert.Empty(t, cols())
 	assert.Equal(t, []string{"factory/bze1x/uz"}, queryStrings(t, db, `SELECT denom FROM explorer.denoms`), "the denom stays")

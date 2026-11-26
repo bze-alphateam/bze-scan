@@ -305,6 +305,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		Daos:            explorerRepo,
 		DaoState:        daoState,
 		DaoTreasury:     daoTreasury,
+		DaoProposals:    explorerRepo,
 		Tokens:          explorerRepo,
 		PoolPrices:      poolPrices,
 		Prices:          explorerRepo,

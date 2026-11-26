@@ -84,6 +84,16 @@ type Entities struct {
 	// the dao_events rows of every DAO change (chain v8.3.0).
 	Daos      []DaoCreated
 	DaoEvents []DaoEvent
+	// DaoProposals, DaoProposalOutcomes, DaoProposalDeposits and
+	// DaoProposalsCleaned are the dao_proposals writes of the heights' DAO
+	// proposal events; DaoVotes and DaoBallotReductions their ballots
+	// (chain v8.3.0).
+	DaoProposals        []DaoProposal
+	DaoProposalOutcomes []DaoProposalOutcome
+	DaoProposalDeposits []DaoProposalDeposit
+	DaoProposalsCleaned []DaoProposalCleaned
+	DaoVotes            []DaoVote
+	DaoBallotReductions []DaoBallotReduction
 	// Dirty is the current state the heights changed, for the state sync.
 	// The live indexer publishes it after the write; the backfill ignores it.
 	Dirty statesync.Dirty
@@ -286,6 +296,7 @@ func (t *Transformer) Transform(in Input) (*Entities, error) {
 	blockGovEvents(ents, b, in.Results.FinalizeBlockEvents)
 	emergencyHalts(ents, b, "", in.Results.FinalizeBlockEvents)
 	blockDaoEvents(ents, b, in.Results.FinalizeBlockEvents)
+	blockDaoProposalEvents(ents, b, in.Results.FinalizeBlockEvents)
 	var queue []queued
 	txFills := 0 // the transactions' fills so far, for their seqs
 	for i, raw := range in.Block.Txs {
@@ -399,6 +410,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int,
 		// Every event of the transaction: an authz MsgExec runs the halt too.
 		emergencyHalts(ents, b, tx.Hash, res.Events)
 		txDaoEvents(ents, b, i, tx.Hash, decoded.Msgs, res.Events)
+		txDaoProposalEvents(ents, b, i, tx.Hash, decoded.Msgs, res.Events)
 	}
 	for j, m := range decoded.Msgs {
 		tx.MsgTypes = append(tx.MsgTypes, m.TypeURL)
