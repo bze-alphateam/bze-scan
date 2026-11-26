@@ -12,10 +12,11 @@ describe("AppsMenu", () => {
     await userEvent.click(screen.getByRole("button", { name: "Apps" }));
 
     const items = await screen.findAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Website", "Staking", "DEX", "Burner", "Factory", "Communities", "Docs"]);
-    expect(items.map((i) => appIconsIn(i))).toEqual([["website"], ["staking"], ["dex"], ["burner"], ["factory"], ["communities"], ["docs"]]);
+    expect(items.map((i) => i.textContent)).toEqual(["Website", "Staking", "DEX", "Burner", "Factory", "Communities", "DAO", "Docs"]);
+    expect(items.map((i) => appIconsIn(i))).toEqual([["website"], ["staking"], ["dex"], ["burner"], ["factory"], ["communities"], ["dao"], ["docs"]]);
     // The icon is decorative: the name alone labels the link.
     expect(screen.getByRole("menuitem", { name: "Staking" })).toHaveAttribute("href", "https://staking.getbze.com");
+    expect(screen.getByRole("menuitem", { name: "DAO" })).toHaveAttribute("href", "https://dao.getbze.com");
   });
 
   it("opens every app in a new tab", async () => {

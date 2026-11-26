@@ -20,6 +20,7 @@ export const navLinks: NavLink[] = [
 export const externalLinks = {
   website: "https://getbze.com",
   ...env.apps,
+  dao: env.daoApp,
   docs: "https://docs.getbze.com",
   pingPub: env.pingPubUrl,
 };
@@ -33,7 +34,7 @@ export function stakeHref(operator: string): string {
   return `${externalLinks.staking}/?stake=${encodeURIComponent(operator)}`;
 }
 
-export type AppKey = keyof typeof env.apps;
+export type AppKey = keyof typeof env.apps | "dao";
 
 /** An app icon for a light and a dark background ("on-dark"). */
 export interface IconPair {
@@ -69,6 +70,7 @@ export const appIdentity: Record<AppKey, AppIdentity> = {
   burner: identity("burner", "#C24A00", "#FF8A1F"),
   factory: identity("factory", "#9A6A00", "#FFC933"),
   communities: identity("communities", "#1A7A43", "#3DD07A"),
+  dao: identity("dao", "#4F48D0", "#8F8CFF"),
 };
 
 /** The mark in front of an app link: an app's icon, the BZE round logo or the docs book. */
@@ -86,6 +88,7 @@ export const appLinks: AppLink[] = [
   { label: "Burner", href: externalLinks.burner, icon: "burner" },
   { label: "Factory", href: externalLinks.factory, icon: "factory" },
   { label: "Communities", href: externalLinks.communities, icon: "communities" },
+  { label: "DAO", href: externalLinks.dao, icon: "dao" },
   { label: "Docs", href: externalLinks.docs, icon: "docs" },
 ];
 

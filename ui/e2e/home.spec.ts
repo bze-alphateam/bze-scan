@@ -22,16 +22,16 @@ test.describe("home page", () => {
     await expect(page.getByTestId("latest-tx")).toHaveCount(5);
     await expect(page.getByTestId("latest-tx-what").first()).toHaveText("Send 25 BZE to bze1m3k…9ds4");
     await expect(page.getByTestId("latest-tx-parties").nth(1)).toContainText("Honeycomb");
-    await expect(page.getByRole("navigation", { name: "BZE apps" }).getByRole("link")).toHaveCount(7);
+    await expect(page.getByRole("navigation", { name: "BZE apps" }).getByRole("link")).toHaveCount(8);
     await noHorizontalScroll(page);
   });
 
   test("shows each app's icon on its Go to tile, for the colour mode", async ({ page }) => {
     await page.goto("/");
     const goTo = page.getByRole("navigation", { name: "BZE apps" });
-    // Dark is the default theme: the five app icons show their on-dark small cut.
+    // Dark is the default theme: the six app icons show their on-dark small cut.
     const apps = goTo.locator("span[data-testid=app-icon] img:visible");
-    await expect(apps).toHaveCount(5);
+    await expect(apps).toHaveCount(6);
     for (const img of await apps.all()) {
       await expect(img).toHaveAttribute("src", /^\/images\/apps\/[a-z]+\/icon-small-on-dark\.svg$/);
       await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
@@ -46,7 +46,7 @@ test.describe("home page", () => {
     // Light mode swaps to the files drawn for a light background.
     await page.addInitScript(() => localStorage.setItem("theme", "light"));
     await page.reload();
-    await expect(apps).toHaveCount(5);
+    await expect(apps).toHaveCount(6);
     await expect(apps.first()).toHaveAttribute("src", "/images/apps/staking/icon-small.svg");
   });
 
