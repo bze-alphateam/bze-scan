@@ -210,6 +210,18 @@ describe("TokenPage", () => {
       }
     });
 
+    it("shows nothing for a renounced factory token that still carries a DAO label", async () => {
+      run({ ...honey, admin: null, admin_label: daoLabel });
+      await screen.findByRole("heading", { level: 1, name: "HONEY" });
+      expect(screen.queryByTestId("token-dao")).not.toBeInTheDocument();
+    });
+
+    it("shows nothing for a non-factory token with an admin and a DAO label", async () => {
+      run({ ...usdc, admin: "bze13gzq40che93tgfm9kzmkpjamah5nj0j73pyhqk", admin_label: daoLabel });
+      await screen.findByTestId("ibc-route");
+      expect(screen.queryByTestId("token-dao")).not.toBeInTheDocument();
+    });
+
     it("shows nothing for a dao label without a parsable id", async () => {
       run({ ...honey, admin_label: { name: "Honey Council", kind: "dao" } });
       await screen.findByRole("heading", { level: 1, name: "HONEY" });

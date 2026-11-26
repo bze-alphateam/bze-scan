@@ -145,7 +145,7 @@ function Header({ t }: { t: Token }) {
           {dao && (
             <DetailMeta mt="6px" data-testid="token-dao">
               <Text as="span">Run by</Text>
-              <Link asChild color="accent.fg">
+              <Link asChild color="accent.fg" minW="0" overflowWrap="anywhere">
                 <NextLink href={daoHref(dao.id)}>{dao.name ? `DAO #${dao.id} · ${dao.name}` : `DAO #${dao.id}`}</NextLink>
               </Link>
             </DetailMeta>
