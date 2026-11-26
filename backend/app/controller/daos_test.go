@@ -346,15 +346,15 @@ func TestDaosFiltersMemberSourcePendingAdminAndName(t *testing.T) {
 
 func TestDaosFilterBadRequests(t *testing.T) {
 	e := daoServer(&fakeDaos{}, &fakeDaoState{supported: true}, nil)
-	tooMany := strings.Repeat("&source=sr/1", controller.MaxDaoSources+1)
+	tooMany := strings.Repeat("&source=sr/1", 21)
 	for _, path := range []string{
 		"/api/v1/daos?member=nope", "/api/v1/daos?pending_admin=nope", "/api/v1/daos?member=cosmos1" + daoAdmin[4:],
-		"/api/v1/daos?source=sr", "/api/v1/daos?source=sr/", "/api/v1/daos?source=x/1", "/api/v1/daos?source=ubze",
+		"/api/v1/daos?source=sr", "/api/v1/daos?source=sr/", "/api/v1/daos?source=sr/abc", "/api/v1/daos?source=sr/-1", "/api/v1/daos?source=sr/1.5", "/api/v1/daos?source=x/1", "/api/v1/daos?source=ubze",
 		"/api/v1/daos?source=sr/1&source=bad", "/api/v1/daos?" + tooMany[1:],
-		"/api/v1/daos?q=a", "/api/v1/daos?q=", "/api/v1/daos?q=%20a%20", "/api/v1/daos?q=" + strings.Repeat("a", controller.MaxDaoNameQuery+1),
+		"/api/v1/daos?q=a", "/api/v1/daos?q=", "/api/v1/daos?q=%20a%20", "/api/v1/daos?q=" + strings.Repeat("a", 101),
 	} {
 		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
 	}
-	atMax := strings.Repeat("&source=dr/ubze", controller.MaxDaoSources)
+	atMax := strings.Repeat("&source=dr/ubze", 20)
 	assert.Equal(t, http.StatusOK, get(t, e, "/api/v1/daos?"+atMax[1:]).Code, "20 sources are allowed")
 }

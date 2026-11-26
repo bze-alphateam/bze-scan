@@ -32,7 +32,7 @@ import (
 const sinkSchemaFile = "../../docker/postgres/initdb/01-cometbft-indexer-schema.sql"
 
 // latestVersion is the number of migrations.
-const latestVersion = 36
+const latestVersion = 37
 
 // migrationVersions are the versions of the up migrations, ascending.
 func migrationVersions(t *testing.T) []int {

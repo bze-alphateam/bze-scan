@@ -52,6 +52,12 @@ func editDaos(t *testing.T, e *syncEnv, edit func(dao map[string]any)) {
 func TestDaoFiltersFollowTheChainsRecord(t *testing.T) {
 	e := newSyncEnv(t)
 	indexTheDaos(t, e)
+	// The staking rewards of the electorate: numeric ids, as the filter requires.
+	editDaos(t, e, func(d map[string]any) {
+		if d["id"] == "2" {
+			d["electorate"] = map[string]any{"sr_ids": []string{"1", "2"}, "dr_denom": "ubze"}
+		}
+	})
 	code, _ := e.syncState(t)
 	require.Equal(t, 0, code)
 	base := e.serveAPI(t)
@@ -65,7 +71,7 @@ func TestDaoFiltersFollowTheChainsRecord(t *testing.T) {
 
 	assert.Equal(t, []string{"1 " + daoMember, "1 " + daoAdmin}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', dao_id, address) FROM explorer.dao_members ORDER BY address`))
-	assert.Equal(t, []string{"2 dr/ubze", "2 sr/sr-1", "2 sr/sr-gone"}, queryStrings(t, e.db,
+	assert.Equal(t, []string{"2 dr/ubze", "2 sr/1", "2 sr/2"}, queryStrings(t, e.db,
 		`SELECT concat_ws(' ', dao_id, source) FROM explorer.dao_sources ORDER BY source`))
 
 	// member: the static-list DAO that lists the address; the spelling is normalised.
@@ -75,11 +81,11 @@ func TestDaoFiltersFollowTheChainsRecord(t *testing.T) {
 	assert.Empty(t, list("member="+daoAdmin+"&type=stake").Items, "filters combine")
 
 	// source: OR-ed, repeatable; sr/ and dr/ spellings are the chain's.
-	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/sr-1")))
+	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/1")))
 	assert.Equal(t, []int64{2}, daoIDs(list("source=dr/ubze")))
-	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/none&source=sr/sr-gone&source=dr/other")))
-	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/sr-1&source=dr/ubze")), "a DAO matching two is listed once")
-	assert.Empty(t, list("source=sr/other&source=dr/uatom").Items)
+	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/3&source=sr/2&source=dr/other")))
+	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/1&source=dr/ubze")), "a DAO matching two is listed once")
+	assert.Empty(t, list("source=sr/9&source=dr/uatom").Items)
 	assert.Empty(t, list("source=dr/sr-1").Items, "the kind is part of the source")
 
 	// q: a case-insensitive substring of the name, literal wildcards, with type.
@@ -116,19 +122,19 @@ func TestDaoFiltersFollowTheChainsRecord(t *testing.T) {
 			d["members"] = []string{daoAdmin, daoTwo}
 		}
 		if d["id"] == "2" {
-			d["electorate"] = map[string]any{"sr_ids": []string{"sr-1"}, "dr_denom": ""}
+			d["electorate"] = map[string]any{"sr_ids": []string{"1"}, "dr_denom": ""}
 		}
 	})
 	code, _ = e.syncState(t)
 	require.Equal(t, 0, code)
 	assert.Empty(t, list("pending_admin="+daoMember).Items, "a cleared nomination is gone")
-	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/sr-1")))
-	assert.Empty(t, list("source=sr/sr-gone&source=dr/ubze").Items, "a dropped source is gone")
-	assert.Equal(t, []string{"2 sr/sr-1"}, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, source) FROM explorer.dao_sources`))
+	assert.Equal(t, []int64{2}, daoIDs(list("source=sr/1")))
+	assert.Empty(t, list("source=sr/2&source=dr/ubze").Items, "a dropped source is gone")
+	assert.Equal(t, []string{"2 sr/1"}, queryStrings(t, e.db, `SELECT concat_ws(' ', dao_id, source) FROM explorer.dao_sources`))
 
 	// Bad input.
 	tooMany := strings.Repeat("&source=sr/1", 21)[1:]
-	for _, q := range []string{"member=nope", "pending_admin=nope", "source=ubze", "source=sr/", "source=x/1", tooMany, "q=a", "q=", "type=nope"} {
+	for _, q := range []string{"member=nope", "pending_admin=nope", "source=ubze", "source=sr/", "source=sr/abc", "source=sr/-1", "source=x/1", tooMany, "q=a", "q=", "type=nope"} {
 		assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/daos?"+q).status, q)
 	}
 	assert.Equal(t, http.StatusOK, fetch(t, base+"/daos?"+strings.Repeat("&source=sr/1", 20)[1:]).status)

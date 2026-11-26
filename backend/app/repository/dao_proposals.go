@@ -205,7 +205,7 @@ func (r *Explorer) DaoProposalsAcross(ctx context.Context, statuses []string, vo
 			endAt, id = &t, &afterVoting.ID
 		}
 		rows, err = r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+`
-			WHERE `+where+` AND p.voting_end IS NOT NULL
+			WHERE `+where+` AND p.status = 'voting' AND p.cleaned_height IS NULL AND p.voting_end IS NOT NULL
 			  AND ($2::timestamptz IS NULL OR (p.voting_end, p.id) > ($2, $3::bigint))
 			ORDER BY p.voting_end ASC, p.id ASC LIMIT $4`, statuses, endAt, id, limit)
 	} else {

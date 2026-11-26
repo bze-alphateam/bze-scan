@@ -61,7 +61,7 @@ func NewDaoController(repo DaoReader, live DaoState, treasury DaoTreasury) *DaoC
 // Daos serves GET /api/v1/daos?type&admin&member&source&pending_admin&q&cursor&limit,
 // newest first. admin lists the DAOs an address administers, the
 // self-governed ones left out; member the DAOs whose member list holds an
-// address; source (repeatable, up to MaxDaoSources, OR-ed) the DAOs whose
+// address; source (repeatable, up to maxDaoSources, OR-ed) the DAOs whose
 // electorate uses one of the sources (sr/{id} or dr/{denom}); pending_admin
 // the DAOs with a nomination pending for an address; q the DAOs whose name
 // contains the text (at least 2 characters, case-insensitive). The filters
@@ -257,13 +257,13 @@ func daoID(c *echo.Context) (int64, error) {
 	return id, nil
 }
 
-// MaxDaoSources is the most source values a DAOs request may carry.
-const MaxDaoSources = 20
+// maxDaoSources is the most source values a DAOs request may carry.
+const maxDaoSources = 20
 
-// MinDaoNameQuery and MaxDaoNameQuery bound the q parameter, in characters.
+// minDaoNameQuery and maxDaoNameQuery bound the q parameter, in characters.
 const (
-	MinDaoNameQuery = 2
-	MaxDaoNameQuery = 100
+	minDaoNameQuery = 2
+	maxDaoNameQuery = 100
 )
 
 // maxSourceLen bounds one source value (a denom is at most 128 characters).
@@ -272,12 +272,18 @@ const maxSourceLen = 140
 // daoSources reads and validates the repeatable source parameter.
 func daoSources(c *echo.Context) ([]string, error) {
 	values := c.QueryParams()["source"]
-	if len(values) > MaxDaoSources {
-		return nil, echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("source takes at most %d values", MaxDaoSources))
+	if len(values) > maxDaoSources {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("source takes at most %d values", maxDaoSources))
 	}
 	for _, v := range values {
 		kind, rest, ok := strings.Cut(v, "/")
-		if !ok || (kind != "sr" && kind != "dr") || rest == "" || len(v) > maxSourceLen {
+		valid := ok && (kind == "sr" || kind == "dr") && rest != "" && len(v) <= maxSourceLen
+		if valid && kind == "sr" {
+			// A staking reward id is a uint.
+			_, err := strconv.ParseUint(rest, 10, 64)
+			valid = err == nil
+		}
+		if !valid {
 			return nil, echo.NewHTTPError(http.StatusBadRequest, "source must be sr/{id} or dr/{denom}")
 		}
 	}
@@ -290,9 +296,9 @@ func daoNameQuery(c *echo.Context) (*string, error) {
 		return nil, nil
 	}
 	q := strings.TrimSpace(c.QueryParam("q"))
-	if n := utf8.RuneCountInString(q); n < MinDaoNameQuery || n > MaxDaoNameQuery {
+	if n := utf8.RuneCountInString(q); n < minDaoNameQuery || n > maxDaoNameQuery {
 		return nil, echo.NewHTTPError(http.StatusBadRequest,
-			fmt.Sprintf("q must be %d to %d characters", MinDaoNameQuery, MaxDaoNameQuery))
+			fmt.Sprintf("q must be %d to %d characters", minDaoNameQuery, maxDaoNameQuery))
 	}
 	return &q, nil
 }

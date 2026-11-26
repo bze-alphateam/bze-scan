@@ -85,6 +85,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"daos",
 		"dao_proposals",
 		"dao_app_filters",
+		"dao_open_proposals_index",
 	}, idents)
 }
 
