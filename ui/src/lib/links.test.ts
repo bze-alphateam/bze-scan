@@ -92,7 +92,7 @@ describe("app identity", () => {
   it("gives every app its icons, from files the explorer serves, and its accent", async () => {
     const { appIdentity } = await load();
     const { env } = await import("./env");
-    expect(Object.keys(appIdentity).sort()).toEqual(Object.keys(env.apps).sort());
+    expect(Object.keys(appIdentity).sort()).toEqual([...Object.keys(env.apps), "dao"].sort());
     for (const [app, id] of Object.entries(appIdentity)) {
       const files = [id.icon.light, id.icon.dark, id.iconSmall.light, id.iconSmall.dark];
       expect(files).toEqual([
