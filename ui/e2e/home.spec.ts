@@ -17,12 +17,12 @@ test.describe("home page", () => {
     await expect(page.getByTestId("tile")).toHaveCount(0);
     await expect(page.getByRole("complementary", { name: "Network summary" }).getByText("25,120,450")).toBeVisible();
 
-    await expect(page.getByTestId("latest-block")).toHaveCount(6);
+    await expect(page.getByTestId("latest-block")).toHaveCount(5);
     await expect(page.getByTestId("latest-block").first().getByRole("link", { name: "25,120,449" })).toBeVisible();
-    await expect(page.getByTestId("latest-tx")).toHaveCount(6);
+    await expect(page.getByTestId("latest-tx")).toHaveCount(5);
     await expect(page.getByTestId("latest-tx-what").first()).toHaveText("Send 25 BZE to bze1m3k…9ds4");
     await expect(page.getByTestId("latest-tx-parties").nth(1)).toContainText("Honeycomb");
-    await expect(page.getByRole("navigation", { name: "BZE apps" }).getByRole("link")).toHaveCount(7);
+    await expect(page.getByRole("navigation", { name: "BZE apps" }).getByRole("link")).toHaveCount(8);
     await noHorizontalScroll(page);
   });
 
@@ -53,8 +53,8 @@ test.describe("home page", () => {
   test("keeps the lists when the stats route fails", async ({ page }) => {
     await mockApi(page, { "v1/stats": respond(500, { error: { code: "internal", message: "boom" } }) });
     await page.goto("/");
-    await expect(page.getByTestId("latest-block")).toHaveCount(6);
-    await expect(page.getByTestId("latest-tx")).toHaveCount(6);
+    await expect(page.getByTestId("latest-block")).toHaveCount(5);
+    await expect(page.getByTestId("latest-tx")).toHaveCount(5);
   });
 });
 
@@ -114,7 +114,7 @@ test.describe("home on a phone", () => {
 
   test("fits the screen", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByTestId("latest-tx")).toHaveCount(6);
+    await expect(page.getByTestId("latest-tx")).toHaveCount(5);
     await noHorizontalScroll(page);
     const box = page.getByRole("main").getByRole("combobox", { name: "Search the explorer" });
     await box.fill("Honey");
