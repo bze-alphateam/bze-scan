@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v5"
 
@@ -56,8 +58,14 @@ func NewDaoController(repo DaoReader, live DaoState, treasury DaoTreasury) *DaoC
 	return &DaoController{repo: repo, live: live, treasury: treasury}
 }
 
-// Daos serves GET /api/v1/daos?type&admin&cursor&limit, newest first. admin
-// lists the DAOs an address administers, the self-governed ones left out.
+// Daos serves GET /api/v1/daos?type&admin&member&source&pending_admin&q&cursor&limit,
+// newest first. admin lists the DAOs an address administers, the
+// self-governed ones left out; member the DAOs whose member list holds an
+// address; source (repeatable, up to maxDaoSources, OR-ed) the DAOs whose
+// electorate uses one of the sources (sr/{id} or dr/{denom}); pending_admin
+// the DAOs with a nomination pending for an address; q the DAOs whose name
+// contains the text (at least 2 characters, case-insensitive). The filters
+// combine with AND.
 // supported is false while the node does not run x/dao yet.
 func (h *DaoController) Daos(c *echo.Context) error {
 	limit, err := parseLimit(c)
@@ -68,12 +76,23 @@ func (h *DaoController) Daos(c *echo.Context) error {
 	if f.Type, err = oneOf(c, "type", daoTypes); err != nil {
 		return err
 	}
-	if s := c.QueryParam("admin"); s != "" {
-		hrp, addr, ok := bech32Address(s)
-		if !ok || hrp != accountPrefix {
-			return echo.NewHTTPError(http.StatusBadRequest, "admin must be a bze1 address")
+	for _, a := range []struct {
+		name string
+		dst  **string
+	}{{"admin", &f.Admin}, {"member", &f.Member}, {"pending_admin", &f.PendingAdmin}} {
+		if s := c.QueryParam(a.name); s != "" {
+			hrp, addr, ok := bech32Address(s)
+			if !ok || hrp != accountPrefix {
+				return echo.NewHTTPError(http.StatusBadRequest, a.name+" must be a bze1 address")
+			}
+			*a.dst = &addr
 		}
-		f.Admin = &addr
+	}
+	if f.Sources, err = daoSources(c); err != nil {
+		return err
+	}
+	if f.Name, err = daoNameQuery(c); err != nil {
+		return err
 	}
 	var before *int64
 	if s := c.QueryParam("cursor"); s != "" {
@@ -236,4 +255,50 @@ func daoID(c *echo.Context) (int64, error) {
 		return 0, echo.NewHTTPError(http.StatusBadRequest, "id must be a positive integer")
 	}
 	return id, nil
+}
+
+// maxDaoSources is the most source values a DAOs request may carry.
+const maxDaoSources = 20
+
+// minDaoNameQuery and maxDaoNameQuery bound the q parameter, in characters.
+const (
+	minDaoNameQuery = 2
+	maxDaoNameQuery = 100
+)
+
+// maxSourceLen bounds one source value (a denom is at most 128 characters).
+const maxSourceLen = 140
+
+// daoSources reads and validates the repeatable source parameter.
+func daoSources(c *echo.Context) ([]string, error) {
+	values := c.QueryParams()["source"]
+	if len(values) > maxDaoSources {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("source takes at most %d values", maxDaoSources))
+	}
+	for _, v := range values {
+		kind, rest, ok := strings.Cut(v, "/")
+		valid := ok && (kind == "sr" || kind == "dr") && rest != "" && len(v) <= maxSourceLen
+		if valid && kind == "sr" {
+			// A staking reward id is a uint.
+			_, err := strconv.ParseUint(rest, 10, 64)
+			valid = err == nil
+		}
+		if !valid {
+			return nil, echo.NewHTTPError(http.StatusBadRequest, "source must be sr/{id} or dr/{denom}")
+		}
+	}
+	return values, nil
+}
+
+// daoNameQuery reads and validates the q parameter; nil when absent.
+func daoNameQuery(c *echo.Context) (*string, error) {
+	if _, present := c.QueryParams()["q"]; !present {
+		return nil, nil
+	}
+	q := strings.TrimSpace(c.QueryParam("q"))
+	if n := utf8.RuneCountInString(q); n < minDaoNameQuery || n > maxDaoNameQuery {
+		return nil, echo.NewHTTPError(http.StatusBadRequest,
+			fmt.Sprintf("q must be %d to %d characters", minDaoNameQuery, maxDaoNameQuery))
+	}
+	return &q, nil
 }

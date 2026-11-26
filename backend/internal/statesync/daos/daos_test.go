@@ -148,3 +148,50 @@ func TestNodeAndStoreFailuresAreReturned(t *testing.T) {
 	assert.ErrorIs(t, set.FullResync(context.Background()), boom)
 	assert.ErrorIs(t, set.ResyncOne(context.Background(), "1"), boom)
 }
+
+// A DAO's members, electorate sources and pending nomination are read off the
+// chain's record: addresses lowercased, duplicates dropped, sources in the
+// join-record form; a DAO of the other type has none.
+func TestDaoMembersSourcesAndPendingAdminAreSaved(t *testing.T) {
+	client := &fakeClient{all: []daotypes.Dao{
+		{Id: 1, Address: "bze1dao1", Admin: "bze1admin", PendingAdmin: "BZE1NEXT", Type: daotypes.DaoType_DAO_TYPE_STATIC_LIST,
+			Members: []string{"BZE1Alice", "bze1bob", "bze1alice", ""}},
+		{Id: 2, Address: "bze1dao2", Admin: "bze1admin", Type: daotypes.DaoType_DAO_TYPE_STAKE,
+			Electorate: &daotypes.StakeElectorate{SrIds: []string{"7", "9", "7"}, DrDenom: "factory/bze1x/uhoney"}},
+		{Id: 3, Address: "bze1dao3", Admin: "bze1admin", Type: daotypes.DaoType_DAO_TYPE_STAKE,
+			Electorate: &daotypes.StakeElectorate{}},
+	}}
+	store := &memStore{}
+	require.NoError(t, newSet(client, store).FullResync(context.Background()))
+
+	require.Len(t, store.saved, 1)
+	got := store.saved[0]
+	assert.Equal(t, "bze1next", got[0].PendingAdmin)
+	assert.Equal(t, []string{"bze1alice", "bze1bob"}, got[0].Members)
+	assert.Empty(t, got[0].Sources)
+	assert.Empty(t, got[1].PendingAdmin)
+	assert.Empty(t, got[1].Members)
+	assert.Equal(t, []string{"sr/7", "sr/9", "dr/factory/bze1x/uhoney"}, got[1].Sources)
+	assert.Empty(t, got[2].Sources, "an electorate naming nothing")
+}
+
+// A resync of a DAO whose members changed and whose nomination was accepted
+// saves its record as it is now (the store replaces the rows), so the old
+// members and the old nomination are not carried over.
+func TestResyncOneSavesTheCurrentMembersAndClearsThePendingAdmin(t *testing.T) {
+	client := &fakeClient{all: []daotypes.Dao{{Id: 1, Address: "bze1dao1", Admin: "bze1admin", PendingAdmin: "bze1next",
+		Type: daotypes.DaoType_DAO_TYPE_STATIC_LIST, Members: []string{"bze1a", "bze1b"}}}}
+	store := &memStore{}
+	set := newSet(client, store)
+	require.NoError(t, set.ResyncOne(context.Background(), "1"))
+
+	client.all[0].PendingAdmin = ""
+	client.all[0].Members = []string{"bze1b", "bze1c"}
+	require.NoError(t, set.ResyncOne(context.Background(), "1"))
+
+	require.Len(t, store.saved, 2)
+	assert.Equal(t, "bze1next", store.saved[0][0].PendingAdmin)
+	assert.Equal(t, []string{"bze1a", "bze1b"}, store.saved[0][0].Members)
+	assert.Empty(t, store.saved[1][0].PendingAdmin)
+	assert.Equal(t, []string{"bze1b", "bze1c"}, store.saved[1][0].Members)
+}

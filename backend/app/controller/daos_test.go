@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -322,4 +323,38 @@ func TestSearchByATreasuryAddressFindsTheDao(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.Equal(t, dto.ResultAccount, results[0].Type)
 	assert.Equal(t, dto.SearchResult{Type: "dao", ID: "12", Label: "DAO #12 · Stakers club"}, results[1])
+}
+
+func TestDaosFiltersMemberSourcePendingAdminAndName(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(1, "A", "stake")}}
+	e := daoServer(f, &fakeDaoState{supported: true}, nil)
+
+	rec := get(t, e, "/api/v1/daos?type=stake&member="+strings.ToUpper(daoAdmin)+"&pending_admin="+daoAdmin+
+		"&source=sr/7&source=dr/factory/bze1x/uhoney&q=%20Fo%25_%20")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, daoAdmin, *f.gotFilter.Member, "addresses are lower-cased")
+	assert.Equal(t, daoAdmin, *f.gotFilter.PendingAdmin)
+	assert.Equal(t, []string{"sr/7", "dr/factory/bze1x/uhoney"}, f.gotFilter.Sources)
+	assert.Equal(t, "Fo%_", *f.gotFilter.Name, "trimmed; wildcards are escaped by the repository")
+	assert.Equal(t, "stake", *f.gotFilter.Type)
+
+	get(t, e, "/api/v1/daos")
+	assert.Nil(t, f.gotFilter.Member)
+	assert.Empty(t, f.gotFilter.Sources)
+	assert.Nil(t, f.gotFilter.Name)
+}
+
+func TestDaosFilterBadRequests(t *testing.T) {
+	e := daoServer(&fakeDaos{}, &fakeDaoState{supported: true}, nil)
+	tooMany := strings.Repeat("&source=sr/1", 21)
+	for _, path := range []string{
+		"/api/v1/daos?member=nope", "/api/v1/daos?pending_admin=nope", "/api/v1/daos?member=cosmos1" + daoAdmin[4:],
+		"/api/v1/daos?source=sr", "/api/v1/daos?source=sr/", "/api/v1/daos?source=sr/abc", "/api/v1/daos?source=sr/-1", "/api/v1/daos?source=sr/1.5", "/api/v1/daos?source=x/1", "/api/v1/daos?source=ubze",
+		"/api/v1/daos?source=sr/1&source=bad", "/api/v1/daos?" + tooMany[1:],
+		"/api/v1/daos?q=a", "/api/v1/daos?q=", "/api/v1/daos?q=%20a%20", "/api/v1/daos?q=" + strings.Repeat("a", 101),
+	} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
+	}
+	atMax := strings.Repeat("&source=dr/ubze", 20)
+	assert.Equal(t, http.StatusOK, get(t, e, "/api/v1/daos?"+atMax[1:]).Code, "20 sources are allowed")
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,6 +26,9 @@ type Dao struct {
 	Creator       *string
 	CreatorLabel  *Label
 	UpdatedHeight *int64
+	// PendingAdmin is the address nominated as the next admin, nil when no
+	// nomination is pending.
+	PendingAdmin *string
 	// ProposalsOpen is the number of the DAO's proposals in voting.
 	ProposalsOpen int64
 }
@@ -36,10 +40,23 @@ type DaoFilter struct {
 	// Admin lists the DAOs the address administers, the self-governed ones
 	// left out; nil lists all.
 	Admin *string
+	// Member lists the DAOs whose current member list holds the address.
+	Member *string
+	// Sources lists the DAOs whose current electorate uses one of the
+	// sources (sr/{id} or dr/{denom}); empty for no filter.
+	Sources []string
+	// PendingAdmin lists the DAOs with a nomination pending for the address.
+	PendingAdmin *string
+	// Name lists the DAOs whose name contains the text, ignoring case. The
+	// text is literal: LIKE wildcards in it are escaped here.
+	Name *string
 }
 
+// likeEscaper escapes the LIKE wildcards and the escape character.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 const daoCols = `d.id, d.address, d.type, d.name, d.admin, la.name, la.kind, d.self_governed, d.created_height,
-	d.created_time, d.created_tx_hash, d.creator, lc.name, lc.kind, d.updated_height,
+	d.created_time, d.created_tx_hash, d.creator, lc.name, lc.kind, d.updated_height, d.pending_admin,
 	(SELECT count(*) FROM explorer.dao_proposals p WHERE p.dao_id = d.id AND p.status = 'voting' AND p.cleaned_height IS NULL)`
 
 const daoFrom = ` FROM explorer.daos d
@@ -50,7 +67,7 @@ func scanDao(row pgx.Row) (Dao, error) {
 	var d Dao
 	var adminName, adminKind, creatorName, creatorKind *string
 	err := row.Scan(&d.ID, &d.Address, &d.Type, &d.Name, &d.Admin, &adminName, &adminKind, &d.SelfGoverned,
-		&d.CreatedHeight, &d.CreatedTime, &d.CreatedTxHash, &d.Creator, &creatorName, &creatorKind, &d.UpdatedHeight, &d.ProposalsOpen)
+		&d.CreatedHeight, &d.CreatedTime, &d.CreatedTxHash, &d.Creator, &creatorName, &creatorKind, &d.UpdatedHeight, &d.PendingAdmin, &d.ProposalsOpen)
 	if err != nil {
 		return Dao{}, err
 	}
@@ -62,11 +79,24 @@ func scanDao(row pgx.Row) (Dao, error) {
 // Daos returns up to limit DAOs, newest (highest id) first, below before when
 // not nil.
 func (r *Explorer) Daos(ctx context.Context, f DaoFilter, before *int64, limit int) ([]Dao, error) {
+	var pattern *string
+	if f.Name != nil {
+		p := "%" + likeEscaper.Replace(*f.Name) + "%"
+		pattern = &p
+	}
+	sources := f.Sources
+	if sources == nil {
+		sources = []string{}
+	}
 	rows, err := r.db.Query(ctx, `SELECT `+daoCols+daoFrom+`
 		WHERE ($1::text IS NULL OR d.type = $1)
 		  AND ($2::text IS NULL OR (d.admin = $2 AND NOT d.self_governed))
 		  AND ($3::bigint IS NULL OR d.id < $3)
-		ORDER BY d.id DESC LIMIT $4`, f.Type, f.Admin, before, limit)
+		  AND ($5::text IS NULL OR EXISTS (SELECT 1 FROM explorer.dao_members m WHERE m.dao_id = d.id AND m.address = $5))
+		  AND (cardinality($6::text[]) = 0 OR EXISTS (SELECT 1 FROM explorer.dao_sources s WHERE s.dao_id = d.id AND s.source = ANY($6)))
+		  AND ($7::text IS NULL OR d.pending_admin = $7)
+		  AND ($8::text IS NULL OR d.name ILIKE $8 ESCAPE '\')
+		ORDER BY d.id DESC LIMIT $4`, f.Type, f.Admin, before, limit, f.Member, sources, f.PendingAdmin, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("daos: %w", err)
 	}

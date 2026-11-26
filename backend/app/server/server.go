@@ -226,6 +226,8 @@ func New(deps Deps) *echo.Echo {
 	if deps.DaoProposals != nil {
 		proposals := controller.NewDaoProposalController(deps.DaoProposals, deps.DaoState, nil)
 		api.GET("/daos/:id/proposals", proposals.DaoProposals)
+		api.GET("/dao-proposals", proposals.AllDaoProposals)
+		api.GET("/dao-votes", proposals.VoterBallots)
 		api.GET("/dao-proposals/:id", proposals.DaoProposal)
 		api.GET("/dao-proposals/:id/votes", proposals.DaoVotes)
 	}
