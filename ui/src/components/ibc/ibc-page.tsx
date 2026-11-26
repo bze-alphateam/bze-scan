@@ -4,7 +4,7 @@ import { Box, Button, Flex, HStack, Link, Popover, Portal, Stack, Text } from "@
 import NextLink from "next/link";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
-import { useDenoms, useIbcChannels, useRateLimits } from "@/api/hooks";
+import { useDenoms, useEmergency, useIbcChannels, useRateLimits } from "@/api/hooks";
 import type { IbcChannel, RateLimit, RateLimitList } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Callout } from "@/components/ui/callout";
@@ -53,6 +53,32 @@ function LimitsHelp() {
   );
 }
 
+/** The "?" next to an emergency-closed channel: who closed it and who can reopen it. */
+function ClosedHelp() {
+  return (
+    <Popover.Root positioning={{ placement: "bottom-end" }} lazyMount unmountOnExit>
+      <Popover.Trigger asChild>
+        <button type="button" aria-label="Why this channel is closed" data-testid="channel-closed-help">
+          <LuCircleHelp size={16} />
+        </button>
+      </Popover.Trigger>
+      <Portal>
+        <Popover.Positioner>
+          <Popover.Content maxW="xs">
+            <Popover.Arrow />
+            <Popover.Body>
+              <Text fontSize="sm">{"The chain's guardian (or governance) stopped transfers on this route. Only a governance vote can reopen it."}</Text>
+              <Link asChild color="accent.fg" fontSize="sm" display="inline-block" mt="2" data-testid="channel-closed-link">
+                <NextLink href="/emergency">Emergency status →</NextLink>
+              </Link>
+            </Popover.Body>
+          </Popover.Content>
+        </Popover.Positioner>
+      </Portal>
+    </Popover.Root>
+  );
+}
+
 function LimitRow({ l, now, withChannel = false }: { l: RateLimit; now: Date; withChannel?: boolean }) {
   return (
     <Box py="3" borderTopWidth="1px" borderColor="border.panel" data-testid="limit-row">
@@ -64,7 +90,7 @@ function LimitRow({ l, now, withChannel = false }: { l: RateLimit; now: Date; wi
   );
 }
 
-function ChannelCard({ channel, limits, showLimits, now }: { channel: IbcChannel; limits: RateLimit[]; showLimits: boolean; now: Date }) {
+function ChannelCard({ channel, limits, showLimits, now, closedByEmergency }: { channel: IbcChannel; limits: RateLimit[]; showLimits: boolean; now: Date; closedByEmergency: boolean }) {
   const state = (channel.state && STATE[channel.state]) || { text: channel.state ?? "Unknown", look: "default" as ChipVariant };
   const client = channel.client_status ? CLIENT[channel.client_status] : null;
   const name = channel.counterparty.pretty_name ?? channel.counterparty.chain_id ?? "Unknown chain";
@@ -81,9 +107,18 @@ function ChannelCard({ channel, limits, showLimits, now }: { channel: IbcChannel
           </Text>
         </Box>
         <HStack gap="1" wrap="wrap">
-          <Chip variant={state.look} data-testid="channel-state">
-            {state.text}
-          </Chip>
+          {closedByEmergency ? (
+            <>
+              <Chip variant="bad" data-testid="channel-state">
+                Closed by an emergency switch
+              </Chip>
+              <ClosedHelp />
+            </>
+          ) : (
+            <Chip variant={state.look} data-testid="channel-state">
+              {state.text}
+            </Chip>
+          )}
           {client && (
             <Chip variant={client.look} data-testid="channel-client">
               {client.text}
@@ -125,7 +160,7 @@ function Blocked({ denoms }: { denoms: string[] }) {
 }
 
 /** The loaded page: the channels, each with its limits when the chain has them, and the blocked tokens. */
-function IbcView({ channels, limits, limitsFailed, retryLimits }: { channels: IbcChannel[]; limits: RateLimitList | undefined; limitsFailed: boolean; retryLimits: () => void }) {
+function IbcView({ channels, limits, limitsFailed, retryLimits, closed }: { channels: IbcChannel[]; limits: RateLimitList | undefined; limitsFailed: boolean; retryLimits: () => void; closed: ReadonlySet<string> }) {
   const now = useNow();
   const supported = limits?.supported === true;
   const byChannel = limitsByChannel(limits?.items ?? []);
@@ -159,7 +194,7 @@ function IbcView({ channels, limits, limitsFailed, retryLimits }: { channels: Ib
           The explorer has not seen a channel yet.
         </StateBox>
       ) : (
-        channels.map((c) => <ChannelCard key={c.channel_id} channel={c} limits={byChannel.get(c.channel_id) ?? []} showLimits={supported} now={now} />)
+        channels.map((c) => <ChannelCard key={c.channel_id} channel={c} limits={byChannel.get(c.channel_id) ?? []} showLimits={supported} now={now} closedByEmergency={closed.has(c.channel_id)} />)
       )}
       {supported && others.length > 0 && (
         <Card title="Other channels" meta="Limits on channels the explorer has not listed above." data-testid="other-channels" p="0">
@@ -179,11 +214,14 @@ function IbcView({ channels, limits, limitsFailed, retryLimits }: { channels: Ib
 export function IbcPage() {
   const channels = useIbcChannels();
   const limits = useRateLimits();
+  // Loading, failed or pre-v8.3.0 reads add nothing: the channels keep their IBC state.
+  const emergency = useEmergency().data;
+  const closed = new Set(emergency?.supported ? emergency.closed_channels.map((c) => c.channel_id) : []);
   return (
     <Box>
       <PageTitle title="Cross-chain" intro="BZE's IBC channels, and how much of each token may still cross them today." />
       {channels.data ? (
-        <IbcView channels={channels.data.items} limits={limits.data} limitsFailed={limits.isError} retryLimits={() => void limits.refetch()} />
+        <IbcView channels={channels.data.items} limits={limits.data} limitsFailed={limits.isError} retryLimits={() => void limits.refetch()} closed={closed} />
       ) : channels.error ? (
         <StateBox
           tone="error"
