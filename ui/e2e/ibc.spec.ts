@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import clear from "../test/fixtures/api/v1/emergency.json";
 import { noHorizontalScroll } from "./layout";
 import { mockApi } from "./mock-api";
 
@@ -17,6 +18,21 @@ test.describe("cross-chain", () => {
     await expect(page.getByTestId("blocked-denoms")).toBeVisible();
     await page.getByTestId("limits-help").click();
     await expect(page.getByRole("dialog")).toContainText("net flow (out minus in)");
+    await page.keyboard.press("Escape");
+    await noHorizontalScroll(page);
+  });
+
+  test("shows a channel closed by an emergency switch", async ({ page }) => {
+    const closed = { channel_id: "channel-0", counterparty_chain_id: "osmosis-1", counterparty_chain_name: "Osmosis" };
+    await mockApi(page, { "v1/emergency": { ...clear, active: true, closed_channels: [closed] } });
+    await page.goto("/ibc");
+    const cards = page.getByTestId("channel-card");
+    await expect(cards).toHaveCount(8);
+    await expect(cards.first().getByTestId("channel-state")).toContainText("Closed by an emergency switch");
+    await expect(cards.nth(1).getByTestId("channel-state")).toContainText("Open");
+    await expect(page.getByTestId("channel-closed-help")).toHaveCount(1);
+    await page.getByTestId("channel-closed-help").click();
+    await expect(page.getByTestId("channel-closed-link")).toHaveAttribute("href", "/emergency");
     await page.keyboard.press("Escape");
     await noHorizontalScroll(page);
   });
