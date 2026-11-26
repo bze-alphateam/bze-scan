@@ -80,6 +80,11 @@ type Entities struct {
 	// EmergencyHalts are the upgrades rows of kind emergency the heights'
 	// ChainHaltScheduledEvents schedule (chain v8.3.0).
 	EmergencyHalts []EmergencyHalt
+	// NestedEmergencyActions are the emergency_nested_actions rows of the
+	// emergency messages the heights' authz MsgExec and dao MsgAdminExecute
+	// ran (chain v8.3.0); an executed DAO proposal's are written by the
+	// writer's settle hook.
+	NestedEmergencyActions []NestedEmergencyAction
 	// Daos and DaoEvents are the daos rows of the heights' DAO creations and
 	// the dao_events rows of every DAO change (chain v8.3.0).
 	Daos      []DaoCreated
@@ -409,6 +414,7 @@ func (t *Transformer) transaction(ents *Entities, queue *[]queued, txFills *int,
 		txIBCTransfers(ents, b, i, tx.Hash, decoded.Msgs, byIndex, logger)
 		// Every event of the transaction: an authz MsgExec runs the halt too.
 		emergencyHalts(ents, b, tx.Hash, res.Events)
+		txNestedEmergency(ents, b, i, tx.Hash, decoded.Msgs)
 		txDaoEvents(ents, b, i, tx.Hash, decoded.Msgs, res.Events)
 		txDaoProposalEvents(ents, b, i, tx.Hash, decoded.Msgs, res.Events)
 	}

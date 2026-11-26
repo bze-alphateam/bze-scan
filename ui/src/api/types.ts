@@ -1427,4 +1427,9 @@ export interface EmergencyAction {
   signer: string | null;
   details: Record<string, unknown>;
   proposal_id: number | null;
+  /** How a guardian action run inside another message reached the chain; null for the others. */
+  via: EmergencyVia | null;
 }
+
+/** The wrapper of a nested guardian action: a grantee's authz `MsgExec`, or a DAO (its admin, or one of its proposals). */
+export type EmergencyVia = { kind: "authz"; grantee: string } | { kind: "dao"; dao_id: number; proposal_id: number | null };

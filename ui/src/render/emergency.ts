@@ -143,6 +143,18 @@ export function ownTitle(a: EmergencyAction): string {
   return OWN_TITLE[a.action]?.(a) ?? humanise(a.action.replace(/_/g, " "));
 }
 
+/**
+ * The "via" line of a nested guardian action, in parts the row links:
+ * "via authz by" and the grantee, or "via DAO #3" and, for a proposal,
+ * "proposal #9". Null for a row the guardian or governance ran directly.
+ */
+export function viaParts(a: Pick<EmergencyAction, "via">): { text: string; address?: string; proposal?: number } | null {
+  const v = a.via;
+  if (!v) return null;
+  if (v.kind === "authz") return { text: "via authz by", address: v.grantee };
+  return v.proposal_id === null ? { text: `via DAO #${v.dao_id}` } : { text: `via DAO #${v.dao_id}`, proposal: v.proposal_id };
+}
+
 /** Where a history row leads: its proposal, its transaction, or its block. */
 export function actionHref(a: EmergencyAction): string {
   if (a.proposal_id !== null) return `/proposals/${a.proposal_id}`;

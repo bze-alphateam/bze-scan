@@ -8,7 +8,8 @@
       "by": "governance",
       "signer": "bze10d07y265gmmuvt4z0w9aw880jnsr700j5xwkxz",
       "details": { "denoms": ["factory/bze1abc/uusdc"], "proposal_id": 52 },
-      "proposal_id": 52
+      "proposal_id": 52,
+      "via": null
     },
     {
       "height": 25120100,
@@ -18,7 +19,8 @@
       "by": "guardian",
       "signer": "bze1guardian0000000000000000000000000q4xk7a",
       "details": { "denoms": ["factory/bze1abc/uusdc"] },
-      "proposal_id": null
+      "proposal_id": null,
+      "via": null
     }
   ],
   "next_cursor": null

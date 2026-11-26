@@ -117,9 +117,9 @@ func TestEmergencyActionsMapRowsAndPage(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"next_cursor":"MjA6MTAwMDE"`) // 20:10001
 	assert.JSONEq(t, `{"items": [
 		{"height": 30, "time": "2026-11-25T10:00:00Z", "tx_hash": null, "action": "unblock_denom", "by": "governance",
-		 "signer": "`+gov+`", "details": {"authority": "`+gov+`", "denom": "ibc/AAA"}, "proposal_id": null},
+		 "signer": "`+gov+`", "details": {"authority": "`+gov+`", "denom": "ibc/AAA"}, "proposal_id": null, "via": null},
 		{"height": 20, "time": "2026-11-25T10:00:00Z", "tx_hash": "AB12", "action": "block_denom", "by": "guardian",
-		 "signer": "bze1guardian", "details": {"denom": "ibc/AAA"}, "proposal_id": null}
+		 "signer": "bze1guardian", "details": {"denom": "ibc/AAA"}, "proposal_id": null, "via": null}
 	], "next_cursor": "MjA6MTAwMDE"}`, rec.Body.String())
 }
 
@@ -152,6 +152,38 @@ func TestEmergencyActionOfAPassedProposalIsGovernancesWithoutATxHash(t *testing.
 	}}
 	rec := serveEmergency(t, fakeEmergencyState{}, idx, "/api/v1/emergency/actions")
 	assert.JSONEq(t, `{"items": [{"height": 5, "time": "1970-01-01T00:00:00Z", "tx_hash": null, "action": "unhalt_trading",
-		"by": "governance", "signer": "`+gov+`", "details": {"denoms": ["x"], "proposal_id": 48}, "proposal_id": 48}],
+		"by": "governance", "signer": "`+gov+`", "details": {"denoms": ["x"], "proposal_id": 48}, "proposal_id": 48, "via": null}],
 		"next_cursor": null}`, rec.Body.String())
+}
+
+// A guardian action run inside another message is the guardian's: its
+// signer is the inner message's, the wrapper is in via (authz: the grantee;
+// a DAO: the DAO and, for a proposal, the DAO proposal).
+func TestEmergencyActionsRunThroughAuthzOrADao(t *testing.T) {
+	authzKind, daoKind, grantee := "authz", "dao", "bze1hot"
+	dao, prop := int64(3), int64(9)
+	tm := time.Date(2026, 11, 25, 10, 0, 0, 0, time.UTC)
+	idx := &fakeEmergencyIndex{rows: []repository.EmergencyAction{
+		{Height: 30, Order: 3_001_000_000_000, Time: tm, TxHash: "EXEC", Kind: "/bze.guardian.v1.MsgCloseChannel",
+			Source: repository.EmergencyFromNested, Signer: "bze1guardian", Details: []byte(`{"channel_id":"channel-3"}`),
+			ViaKind: &authzKind, Grantee: &grantee},
+		{Height: 20, Order: 3_000_100_002_000, Time: tm, TxHash: "SETTLE", Kind: "/bze.guardian.v1.MsgBlockDenom",
+			Source: repository.EmergencyFromNested, Signer: "bze1dao", Details: []byte(`{"denom":"ibc/AAA"}`),
+			ViaKind: &daoKind, DaoID: &dao, DaoProposalID: &prop},
+		{Height: 10, Order: 3_000_000_000_000, Time: tm, TxHash: "ADMIN", Kind: "/bze.guardian.v1.MsgPauseAutomation",
+			Source: repository.EmergencyFromNested, Signer: "bze1dao", Details: []byte(`{}`), ViaKind: &daoKind, DaoID: &dao},
+	}}
+	rec := serveEmergency(t, fakeEmergencyState{}, idx, "/api/v1/emergency/actions")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"items": [
+		{"height": 30, "time": "2026-11-25T10:00:00Z", "tx_hash": "EXEC", "action": "close_channel", "by": "guardian",
+		 "signer": "bze1guardian", "details": {"channel_id": "channel-3"}, "proposal_id": null,
+		 "via": {"kind": "authz", "grantee": "bze1hot"}},
+		{"height": 20, "time": "2026-11-25T10:00:00Z", "tx_hash": "SETTLE", "action": "block_denom", "by": "guardian",
+		 "signer": "bze1dao", "details": {"denom": "ibc/AAA"}, "proposal_id": null,
+		 "via": {"kind": "dao", "dao_id": 3, "proposal_id": 9}},
+		{"height": 10, "time": "2026-11-25T10:00:00Z", "tx_hash": "ADMIN", "action": "pause_automation", "by": "guardian",
+		 "signer": "bze1dao", "details": {}, "proposal_id": null,
+		 "via": {"kind": "dao", "dao_id": 3, "proposal_id": null}}
+	], "next_cursor": null}`, rec.Body.String())
 }

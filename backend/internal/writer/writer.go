@@ -422,8 +422,9 @@ type statement struct {
 // validator_events, transfers, block_events, token_events and
 // account_activity of ents, then
 // its governance writes (govStatements), its order book writes
-// (dexStatements), its cross-chain transfer writes (ibcStatements) and its
-// emergency halts (upgradeStatements), in chunks of ChunkRows rows. top
+// (dexStatements), its cross-chain transfer writes (ibcStatements), its
+// emergency halts (upgradeStatements) and its nested emergency actions
+// (emergencyNestedStatements), in chunks of ChunkRows rows. top
 // names the write in errors.
 func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement, error) {
 	txRows := make([]txRow, 0, len(ents.Transactions))
@@ -535,6 +536,10 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
+	nested, err := emergencyNestedStatements(top, ents.NestedEmergencyActions, mode)
+	if err != nil {
+		return nil, err
+	}
 	daos, err := daoStatements(top, ents, mode)
 	if err != nil {
 		return nil, err
@@ -543,7 +548,7 @@ func rowStatements(top int64, ents *transform.Entities, mode Mode) ([]statement,
 	if err != nil {
 		return nil, err
 	}
-	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups, daos, daoProposals), nil
+	return slices.Concat(txs, msgs, vals, transfers, events, tokens, activity, gov, dex, ibc, ups, nested, daos, daoProposals), nil
 }
 
 // validatorEventRows are the validator_events rows of events.

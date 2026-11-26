@@ -22,8 +22,11 @@ type EmergencyKey struct {
 
 // The order keys of the rows of one block, ascending: the transactions'
 // messages, then the block events, then the messages of the proposals that
-// passed in it (governance executes in the end block). Every key is unique,
-// so the (height, order) keyset pages without skipping or repeating a row.
+// passed in it (governance executes in the end block), then the nested
+// actions (emergency messages run by a MsgExec, a MsgAdminExecute or an
+// executed DAO proposal's settle), each after its wrapper's message. Every
+// key is unique, so the (height, order) keyset pages without skipping or
+// repeating a row.
 const (
 	// msgOrderStride spaces the transactions of a block: tx_index * stride +
 	// msg_index.
@@ -34,6 +37,13 @@ const (
 	// orders the messages of passed proposals.
 	proposalOrderBase   = int64(2_000_000_000_000)
 	proposalOrderStride = int64(1_000)
+	// nestedOrderBase + tx_index * nestedTxStride + msg_index *
+	// nestedMsgStride + seq orders the nested actions: by the wrapper's
+	// transaction and message, then the inner message's seq. It sits above
+	// every passed proposal's key (ids below a billion).
+	nestedOrderBase = int64(3_000_000_000_000)
+	nestedTxStride  = int64(1_000_000_000_000)
+	nestedMsgStride = int64(100_000_000)
 )
 
 // The sources of an EmergencyAction.
@@ -41,6 +51,7 @@ const (
 	EmergencyFromTx       = "tx"
 	EmergencyFromEvent    = "event"
 	EmergencyFromProposal = "proposal"
+	EmergencyFromNested   = "nested"
 )
 
 // EmergencyAction is a stored message or block event that pulled an
@@ -62,15 +73,25 @@ type EmergencyAction struct {
 	Details json.RawMessage
 	// ProposalID is set when Source is proposal.
 	ProposalID *int64
+	// ViaKind is set when Source is nested: authz or dao (see the
+	// emergency_nested_actions table), with Grantee (authz), DaoID and
+	// DaoProposalID (dao; the proposal is nil for a MsgAdminExecute).
+	ViaKind       *string
+	Grantee       *string
+	DaoID         *int64
+	DaoProposalID *int64
 }
 
 // EmergencyActions returns up to limit emergency actions, newest first
 // (height, then position, descending), after before when it is not nil,
-// from three sources: the successful messages of the guardian module and
+// from four sources: the successful messages of the guardian module and
 // the circuit breaker's reset and tradebin's halt and unhalt, signed in a
 // transaction; the guardian events of the blocks (guardian messages
-// governance executed); and the messages of passed proposals, for the types
-// only governance can run (which are never transactions' messages). Each
+// governance executed); the messages of passed proposals, for the types
+// only governance can run (which are never transactions' messages); and the
+// same messages run inside an authz MsgExec, a DAO's MsgAdminExecute or an
+// executed DAO proposal, which the indexer unwraps into
+// emergency_nested_actions. Each
 // branch reads its own index and carries the keyset bound on the height, so
 // the partitions above the cursor are pruned.
 func (r *Explorer) EmergencyActions(ctx context.Context, before *EmergencyKey, limit int) ([]EmergencyAction, error) {
@@ -80,14 +101,16 @@ func (r *Explorer) EmergencyActions(ctx context.Context, before *EmergencyKey, l
 	}
 	rows, err := r.db.Query(ctx, `
 		(SELECT m.height, m.tx_index::bigint * $6 + m.msg_index AS ord, t.time, t.hash, m.type_url,
-				'tx' AS src, coalesce(m.sender, ''), coalesce(m.body, '{}'::jsonb), NULL::bigint AS proposal_id
+				'tx' AS src, coalesce(m.sender, ''), coalesce(m.body, '{}'::jsonb), NULL::bigint AS proposal_id,
+				NULL::text AS via_kind, NULL::text AS grantee, NULL::bigint AS dao_id, NULL::bigint AS dao_proposal_id
 		 FROM explorer.messages m
 		 JOIN explorer.transactions t ON t.height = m.height AND t.tx_index = m.tx_index
 		 WHERE m.type_url = ANY($1) AND t.success
 		   AND m.height <= $2 AND (m.height, m.tx_index::bigint * $6 + m.msg_index) < ($2, $3)
 		 ORDER BY m.height DESC, ord DESC LIMIT $4)
 		UNION ALL
-		(SELECT e.height, $7::bigint + e.seq AS ord, b.time, '', e.type, 'event', '', e.attrs, NULL::bigint
+		(SELECT e.height, $7::bigint + e.seq AS ord, b.time, '', e.type, 'event', '', e.attrs, NULL::bigint,
+				NULL::text, NULL::text, NULL::bigint, NULL::bigint
 		 FROM explorer.block_events e
 		 JOIN explorer.blocks b ON b.height = e.height
 		 WHERE e.type = ANY($5)
@@ -96,7 +119,7 @@ func (r *Explorer) EmergencyActions(ctx context.Context, before *EmergencyKey, l
 		UNION ALL
 		(SELECT p.resolved_height, $8::bigint + p.id * $9 + (x.idx - 1) AS ord,
 				coalesce(b.time, p.voting_end_time, p.updated_at), '', x.msg ->> '@type', 'proposal', '',
-				x.msg || jsonb_build_object('proposal_id', p.id), p.id
+				x.msg || jsonb_build_object('proposal_id', p.id), p.id, NULL::text, NULL::text, NULL::bigint, NULL::bigint
 		 FROM explorer.proposals p
 		 CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.messages) = 'array' THEN p.messages ELSE '[]'::jsonb END)
 				WITH ORDINALITY AS x(msg, idx)
@@ -105,15 +128,25 @@ func (r *Explorer) EmergencyActions(ctx context.Context, before *EmergencyKey, l
 		   AND x.msg ->> '@type' = ANY($10)
 		   AND p.resolved_height <= $2 AND (p.resolved_height, $8::bigint + p.id * $9 + (x.idx - 1)) < ($2, $3)
 		 ORDER BY p.resolved_height DESC, ord DESC LIMIT $4)
+		UNION ALL
+		(SELECT n.height, $11::bigint + n.tx_index::bigint * $12 + n.msg_index::bigint * $13 + n.seq AS ord, n.time,
+				n.tx_hash, n.type_url, 'nested', coalesce(n.signer, ''), n.body, NULL::bigint,
+				n.via_kind, n.grantee, n.dao_id, n.proposal_id
+		 FROM explorer.emergency_nested_actions n
+		 WHERE n.height <= $2
+		   AND (n.height, $11::bigint + n.tx_index::bigint * $12 + n.msg_index::bigint * $13 + n.seq) < ($2, $3)
+		 ORDER BY n.height DESC, n.tx_index DESC, n.msg_index DESC, n.seq DESC LIMIT $4)
 		ORDER BY 1 DESC, 2 DESC LIMIT $4`,
 		emergency.MessageTypes(), bh, bo, limit, emergency.EventTypes(), msgOrderStride, blockOrderBase,
-		proposalOrderBase, proposalOrderStride, emergency.GovernanceMessageTypes())
+		proposalOrderBase, proposalOrderStride, emergency.GovernanceMessageTypes(),
+		nestedOrderBase, nestedTxStride, nestedMsgStride)
 	if err != nil {
 		return nil, fmt.Errorf("emergency actions: %w", err)
 	}
 	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (EmergencyAction, error) {
 		var a EmergencyAction
-		err := row.Scan(&a.Height, &a.Order, &a.Time, &a.TxHash, &a.Kind, &a.Source, &a.Signer, &a.Details, &a.ProposalID)
+		err := row.Scan(&a.Height, &a.Order, &a.Time, &a.TxHash, &a.Kind, &a.Source, &a.Signer, &a.Details, &a.ProposalID,
+			&a.ViaKind, &a.Grantee, &a.DaoID, &a.DaoProposalID)
 		return a, err
 	})
 	if err != nil {

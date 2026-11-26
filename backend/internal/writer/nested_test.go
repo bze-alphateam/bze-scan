@@ -48,7 +48,7 @@ func settledFlush(t *testing.T, db *mockDB, mode writer.Mode, ents *transform.En
 func TestSettledProposalActionsWriteTheBodyRows(t *testing.T) {
 	at := time.Unix(300, 0).UTC()
 	db := newMockDB(49)
-	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 10, 2, at, 1}}}
+	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 10, 2, at, 1, 3, "SETTLE", 0}}}
 	ents := block(10)
 	ok := true
 	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Height: 10, TxIndex: 2, Executed: &ok}}
@@ -73,7 +73,7 @@ func TestSettledProposalActionsWriteTheBodyRows(t *testing.T) {
 // (the backfill walks down) triggers the same read.
 func TestSettledProposalActionsOnTheSubmissionInUpdateMode(t *testing.T) {
 	db := newMockDB(49)
-	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 20, 0, time.Unix(1, 0), 0}}}
+	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 20, 0, time.Unix(1, 0), 0, 3, "SETTLE", 0}}}
 	ents := block(10)
 	ents.DaoProposals = []transform.DaoProposal{{ID: 6, HasBody: true}, {ID: 7}}
 	tx := settledFlush(t, db, writer.ModeUpdate, ents)
@@ -96,7 +96,7 @@ func TestSettledProposalActionsWithoutCandidatesOrMsgs(t *testing.T) {
 	assert.Empty(t, statementsWith(tx, "WITH s AS ("), "nothing executed: no read")
 
 	db = newMockDB(49)
-	db.returning = map[string][][]any{"WITH s AS (": {{6, "", 10, 0, time.Unix(1, 0), 0}}}
+	db.returning = map[string][][]any{"WITH s AS (": {{6, "", 10, 0, time.Unix(1, 0), 0, 3, "SETTLE", 0}}}
 	ok := true
 	ents = block(10)
 	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Executed: &ok}}
@@ -108,7 +108,7 @@ func TestSettledProposalActionsWithoutCandidatesOrMsgs(t *testing.T) {
 // wrote rows for.
 func TestSettledProposalActionsMarkTheirDenomsOnTheLivePath(t *testing.T) {
 	db := newMockDB(49)
-	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 10, 0, time.Unix(1, 0), 0}}}
+	db.returning = map[string][][]any{"WITH s AS (": {{6, nestedMsgs, 10, 0, time.Unix(1, 0), 0, 3, "SETTLE", 0}}}
 	ents := block(10)
 	ok := true
 	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Executed: &ok}}
@@ -129,7 +129,7 @@ func TestSettledProposalActionsWarnAboutAnOverflow(t *testing.T) {
 		items = append(items, `{"@type":"/bze.tokenfactory.MsgSetDenomBranding","creator":"`+nestedDao+`","denom":"`+nestedDenom+`"}`)
 	}
 	db := newMockDB(49)
-	db.returning = map[string][][]any{"WITH s AS (": {{6, "[" + strings.Join(items, ",") + "]", 10, 0, time.Unix(1, 0), 0}}}
+	db.returning = map[string][][]any{"WITH s AS (": {{6, "[" + strings.Join(items, ",") + "]", 10, 0, time.Unix(1, 0), 0, 3, "SETTLE", 0}}}
 	ents := block(10)
 	ok := true
 	ents.DaoProposalOutcomes = []transform.DaoProposalOutcome{{ID: 6, Status: "executed", Executed: &ok}}

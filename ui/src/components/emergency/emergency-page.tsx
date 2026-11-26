@@ -9,6 +9,7 @@ import { useEmergency, useEmergencyActions, useLiveHalt, useStats } from "@/api/
 import type { Emergency, EmergencyAction, EmergencyDenom } from "@/api/types";
 import { Callout } from "@/components/ui/callout";
 import { Chip } from "@/components/ui/chip";
+import { AddressLink } from "@/components/ui/links";
 import { ListPanel, ListRow } from "@/components/ui/list";
 import { PageTitle } from "@/components/ui/page-head";
 import { CardSkeleton, TableSkeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,10 @@ import {
   IBC_PAGE,
   measureCount,
   ownTitle,
+  viaParts,
 } from "@/render/emergency";
+import { daoProposalHref } from "@/render/dao-proposals";
+import { daoHref } from "@/render/daos";
 import { humanise } from "@/render/messages/common";
 import { NestedList } from "@/render/messages/v830-common";
 import { tokenHref } from "@/render/tokens";
@@ -291,6 +295,37 @@ function HistoryTab() {
   );
 }
 
+/** How a nested guardian action reached the chain: "via authz by <grantee>" or "via DAO #3" (and its proposal); nothing for the others. */
+function ViaLine({ a }: { a: EmergencyAction }) {
+  const via = viaParts(a);
+  if (!via || !a.via) return null;
+  return (
+    <Flex gap="1.5" align="center" wrap="wrap" fontSize="12px" color="fg.muted" minW="0" data-testid="emergency-via">
+      {a.via.kind === "authz" ? (
+        <>
+          <Text as="span">{via.text}</Text>
+          <AddressLink address={via.address!} noCopy fontSize="12px" />
+        </>
+      ) : (
+        <>
+          <Text as="span">via</Text>
+          <Link asChild color="accent.fg">
+            <NextLink href={daoHref(a.via.dao_id)}>DAO #{a.via.dao_id}</NextLink>
+          </Link>
+          {via.proposal !== undefined && (
+            <>
+              <Text as="span">·</Text>
+              <Link asChild color="accent.fg">
+                <NextLink href={daoProposalHref(a.via.dao_id, via.proposal)}>proposal #{via.proposal}</NextLink>
+              </Link>
+            </>
+          )}
+        </>
+      )}
+    </Flex>
+  );
+}
+
 function HistoryRow({ a, ctx }: { a: EmergencyAction; ctx: ReturnType<typeof useListRenderContext> }) {
   const [open, setOpen] = useState(false);
   const msg = actionMessage(a);
@@ -306,6 +341,7 @@ function HistoryRow({ a, ctx }: { a: EmergencyAction; ctx: ReturnType<typeof use
           {guardian ? "by guardian" : "by governance"}
         </Chip>
       </Flex>
+      <ViaLine a={a} />
       <Flex gap="3" align="center" wrap="wrap" fontSize="12px" color="fg.muted">
         <TimeAgo time={a.time} />
         <Link asChild color="accent.fg">

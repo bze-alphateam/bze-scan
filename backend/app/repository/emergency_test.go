@@ -18,6 +18,8 @@ func TestEmergencyActionsReadBothIndexesAndBindTheKeyset(t *testing.T) {
 	assert.Contains(t, db.sql[0], "e.type = ANY($5)")
 	assert.Contains(t, db.sql[0], "UNION ALL")
 	assert.Contains(t, db.sql[0], "p.status = 'passed'")
+	assert.Contains(t, db.sql[0], "FROM explorer.emergency_nested_actions n")
+	assert.Equal(t, int64(3_000_000_000_000), db.args[0][10], "the nested rows sort after the passed proposals' keys")
 	assert.Equal(t, int64(20), db.args[0][1])
 	assert.Equal(t, int64(7), db.args[0][2])
 	assert.Equal(t, 51, db.args[0][3])

@@ -116,6 +116,7 @@ describe("EmergencyPage history", () => {
       signer: "bze1gov",
       details: { denoms: ["a", "b"] },
       proposal_id: 52,
+      via: null,
     },
     {
       height: 200,
@@ -126,6 +127,7 @@ describe("EmergencyPage history", () => {
       signer: "bze1guardian",
       details: { denoms: ["factory/bze1abc/uusdc"] },
       proposal_id: null,
+      via: null,
     },
     {
       height: 150,
@@ -136,6 +138,7 @@ describe("EmergencyPage history", () => {
       signer: null,
       details: { channel_id: "channel-3" },
       proposal_id: null,
+      via: null,
     },
   ];
 
@@ -164,6 +167,39 @@ describe("EmergencyPage history", () => {
     fireEvent.click(within(items[1]).getByRole("button", { name: "Details" }));
     expect(await within(items[1]).findByTestId("emergency-badge")).toBeInTheDocument();
     expect(within(items[1]).getByTestId("nested-message")).toHaveTextContent("Tokens halted");
+  });
+
+  it("tells how a nested guardian action reached the chain: via authz by the grantee, or via a DAO", async () => {
+    const nested: EmergencyAction[] = [
+      { ...rows[1], height: 230, via: { kind: "authz", grantee: "bze1hotkey00000000000000000000000000000000" } },
+      { ...rows[1], height: 220, via: { kind: "dao", dao_id: 3, proposal_id: 9 } },
+      { ...rows[1], height: 210, via: { kind: "dao", dao_id: 3, proposal_id: null } },
+    ];
+    renderWithProviders(<EmergencyPage />, { api: api(clear as Emergency, nested) });
+    fireEvent.click(await screen.findByTestId("emergency-tab-history"));
+    const items = await screen.findAllByTestId("emergency-action");
+    expect(items).toHaveLength(3);
+
+    const authz = within(items[0]).getByTestId("emergency-via");
+    expect(authz).toHaveTextContent(/^via authz by\s*bze1hot…0000$/);
+    expect(within(authz).getByRole("link")).toHaveAttribute("href", "/accounts/bze1hotkey00000000000000000000000000000000");
+    expect(within(items[0]).getByTestId("emergency-by")).toHaveTextContent("by guardian");
+
+    const dao = within(items[1]).getByTestId("emergency-via");
+    expect(dao).toHaveTextContent(/^via\s*DAO #3\s*·\s*proposal #9$/);
+    expect(within(dao).getByRole("link", { name: "DAO #3" })).toHaveAttribute("href", "/daos/3");
+    expect(within(dao).getByRole("link", { name: "proposal #9" })).toHaveAttribute("href", "/daos/3/proposals/9");
+
+    const admin = within(items[2]).getByTestId("emergency-via");
+    expect(admin).toHaveTextContent(/^via\s*DAO #3$/);
+    expect(within(admin).queryByRole("link", { name: /proposal/ })).toBeNull();
+  });
+
+  it("shows no via line for a direct action", async () => {
+    renderWithProviders(<EmergencyPage />, { api: api(clear as Emergency, rows) });
+    fireEvent.click(await screen.findByTestId("emergency-tab-history"));
+    await screen.findAllByTestId("emergency-action");
+    expect(screen.queryByTestId("emergency-via")).toBeNull();
   });
 
   it("says so when nothing was ever switched", async () => {

@@ -9,13 +9,23 @@ import (
 	"testing"
 	"time"
 
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/authz"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	daotypes "github.com/bze-alphateam/bze/x/dao/types"
+	guardiantypes "github.com/bze-alphateam/bze/x/guardian/types"
 
 	"github.com/bze-alphateam/bze-scan/backend/app/dto"
 	"github.com/bze-alphateam/bze-scan/backend/app/serve"
 	"github.com/bze-alphateam/bze-scan/backend/config"
 	"github.com/bze-alphateam/bze-scan/backend/internal/chain"
+	"github.com/bze-alphateam/bze-scan/backend/internal/node"
+	"github.com/bze-alphateam/bze-scan/backend/internal/transform"
+	"github.com/bze-alphateam/bze-scan/backend/internal/writer"
 )
 
 // serveEmergency runs the real serve wiring (indexer off) over the env's fake
@@ -199,4 +209,124 @@ func TestEmergencyActions(t *testing.T) {
 		url = base + "/emergency/actions?limit=1&cursor=" + *page.NextCursor
 	}
 	assert.Equal(t, list.Items, paged)
+}
+
+// Guardian actions run through authz (a grantee's MsgExec) and through a DAO
+// (an executed proposal of the DAO that is the guardian) are indexed by the
+// real transformer and settle hook and listed with the guardian's own
+// transaction message, a governance block event and a passed proposal's
+// message, newest first, paged across all of them. A proposal whose
+// execution failed lists nothing (a failed transaction runs nothing: see the
+// transformer's tests); the old rows have no via.
+func TestEmergencyActionsThroughAuthzAndADao(t *testing.T) {
+	e := newSyncEnv(t)
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	gov := chain.ModuleAddress("gov")
+	const h = int64(25_400_000)
+	guardian, hot := daoAdmin, daoMember
+	anyOf := func(m sdk.Msg) []*codectypes.Any {
+		a, err := codectypes.NewAnyWithValue(m)
+		require.NoError(t, err)
+		return []*codectypes.Any{a}
+	}
+	closeChannel := &authz.MsgExec{Grantee: hot, Msgs: anyOf(&guardiantypes.MsgCloseChannel{Signer: guardian, ChannelId: "channel-3"})}
+	blocks := []*transform.Entities{
+		// The guardian's own transaction message.
+		daoTxBlock(t, h, []sdk.Msg{&guardiantypes.MsgBlockDenom{Signer: guardian, Denom: "ibc/AAA"}}, [][]node.Event{{}}),
+		// Through authz: the hot key runs the guardian's grant.
+		daoTxBlock(t, h+1, []sdk.Msg{closeChannel}, [][]node.Event{{}}),
+		// Proposals #11 and #12 of DAO #2 (the guardian DAO), each halting trading.
+		daoTxBlock(t, h+2,
+			[]sdk.Msg{
+				&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Halt", Msgs: anyOf(&guardiantypes.MsgHaltTradingDenoms{Signer: daoTwo, Denoms: []string{"ubze"}})},
+				&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Halt too", Msgs: anyOf(&guardiantypes.MsgHaltTradingDenoms{Signer: daoTwo, Denoms: []string{"uvdl"}})},
+			},
+			[][]node.Event{{daoSubmittedEvent("11", "2", "100", "1764666002", false)}, {daoSubmittedEvent("12", "2", "100", "1764666002", false)}}),
+		// #11 executed, #12's execution failed.
+		daoTxBlock(t, h+3,
+			[]sdk.Msg{&daotypes.MsgSettleProposal{Sender: daoMember, ProposalId: 11}, &daotypes.MsgSettleProposal{Sender: daoMember, ProposalId: 12}},
+			[][]node.Event{daoSettledEvents("11", "EXECUTED", "60", "100", boolPtr(true), false),
+				daoSettledEvents("12", "EXECUTION_FAILED", "60", "100", boolPtr(false), false)}),
+	}
+	w := writer.NewBatchWriter(pool, writer.SettledProposalActions(nullLog()))
+	require.NoError(t, w.Write(context.Background(), blocks, writer.ModeInsert))
+
+	// Governance's block event and passed proposal, between them.
+	_, err = e.db.Exec(`INSERT INTO explorer.blocks (height, time, hash) VALUES ($1, '2026-12-01T08:00:00Z', 'H')`, h-1)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.block_events (height, seq, type, attrs)
+		VALUES ($1, 3, 'bze.guardian.v1.DenomUnblockedEvent', jsonb_build_object('authority', $2::text, 'denom', 'ibc/BBB'))`, h-1, gov)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.proposals (id, title, kind, message_types, messages, status, submit_time, resolved_height, updated_at)
+		VALUES (7, 'p', 'other', ARRAY['/bze.tradebin.MsgUnhaltDenoms'],
+		        jsonb_build_array(jsonb_build_object('@type', '/bze.tradebin.MsgUnhaltDenoms', 'authority', $1::text)),
+		        'passed', '2026-12-01T07:00:00Z', $2, now())`, gov, h-1)
+	require.NoError(t, err)
+
+	base := e.serveEmergency(t)
+	list := into[dto.List[dto.EmergencyAction]](t, fetch(t, base+"/emergency/actions"))
+	require.Nil(t, list.NextCursor)
+	type row struct {
+		height       int64
+		action, by   string
+		signer, via  string
+		viaID, viaPr int64
+	}
+	var got []row
+	for _, a := range list.Items {
+		r := row{height: a.Height, action: a.Action, by: a.By}
+		if a.Signer != nil {
+			r.signer = *a.Signer
+		}
+		if a.Via != nil {
+			r.via = a.Via.Kind
+			if a.Via.Grantee != nil {
+				r.via += " " + *a.Via.Grantee
+			}
+			if a.Via.DaoID != nil {
+				r.viaID = *a.Via.DaoID
+			}
+			if a.Via.ProposalID != nil {
+				r.viaPr = *a.Via.ProposalID
+			}
+		}
+		got = append(got, r)
+	}
+	assert.Equal(t, []row{
+		{h + 3, "halt_trading", "guardian", daoTwo, "dao", 2, 11},
+		{h + 1, "close_channel", "guardian", guardian, "authz " + hot, 0, 0},
+		{h, "block_denom", "guardian", guardian, "", 0, 0},
+		{h - 1, "unhalt_trading", "governance", gov, "", 0, 0},
+		{h - 1, "unblock_denom", "governance", gov, "", 0, 0},
+	}, got)
+	require.NotNil(t, list.Items[0].TxHash, "the settle's transaction")
+	assert.Equal(t, blocks[3].Transactions[0].Hash, *list.Items[0].TxHash)
+	assert.Equal(t, blocks[1].Transactions[0].Hash, *list.Items[1].TxHash)
+	assert.JSONEq(t, `{"@type":"/bze.guardian.v1.MsgCloseChannel","signer":"`+guardian+`","channel_id":"channel-3"}`, string(list.Items[1].Details))
+	for _, a := range list.Items[2:] {
+		assert.Nil(t, a.Via)
+	}
+	raw := fetch(t, base+"/emergency/actions")
+	assert.Contains(t, string(raw.body), `"via":{"kind":"dao","dao_id":2,"proposal_id":11}`)
+	assert.Contains(t, string(raw.body), `"via":null`)
+
+	// One row per page across the five sources.
+	var paged []dto.EmergencyAction
+	url := base + "/emergency/actions?limit=1"
+	for range 10 {
+		page := into[dto.List[dto.EmergencyAction]](t, fetch(t, url))
+		require.LessOrEqual(t, len(page.Items), 1)
+		paged = append(paged, page.Items...)
+		if page.NextCursor == nil {
+			break
+		}
+		url = base + "/emergency/actions?limit=1&cursor=" + *page.NextCursor
+	}
+	assert.Equal(t, list.Items, paged)
+
+	// A reindex numbers the nested rows the same: nothing moves.
+	require.NoError(t, w.Write(context.Background(), blocks, writer.ModeUpdate))
+	assert.Equal(t, list.Items, into[dto.List[dto.EmergencyAction]](t, fetch(t, base+"/emergency/actions")).Items)
 }
