@@ -101,6 +101,7 @@ describe("HomePage", () => {
       "Burner",
       "Factory",
       "Communities",
+      "DAO",
       "Docs",
     ]);
     expect(within(goTo).getAllByRole("link").map((a) => appIconsIn(a))).toEqual([
@@ -110,6 +111,7 @@ describe("HomePage", () => {
       ["burner"],
       ["factory"],
       ["communities"],
+      ["dao"],
       ["docs"],
     ]);
     // The small cut, for light and dark backgrounds, switched in CSS.

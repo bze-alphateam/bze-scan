@@ -42,10 +42,18 @@ describe("DAO app links", () => {
 });
 
 describe("app links", () => {
+  it("link the DAO app from the one env.daoApp, overridable by NEXT_PUBLIC_DAO_URL", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DAO_URL", "https://dao.example.test/");
+    const { appLinks, daoAppLinks } = await load();
+    expect(appLinks.find((l) => l.label === "DAO")?.href).toBe("https://dao.example.test");
+    expect(daoAppLinks.home).toBe("https://dao.example.test");
+  });
+
   it("point at the mainnet apps by default", async () => {
     const { appLinks, externalLinks, stakeHref } = await load();
     expect(externalLinks.staking).toBe("https://staking.getbze.com");
     expect(appLinks.find((l) => l.label === "Communities")?.href).toBe("https://communities.getbze.com");
+    expect(appLinks.find((l) => l.label === "DAO")?.href).toBe("https://dao.getbze.com");
     expect(stakeHref("bzevaloper1x")).toBe("https://staking.getbze.com/?stake=bzevaloper1x");
   });
 
@@ -55,6 +63,7 @@ describe("app links", () => {
     vi.stubEnv("NEXT_PUBLIC_BURNER_URL", "https://testnet-burner.getbze.com");
     vi.stubEnv("NEXT_PUBLIC_FACTORY_URL", "https://testnet-factory.getbze.com");
     vi.stubEnv("NEXT_PUBLIC_COMMUNITIES_URL", "https://testnet-communities.getbze.com");
+    vi.stubEnv("NEXT_PUBLIC_CHAIN_ID", "bzetestnet-3");
     const { appLinks, externalLinks, stakeHref, burnerCoinHref, stakingVoteHref, dexAssetUrl, dexMarketUrl, PARAM_GROUPS } = await load();
 
     expect(appLinks.map((l) => l.href)).toEqual([
@@ -64,6 +73,7 @@ describe("app links", () => {
       "https://testnet-burner.getbze.com",
       "https://testnet-factory.getbze.com",
       "https://testnet-communities.getbze.com",
+      "https://testnet-dao.getbze.com",
       "https://docs.getbze.com",
     ]);
     expect(stakeHref("bzevaloper1x")).toBe("https://testnet-staking.getbze.com/?stake=bzevaloper1x");
@@ -98,11 +108,12 @@ describe("app identity", () => {
     // Ink on light, the light end on dark (Official-BZEdge-Graphics, beezee/apps).
     expect(appIdentity.dex.accent).toEqual({ light: "#0E74AD", dark: "#12C1E1" });
     expect(appIdentity.factory.accent).toEqual({ light: "#9A6A00", dark: "#FFC933" });
+    expect(appIdentity.dao.accent).toEqual({ light: "#4F48D0", dark: "#8F8CFF" });
   });
 
   it("puts an icon on every app link; Website and Docs keep the explorer's accent", async () => {
     const { appLinks, appAccent, appIdentity } = await load();
-    expect(appLinks.map((l) => l.icon)).toEqual(["website", "staking", "dex", "burner", "factory", "communities", "docs"]);
+    expect(appLinks.map((l) => l.icon)).toEqual(["website", "staking", "dex", "burner", "factory", "communities", "dao", "docs"]);
     expect(appAccent("staking")).toBe(appIdentity.staking.accent);
     expect(appAccent("website")).toBeNull();
     expect(appAccent("docs")).toBeNull();
