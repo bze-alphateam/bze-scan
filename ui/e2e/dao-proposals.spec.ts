@@ -56,7 +56,7 @@ test.describe("DAO proposal page", () => {
     await page.getByRole("tab", { name: /^Votes/ }).click();
     await expect(page).toHaveURL(/\?tab=votes$/);
     await expect(page.getByTestId("dao-vote-row")).toHaveCount(4);
-    await expect(page.getByTestId("dao-votes").getByText("part of this stake left before the vote ended").filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByTestId("dao-votes").getByText("part of this stake has left since the vote was cast").filter({ visible: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "No", exact: true }).click();
     await noHorizontalScroll(page);
   });

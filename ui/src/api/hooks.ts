@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { isNotFound } from "./client";
+import { ApiError, isNotFound } from "./client";
 import { immutable, live, reference, slow, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
@@ -592,9 +592,21 @@ export function useDaoProposals(daoId: number, status: DaoProposalStatus | null)
   });
 }
 
-/** A DAO proposal still moves while it is voting; once settled or cancelled it never changes (a failed run may be retried: it keeps polling). */
-const daoProposalDone = (p: DaoProposal | undefined) =>
-  p != null && p.status != null && p.status !== "voting" && p.status !== "execution_failed";
+/** The state of a DAO proposal query the polling decision reads. */
+interface DaoProposalQuery {
+  state: { data: DaoProposal | undefined; error: unknown };
+}
+
+/**
+ * A DAO proposal moves while it is voting, or failed to execute (it may be
+ * retried until its deadline). Once settled for good, a placeholder row (no
+ * status: not open) or a 4xx answer (not found) it never changes: no polling.
+ */
+const daoProposalPolls = (q: DaoProposalQuery): boolean => {
+  if (q.state.error instanceof ApiError && q.state.error.isClientError) return false;
+  const p = q.state.data;
+  return p == null || p.status === "voting" || p.status === "execution_failed";
+};
 
 /** A DAO proposal: polled while voting (or retryable), fetched once after it ended for good. */
 export function useDaoProposal(id: number) {
@@ -603,8 +615,8 @@ export function useDaoProposal(id: number) {
     queryKey: queryKeys.daoProposal(id),
     queryFn: ({ signal }) => api.daoProposal(id, signal),
     ...live,
-    refetchInterval: (q) => (daoProposalDone(q.state.data) ? false : live.refetchInterval),
-    staleTime: (q) => (daoProposalDone(q.state.data) ? Infinity : live.staleTime),
+    refetchInterval: (q) => (daoProposalPolls(q) ? live.refetchInterval : false),
+    staleTime: (q) => (daoProposalPolls(q) ? live.staleTime : Infinity),
   });
 }
 

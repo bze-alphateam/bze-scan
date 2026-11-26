@@ -31,7 +31,7 @@ const OPTIONS = [
 type Votes = Pick<DaoProposalSummary, "yes" | "no" | "abstain" | "denominator">;
 
 /** Yes, No and Abstain as 6px bars, each as a share of the voting power pinned at submission; the amounts when asked. */
-export function DaoTallyBars({ p, weight, amounts = false }: { p: Votes; weight?: DaoWeightDenom | null; amounts?: boolean }) {
+export function DaoTallyBars({ p, weight, stake = false, amounts = false }: { p: Votes; weight?: DaoWeightDenom | null; stake?: boolean; amounts?: boolean }) {
   const s = shares(p);
   return (
     <Flex direction="column" gap="7px" maxW="720px" role="list" aria-label="Votes" data-testid="dao-tally-bars">
@@ -46,7 +46,7 @@ export function DaoTallyBars({ p, weight, amounts = false }: { p: Votes; weight?
           </Text>
           {amounts && (
             <Text hideBelow="c2" textAlign="end" fontFamily="mono" color="fg.muted" whiteSpace="nowrap">
-              {weightText(p[o.key], weight, true)}
+              {weightText(p[o.key], weight, true, stake)}
             </Text>
           )}
         </Grid>

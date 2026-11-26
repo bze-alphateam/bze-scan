@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
 import type { DaoProposal, DaoVoteList, Page, TokenSummary } from "@/api/types";
@@ -13,6 +13,17 @@ import p7 from "../../../test/fixtures/api/v1/dao-proposals/7.json";
 import votes3 from "../../../test/fixtures/api/v1/dao-proposals/3/votes.json";
 import votes7 from "../../../test/fixtures/api/v1/dao-proposals/7/votes.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
+
+vi.mock("@/render/messages/registry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/render/messages/registry")>();
+  return {
+    ...real,
+    rendererFor: (typeUrl: string) =>
+      typeUrl === "/test.Boom"
+        ? { title: () => { throw new Error("cannot read"); }, Body: () => null }
+        : real.rendererFor(typeUrl),
+  };
+});
 
 import { DaoProposalPage } from "./dao-proposal-page";
 
@@ -84,7 +95,7 @@ describe("DaoProposalPage", () => {
     it("shows the regular checks and, for an expedited proposal, the expedite bars", async () => {
       await open(7);
       expect(checkOks("regular")).toEqual(["true", "true"]);
-      expect(checkOks("expedite")).toEqual(["false", "false"]);
+      expect(checkOks("expedite")).toEqual(["unknown", "unknown"]);
       expect(screen.queryByTestId("settle-note")).toBeNull();
     });
 
@@ -114,6 +125,37 @@ describe("DaoProposalPage", () => {
       await userEvent.click(screen.getByRole("button", { name: /More details/ }));
       expect(await screen.findByText(/"expedite_settleable": false/)).toBeInTheDocument();
     });
+  });
+
+  describe("a voting proposal's checks", () => {
+    it("shows a bar not met yet as unknown, not failed", async () => {
+      await open(7, { checks: { regular: { quorum_met: false, threshold_met: false, passes: false }, expedite: { quorum_met: false, yes_met: false, passes: false } } });
+      expect(checkOks("regular")).toEqual(["unknown", "unknown"]);
+      expect(checkOks("expedite")).toEqual(["unknown", "unknown"]);
+    });
+  });
+
+  it("links to the proposal in the DAO app", async () => {
+    await open(7);
+    expect(screen.getByTestId("dao-app-link")).toHaveAttribute("href", "https://dao.getbze.com/proposal/7");
+    expect(screen.getByTestId("dao-app-link")).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows a stake DAO's weights as base units, not votes, when the node did not name the weight denom", async () => {
+    await open(7, { weight_denom: null });
+    expect(tile("yes")).toHaveTextContent("4200000000 (base units)");
+    expect(tile("yes")).not.toHaveTextContent("votes");
+  });
+
+  it("shows a message its renderer cannot read as raw JSON, and the rest as usual", async () => {
+    const good = (byId[7].msgs as Record<string, unknown>[])[0];
+    const bad = { "@type": "/test.Boom", detail: "unreadable" };
+    await open(7, { msgs: [bad, good] });
+    const raw = screen.getByTestId("dao-action-raw");
+    expect(raw).toHaveAttribute("data-type", "/test.Boom");
+    expect(raw).toHaveTextContent('"detail": "unreadable"');
+    expect(screen.getAllByTestId("dao-action")).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Fund the hive festival");
   });
 
   describe("a proposal past its voting end", () => {
@@ -224,7 +266,7 @@ describe("DaoProposalPage", () => {
       expect(within(rows[0]).getByTestId("dao-vote-weight")).toHaveTextContent("3K BZE");
       expect(within(rows[0]).queryByTestId("vote-reduced")).toBeNull();
       const reduced = within(rows[1]).getByTestId("vote-reduced");
-      expect(reduced).toHaveTextContent("counts 700 BZE: part of this stake left before the vote ended");
+      expect(reduced).toHaveTextContent("counts 700 BZE: part of this stake has left since the vote was cast");
       expect(within(rows[3]).getByRole("link", { name: /Honey Council/ })).toBeInTheDocument();
     });
 

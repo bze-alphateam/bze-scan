@@ -112,6 +112,9 @@ const needed = (v: string | null) => (v == null ? "" : ` · ${v} needed`);
  */
 export function checkGroups(p: DaoProposal): CheckGroup[] {
   if (!p.checks) return [];
+  // While voting, a bar not met is "not reached yet", not a failure: it can still be met. A met bar stays met.
+  const open = p.status === "voting";
+  const ok = (met: boolean): boolean | null => (met || !open ? met : null);
   const s = shares(p);
   const cfg = p.pinned_config;
   const groups: CheckGroup[] = [
@@ -123,13 +126,13 @@ export function checkGroups(p: DaoProposal): CheckGroup[] {
         {
           key: "quorum",
           title: "Enough turnout",
-          ok: p.checks.regular.quorum_met,
+          ok: ok(p.checks.regular.quorum_met),
           detail: `${pct(s.turnout)} of the voting power voted${needed(bar(cfg, "min_quorum"))}`,
         },
         {
           key: "threshold",
           title: "Yes above the threshold",
-          ok: p.checks.regular.threshold_met,
+          ok: ok(p.checks.regular.threshold_met),
           detail: `${pct(yesOfCast(p))} of the Yes and No votes are Yes · more than ${bar(cfg, "threshold") ?? "the threshold"} needed, a tie fails`,
         },
       ],
@@ -144,13 +147,13 @@ export function checkGroups(p: DaoProposal): CheckGroup[] {
         {
           key: "expedite-quorum",
           title: "Enough turnout for an early finish",
-          ok: p.checks.expedite.quorum_met,
+          ok: ok(p.checks.expedite.quorum_met),
           detail: `${pct(s.turnout)} of the full voting power voted${needed(bar(cfg, "expedite_quorum"))}`,
         },
         {
           key: "expedite-yes",
           title: "Enough Yes votes for an early finish",
-          ok: p.checks.expedite.yes_met,
+          ok: ok(p.checks.expedite.yes_met),
           detail: `${pct(s.yes)} of the full voting power said Yes · more than ${bar(cfg, "expedite_threshold") ?? "the threshold"} needed`,
         },
       ],
@@ -167,13 +170,17 @@ export function settleNote(p: Pick<DaoProposal, "status" | "voting_ended" | "exp
   return null;
 }
 
-/** A voting-power amount in words: stake DAOs in display units of the weight denom, member lists as votes. */
-export function weightText(amount: string | null | undefined, wd: DaoWeightDenom | null | undefined, compact = false): string {
+/** Whether the proposal's weights are stake (a stake DAO) rather than one vote per member. */
+export const isStakeDao = (p: Pick<DaoProposal, "dao" | "weight_denom">): boolean => p.weight_denom != null || p.dao?.type === "stake";
+
+/**
+ * A voting-power amount in words: stake DAOs in display units of the weight
+ * denom, member lists as votes. A stake DAO whose denom is unknown (the node
+ * did not answer) shows the raw amount marked as base units, never as votes.
+ */
+export function weightText(amount: string | null | undefined, wd: DaoWeightDenom | null | undefined, compact = false, stake = false): string {
   if (amount == null) return "—";
-  if (!wd) {
-    // A member list counts one vote per member; a stake DAO whose denom is unknown shows the raw weight.
-    return `${amount} ${amount === "1" ? "vote" : "votes"}`;
-  }
+  if (!wd) return stake ? `${amount} (base units)` : `${amount} ${amount === "1" ? "vote" : "votes"}`;
   return wd.symbol != null && wd.exponent != null ? formatAmount(amount, wd.exponent, wd.symbol, { compact }) : `${amount} ${wd.denom}`;
 }
 
@@ -184,8 +191,9 @@ export function isReduced(v: Pick<DaoVote, "weight" | "effective_weight">): bool
   return w.isFinite() && e.isFinite() && e.lt(w);
 }
 
-export const REDUCED_NOTE_STAKE = "part of this stake left before the vote ended";
-export const REDUCED_NOTE_MEMBER = "this member left the DAO before the vote ended";
+// The API subtracts every reduction recorded after the vote, with no cut-off at the voting end.
+export const REDUCED_NOTE_STAKE = "part of this stake has left since the vote was cast";
+export const REDUCED_NOTE_MEMBER = "this member has left the DAO since the vote was cast";
 
 /** The summary a proposer wrote, cut to the limit; `cut` says it was. */
 export function summaryText(summary: string | null): { text: string; cut: boolean } | null {

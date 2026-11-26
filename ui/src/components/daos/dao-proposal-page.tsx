@@ -3,7 +3,7 @@
 import { Box, Button, Flex, Grid, Heading, Link, Skeleton, Stack, Text } from "@chakra-ui/react";
 import BigNumber from "bignumber.js";
 import NextLink from "next/link";
-import { useId, useState, type ReactNode } from "react";
+import { Component, useId, useState, type ReactNode } from "react";
 import { LuCircleHelp, LuTriangleAlert } from "react-icons/lu";
 
 import { isNotFound } from "@/api/client";
@@ -12,6 +12,7 @@ import type { DaoProposal, DaoVote, DaoVoteOption, TokenSummary } from "@/api/ty
 import { CheckRow } from "@/components/proposals/parts";
 import { AccountChip } from "@/components/ui/account-chip";
 import { Chip } from "@/components/ui/chip";
+import { ExternalLink } from "@/components/ui/external-link";
 import { FilterPills } from "@/components/ui/filter-pills";
 import { JsonBlock } from "@/components/ui/json-block";
 import { ListPanel } from "@/components/ui/list";
@@ -22,12 +23,14 @@ import { StateBox } from "@/components/ui/state-box";
 import { Tile } from "@/components/ui/tile";
 import { TimeAgo } from "@/components/ui/time-ago";
 import { VTabPanel, VTabs, VTabsBar } from "@/components/ui/vtabs";
+import { daoAppLinks } from "@/lib/links";
 import { formatCount, formatDate, formatDateTime, formatPct, shortHash } from "@/lib/format";
 import { destinationText, daoHref } from "@/render/daos";
 import {
   checkGroups,
   hasMessages,
   isReduced,
+  isStakeDao,
   msgType,
   REDUCED_NOTE_MEMBER,
   REDUCED_NOTE_STAKE,
@@ -36,6 +39,7 @@ import {
   summaryText,
   weightText,
 } from "@/render/dao-proposals";
+import type { RenderContext } from "@/render/messages/types";
 import { createRenderContext, rendererFor } from "@/render/messages/registry";
 import { parseCoins } from "@/render/messages/common";
 import { coinsText, endsIn } from "@/render/proposals";
@@ -123,6 +127,9 @@ function Header({ p }: { p: DaoProposal }) {
           #{p.id}
         </Text>
         {p.dao && <DaoChip id={p.dao.id} name={p.dao.name} />}
+        <ExternalLink href={daoAppLinks.proposal(p.id)} fontWeight="500" data-testid="dao-app-link">
+          Open in the DAO app
+        </ExternalLink>
       </Flex>
       <Heading as="h1" fontSize="24px" fontWeight="600" letterSpacing="-0.01em" lineHeight="1.25" overflowWrap="anywhere">
         {p.title || `Proposal #${p.id}`}
@@ -153,7 +160,7 @@ function SummaryTiles({ p, now }: { p: DaoProposal; now: Date }) {
       label={label}
       value={s[key] != null ? formatPct(s[key]!) : null}
       valueColor={color}
-      sub={p[key] != null ? weightText(p[key], p.weight_denom, true) : null}
+      sub={p[key] != null ? weightText(p[key], p.weight_denom, true, isStakeDao(p)) : null}
       data-testid={`tile-${key}`}
     />
   );
@@ -234,10 +241,44 @@ function Result({ p }: { p: DaoProposal }) {
         </Stack>
       )}
       <Box mt="4">
-        <DaoTallyBars p={p} weight={p.weight_denom} amounts />
+        <DaoTallyBars p={p} weight={p.weight_denom} stake={isStakeDao(p)} amounts />
       </Box>
     </Section>
   );
+}
+
+/** One message in plain words through its renderer. */
+function Action({ msg: m, ctx }: { msg: Record<string, unknown>; ctx: RenderContext }) {
+  const type = msgType(m);
+  const r = rendererFor(type);
+  const msg = { type_url: type, sender: null, module: null, body: m, events: null, msg_index: null };
+  return (
+    <Stack gap="2" data-testid="dao-action" data-type={type}>
+      <Text fontWeight="semibold">{r.title(msg, ctx)}</Text>
+      <r.Body msg={msg} ctx={ctx} />
+    </Stack>
+  );
+}
+
+/**
+ * The messages are chain data anyone could write: one a renderer cannot read
+ * falls back to its raw JSON instead of blanking the page.
+ */
+class ActionBoundary extends Component<{ msg: Record<string, unknown>; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <Stack gap="2" data-testid="dao-action-raw" data-type={msgType(this.props.msg)}>
+        <Text fontWeight="semibold">{msgType(this.props.msg) || "A message"}</Text>
+        <Text color="fg.muted">The explorer could not read this message; here it is as the chain holds it.</Text>
+        <JsonBlock value={this.props.msg} maxH="240px" />
+      </Stack>
+    );
+  }
 }
 
 /** The proposal's messages, each in plain words through the renderers. */
@@ -250,17 +291,11 @@ function WhatItDoes({ p, denoms }: { p: DaoProposal; denoms?: Map<string, TokenS
           <Text color="fg.muted" data-testid="runs-as-dao">
             Runs as the DAO&apos;s treasury account.
           </Text>
-          {p.msgs!.map((m, i) => {
-            const type = msgType(m);
-            const r = rendererFor(type);
-            const msg = { type_url: type, sender: null, module: null, body: m, events: null, msg_index: null };
-            return (
-              <Stack key={i} gap="2" data-testid="dao-action" data-type={type}>
-                <Text fontWeight="semibold">{r.title(msg, ctx)}</Text>
-                <r.Body msg={msg} ctx={ctx} />
-              </Stack>
-            );
-          })}
+          {p.msgs!.map((m, i) => (
+            <ActionBoundary key={i} msg={m}>
+              <Action msg={m} ctx={ctx} />
+            </ActionBoundary>
+          ))}
         </Stack>
       ) : p.message_types.length > 0 ? (
         <Stack gap="2" data-testid="dao-actions-unread">
@@ -399,7 +434,7 @@ function Outcome({ p, denoms }: { p: DaoProposal; denoms?: Map<string, TokenSumm
 }
 
 function VoteRow({ v, p }: { v: DaoVote; p: DaoProposal }) {
-  const stake = p.weight_denom != null || p.dao?.type === "stake";
+  const stake = isStakeDao(p);
   const reduced = isReduced(v);
   return (
     <Grid
@@ -421,10 +456,10 @@ function VoteRow({ v, p }: { v: DaoVote; p: DaoProposal }) {
         {OPTION_TEXT[v.option] ?? v.option}
       </Text>
       <Box hideBelow="c2" minW="0" fontFamily="mono" data-testid="dao-vote-weight">
-        {weightText(v.weight, p.weight_denom, true)}
+        {weightText(v.weight, p.weight_denom, true, stake)}
         {reduced && (
           <Text as="span" display="block" fontFamily="body" fontSize="12px" color="warn.fg" data-testid="vote-reduced">
-            counts {weightText(v.effective_weight, p.weight_denom, true)}: {stake ? REDUCED_NOTE_STAKE : REDUCED_NOTE_MEMBER}
+            counts {weightText(v.effective_weight, p.weight_denom, true, stake)}: {stake ? REDUCED_NOTE_STAKE : REDUCED_NOTE_MEMBER}
           </Text>
         )}
       </Box>
@@ -441,10 +476,10 @@ function VoteRow({ v, p }: { v: DaoVote; p: DaoProposal }) {
       </Box>
       {/* Phones: the weight and time under the voter, the grid's second row. */}
       <Box hideFrom="c2" gridColumn="1 / -1" fontSize="12px" color="fg.muted" data-testid="dao-vote-phone">
-        <Mono>{weightText(v.weight, p.weight_denom, true)}</Mono> · <TimeAgo time={v.time} />
+        <Mono>{weightText(v.weight, p.weight_denom, true, stake)}</Mono> · <TimeAgo time={v.time} />
         {reduced && (
           <Text as="span" display="block" color="warn.fg">
-            counts {weightText(v.effective_weight, p.weight_denom, true)}: {stake ? REDUCED_NOTE_STAKE : REDUCED_NOTE_MEMBER}
+            counts {weightText(v.effective_weight, p.weight_denom, true, stake)}: {stake ? REDUCED_NOTE_STAKE : REDUCED_NOTE_MEMBER}
           </Text>
         )}
       </Box>

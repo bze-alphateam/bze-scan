@@ -95,21 +95,36 @@ describe("checkGroups", () => {
     expect(checkGroups(proposal({ checks: null }))).toEqual([]);
   });
 
-  it("reports a tie as failing the threshold, with the figures that explain it", () => {
-    const [regular] = checkGroups(proposal());
+  it("reports a tie as failing the threshold once voting ended, with the figures that explain it", () => {
+    const [regular] = checkGroups(proposal({ status: "rejected" }));
     expect(regular.lines.map((l) => l.ok)).toEqual([true, false]);
     expect(regular.lines[0].detail).toBe("60.0% of the voting power voted · 40% needed");
     expect(regular.lines[1].detail).toBe("50.0% of the Yes and No votes are Yes · more than 50% needed, a tie fails");
   });
 
+  it("shows a bar not met yet as not reached, not failed, while voting; a met bar stays met", () => {
+    const [regular] = checkGroups(proposal({ status: "voting" }));
+    expect(regular.lines.map((l) => l.ok)).toEqual([true, null]);
+    const groups = checkGroups(
+      proposal({ status: "voting", expedited: true, checks: { regular: { quorum_met: false, threshold_met: false, passes: false }, expedite: { quorum_met: false, yes_met: true, passes: false } } }),
+    );
+    expect(groups[0].lines.map((l) => l.ok)).toEqual([null, null]);
+    expect(groups[1].lines.map((l) => l.ok)).toEqual([null, true]);
+  });
+
+  it("fails the unmet bars once the proposal is no longer voting", () => {
+    const [regular] = checkGroups(proposal({ status: "rejected", checks: { regular: { quorum_met: false, threshold_met: false, passes: false }, expedite: null } }));
+    expect(regular.lines.map((l) => l.ok)).toEqual([false, false]);
+  });
+
   it("shows the verdicts of the API, not its own arithmetic (a boundary the API passes stays passing)", () => {
-    const [regular] = checkGroups(proposal({ yes: "31", checks: { regular: { quorum_met: true, threshold_met: true, passes: true }, expedite: null } }));
+    const [regular] = checkGroups(proposal({ status: "executed", yes: "31", checks: { regular: { quorum_met: true, threshold_met: true, passes: true }, expedite: null } }));
     expect(regular.lines.map((l) => l.ok)).toEqual([true, true]);
   });
 
   it("adds the early-settle bars of an expedited proposal, against the full voting power", () => {
     const groups = checkGroups(
-      proposal({ expedited: true, yes: "70", no: "0", checks: { regular: { quorum_met: true, threshold_met: true, passes: true }, expedite: { quorum_met: true, yes_met: true, passes: true } } }),
+      proposal({ status: "executed", expedited: true, yes: "70", no: "0", checks: { regular: { quorum_met: true, threshold_met: true, passes: true }, expedite: { quorum_met: true, yes_met: true, passes: true } } }),
     );
     expect(groups.map((g) => g.key)).toEqual(["regular", "expedite"]);
     expect(groups[1].lines.map((l) => l.ok)).toEqual([true, true]);
@@ -142,6 +157,9 @@ describe("weightText", () => {
   });
   it("writes the raw amount for a denom without metadata", () => {
     expect(weightText("5", { denom: "factory/x/y", symbol: null, exponent: null })).toBe("5 factory/x/y");
+  });
+  it("never calls the raw amount of a stake DAO with an unknown denom votes", () => {
+    expect(weightText("3000000000", null, false, true)).toBe("3000000000 (base units)");
   });
   it("counts votes for a member list", () => {
     expect(weightText("1", null)).toBe("1 vote");
