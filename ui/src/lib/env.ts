@@ -13,6 +13,11 @@ export const env = {
     factory: trimSlash(process.env.NEXT_PUBLIC_FACTORY_URL || "https://factory.getbze.com"),
     communities: trimSlash(process.env.NEXT_PUBLIC_COMMUNITIES_URL || "https://communities.getbze.com"),
   },
+  /** The DAO app: mainnet by default, the testnet- host on any other chain; `NEXT_PUBLIC_DAO_URL` overrides. */
+  daoApp: trimSlash(
+    process.env.NEXT_PUBLIC_DAO_URL ||
+      ((process.env.NEXT_PUBLIC_CHAIN_ID || "beezee-1") === "beezee-1" ? "https://dao.getbze.com" : "https://testnet-dao.getbze.com"),
+  ),
   /** The API as the browser reaches it, without `/v1`. */
   apiUrl: trimSlash(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"),
   chainId: process.env.NEXT_PUBLIC_CHAIN_ID || "beezee-1",

@@ -32,6 +32,7 @@ type TokenReader interface {
 	Tokens(ctx context.Context, kind *string, after *repository.TokenKey, limit int) ([]repository.TokenSummary, error)
 	Token(ctx context.Context, denom string) (*repository.Token, error)
 	TokenEvents(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.TokenEvent, error)
+	TokenSettings(ctx context.Context, denom string) (*repository.TokenSettings, error)
 	DenomTransfers(ctx context.Context, denom string, before *repository.EventKey, limit int) ([]repository.DenomTransfer, error)
 	TokenHolders(ctx context.Context, denom string, after *repository.HolderKey, limit int) ([]repository.TokenHolder, error)
 	// DenomVolume counts and sums the transfers of denom in the window
@@ -123,6 +124,9 @@ func (h *TokenController) Token(c *echo.Context) error {
 	resp := dto.NewToken(t, events, next, *volume)
 	resp.RateLimits = h.rateLimits(ctx, denom)
 	resp.Pool = h.poolPrice(ctx, t)
+	if resp.TokenSettings, err = h.tokenSettings(ctx, denom); err != nil {
+		return err
+	}
 	return c.JSON(http.StatusOK, resp)
 }
 

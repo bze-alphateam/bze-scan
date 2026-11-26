@@ -59,6 +59,24 @@ describe("TokenPage", () => {
     expect(screen.queryByTestId("hops-callout")).not.toBeInTheDocument();
   });
 
+  it("warns on a token an emergency measure blocks from crossing chains", async () => {
+    const emergency = {
+      supported: true, height: 1, active: true, guardian: null, automation_paused: false, closed_channels: [],
+      blocked_denoms: [{ denom: usdc.denom, symbol: "USDC", exponent: 6, logo_url: null }],
+      disabled_messages: [], halted_denoms: [], plan: null,
+    };
+    renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(usdc, { emergency: () => Promise.resolve(emergency) }) });
+    const callout = await screen.findByTestId("ibc-blocked-callout");
+    expect(callout).toHaveTextContent("blocked from crossing chains");
+    expect(within(callout).getByRole("link", { name: "Emergency status →" })).toHaveAttribute("href", "/emergency");
+  });
+
+  it("shows no emergency warning when no measure touches the token", async () => {
+    renderWithProviders(<TokenPage denom={usdc.denom} />, { api: api(usdc, { emergency: () => Promise.reject(new Error("502")) }) });
+    await screen.findByTestId("ibc-route");
+    expect(screen.queryByTestId("ibc-blocked-callout")).not.toBeInTheDocument();
+  });
+
   it("tells a two-hop token apart from the direct one and draws the chain it came through", async () => {
     const directAtone = { ...atone, denom: "ibc/DIRECTATONE", ibc_hops: 1, via_chain: null };
     const tokens = () => Promise.resolve({ items: [atone, directAtone], next_cursor: null } as Page<TokenSummary>);

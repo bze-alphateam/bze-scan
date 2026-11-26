@@ -80,6 +80,8 @@
 #     cointrunk, txfeecollector; dao and guardian exist from chain v8.3.0 and
 #     are not recorded here: take them, and tradebin/burner, from a v8.3.0 node)
 #
+#   ratelimits (the IBC rate limits, chain v8.3.0 on; record from a v8.3.0 node):
+#     ratelimit/AllRateLimits.json, ratelimit/AllBlacklistedDenoms.json
 #   daos (the DAOs sync and the DAO page's live reads, chain v8.3.0; take them from a
 #     node that runs it and has DAOs):
 #     dao/Daos.json (one page of 100), and per DAO id in it: dao/Dao.<id>.json,
@@ -88,9 +90,6 @@
 #     gateway error for one the chain no longer has) and rewards/DenomReward.<denom>.json.
 #     The e2e tests' DAO fixtures (daos_test.go) are hand-written until a node
 #     with DAOs is recorded.
-#
-#   ratelimits (the IBC rate limits, chain v8.3.0 on; record from a v8.3.0 node):
-#     ratelimit/AllRateLimits.json, ratelimit/AllBlacklistedDenoms.json
 #
 # Usage: VALIDATORS="bzevaloper1…" ACCOUNTS="bze1…" scripts/record-grpc-fixtures.sh
 #        (or: make grpc-fixtures [SETS=accounts] VALIDATORS="…" ACCOUNTS="…" [DENOMS="ubze …"]

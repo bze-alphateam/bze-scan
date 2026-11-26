@@ -418,6 +418,14 @@ function ModuleAccounts({ group }: { group: ParamGroup }) {
       {note ? (
         <Text px="4" py="3" fontSize="13px" color="fg.muted" bg="bg.panel" borderWidth="1px" borderColor="border.panel" rounded="l3">
           {note}
+          {group === "emergency" && (
+            <>
+              {" "}
+              <Link asChild color="accent.fg">
+                <NextLink href="/emergency">See what is switched on right now →</NextLink>
+              </Link>
+            </>
+          )}
         </Text>
       ) : (
         <ListPanel>

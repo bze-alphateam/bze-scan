@@ -11,6 +11,7 @@ import type {
   ActivityCategory,
   BlockListParams,
   BlockTransfer,
+  DaoType,
   HallOfFame,
   Page,
   PageParams,
@@ -70,10 +71,17 @@ export const queryKeys = {
   proposalNonVoters: (id: number) => ["proposal-non-voters", id] as const,
   upgrade: (height: number) => ["upgrade", height] as const,
   liveHalt: () => ["upgrade", "live"] as const,
+  daos: (type: DaoType | null) => ["daos", type] as const,
+  daosSupport: () => ["daos", "support"] as const,
+  daosByAdmin: (admin: string) => ["daos", "admin", admin] as const,
+  dao: (id: number) => ["dao", id] as const,
+  daoHistory: (id: number) => ["dao-history", id] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
   haltedDenoms: () => ["halted-denoms"] as const,
+  emergency: () => ["emergency"] as const,
+  emergencyActions: () => ["emergency-actions"] as const,
   modules: () => ["modules"] as const,
   rawBlock: (height: number) => ["raw", "block", height] as const,
   rawBlockResults: (height: number) => ["raw", "block_results", height] as const,
@@ -504,6 +512,68 @@ export function useTokenTransfers(denom: string) {
   });
 }
 
+/**
+ * An infinite list's policy: only the first page is live. Once an older page is
+ * loaded the list stops polling, so the older pages (which never change) are not
+ * fetched again every few seconds; a refocus or remount still refreshes it.
+ */
+const firstPageLive = {
+  ...live,
+  refetchInterval: (q: { state: { data: { pages: unknown[] } | undefined } }) => ((q.state.data?.pages.length ?? 1) > 1 ? false : live.refetchInterval),
+} as const;
+
+/** The DAOs, newest first, of one type (every type for null): 20 a page, the first page polled. */
+export function useDaos(type: DaoType | null) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daos(type),
+    queryFn: ({ pageParam, signal }) => api.daos({ ...pageParam, type: type ?? undefined }, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...firstPageLive,
+  });
+}
+
+/** The first page of the DAOs: `supported` says whether the chain runs them (the nav entry hides when it does not). */
+export function useDaosSupport() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.daosSupport(),
+    queryFn: ({ signal }) => api.daos({ limit: 1 }, signal),
+    ...reference,
+    select: (list) => list.supported,
+  });
+}
+
+/** The DAOs an address runs (an account page's "Admin of" list), every page followed. The mock API ignores the filter, so the rows are checked again. */
+export function useDaosByAdmin(admin: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.daosByAdmin(admin),
+    queryFn: ({ signal }) => allPages((cursor) => api.daos({ admin, cursor, limit: 100 }, signal)),
+    ...slow,
+    select: (items) => items.filter((d) => d.admin === admin),
+  });
+}
+
+/** A DAO: polled, its treasury and rules are live chain state. */
+export function useDao(id: number) {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.dao(id), queryFn: ({ signal }) => api.dao(id, signal), ...live });
+}
+
+/** A DAO's changes, newest first: 20 a page. */
+export function useDaoHistory(id: number) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daoHistory(id),
+    queryFn: ({ pageParam, signal }) => api.daoHistory(id, pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...firstPageLive,
+  });
+}
+
 /** Every page of a list route, pages of 100 followed to the last. */
 async function allPages<T>(read: (cursor: string | undefined) => Promise<Page<T>>): Promise<T[]> {
   const items: T[] = [];
@@ -741,4 +811,26 @@ export function useIbcChannels() {
 export function useRateLimits() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.rateLimits(), queryFn: ({ signal }) => api.rateLimits(signal), ...live });
+}
+
+/** The emergency switches in force: polled with the `status` policy (60 s). */
+export function useEmergency() {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.emergency(),
+    queryFn: ({ signal }) => api.emergency(signal),
+    ...status,
+  });
+}
+
+/** The emergency actions and their undos, newest first: 20 a page. */
+export function useEmergencyActions() {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.emergencyActions(),
+    queryFn: ({ pageParam, signal }) => api.emergencyActions(pageParam, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...reference,
+  });
 }
