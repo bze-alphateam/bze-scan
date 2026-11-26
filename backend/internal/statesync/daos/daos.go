@@ -1,5 +1,6 @@
-// Package daos is the DAOs set of the state sync: it writes the name, admin
-// and type of every DAO of chain v8.3.0 (x/dao) into explorer.daos, and the
+// Package daos is the DAOs set of the state sync: it writes the name, admin,
+// pending admin and type of every DAO, and the current members and electorate
+// sources of each (replaced on every save), of chain v8.3.0 (x/dao) into explorer.daos, and the
 // "DAO #<id> · <name>" label of its treasury address into explorer.labels. A
 // full resync lists every DAO (also the ones the index missed, created below
 // the live floor); the transformer marks a DAO dirty on each of its events.
@@ -13,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/types/query"
@@ -51,6 +53,14 @@ type Dao struct {
 	Type    string
 	Name    string
 	Admin   string
+	// PendingAdmin is the address nominated as the next admin; "" when no
+	// nomination is pending.
+	PendingAdmin string
+	// Members are the addresses of a static-list DAO, lowercase and unique.
+	Members []string
+	// Sources are the electorate sources of a stake DAO in the chain's
+	// join-record form: sr/{reward_id} or dr/{staking_denom}.
+	Sources []string
 }
 
 // SelfGoverned reports whether the DAO is its own admin.
@@ -139,5 +149,25 @@ func of(d daotypes.Dao) Dao {
 	if d.Type == daotypes.DaoType_DAO_TYPE_STAKE {
 		t = TypeStake
 	}
-	return Dao{ID: d.Id, Address: d.Address, Type: t, Name: d.Name, Admin: d.Admin}
+	out := Dao{ID: d.Id, Address: d.Address, Type: t, Name: d.Name, Admin: d.Admin,
+		PendingAdmin: strings.ToLower(d.PendingAdmin)}
+	seen := map[string]bool{}
+	for _, m := range d.Members {
+		if m = strings.ToLower(strings.TrimSpace(m)); m != "" && !seen[m] {
+			seen[m] = true
+			out.Members = append(out.Members, m)
+		}
+	}
+	if e := d.Electorate; e != nil {
+		for _, id := range e.SrIds {
+			if id != "" && !seen["sr/"+id] {
+				seen["sr/"+id] = true
+				out.Sources = append(out.Sources, "sr/"+id)
+			}
+		}
+		if e.DrDenom != "" {
+			out.Sources = append(out.Sources, "dr/"+e.DrDenom)
+		}
+	}
+	return out
 }

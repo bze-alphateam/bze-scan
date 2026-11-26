@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -27,6 +29,8 @@ type DaoProposalReader interface {
 	DaoProposals(ctx context.Context, daoID int64, status *string, before *int64, limit int) ([]repository.DaoProposal, error)
 	DaoProposal(ctx context.Context, id int64) (*repository.DaoProposal, int64, error)
 	DaoVotes(ctx context.Context, id int64, option *string, after *repository.DaoVoteKey, limit int) ([]repository.DaoVote, error)
+	DaoProposalsAcross(ctx context.Context, statuses []string, voting bool, before *int64, afterVoting *repository.OpenDaoProposalKey, limit int) ([]repository.DaoProposal, error)
+	DaoVotesByVoter(ctx context.Context, voter string, before *repository.VoterBallotKey, limit int) ([]repository.VoterBallot, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 }
 
@@ -182,4 +186,98 @@ func (h *DaoProposalController) weightDenom(ctx context.Context, daoID *int64, d
 		return nil, err
 	}
 	return dto.NewWeightDenom(denom, known), nil
+}
+
+// supported reports whether the node runs x/dao; false without a gRPC
+// address.
+func (h *DaoProposalController) supported(ctx context.Context) bool {
+	return h.live != nil && h.live.Supported(ctx)
+}
+
+// AllDaoProposals serves GET /api/v1/dao-proposals?status&cursor&limit: the
+// proposals of every DAO. status repeats; with status=voting alone the list
+// is the open proposals, soonest voting_end first (then id), otherwise
+// newest (highest id) first. Each item names its DAO. supported is false
+// while the node does not run x/dao yet.
+func (h *DaoProposalController) AllDaoProposals(c *echo.Context) error {
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	statuses := c.QueryParams()["status"]
+	for _, st := range statuses {
+		if !slices.Contains(daoProposalStatuses, st) {
+			return echo.NewHTTPError(http.StatusBadRequest, "status must be one of "+strings.Join(daoProposalStatuses, ", "))
+		}
+	}
+	voting := len(statuses) > 0 && !slices.ContainsFunc(statuses, func(s string) bool { return s != "voting" })
+	var before *int64
+	var afterVoting *repository.OpenDaoProposalKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if voting {
+			afterVoting, err = dto.DecodeOpenProposalCursor(s)
+		} else {
+			var keys []int64
+			if keys, err = dto.DecodeCursor(s, 1); err == nil {
+				before = &keys[0]
+			}
+		}
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+	ctx := c.Request().Context()
+	rows, err := h.repo.DaoProposalsAcross(ctx, statuses, voting, before, afterVoting, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.DaoProposalFeed{Items: make([]dto.DaoProposalFeedItem, 0, min(len(rows), limit)), Supported: h.supported(ctx)}
+	for i, p := range rows {
+		if i == limit {
+			next := dto.EncodeCursor(rows[i-1].ID)
+			if voting {
+				next = dto.EncodeOpenProposalCursor(rows[i-1])
+			}
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewDaoProposalFeedItem(p))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
+}
+
+// VoterBallots serves GET /api/v1/dao-votes?voter&cursor&limit: the ballots
+// of an address across DAOs, newest first. voter is required.
+func (h *DaoProposalController) VoterBallots(c *echo.Context) error {
+	limit, err := parseLimit(c)
+	if err != nil {
+		return err
+	}
+	hrp, voter, ok := bech32Address(c.QueryParam("voter"))
+	if !ok || hrp != accountPrefix {
+		return echo.NewHTTPError(http.StatusBadRequest, "voter must be a bze1 address")
+	}
+	var before *repository.VoterBallotKey
+	if s := c.QueryParam("cursor"); s != "" {
+		if before, err = dto.DecodeVoterBallotCursor(s); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
+		}
+	}
+	ctx := c.Request().Context()
+	rows, err := h.repo.DaoVotesByVoter(ctx, voter, before, limit+1)
+	if err != nil {
+		return err
+	}
+	resp := dto.VoterBallotList{Items: make([]dto.VoterBallot, 0, min(len(rows), limit)), Supported: h.supported(ctx)}
+	for i, b := range rows {
+		if i == limit {
+			next := dto.EncodeVoterBallotCursor(rows[i-1])
+			resp.NextCursor = &next
+			break
+		}
+		resp.Items = append(resp.Items, dto.NewVoterBallot(b))
+	}
+	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+	return c.JSON(http.StatusOK, resp)
 }

@@ -20,6 +20,9 @@ type DaoSummary struct {
 	AdminLabel   *Label     `json:"admin_label"`
 	SelfGoverned bool       `json:"self_governed"`
 	CreatedTime  *time.Time `json:"created_time"`
+	// PendingAdmin is the address nominated as the next admin; null when no
+	// nomination is pending.
+	PendingAdmin *string `json:"pending_admin"`
 	// ProposalsOpen is the number of the DAO's proposals in voting.
 	ProposalsOpen int64 `json:"proposals_open"`
 }
@@ -37,7 +40,7 @@ type DaoList struct {
 func NewDaoSummary(d repository.Dao) DaoSummary {
 	s := DaoSummary{
 		ID: d.ID, Name: d.Name, Type: d.Type, Address: d.Address, Admin: d.Admin, AdminLabel: newLabel(d.AdminLabel),
-		SelfGoverned: d.SelfGoverned, ProposalsOpen: d.ProposalsOpen,
+		SelfGoverned: d.SelfGoverned, PendingAdmin: d.PendingAdmin, ProposalsOpen: d.ProposalsOpen,
 	}
 	if d.CreatedTime != nil {
 		t := d.CreatedTime.UTC()

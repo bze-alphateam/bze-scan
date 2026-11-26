@@ -241,3 +241,110 @@ func messageTypes(raw json.RawMessage) []string {
 	}
 	return out
 }
+
+// DaoProposalFeedItem is an item of GET /api/v1/dao-proposals: the list item
+// with its DAO (null while the proposal's submission is not indexed).
+type DaoProposalFeedItem struct {
+	DaoProposalSummary
+	Dao *DaoRef `json:"dao"`
+}
+
+// DaoProposalFeed is the response of GET /api/v1/dao-proposals. Supported is
+// false on a node that has not upgraded to chain v8.3.0.
+type DaoProposalFeed struct {
+	Items      []DaoProposalFeedItem `json:"items"`
+	NextCursor *string               `json:"next_cursor"`
+	Supported  bool                  `json:"supported"`
+}
+
+// NewDaoProposalFeedItem builds a feed item.
+func NewDaoProposalFeedItem(p repository.DaoProposal) DaoProposalFeedItem {
+	out := DaoProposalFeedItem{DaoProposalSummary: NewDaoProposalSummary(p)}
+	if p.DaoID != nil && p.DaoName != nil && p.DaoType != nil {
+		out.Dao = &DaoRef{ID: *p.DaoID, Name: *p.DaoName, Type: *p.DaoType}
+	}
+	return out
+}
+
+// EncodeOpenProposalCursor is the cursor after a voting proposal of the feed:
+// its voting_end (microseconds) and id.
+func EncodeOpenProposalCursor(p repository.DaoProposal) string {
+	var micros int64
+	if p.VotingEnd != nil {
+		micros = p.VotingEnd.UnixMicro()
+	}
+	return EncodeCursor(micros, p.ID)
+}
+
+// DecodeOpenProposalCursor reverses EncodeOpenProposalCursor.
+func DecodeOpenProposalCursor(cursor string) (*repository.OpenDaoProposalKey, error) {
+	keys, err := DecodeCursor(cursor, 2)
+	if err != nil {
+		return nil, err
+	}
+	return &repository.OpenDaoProposalKey{VotingEndMicros: keys[0], ID: keys[1]}, nil
+}
+
+// VoterProposal is the proposal of a ballot; every field but the id is null
+// when the index does not hold the proposal's submission.
+type VoterProposal struct {
+	ID        int64      `json:"id"`
+	Title     *string    `json:"title"`
+	Status    *string    `json:"status"`
+	VotingEnd *time.Time `json:"voting_end"`
+}
+
+// VoterDao is the DAO of a ballot's proposal.
+type VoterDao struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// VoterBallot is an item of GET /api/v1/dao-votes: Weight is the ballot's
+// weight when cast, EffectiveWeight what is left of it after the ballot
+// reductions since. Dao is null while the proposal's DAO is not indexed.
+type VoterBallot struct {
+	Proposal        VoterProposal `json:"proposal"`
+	Dao             *VoterDao     `json:"dao"`
+	Option          string        `json:"option"`
+	Weight          string        `json:"weight"`
+	EffectiveWeight string        `json:"effective_weight"`
+	Height          int64         `json:"height"`
+	TxHash          *string       `json:"tx_hash"`
+	Time            time.Time     `json:"time"`
+}
+
+// VoterBallotList is the response of GET /api/v1/dao-votes. Supported is false
+// on a node that has not upgraded to chain v8.3.0.
+type VoterBallotList struct {
+	Items      []VoterBallot `json:"items"`
+	NextCursor *string       `json:"next_cursor"`
+	Supported  bool          `json:"supported"`
+}
+
+// NewVoterBallot builds a ballot item.
+func NewVoterBallot(b repository.VoterBallot) VoterBallot {
+	out := VoterBallot{
+		Proposal: VoterProposal{ID: b.ProposalID, Title: b.ProposalTitle, Status: b.ProposalStatus, VotingEnd: utc(b.VotingEnd)},
+		Option:   b.Option, Weight: b.Weight, EffectiveWeight: b.EffectiveWeight, Height: b.Height, TxHash: b.TxHash,
+		Time: b.Time.UTC(),
+	}
+	if b.DaoID != nil && b.DaoName != nil {
+		out.Dao = &VoterDao{ID: *b.DaoID, Name: *b.DaoName}
+	}
+	return out
+}
+
+// EncodeVoterBallotCursor is the cursor after a ballot of a voter's list.
+func EncodeVoterBallotCursor(b repository.VoterBallot) string {
+	return EncodeCursor(b.Height, b.ProposalID)
+}
+
+// DecodeVoterBallotCursor reverses EncodeVoterBallotCursor.
+func DecodeVoterBallotCursor(cursor string) (*repository.VoterBallotKey, error) {
+	keys, err := DecodeCursor(cursor, 2)
+	if err != nil {
+		return nil, err
+	}
+	return &repository.VoterBallotKey{Height: keys[0], ProposalID: keys[1]}, nil
+}

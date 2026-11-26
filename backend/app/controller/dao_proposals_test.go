@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,24 @@ type fakeDaoProposals struct {
 	gotOption *string
 	gotAfter  *repository.DaoVoteKey
 	gotLimit  int
+
+	ballots        []repository.VoterBallot
+	gotStatuses    []string
+	gotVoting      bool
+	gotAfterVoting *repository.OpenDaoProposalKey
+	gotVoter       string
+	gotBallotKey   *repository.VoterBallotKey
+}
+
+func (f *fakeDaoProposals) DaoProposalsAcross(_ context.Context, statuses []string, voting bool, before *int64,
+	afterVoting *repository.OpenDaoProposalKey, limit int) ([]repository.DaoProposal, error) {
+	f.gotStatuses, f.gotVoting, f.gotBefore, f.gotAfterVoting, f.gotLimit = statuses, voting, before, afterVoting, limit
+	return f.proposals[:min(limit, len(f.proposals))], f.err
+}
+
+func (f *fakeDaoProposals) DaoVotesByVoter(_ context.Context, voter string, before *repository.VoterBallotKey, limit int) ([]repository.VoterBallot, error) {
+	f.gotVoter, f.gotBallotKey, f.gotLimit = voter, before, limit
+	return f.ballots[:min(limit, len(f.ballots))], f.err
 }
 
 func (f *fakeDaoProposals) Dao(_ context.Context, id int64) (*repository.Dao, error) {
@@ -75,6 +94,8 @@ func daoProposalServer(r controller.DaoProposalReader, s controller.DaoState) *e
 	e.HTTPErrorHandler = middleware.ErrorHandler
 	h := controller.NewDaoProposalController(r, s, func() time.Time { return proposalNow })
 	e.GET("/api/v1/daos/:id/proposals", h.DaoProposals)
+	e.GET("/api/v1/dao-proposals", h.AllDaoProposals)
+	e.GET("/api/v1/dao-votes", h.VoterBallots)
 	e.GET("/api/v1/dao-proposals/:id", h.DaoProposal)
 	e.GET("/api/v1/dao-proposals/:id/votes", h.DaoVotes)
 	return e
@@ -200,4 +221,85 @@ func TestDaoVotesPagedByEffectiveWeight(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/dao-proposals/9/votes?cursor=eyJ3IjoiLTEiLCJ2IjoieCJ9").Code,
 		"a negative weight is not a cursor")
 	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/dao-proposals/8/votes").Code)
+}
+
+func TestAllDaoProposalsOpenOnesSoonestFirst(t *testing.T) {
+	end := proposalNow.Add(time.Hour)
+	f := &fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "voting", end), stakeProposal(7, "voting", end)}}
+	e := daoProposalServer(f, &fakeDaoState{supported: true})
+
+	rec := get(t, e, "/api/v1/dao-proposals?status=voting&status=voting&limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	assert.True(t, f.gotVoting)
+	assert.Equal(t, []string{"voting", "voting"}, f.gotStatuses)
+	feed := decode[dto.DaoProposalFeed](t, rec)
+	assert.True(t, feed.Supported)
+	require.Len(t, feed.Items, 1)
+	assert.Equal(t, &dto.DaoRef{ID: 2, Name: "Stakers", Type: "stake"}, feed.Items[0].Dao)
+	require.NotNil(t, feed.NextCursor)
+
+	get(t, e, "/api/v1/dao-proposals?status=voting&cursor="+*feed.NextCursor)
+	assert.Equal(t, &repository.OpenDaoProposalKey{VotingEndMicros: end.UnixMicro(), ID: 9}, f.gotAfterVoting,
+		"the cursor holds the last row's voting_end and id")
+}
+
+func TestAllDaoProposalsOtherStatusesNewestFirst(t *testing.T) {
+	f := &fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "executed", proposalNow), stakeProposal(7, "rejected", proposalNow)}}
+	e := daoProposalServer(f, nil)
+
+	for _, q := range []string{"status=executed&status=rejected", "status=voting&status=executed", ""} {
+		rec := get(t, e, "/api/v1/dao-proposals?limit=1&"+q)
+		require.Equal(t, http.StatusOK, rec.Code, q)
+		assert.False(t, f.gotVoting, q)
+		feed := decode[dto.DaoProposalFeed](t, rec)
+		assert.False(t, feed.Supported, "no node")
+		require.NotNil(t, feed.NextCursor)
+		get(t, e, "/api/v1/dao-proposals?cursor="+*feed.NextCursor)
+		assert.Equal(t, int64(9), *f.gotBefore, q)
+	}
+}
+
+func TestAllDaoProposalsBadRequests(t *testing.T) {
+	e := daoProposalServer(&fakeDaoProposals{}, nil)
+	for _, path := range []string{"/api/v1/dao-proposals?status=passed", "/api/v1/dao-proposals?status=voting&status=nope",
+		"/api/v1/dao-proposals?cursor=@@", "/api/v1/dao-proposals?status=voting&cursor=1", "/api/v1/dao-proposals?limit=0"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
+	}
+}
+
+func TestVoterBallotsNewestFirstPaged(t *testing.T) {
+	end := proposalNow.Add(time.Hour)
+	f := &fakeDaoProposals{ballots: []repository.VoterBallot{
+		{DaoVote: repository.DaoVote{Voter: daoAdmin, Option: "yes", Weight: "10", EffectiveWeight: "4", Height: 90, Time: proposalNow},
+			ProposalID: 5, ProposalTitle: sp("Spend"), ProposalStatus: sp("voting"), VotingEnd: &end, DaoID: ip(2), DaoName: sp("Stakers")},
+		{DaoVote: repository.DaoVote{Voter: daoAdmin, Option: "no", Weight: "1", EffectiveWeight: "1", Height: 80, Time: proposalNow}, ProposalID: 4},
+	}}
+	e := daoProposalServer(f, &fakeDaoState{supported: true})
+
+	rec := get(t, e, "/api/v1/dao-votes?limit=1&voter="+strings.ToUpper(daoAdmin))
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, daoAdmin, f.gotVoter, "the address is lower-cased")
+	list := decode[dto.VoterBallotList](t, rec)
+	assert.True(t, list.Supported)
+	require.Len(t, list.Items, 1)
+	b := list.Items[0]
+	assert.Equal(t, int64(5), b.Proposal.ID)
+	assert.Equal(t, "voting", *b.Proposal.Status)
+	assert.Equal(t, &dto.VoterDao{ID: 2, Name: "Stakers"}, b.Dao)
+	assert.Equal(t, "10", b.Weight)
+	assert.Equal(t, "4", b.EffectiveWeight)
+	require.NotNil(t, list.NextCursor)
+
+	rec = get(t, e, "/api/v1/dao-votes?voter="+daoAdmin+"&cursor="+*list.NextCursor)
+	assert.Equal(t, &repository.VoterBallotKey{Height: 90, ProposalID: 5}, f.gotBallotKey)
+	assert.Nil(t, decode[dto.VoterBallotList](t, rec).Items[1].Dao, "a ballot whose proposal is not indexed has no DAO")
+}
+
+func TestVoterBallotsBadRequests(t *testing.T) {
+	e := daoProposalServer(&fakeDaoProposals{}, nil)
+	for _, path := range []string{"/api/v1/dao-votes", "/api/v1/dao-votes?voter=nope", "/api/v1/dao-votes?voter=cosmos1" + daoAdmin[4:],
+		"/api/v1/dao-votes?voter=" + daoAdmin + "&cursor=@@", "/api/v1/dao-votes?voter=" + daoAdmin + "&limit=0"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
+	}
 }

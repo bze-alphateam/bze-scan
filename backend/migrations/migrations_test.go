@@ -84,6 +84,7 @@ func TestMigrationSetLoadsInOrder(t *testing.T) {
 		"activity_deltas_index", "activity_incoming_index", "order_book_tx_events", "merged_orders", "emergency_halts", "token_settings",
 		"daos",
 		"dao_proposals",
+		"dao_app_filters",
 	}, idents)
 }
 
@@ -158,7 +159,7 @@ func TestPartitionedTablesMatchTheSQL(t *testing.T) {
 // TestDownMigrationsDropWhatUpCreates checks that every table an up file
 // creates is dropped by its down file.
 func TestDownMigrationsDropWhatUpCreates(t *testing.T) {
-	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps", "000024_candles", "000034_daos", "000035_dao_proposals"} {
+	for _, base := range []string{"000003_history_tables", "000004_state_tables", "000005_operational", "000023_pool_swaps", "000024_candles", "000034_daos", "000035_dao_proposals", "000036_dao_app_filters"} {
 		all, _ := createdTables(t, base+".up.sql")
 		down := readMigration(t, base+".down.sql")
 		for _, table := range all {
