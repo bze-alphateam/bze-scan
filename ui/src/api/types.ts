@@ -1207,6 +1207,104 @@ export interface DaoEvent {
   time: string;
 }
 
+export type DaoProposalStatus = "voting" | "rejected" | "executed" | "execution_failed" | "expired" | "cancelled";
+
+export interface DaoProposalListParams extends PageParams {
+  status?: DaoProposalStatus;
+}
+
+/** An item of `/daos/{id}/proposals`. Tallies are base units of the DAO's stake denom (member votes for a member list), decimal strings. */
+export interface DaoProposalSummary {
+  id: number;
+  dao_id: number | null;
+  title: string | null;
+  /** Null on a placeholder row (not open). */
+  status: DaoProposalStatus | (string & {}) | null;
+  proposer: string | null;
+  proposer_label: Label | null;
+  expedited: boolean | null;
+  submit_time: string | null;
+  voting_end: string | null;
+  yes: string | null;
+  no: string | null;
+  abstain: string | null;
+  /** The voting power the votes are measured against, pinned at submission. */
+  denominator: string | null;
+  settled_height: number | null;
+  message_types: string[];
+}
+
+/** The decision bars of the regular rule at voting end. */
+export interface DaoRegularChecks {
+  quorum_met: boolean;
+  threshold_met: boolean;
+  passes: boolean;
+}
+
+/** The early-settle bars of an expedited proposal, against the full voting power. */
+export interface DaoExpediteChecks {
+  quorum_met: boolean;
+  yes_met: boolean;
+  passes: boolean;
+}
+
+/** The denom a stake DAO's weights are counted in; null for member lists. */
+export interface DaoWeightDenom {
+  denom: string;
+  symbol: string | null;
+  exponent: number | null;
+}
+
+/** `/dao-proposals/{id}`. */
+export interface DaoProposal extends DaoProposalSummary {
+  dao: { id: number; name: string; type: DaoType | (string & {}) } | null;
+  summary: string | null;
+  /** The messages the proposal runs as the DAO, as proto JSON with `@type`. */
+  msgs: Record<string, unknown>[] | null;
+  submit_height: number | null;
+  submit_tx_hash: string | null;
+  pinned_config: Record<string, unknown> | null;
+  tally_updated_at: string | null;
+  /** Voting and past its end: anyone can settle it now. */
+  voting_ended: boolean;
+  expedite_settleable: boolean;
+  retry_deadline: string | null;
+  settled_tx_hash: string | null;
+  expedited_early: boolean | null;
+  executed: boolean | null;
+  execution_error: string | null;
+  deposit_refunded: boolean | null;
+  deposit_destination: string | null;
+  deposit_amount: string | null;
+  cancelled_height: number | null;
+  cleaned_height: number | null;
+  votes_count: number;
+  weight_denom: DaoWeightDenom | null;
+  checks: { regular: DaoRegularChecks; expedite: DaoExpediteChecks | null } | null;
+}
+
+export type DaoVoteOption = "yes" | "no" | "abstain";
+
+export interface DaoVoteListParams extends PageParams {
+  option?: DaoVoteOption;
+}
+
+/** An item of `/dao-proposals/{id}/votes`: `effective_weight` is what is left of `weight` after later stake or membership changes. */
+export interface DaoVote {
+  voter: string;
+  voter_label: Label | null;
+  option: DaoVoteOption | (string & {});
+  weight: string;
+  effective_weight: string;
+  height: number;
+  tx_hash: string | null;
+  time: string;
+}
+
+export interface DaoVoteList extends Page<DaoVote> {
+  weight_denom: DaoWeightDenom | null;
+}
+
 // Cross-chain (IBC channels and the rate limits of chain v8.3.0)
 
 export interface IbcChannel {

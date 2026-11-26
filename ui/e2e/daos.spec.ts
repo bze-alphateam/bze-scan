@@ -47,7 +47,7 @@ test.describe("DAO page", () => {
     await page.getByRole("tab", { name: /^Members/ }).click();
     await expect(page.getByTestId("dao-member")).toHaveCount(3);
     await page.getByRole("tab", { name: /^Proposals/ }).click();
-    await expect(page.getByTestId("dao-proposals-slot")).toBeVisible();
+    await expect(page.getByTestId("dao-proposal-row")).toHaveCount(3);
     await page.getByRole("tab", { name: /^Rules/ }).click();
     await expect(page.getByTestId("dao-rules")).toContainText("40% of the voting power must vote");
     await page.getByRole("tab", { name: /^History/ }).click();

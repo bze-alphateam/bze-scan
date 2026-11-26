@@ -1,0 +1,58 @@
+{
+  "id": 3,
+  "dao_id": 1,
+  "title": "Raise the honey tax",
+  "status": "rejected",
+  "proposer": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+  "proposer_label": null,
+  "expedited": false,
+  "submit_time": "2099-11-01T09:00:00Z",
+  "voting_end": "2099-11-04T09:00:00Z",
+  "yes": "1",
+  "no": "2",
+  "abstain": "0",
+  "denominator": "3",
+  "settled_height": 25101900,
+  "message_types": [],
+  "dao": {
+    "id": 1,
+    "name": "Honey Council",
+    "type": "static_list"
+  },
+  "summary": null,
+  "msgs": null,
+  "submit_height": 25101600,
+  "submit_tx_hash": null,
+  "pinned_config": {
+    "min_quorum": "0.400000000000000000",
+    "threshold": "0.500000000000000000",
+    "voting_period_seconds": 259200,
+    "allow_expedite": true,
+    "expedited_period_seconds": 86400,
+    "expedite_quorum": "0.600000000000000000",
+    "expedite_threshold": "0.660000000000000000"
+  },
+  "tally_updated_at": "2099-11-04T09:05:00Z",
+  "voting_ended": false,
+  "expedite_settleable": false,
+  "retry_deadline": null,
+  "settled_tx_hash": "8888888888888888888888888888888888888888888888888888888888888888",
+  "expedited_early": null,
+  "executed": null,
+  "execution_error": null,
+  "deposit_refunded": false,
+  "deposit_destination": "BURN",
+  "deposit_amount": "1000000ubze",
+  "cancelled_height": null,
+  "cleaned_height": null,
+  "votes_count": 3,
+  "weight_denom": null,
+  "checks": {
+    "regular": {
+      "quorum_met": true,
+      "threshold_met": false,
+      "passes": false
+    },
+    "expedite": null
+  }
+}

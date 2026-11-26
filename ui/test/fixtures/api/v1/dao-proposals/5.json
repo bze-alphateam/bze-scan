@@ -1,0 +1,76 @@
+{
+  "id": 5,
+  "dao_id": 2,
+  "title": "Buy the meadow",
+  "status": "execution_failed",
+  "proposer": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+  "proposer_label": null,
+  "expedited": false,
+  "submit_time": "2099-11-02T10:00:00Z",
+  "voting_end": "2099-11-05T10:00:00Z",
+  "yes": "7000000000",
+  "no": "500000000",
+  "abstain": "100000000",
+  "denominator": "10000000000",
+  "settled_height": 25102000,
+  "message_types": [
+    "/cosmos.bank.v1beta1.MsgSend"
+  ],
+  "dao": {
+    "id": 2,
+    "name": "Hive Stakers",
+    "type": "stake"
+  },
+  "summary": null,
+  "msgs": [
+    {
+      "@type": "/cosmos.bank.v1beta1.MsgSend",
+      "from_address": "bze15n2d0sxsddyl2x8xwd9xyqdcmy8aml7ghes29x",
+      "to_address": "bze1t5lr34ka3w2evm6r2p8yegksh42sj7ykxzcul4",
+      "amount": [
+        {
+          "denom": "ubze",
+          "amount": "900000000000"
+        }
+      ]
+    }
+  ],
+  "submit_height": 25101800,
+  "submit_tx_hash": null,
+  "pinned_config": {
+    "min_quorum": "0.400000000000000000",
+    "threshold": "0.500000000000000000",
+    "voting_period_seconds": 259200,
+    "allow_expedite": true,
+    "expedited_period_seconds": 86400,
+    "expedite_quorum": "0.600000000000000000",
+    "expedite_threshold": "0.660000000000000000"
+  },
+  "tally_updated_at": "2099-11-05T10:05:00Z",
+  "voting_ended": false,
+  "expedite_settleable": false,
+  "retry_deadline": "2099-11-12T10:05:00Z",
+  "settled_tx_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+  "expedited_early": null,
+  "executed": false,
+  "execution_error": "spendable balance 5000000ubze is smaller than 900000000000ubze: insufficient funds",
+  "deposit_refunded": true,
+  "deposit_destination": null,
+  "deposit_amount": "1000000ubze",
+  "cancelled_height": null,
+  "cleaned_height": null,
+  "votes_count": 2,
+  "weight_denom": {
+    "denom": "ubze",
+    "symbol": "BZE",
+    "exponent": 6
+  },
+  "checks": {
+    "regular": {
+      "quorum_met": true,
+      "threshold_met": true,
+      "passes": true
+    },
+    "expedite": null
+  }
+}

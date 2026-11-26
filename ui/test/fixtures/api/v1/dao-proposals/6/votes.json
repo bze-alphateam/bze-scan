@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "voter": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+      "voter_label": null,
+      "option": "yes",
+      "weight": "6000000000",
+      "effective_weight": "6000000000",
+      "height": 25102100,
+      "tx_hash": "6666666666666666666666666666666666666666666666666666666666666666",
+      "time": "2099-11-11T11:00:00Z"
+    }
+  ],
+  "next_cursor": null,
+  "weight_denom": {
+    "denom": "ubze",
+    "symbol": "BZE",
+    "exponent": 6
+  }
+}

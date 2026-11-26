@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "voter": "bze17rwhtnz65yn2ua5u62n9jrj64sct0u8aw4j4nw",
+      "voter_label": null,
+      "option": "yes",
+      "weight": "3000000000",
+      "effective_weight": "3000000000",
+      "height": 25103100,
+      "tx_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "time": "2099-11-28T11:00:00Z"
+    },
+    {
+      "voter": "bze1q8f7z6x5c4v3d2n0mlkjhgfdsapzxu4a0ex0rq",
+      "voter_label": null,
+      "option": "yes",
+      "weight": "1200000000",
+      "effective_weight": "700000000",
+      "height": 25103200,
+      "tx_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "time": "2099-11-28T12:00:00Z"
+    },
+    {
+      "voter": "bze1t5lr34ka3w2evm6r2p8yegksh42sj7ykxzcul4",
+      "voter_label": null,
+      "option": "no",
+      "weight": "600000000",
+      "effective_weight": "600000000",
+      "height": 25103300,
+      "tx_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+      "time": "2099-11-28T13:00:00Z"
+    },
+    {
+      "voter": "bze1d9am8lvjszdmq702lg3d4tke0guds8a8e6spyc",
+      "voter_label": {
+        "name": "DAO #1 \u00b7 Honey Council",
+        "kind": "dao"
+      },
+      "option": "abstain",
+      "weight": "400000000",
+      "effective_weight": "400000000",
+      "height": 25103400,
+      "tx_hash": null,
+      "time": "2099-11-28T14:00:00Z"
+    }
+  ],
+  "next_cursor": null,
+  "weight_denom": {
+    "denom": "ubze",
+    "symbol": "BZE",
+    "exponent": 6
+  }
+}

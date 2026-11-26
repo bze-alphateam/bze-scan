@@ -86,7 +86,7 @@ export function VerdictTag({ v }: { v: Verdict }) {
 }
 
 /** One check: met, not met, or unknown (null) when the explorer has no measure for it. */
-function CheckRow({ ok, title, detail, mark }: { ok: boolean | null; title: string; detail: string; mark?: ReactNode }) {
+export function CheckRow({ ok, title, detail, mark }: { ok: boolean | null; title: string; detail: string; mark?: ReactNode }) {
   return (
     <Flex as="li" gap="10px" align="flex-start" fontSize="13px" data-testid="check" data-ok={ok ?? "unknown"}>
       <Box color={ok === null ? "fg.muted" : ok ? "pos.fg" : "neg.fg"} pt="1px" display="inline-flex" aria-hidden>

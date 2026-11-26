@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { isNotFound } from "./client";
+import { ApiError, isNotFound } from "./client";
 import { immutable, live, reference, slow, status, TX_PENDING_POLL_MS, TX_PENDING_WINDOW_MS } from "./policy";
 import { useApi } from "./provider";
 import type { ExplorerApi } from "./client";
@@ -11,7 +11,10 @@ import type {
   ActivityCategory,
   BlockListParams,
   BlockTransfer,
+  DaoProposal,
+  DaoProposalStatus,
   DaoType,
+  DaoVoteOption,
   HallOfFame,
   Page,
   PageParams,
@@ -76,6 +79,9 @@ export const queryKeys = {
   daosByAdmin: (admin: string) => ["daos", "admin", admin] as const,
   dao: (id: number) => ["dao", id] as const,
   daoHistory: (id: number) => ["dao-history", id] as const,
+  daoProposals: (daoId: number, status: DaoProposalStatus | null) => ["dao-proposals", daoId, status] as const,
+  daoProposal: (id: number) => ["dao-proposal", id] as const,
+  daoProposalVotes: (id: number, option: DaoVoteOption | null) => ["dao-proposal-votes", id, option] as const,
   search: (q: string) => ["search", q] as const,
   stats: () => ["stats"] as const,
   params: () => ["params"] as const,
@@ -571,6 +577,58 @@ export function useDaoHistory(id: number) {
     initialPageParam: firstPage(20),
     getNextPageParam: nextPage(20),
     ...firstPageLive,
+  });
+}
+
+/** A DAO's proposals, newest first, of one status (every status for null): 20 a page, the first page polled. */
+export function useDaoProposals(daoId: number, status: DaoProposalStatus | null) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daoProposals(daoId, status),
+    queryFn: ({ pageParam, signal }) => api.daoProposals(daoId, { ...pageParam, status: status ?? undefined }, signal),
+    initialPageParam: firstPage(20),
+    getNextPageParam: nextPage(20),
+    ...firstPageLive,
+  });
+}
+
+/** The state of a DAO proposal query the polling decision reads. */
+interface DaoProposalQuery {
+  state: { data: DaoProposal | undefined; error: unknown };
+}
+
+/**
+ * A DAO proposal moves while it is voting, or failed to execute (it may be
+ * retried until its deadline). Once settled for good, a placeholder row (no
+ * status: not open) or a 4xx answer (not found) it never changes: no polling.
+ */
+const daoProposalPolls = (q: DaoProposalQuery): boolean => {
+  if (q.state.error instanceof ApiError && q.state.error.isClientError) return false;
+  const p = q.state.data;
+  return p == null || p.status === "voting" || p.status === "execution_failed";
+};
+
+/** A DAO proposal: polled while voting (or retryable), fetched once after it ended for good. */
+export function useDaoProposal(id: number) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.daoProposal(id),
+    queryFn: ({ signal }) => api.daoProposal(id, signal),
+    ...live,
+    refetchInterval: (q) => (daoProposalPolls(q) ? live.refetchInterval : false),
+    staleTime: (q) => (daoProposalPolls(q) ? live.staleTime : Infinity),
+  });
+}
+
+/** The votes of a DAO proposal, heaviest first, of one option (every vote for null): 25 a page; live only while `open`. */
+export function useDaoProposalVotes(id: number, option: DaoVoteOption | null, open: boolean) {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: queryKeys.daoProposalVotes(id, option),
+    queryFn: ({ pageParam, signal }) => api.daoProposalVotes(id, { ...pageParam, option: option ?? undefined }, signal),
+    initialPageParam: firstPage(25),
+    getNextPageParam: nextPage(25),
+    ...(open ? firstPageLive : immutable),
   });
 }
 

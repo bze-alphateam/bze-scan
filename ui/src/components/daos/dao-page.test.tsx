@@ -11,6 +11,8 @@ import dao1 from "../../../test/fixtures/api/v1/daos/1.json";
 import dao2 from "../../../test/fixtures/api/v1/daos/2.json";
 import history1 from "../../../test/fixtures/api/v1/daos/1/history.json";
 import history2 from "../../../test/fixtures/api/v1/daos/2/history.json";
+import proposals1 from "../../../test/fixtures/api/v1/daos/1/proposals.json";
+import proposals2 from "../../../test/fixtures/api/v1/daos/2/proposals.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
 
 import { DaoPage } from "./dao-page";
@@ -22,6 +24,7 @@ function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
     dao: (id) => (byId[id] ? Promise.resolve(byId[id]) : Promise.reject(new ApiError(404, "not_found", "no"))),
     daoHistory: (id) => Promise.resolve(histories[id as 1 | 2]),
+    daoProposals: (id) => Promise.resolve(id === 1 ? proposals1 : proposals2),
     daos: () => Promise.resolve(daosList as DaoList),
     tokens: () => Promise.resolve(tokens as Page<TokenSummary>),
     ...extra,
@@ -108,10 +111,10 @@ describe("DaoPage", () => {
       expect(screen.getByRole("tabpanel")).toHaveTextContent("3 members, one vote each.");
     });
 
-    it("leaves the proposals slot for the proposals story", async () => {
+    it("lists the DAO's proposals in the Proposals tab", async () => {
       await open(1);
       await userEvent.click(tab("Proposals"));
-      expect(screen.getByTestId("dao-proposals-slot")).toHaveAttribute("data-dao", "1");
+      expect(await screen.findAllByTestId("dao-proposal-row")).toHaveLength(3);
     });
 
     it("explains each rule in plain words with the raw value on hover", async () => {
