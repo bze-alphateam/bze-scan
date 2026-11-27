@@ -92,6 +92,28 @@ test.describe("token page", () => {
     await noHorizontalScroll(page);
   });
 
+  test("a token run by a DAO says so and links to the DAO", async ({ page }) => {
+    await mockApi(page, {
+      [`v1/tokens/${encodeURIComponent(honey.denom)}`]: { ...honey, admin_label: { name: "DAO #1 · Honey Council", kind: "dao" } },
+    });
+    await page.goto(tokenPath(honey.denom));
+    const dao = page.getByTestId("token-dao");
+    await expect(dao).toContainText("Run by");
+    await expect(dao.getByRole("link")).toHaveText("DAO #1 · Honey Council");
+    await expect(dao.getByRole("link")).toHaveAttribute("href", "/daos/1");
+    await noHorizontalScroll(page);
+  });
+
+  test("a long DAO name stays within the screen", async ({ page }) => {
+    const name = `DAO #1 · ${"Honeycouncil".repeat(12)}`;
+    await mockApi(page, {
+      [`v1/tokens/${encodeURIComponent(honey.denom)}`]: { ...honey, admin_label: { name, kind: "dao" } },
+    });
+    await page.goto(tokenPath(honey.denom));
+    await expect(page.getByTestId("token-dao")).toContainText("Honeycouncil");
+    await noHorizontalScroll(page);
+  });
+
   test("the plain-path form of a denom opens the same page", async ({ page }) => {
     await page.goto(`/tokens/${honey.denom}`);
     await expect(page.getByRole("heading", { level: 1, name: "HONEY" })).toBeVisible();

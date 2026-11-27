@@ -4,17 +4,24 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ExplorerApi } from "@/api/client";
-import type { IbcChannel, Page, RateLimitList } from "@/api/types";
+import type { Emergency, IbcChannel, Page, RateLimitList } from "@/api/types";
 import { fakeApi, renderWithProviders } from "@/test/render";
 
 import channelsJson from "../../../test/fixtures/api/v1/ibc/channels.json";
 import limitsJson from "../../../test/fixtures/api/v1/ibc/rate-limits.json";
+import emergencyJson from "../../../test/fixtures/api/v1/emergency.json";
 import tokens from "../../../test/fixtures/api/v1/tokens.json";
 
 import { IbcPage } from "./ibc-page";
 
 const channels = channelsJson as Page<IbcChannel>;
 const limits = limitsJson as RateLimitList;
+const clear = emergencyJson as Emergency;
+const closedOsmosis: Emergency = {
+  ...clear,
+  active: true,
+  closed_channels: [{ channel_id: "channel-0", counterparty_chain_id: "osmosis-1", counterparty_chain_name: "Osmosis" }],
+};
 
 function api(extra: Partial<ExplorerApi> = {}): ExplorerApi {
   return fakeApi({
@@ -137,5 +144,49 @@ describe("IbcPage", () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(within(osmosis).getByTestId("limit-reset")).toHaveTextContent("resets in 5 h 11 m (00:00 UTC)");
+  });
+
+  describe("emergency-closed channels", () => {
+    it("shows 'Closed by an emergency switch' with an explainer and a link, on that channel only", async () => {
+      renderWithProviders(<IbcPage />, { api: api({ emergency: () => Promise.resolve(closedOsmosis) }) });
+      const cards = await screen.findAllByTestId("channel-card");
+      await vi.waitFor(() => expect(within(cards[0]).getByTestId("channel-state")).toHaveTextContent("Closed by an emergency switch"));
+      expect(within(cards[1]).getByTestId("channel-state")).toHaveTextContent("Open");
+      expect(screen.getAllByTestId("channel-closed-help")).toHaveLength(1);
+      await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(within(cards[0]).getByTestId("channel-closed-help"));
+      expect(await screen.findByText(/Only a governance vote can reopen it/)).toBeInTheDocument();
+      expect(screen.getByTestId("channel-closed-link")).toHaveAttribute("href", "/emergency");
+    });
+
+    it("keeps the limits of a closed channel", async () => {
+      renderWithProviders(<IbcPage />, { api: api({ emergency: () => Promise.resolve(closedOsmosis) }) });
+      const [osmosis] = await screen.findAllByTestId("channel-card");
+      expect(within(osmosis).getByTestId("limit-out")).toHaveTextContent("1.2M of 2M BZE used (60%)");
+    });
+
+    it("keeps the IBC states while the emergency read is loading", async () => {
+      renderWithProviders(<IbcPage />, { api: api({ emergency: () => new Promise(() => {}) }) });
+      const [osmosis] = await screen.findAllByTestId("channel-card");
+      expect(within(osmosis).getByTestId("channel-state")).toHaveTextContent("Open");
+      expect(screen.queryByTestId("channel-closed-help")).not.toBeInTheDocument();
+    });
+
+    it("keeps the IBC states, with no error box, when the emergency read fails", async () => {
+      const emergency = vi.fn().mockRejectedValue(new ApiError(502, "upstream_error", "down"));
+      renderWithProviders(<IbcPage />, { api: api({ emergency }) });
+      const [osmosis] = await screen.findAllByTestId("channel-card");
+      await vi.waitFor(() => expect(emergency).toHaveBeenCalled());
+      expect(within(osmosis).getByTestId("channel-state")).toHaveTextContent("Open");
+      expect(screen.queryByTestId("ibc-error")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("limits-error")).not.toBeInTheDocument();
+    });
+
+    it("keeps the IBC states when the node is from before v8.3.0", async () => {
+      const old: Emergency = { ...closedOsmosis, supported: false };
+      renderWithProviders(<IbcPage />, { api: api({ emergency: () => Promise.resolve(old) }) });
+      const [osmosis] = await screen.findAllByTestId("channel-card");
+      await vi.waitFor(() => expect(within(osmosis).getByTestId("channel-state")).toHaveTextContent("Open"));
+      expect(screen.queryByTestId("channel-closed-help")).not.toBeInTheDocument();
+    });
   });
 });
