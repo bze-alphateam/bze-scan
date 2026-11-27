@@ -33,11 +33,29 @@ type fakeDaos struct {
 	gotBefore *int64
 	gotKey    *repository.DaoEventKey
 	gotLimit  int
+
+	total       int64
+	gotOffset   int64
+	pageCalls   int
+	totalCalls  int
+	totalFilter repository.DaoFilter
 }
 
 func (f *fakeDaos) Daos(_ context.Context, filter repository.DaoFilter, before *int64, limit int) ([]repository.Dao, error) {
 	f.gotFilter, f.gotBefore, f.gotLimit = filter, before, limit
 	return f.daos[:min(limit, len(f.daos))], f.err
+}
+
+func (f *fakeDaos) DaosPage(_ context.Context, filter repository.DaoFilter, offset int64, limit int) ([]repository.Dao, error) {
+	f.pageCalls++
+	f.gotFilter, f.gotOffset, f.gotLimit = filter, offset, limit
+	return f.daos[:min(limit, len(f.daos))], f.err
+}
+
+func (f *fakeDaos) DaosTotal(_ context.Context, filter repository.DaoFilter) (int64, error) {
+	f.totalCalls++
+	f.totalFilter = filter
+	return f.total, f.err
 }
 
 func (f *fakeDaos) Dao(_ context.Context, id int64) (*repository.Dao, error) {
@@ -357,4 +375,63 @@ func TestDaosFilterBadRequests(t *testing.T) {
 	}
 	atMax := strings.Repeat("&source=dr/ubze", 20)
 	assert.Equal(t, http.StatusOK, get(t, e, "/api/v1/daos?"+atMax[1:]).Code, "20 sources are allowed")
+}
+
+func TestDaosWithoutPageHaveNoTotal(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(1, "A", "stake")}, total: 9}
+	rec := get(t, daoServer(f, &fakeDaoState{supported: true}, nil), "/api/v1/daos")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Zero(t, f.pageCalls)
+	assert.Zero(t, f.totalCalls)
+	assert.NotContains(t, rec.Body.String(), `"total"`)
+}
+
+func TestDaosPageReadsTheOffsetAndTheTotalUnderTheSameFilter(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(3, "C", "stake")}, total: 23}
+	e := daoServer(f, &fakeDaoState{supported: true}, nil)
+
+	rec := get(t, e, "/api/v1/daos?type=stake&q=ab&member="+daoAdmin+"&source=sr/1&page=3&limit=20")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, int64(40), f.gotOffset)
+	assert.Equal(t, 21, f.gotLimit)
+	assert.Equal(t, 1, f.pageCalls)
+	assert.Equal(t, 1, f.totalCalls)
+	assert.Equal(t, f.gotFilter, f.totalFilter)
+	assert.Equal(t, "stake", *f.totalFilter.Type)
+	assert.Equal(t, "ab", *f.totalFilter.Name)
+	assert.Equal(t, daoAdmin, *f.totalFilter.Member)
+	assert.Equal(t, []string{"sr/1"}, f.totalFilter.Sources)
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	assert.Contains(t, rec.Body.String(), `"total":23`)
+}
+
+func TestDaosPageCannotCombineWithCursorAndMustBeValid(t *testing.T) {
+	e := daoServer(&fakeDaos{}, &fakeDaoState{supported: true}, nil)
+	cursor := dto.EncodeCursor(5)
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos?page=1&cursor="+cursor).Code)
+	for _, page := range []string{"0", "-1", "abc", "1.5", "99999999999"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos?page="+page).Code, page)
+	}
+}
+
+func TestDaosPagePastTheEndIsEmptyWithTheRealTotal(t *testing.T) {
+	f := &fakeDaos{total: 23}
+	rec := get(t, daoServer(f, &fakeDaoState{supported: true}, nil), "/api/v1/daos?page=9&limit=20")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"supported":true,"total":23}`, rec.Body.String())
+}
+
+func TestDaosPageOfANodeWithoutDaosHasTotalZero(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(1, "A", "stake")}, total: 4}
+	rec := get(t, daoServer(f, &fakeDaoState{supported: false}, nil), "/api/v1/daos?page=1")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"supported":false,"total":0}`, rec.Body.String())
+}
+
+func TestDaosPageSetsTheNextCursorWhenMoreRowsFollow(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(3, "C", "stake"), indexedDao(2, "B", "stake"), indexedDao(1, "A", "stake")}, total: 3}
+	rec := get(t, daoServer(f, &fakeDaoState{supported: true}, nil), "/api/v1/daos?page=1&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"next_cursor":"`+dto.EncodeCursor(2)+`"`)
+	assert.Equal(t, 3, f.gotLimit)
 }

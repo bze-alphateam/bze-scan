@@ -24,6 +24,8 @@ var daoTypes = []string{"static_list", "stake"}
 // by repository.Explorer; a missing DAO is repository.ErrNotFound.
 type DaoReader interface {
 	Daos(ctx context.Context, f repository.DaoFilter, before *int64, limit int) ([]repository.Dao, error)
+	DaosPage(ctx context.Context, f repository.DaoFilter, offset int64, limit int) ([]repository.Dao, error)
+	DaosTotal(ctx context.Context, f repository.DaoFilter) (int64, error)
 	Dao(ctx context.Context, id int64) (*repository.Dao, error)
 	DaoEvents(ctx context.Context, id int64, before *repository.DaoEventKey, limit int) ([]repository.DaoEvent, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
@@ -58,8 +60,9 @@ func NewDaoController(repo DaoReader, live DaoState, treasury DaoTreasury) *DaoC
 	return &DaoController{repo: repo, live: live, treasury: treasury}
 }
 
-// Daos serves GET /api/v1/daos?type&admin&member&source&pending_admin&q&cursor&limit,
-// newest first. admin lists the DAOs an address administers, the
+// Daos serves GET /api/v1/daos?type&admin&member&source&pending_admin&q&cursor&page&limit,
+// newest first. page (1-based, not with cursor) answers numbered pages and
+// adds total, the number of DAOs the filters match. admin lists the DAOs an address administers, the
 // self-governed ones left out; member the DAOs whose member list holds an
 // address; source (repeatable, up to maxDaoSources, OR-ed) the DAOs whose
 // electorate uses one of the sources (sr/{id} or dr/{denom}); pending_admin
@@ -102,12 +105,30 @@ func (h *DaoController) Daos(c *echo.Context) error {
 		}
 		before = &keys[0]
 	}
-	ctx := c.Request().Context()
-	rows, err := h.repo.Daos(ctx, f, before, limit+1)
+	pageNo, err := parsePage(c)
 	if err != nil {
 		return err
 	}
-	resp := dto.DaoList{Items: make([]dto.DaoSummary, 0, min(len(rows), limit)), Supported: h.live != nil && h.live.Supported(ctx)}
+	if pageNo > 0 && before != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
+	}
+	ctx := c.Request().Context()
+	resp := dto.DaoList{Items: make([]dto.DaoSummary, 0, limit), Supported: h.live != nil && h.live.Supported(ctx)}
+	var rows []repository.Dao
+	if pageNo > 0 {
+		var total int64
+		if resp.Supported {
+			if total, err = h.repo.DaosTotal(ctx, f); err != nil {
+				return err
+			}
+			if rows, err = h.repo.DaosPage(ctx, f, (pageNo-1)*int64(limit), limit+1); err != nil {
+				return err
+			}
+		}
+		resp.Total = &total
+	} else if rows, err = h.repo.Daos(ctx, f, before, limit+1); err != nil {
+		return err
+	}
 	for i, d := range rows {
 		if i == limit {
 			next := dto.EncodeCursor(rows[i-1].ID)
