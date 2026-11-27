@@ -76,9 +76,19 @@ func scanDao(row pgx.Row) (Dao, error) {
 	return d, nil
 }
 
-// Daos returns up to limit DAOs, newest (highest id) first, below before when
-// not nil.
-func (r *Explorer) Daos(ctx context.Context, f DaoFilter, before *int64, limit int) ([]Dao, error) {
+// daoWhere is the one filter every DAO read shares, so the count and the rows
+// of a page can never disagree. Its arguments come from DaoFilter.args.
+const daoWhere = ` WHERE ($1::text IS NULL OR d.type = $1)
+		  AND ($2::text IS NULL OR (d.admin = $2 AND NOT d.self_governed))
+		  AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM explorer.dao_members m WHERE m.dao_id = d.id AND m.address = $3))
+		  AND (cardinality($4::text[]) = 0 OR EXISTS (SELECT 1 FROM explorer.dao_sources s WHERE s.dao_id = d.id AND s.source = ANY($4)))
+		  AND ($5::text IS NULL OR d.pending_admin = $5)
+		  AND ($6::text IS NULL OR d.name ILIKE $6 ESCAPE '\')
+		  AND ($7::bigint IS NULL OR d.id < $7)`
+
+// args returns the arguments of daoWhere; before is the keyset position, nil
+// for none.
+func (f DaoFilter) args(before *int64) []any {
 	var pattern *string
 	if f.Name != nil {
 		p := "%" + likeEscaper.Replace(*f.Name) + "%"
@@ -88,19 +98,37 @@ func (r *Explorer) Daos(ctx context.Context, f DaoFilter, before *int64, limit i
 	if sources == nil {
 		sources = []string{}
 	}
-	rows, err := r.db.Query(ctx, `SELECT `+daoCols+daoFrom+`
-		WHERE ($1::text IS NULL OR d.type = $1)
-		  AND ($2::text IS NULL OR (d.admin = $2 AND NOT d.self_governed))
-		  AND ($3::bigint IS NULL OR d.id < $3)
-		  AND ($5::text IS NULL OR EXISTS (SELECT 1 FROM explorer.dao_members m WHERE m.dao_id = d.id AND m.address = $5))
-		  AND (cardinality($6::text[]) = 0 OR EXISTS (SELECT 1 FROM explorer.dao_sources s WHERE s.dao_id = d.id AND s.source = ANY($6)))
-		  AND ($7::text IS NULL OR d.pending_admin = $7)
-		  AND ($8::text IS NULL OR d.name ILIKE $8 ESCAPE '\')
-		ORDER BY d.id DESC LIMIT $4`, f.Type, f.Admin, before, limit, f.Member, sources, f.PendingAdmin, pattern)
+	return []any{f.Type, f.Admin, f.Member, sources, f.PendingAdmin, pattern, before}
+}
+
+// Daos returns up to limit DAOs, newest (highest id) first, below before when
+// not nil.
+func (r *Explorer) Daos(ctx context.Context, f DaoFilter, before *int64, limit int) ([]Dao, error) {
+	return r.daoRows(ctx, f, before, 0, limit)
+}
+
+// DaosPage returns up to limit DAOs, newest first, after skipping offset of
+// them.
+func (r *Explorer) DaosPage(ctx context.Context, f DaoFilter, offset int64, limit int) ([]Dao, error) {
+	return r.daoRows(ctx, f, nil, offset, limit)
+}
+
+func (r *Explorer) daoRows(ctx context.Context, f DaoFilter, before *int64, offset int64, limit int) ([]Dao, error) {
+	rows, err := r.db.Query(ctx, `SELECT `+daoCols+daoFrom+daoWhere+`
+		ORDER BY d.id DESC LIMIT $8 OFFSET $9`, append(f.args(before), limit, offset)...)
 	if err != nil {
 		return nil, fmt.Errorf("daos: %w", err)
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Dao, error) { return scanDao(row) })
+}
+
+// DaosTotal returns the number of DAOs the filter matches, whatever the page.
+func (r *Explorer) DaosTotal(ctx context.Context, f DaoFilter) (int64, error) {
+	var n int64
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.daos d`+daoWhere, f.args(nil)...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("daos total: %w", err)
+	}
+	return n, nil
 }
 
 // Dao returns DAO id; ErrNotFound when the index has none.

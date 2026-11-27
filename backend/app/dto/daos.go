@@ -34,6 +34,9 @@ type DaoList struct {
 	Items      []DaoSummary `json:"items"`
 	NextCursor *string      `json:"next_cursor"`
 	Supported  bool         `json:"supported"`
+	// Total is the number of DAOs the filters match, across every page. Set
+	// only when a page was asked for.
+	Total *int64 `json:"total,omitempty"`
 }
 
 // NewDaoSummary builds a list item.

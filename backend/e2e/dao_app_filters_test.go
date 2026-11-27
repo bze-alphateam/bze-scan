@@ -320,3 +320,62 @@ func TestDaoAppListsAgainstANodeWithoutDaos(t *testing.T) {
 	assert.False(t, ballots.Supported)
 	assert.Empty(t, ballots.Items)
 }
+
+// The numbered pages of the DAOs list: total counts what the same filters
+// list without paging, so the count and the rows cannot drift apart.
+func TestDaosListInNumberedPagesWithTheTotal(t *testing.T) {
+	e := newSyncEnv(t)
+	indexTheDaos(t, e)
+	code, _ := e.syncState(t)
+	require.Equal(t, 0, code)
+	// Five more DAOs of both types (ids 3 to 7); 4 and 6 are named Hive.
+	_, err := e.db.Exec(`INSERT INTO explorer.daos (id, address, type, name, admin) VALUES
+		(3, 'bze1paged3', 'static_list', 'Plain', $1),
+		(4, 'bze1paged4', 'stake', 'Hive Holders', $1),
+		(5, 'bze1paged5', 'stake', 'Other', $1),
+		(6, 'bze1paged6', 'static_list', 'Hive Club', $1),
+		(7, 'bze1paged7', 'stake', 'Last', $1)`, daoAdmin)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`INSERT INTO explorer.dao_members (dao_id, address) VALUES (3, $1), (6, $1), (7, $1)`, daoMember)
+	require.NoError(t, err)
+	base := e.serveAPI(t)
+	list := func(query string) dto.DaoList {
+		t.Helper()
+		r := fetch(t, base+"/daos?"+query)
+		require.Equal(t, http.StatusOK, r.status, query+": "+string(r.body))
+		return into[dto.DaoList](t, r)
+	}
+
+	// Without page the answer carries no total.
+	r := fetch(t, base+"/daos")
+	assert.NotContains(t, string(r.body), `"total"`)
+
+	p1 := list("page=1&limit=2")
+	assert.Equal(t, []int64{7, 6}, daoIDs(p1))
+	require.NotNil(t, p1.Total)
+	assert.Equal(t, int64(7), *p1.Total)
+	assert.NotNil(t, p1.NextCursor)
+	assert.Equal(t, []int64{5, 4}, daoIDs(list("page=2&limit=2")))
+	p3 := list("page=3&limit=2")
+	assert.Equal(t, []int64{3, 2}, daoIDs(p3))
+	assert.Equal(t, []int64{1}, daoIDs(list("page=4&limit=2")))
+	p5 := list("page=5&limit=2")
+	assert.Empty(t, p5.Items)
+	assert.Nil(t, p5.NextCursor)
+	require.NotNil(t, p5.Total)
+	assert.Equal(t, int64(7), *p5.Total, "a page past the end keeps the real total")
+
+	// The total of every filter is what the filter lists without paging.
+	for _, q := range []string{"type=stake", "type=static_list", "q=hive", "q=hive&type=stake", "member=" + daoMember,
+		"member=" + daoMember + "&type=static_list", "admin=" + daoAdmin, "q=nomatch"} {
+		all := daoIDs(list(q + "&limit=100"))
+		paged := list(q + "&page=1&limit=2")
+		require.NotNil(t, paged.Total, q)
+		assert.Equal(t, int64(len(all)), *paged.Total, q)
+		assert.Equal(t, all[:min(2, len(all))], daoIDs(paged), q)
+	}
+
+	cursor := dto.EncodeCursor(5)
+	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/daos?page=1&cursor="+cursor).status)
+	assert.Equal(t, http.StatusBadRequest, fetch(t, base+"/daos?page=0").status)
+}
