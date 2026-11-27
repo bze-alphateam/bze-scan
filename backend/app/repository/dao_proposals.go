@@ -84,6 +84,13 @@ func scanDaoProposal(row pgx.Row) (DaoProposal, error) {
 const daoProposalWhere = ` WHERE p.dao_id = $1 AND (cardinality($2::text[]) = 0 OR p.status = ANY($2))
 		  AND ($3::bigint IS NULL OR p.id < $3)`
 
+// daoProposalCounted narrows daoProposalWhere to the rows numbered pages,
+// their totals and the status counts hold: a placeholder row (status NULL: a
+// deposit release or a cleanup indexed without the submission and the
+// settle) has no title and no status to count it under. The cursor list keeps
+// them, as it always did.
+const daoProposalCounted = ` AND p.status IS NOT NULL`
+
 // daoProposalArgs returns the arguments of daoProposalWhere.
 func daoProposalArgs(daoID int64, statuses []string, before *int64) []any {
 	if statuses == nil {
@@ -113,10 +120,10 @@ func (r *Explorer) DaoProposals(ctx context.Context, daoID int64, statuses []str
 }
 
 // DaoProposalsPage returns up to limit proposals of DAO daoID whose status is
-// one of statuses (all when empty), active first (see
-// daoProposalActiveFirst), after skipping offset of them.
+// one of statuses (all when empty, placeholder rows left out), active first
+// (see daoProposalActiveFirst), after skipping offset of them.
 func (r *Explorer) DaoProposalsPage(ctx context.Context, daoID int64, statuses []string, offset int64, limit int) ([]DaoProposal, error) {
-	rows, err := r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+daoProposalWhere+daoProposalActiveFirst+`
+	rows, err := r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+daoProposalWhere+daoProposalCounted+daoProposalActiveFirst+`
 		LIMIT $4 OFFSET $5`, append(daoProposalArgs(daoID, statuses, nil), limit, offset)...)
 	if err != nil {
 		return nil, fmt.Errorf("dao %d proposals page: %w", daoID, err)
@@ -125,10 +132,11 @@ func (r *Explorer) DaoProposalsPage(ctx context.Context, daoID int64, statuses [
 }
 
 // DaoProposalsTotal returns the number of proposals of DAO daoID whose status
-// is one of statuses (all when empty), whatever the page.
+// is one of statuses (all when empty), whatever the page; placeholder rows
+// are not counted.
 func (r *Explorer) DaoProposalsTotal(ctx context.Context, daoID int64, statuses []string) (int64, error) {
 	var n int64
-	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.dao_proposals p`+daoProposalWhere,
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.dao_proposals p`+daoProposalWhere+daoProposalCounted,
 		daoProposalArgs(daoID, statuses, nil)...).Scan(&n); err != nil {
 		return 0, fmt.Errorf("dao %d proposals total: %w", daoID, err)
 	}
@@ -139,8 +147,8 @@ func (r *Explorer) DaoProposalsTotal(ctx context.Context, daoID int64, statuses 
 // status, every status of the DAO counted; a status without proposals is
 // missing from the map.
 func (r *Explorer) DaoProposalStatusCounts(ctx context.Context, daoID int64) (map[string]int64, error) {
-	rows, err := r.db.Query(ctx, `SELECT p.status, count(*) FROM explorer.dao_proposals p`+daoProposalWhere+`
-		  AND p.status IS NOT NULL GROUP BY p.status`, daoProposalArgs(daoID, nil, nil)...)
+	rows, err := r.db.Query(ctx, `SELECT p.status, count(*) FROM explorer.dao_proposals p`+daoProposalWhere+
+		daoProposalCounted+` GROUP BY p.status`, daoProposalArgs(daoID, nil, nil)...)
 	if err != nil {
 		return nil, fmt.Errorf("dao %d proposal counts: %w", daoID, err)
 	}
@@ -148,7 +156,8 @@ func (r *Explorer) DaoProposalStatusCounts(ctx context.Context, daoID int64) (ma
 }
 
 // DaoProposalCount returns the number of proposals the index holds for DAO
-// daoID, whatever their status, the cleaned-up ones included.
+// daoID, whatever their status, the cleaned-up ones included and the
+// placeholder rows left out.
 func (r *Explorer) DaoProposalCount(ctx context.Context, daoID int64) (int64, error) {
 	return r.DaoProposalsTotal(ctx, daoID, nil)
 }

@@ -15,8 +15,9 @@ import (
 )
 
 // seedPagedDaoRows writes, straight into the tables, the proposals of DAO 1
-// (every status, a cleaned-up one and a second DAO's proposal that must not
-// count), the ballots of proposal 101 and more history rows of DAO 1: the
+// (every status, a cleaned-up one, a placeholder row with no status (113), a
+// voting one without voting_end (114) and a second DAO's proposal that must
+// not count), the ballots of proposal 101 and more history rows of DAO 1: the
 // numbered pages, their totals and counts are what is under test.
 func seedPagedDaoRows(t *testing.T, e *syncEnv) {
 	t.Helper()
@@ -32,7 +33,9 @@ func seedPagedDaoRows(t *testing.T, e *syncEnv) {
 		(109, 1, 'Cancelled', 'cancelled', '2026-11-06 10:00:00+00', NULL),
 		(110, 1, 'Executed new', 'executed', '2026-11-07 10:00:00+00', 25200100),
 		(111, 2, 'Other DAO', 'voting', '2027-01-01 09:00:00+00', NULL),
-		(112, NULL, NULL, NULL, NULL, NULL)`)
+		(112, NULL, NULL, NULL, NULL, NULL),
+		(113, 1, NULL, NULL, NULL, NULL),
+		(114, 1, 'Voting no end', 'voting', NULL, NULL)`)
 	require.NoError(t, err)
 	_, err = e.db.Exec(`INSERT INTO explorer.dao_votes (proposal_id, voter, option, weight, height, tx_index, msg_index, tx_hash, time) VALUES
 		(101, 'bze1voter1', 'yes', 50, 25200010, 0, 0, 'V1', '2026-12-01 10:00:00+00'),
@@ -84,8 +87,9 @@ func TestDaoPageCountsItsProposals(t *testing.T) {
 
 	one := getOK[dto.Dao](t, base+"/daos/1")
 	// Open = the DAOs list's definition: voting and not cleaned up.
-	assert.Equal(t, int64(3), one.ProposalsOpen)
-	assert.Equal(t, int64(10), one.ProposalsTotal, "every indexed proposal of the DAO, the cleaned-up one included")
+	assert.Equal(t, int64(4), one.ProposalsOpen)
+	assert.Equal(t, int64(11), one.ProposalsTotal,
+		"every indexed proposal of the DAO, the cleaned-up one included, the placeholder row left out")
 	two := getOK[dto.Dao](t, base+"/daos/2")
 	assert.Equal(t, int64(1), two.ProposalsOpen)
 	assert.Equal(t, int64(1), two.ProposalsTotal)
@@ -110,30 +114,37 @@ func TestDaoProposalsInNumberedPagesActiveFirst(t *testing.T) {
 		t.Helper()
 		return getOK[dto.DaoProposalList](t, base+"/daos/1/proposals?"+query)
 	}
-	allCounts := map[string]int64{"voting": 3, "execution_failed": 2, "executed": 2, "rejected": 1, "expired": 1, "cancelled": 1}
+	allCounts := map[string]int64{"voting": 4, "execution_failed": 2, "executed": 2, "rejected": 1, "expired": 1, "cancelled": 1}
 
-	// Pages of 4: the boundary between the active and the finished rows falls
-	// inside page 2.
+	// Pages of 4: the voting row without voting_end comes after the voting
+	// rows that have one; the boundary between the active and the finished
+	// rows falls inside page 2; the placeholder row (113) is on no page.
 	p1 := page("page=1&limit=4")
-	assert.Equal(t, []int64{104, 106, 101, 107}, pagedProposalIDs(p1))
+	assert.Equal(t, []int64{104, 106, 101, 114}, pagedProposalIDs(p1))
 	require.NotNil(t, p1.Total)
-	assert.Equal(t, int64(10), *p1.Total)
+	assert.Equal(t, int64(11), *p1.Total, "the placeholder row is not counted")
 	assert.Nil(t, p1.NextCursor)
 	assert.Equal(t, allCounts, p1.StatusCounts)
-	assert.Equal(t, []int64{103, 110, 109, 108}, pagedProposalIDs(page("page=2&limit=4")))
-	assert.Equal(t, []int64{105, 102}, pagedProposalIDs(page("page=3&limit=4")))
+	var counted int64
+	for _, n := range p1.StatusCounts {
+		counted += n
+	}
+	assert.Equal(t, *p1.Total, counted, "the unfiltered total is the sum of the status counts")
+	assert.Equal(t, []int64{107, 103, 110, 109}, pagedProposalIDs(page("page=2&limit=4")))
+	assert.Equal(t, []int64{108, 105, 102}, pagedProposalIDs(page("page=3&limit=4")))
 	p4 := page("page=4&limit=4")
 	assert.Empty(t, p4.Items)
 	require.NotNil(t, p4.Total)
-	assert.Equal(t, int64(10), *p4.Total, "a page past the end keeps the real total")
+	assert.Equal(t, int64(11), *p4.Total, "a page past the end keeps the real total")
+	assert.NotContains(t, pagedProposalIDs(page("page=1&limit=100")), int64(113))
 
 	// The active alias, its total and the counts, which ignore the filter.
 	active := page("status=active&page=1&limit=3")
 	assert.Equal(t, []int64{104, 106, 101}, pagedProposalIDs(active))
 	require.NotNil(t, active.Total)
-	assert.Equal(t, int64(5), *active.Total)
+	assert.Equal(t, int64(6), *active.Total)
 	assert.Equal(t, allCounts, active.StatusCounts, "the counts are the whole DAO's")
-	assert.Equal(t, []int64{107, 103}, pagedProposalIDs(page("status=active&page=2&limit=3")))
+	assert.Equal(t, []int64{114, 107, 103}, pagedProposalIDs(page("status=active&page=2&limit=3")))
 	assert.Equal(t, page("status=voting&status=execution_failed&page=1&limit=10").Items, page("status=active&page=1&limit=10").Items)
 
 	// The total of every filter is what the cursor list holds, and equals the
@@ -147,7 +158,10 @@ func TestDaoProposalsInNumberedPagesActiveFirst(t *testing.T) {
 		assert.ElementsMatch(t, pagedProposalIDs(cursorList), pagedProposalIDs(paged), st)
 	}
 
-	// Cursor mode is unchanged: newest first, no total, no counts.
+	// Cursor mode is unchanged: newest first, the placeholder row included,
+	// no total, no counts.
+	assert.Equal(t, []int64{114, 113, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101},
+		pagedProposalIDs(getOK[dto.DaoProposalList](t, base+"/daos/1/proposals?limit=100")))
 	r := fetch(t, base+"/daos/1/proposals?limit=4")
 	require.Equal(t, http.StatusOK, r.status)
 	var raw map[string]json.RawMessage
@@ -155,11 +169,11 @@ func TestDaoProposalsInNumberedPagesActiveFirst(t *testing.T) {
 	assert.NotContains(t, raw, "total")
 	assert.NotContains(t, raw, "status_counts")
 	c1 := into[dto.DaoProposalList](t, r)
-	assert.Equal(t, []int64{110, 109, 108, 107}, pagedProposalIDs(c1))
+	assert.Equal(t, []int64{114, 113, 110, 109}, pagedProposalIDs(c1))
 	require.NotNil(t, c1.NextCursor)
 	c2 := getOK[dto.DaoProposalList](t, base+"/daos/1/proposals?limit=4&cursor="+*c1.NextCursor)
-	assert.Equal(t, []int64{106, 105, 104, 103}, pagedProposalIDs(c2))
-	assert.Equal(t, []int64{107, 106, 104, 103, 101}, pagedProposalIDs(getOK[dto.DaoProposalList](t,
+	assert.Equal(t, []int64{108, 107, 106, 105}, pagedProposalIDs(c2))
+	assert.Equal(t, []int64{114, 107, 106, 104, 103, 101}, pagedProposalIDs(getOK[dto.DaoProposalList](t,
 		base+"/daos/1/proposals?status=active")), "the alias in cursor mode: newest first")
 
 	for _, q := range []string{"status=open", "page=0", "page=1&cursor=" + *c1.NextCursor} {
