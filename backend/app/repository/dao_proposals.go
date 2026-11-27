@@ -77,16 +77,98 @@ func scanDaoProposal(row pgx.Row) (DaoProposal, error) {
 	return p, nil
 }
 
+// daoProposalWhere is the one filter a DAO's proposal reads share, so the
+// count and the rows of a page can never disagree. Its arguments are the DAO
+// id, the statuses ($2, every status when empty) and the keyset position
+// ($3, nil for none).
+const daoProposalWhere = ` WHERE p.dao_id = $1 AND (cardinality($2::text[]) = 0 OR p.status = ANY($2))
+		  AND ($3::bigint IS NULL OR p.id < $3)`
+
+// daoProposalArgs returns the arguments of daoProposalWhere.
+func daoProposalArgs(daoID int64, statuses []string, before *int64) []any {
+	if statuses == nil {
+		statuses = []string{}
+	}
+	return []any{daoID, statuses, before}
+}
+
+// daoProposalActiveFirst orders a DAO's numbered proposal pages: the voting
+// ones first, soonest voting_end then lowest id; then the execution_failed
+// ones; then every other, each of those two groups newest (highest id) first.
+const daoProposalActiveFirst = ` ORDER BY CASE p.status WHEN 'voting' THEN 0 WHEN 'execution_failed' THEN 1 ELSE 2 END,
+		  CASE WHEN p.status = 'voting' THEN p.voting_end END ASC NULLS LAST,
+		  CASE WHEN p.status = 'voting' THEN p.id END ASC,
+		  p.id DESC`
+
 // DaoProposals returns up to limit proposals of DAO daoID, newest (highest
-// id) first, below before when not nil, only those in status when not nil.
-func (r *Explorer) DaoProposals(ctx context.Context, daoID int64, status *string, before *int64, limit int) ([]DaoProposal, error) {
-	rows, err := r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+`
-		WHERE p.dao_id = $1 AND ($2::text IS NULL OR p.status = $2) AND ($3::bigint IS NULL OR p.id < $3)
-		ORDER BY p.id DESC LIMIT $4`, daoID, status, before, limit)
+// id) first, below before when not nil, only those whose status is one of
+// statuses when not empty.
+func (r *Explorer) DaoProposals(ctx context.Context, daoID int64, statuses []string, before *int64, limit int) ([]DaoProposal, error) {
+	rows, err := r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+daoProposalWhere+`
+		ORDER BY p.id DESC LIMIT $4`, append(daoProposalArgs(daoID, statuses, before), limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("dao %d proposals: %w", daoID, err)
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (DaoProposal, error) { return scanDaoProposal(row) })
+}
+
+// DaoProposalsPage returns up to limit proposals of DAO daoID whose status is
+// one of statuses (all when empty), active first (see
+// daoProposalActiveFirst), after skipping offset of them.
+func (r *Explorer) DaoProposalsPage(ctx context.Context, daoID int64, statuses []string, offset int64, limit int) ([]DaoProposal, error) {
+	rows, err := r.db.Query(ctx, `SELECT `+daoProposalCols+daoProposalFrom+daoProposalWhere+daoProposalActiveFirst+`
+		LIMIT $4 OFFSET $5`, append(daoProposalArgs(daoID, statuses, nil), limit, offset)...)
+	if err != nil {
+		return nil, fmt.Errorf("dao %d proposals page: %w", daoID, err)
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (DaoProposal, error) { return scanDaoProposal(row) })
+}
+
+// DaoProposalsTotal returns the number of proposals of DAO daoID whose status
+// is one of statuses (all when empty), whatever the page.
+func (r *Explorer) DaoProposalsTotal(ctx context.Context, daoID int64, statuses []string) (int64, error) {
+	var n int64
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.dao_proposals p`+daoProposalWhere,
+		daoProposalArgs(daoID, statuses, nil)...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("dao %d proposals total: %w", daoID, err)
+	}
+	return n, nil
+}
+
+// DaoProposalStatusCounts returns the number of proposals of DAO daoID per
+// status, every status of the DAO counted; a status without proposals is
+// missing from the map.
+func (r *Explorer) DaoProposalStatusCounts(ctx context.Context, daoID int64) (map[string]int64, error) {
+	rows, err := r.db.Query(ctx, `SELECT p.status, count(*) FROM explorer.dao_proposals p`+daoProposalWhere+`
+		  AND p.status IS NOT NULL GROUP BY p.status`, daoProposalArgs(daoID, nil, nil)...)
+	if err != nil {
+		return nil, fmt.Errorf("dao %d proposal counts: %w", daoID, err)
+	}
+	return collectCounts(rows)
+}
+
+// DaoProposalCount returns the number of proposals the index holds for DAO
+// daoID, whatever their status, the cleaned-up ones included.
+func (r *Explorer) DaoProposalCount(ctx context.Context, daoID int64) (int64, error) {
+	return r.DaoProposalsTotal(ctx, daoID, nil)
+}
+
+// collectCounts reads (key, count) rows into a map.
+func collectCounts(rows pgx.Rows) (map[string]int64, error) {
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var k string
+		var n int64
+		if err := rows.Scan(&k, &n); err != nil {
+			return nil, fmt.Errorf("counts: %w", err)
+		}
+		out[k] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("counts: %w", err)
+	}
+	return out, nil
 }
 
 // DaoProposal returns DAO proposal id and its number of votes; ErrNotFound
@@ -143,12 +225,28 @@ var reductionsJoin = `
 		                WHERE b.proposal_id = v.proposal_id AND b.voter = v.voter AND b.height >= v.height
 		                  AND (b.height, ` + inBlock("b") + `, b.msg_index) > (v.height, ` + inBlock("v") + `, v.msg_index)) red ON true`
 
+// daoVoteWhere is the one filter a proposal's vote reads share, over
+// explorer.dao_votes v, so the count and the rows of a page can never
+// disagree. Its arguments are the proposal id and the option ($2, every
+// option when nil).
+const daoVoteWhere = ` WHERE v.proposal_id = $1 AND ($2::text IS NULL OR v.option = $2)`
+
 // DaoVotes returns up to limit votes of DAO proposal id, heaviest effective
 // weight first, then by voter, after when not nil, only option when not nil.
 // A reduction counts against a ballot when it comes after it (height,
 // transaction, message; the block's own events after its transactions): a revote's weight already reflects the earlier
 // ones.
 func (r *Explorer) DaoVotes(ctx context.Context, id int64, option *string, after *DaoVoteKey, limit int) ([]DaoVote, error) {
+	return r.daoVoteRows(ctx, id, option, after, 0, limit)
+}
+
+// DaoVotesPage returns up to limit votes of DAO proposal id in the order of
+// DaoVotes, only option when not nil, after skipping offset of them.
+func (r *Explorer) DaoVotesPage(ctx context.Context, id int64, option *string, offset int64, limit int) ([]DaoVote, error) {
+	return r.daoVoteRows(ctx, id, option, nil, offset, limit)
+}
+
+func (r *Explorer) daoVoteRows(ctx context.Context, id int64, option *string, after *DaoVoteKey, offset int64, limit int) ([]DaoVote, error) {
 	var weight, voter *string
 	if after != nil {
 		weight, voter = &after.EffectiveWeight, &after.Voter
@@ -157,11 +255,10 @@ func (r *Explorer) DaoVotes(ctx context.Context, id int64, option *string, after
 		       x.tx_index, x.msg_index, x.tx_hash, x.time
 		  FROM (SELECT v.voter, v.option, v.weight, GREATEST(v.weight - COALESCE(red.amount, 0), 0) AS eff, v.height,
 		               v.tx_index, v.msg_index, v.tx_hash, v.time
-		          FROM explorer.dao_votes v`+reductionsJoin+`
-		         WHERE v.proposal_id = $1 AND ($2::text IS NULL OR v.option = $2)) x
+		          FROM explorer.dao_votes v`+reductionsJoin+daoVoteWhere+`) x
 		  LEFT JOIN explorer.labels l ON l.address = x.voter
 		 WHERE $3::numeric IS NULL OR x.eff < $3 OR (x.eff = $3 AND x.voter > $4)
-		 ORDER BY x.eff DESC, x.voter ASC LIMIT $5`, id, option, weight, voter, limit)
+		 ORDER BY x.eff DESC, x.voter ASC LIMIT $5 OFFSET $6`, id, option, weight, voter, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("dao proposal %d votes: %w", id, err)
 	}
@@ -173,6 +270,27 @@ func (r *Explorer) DaoVotes(ctx context.Context, id int64, option *string, after
 		v.VoterLabel = label(&v.Voter, name, kind)
 		return v, err
 	})
+}
+
+// DaoVotesTotal returns the number of votes of DAO proposal id, only option
+// when not nil, whatever the page.
+func (r *Explorer) DaoVotesTotal(ctx context.Context, id int64, option *string) (int64, error) {
+	var n int64
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.dao_votes v`+daoVoteWhere, id, option).Scan(&n); err != nil {
+		return 0, fmt.Errorf("dao proposal %d votes total: %w", id, err)
+	}
+	return n, nil
+}
+
+// DaoVoteOptionCounts returns the number of ballots of DAO proposal id per
+// option; an option nobody chose is missing from the map.
+func (r *Explorer) DaoVoteOptionCounts(ctx context.Context, id int64) (map[string]int64, error) {
+	rows, err := r.db.Query(ctx, `SELECT v.option, count(*) FROM explorer.dao_votes v`+daoVoteWhere+`
+		 GROUP BY v.option`, id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dao proposal %d vote counts: %w", id, err)
+	}
+	return collectCounts(rows)
 }
 
 // OpenDaoProposalKey is the keyset position of the voting proposals list:

@@ -185,6 +185,35 @@ type DaoVoteList struct {
 	Items       []DaoVote    `json:"items"`
 	NextCursor  *string      `json:"next_cursor"`
 	WeightDenom *WeightDenom `json:"weight_denom"`
+	// Total is the number of votes the option filter matches, across every
+	// page. Set only when a page was asked for.
+	Total *int64 `json:"total,omitempty"`
+	// OptionCounts is the number of ballots per option (yes, no, abstain),
+	// whatever the option filter. Set only when a page was asked for.
+	OptionCounts map[string]int64 `json:"option_counts,omitempty"`
+}
+
+// DaoProposalList is GET /api/v1/daos/{id}/proposals.
+type DaoProposalList struct {
+	Items      []DaoProposalSummary `json:"items"`
+	NextCursor *string              `json:"next_cursor"`
+	// Total is the number of the DAO's proposals the status filter matches,
+	// across every page. Set only when a page was asked for.
+	Total *int64 `json:"total,omitempty"`
+	// StatusCounts is the number of the DAO's proposals per status, every
+	// status present, whatever the status filter. Set only when a page was
+	// asked for.
+	StatusCounts map[string]int64 `json:"status_counts,omitempty"`
+}
+
+// ZeroFilledCounts returns counts with a key for each of keys, 0 for a key
+// counts lacks; keys outside keys are left out.
+func ZeroFilledCounts(counts map[string]int64, keys []string) map[string]int64 {
+	out := make(map[string]int64, len(keys))
+	for _, k := range keys {
+		out[k] = counts[k]
+	}
+	return out
 }
 
 // daoVoteCursor is the JSON of a votes cursor.

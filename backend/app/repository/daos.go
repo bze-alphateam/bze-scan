@@ -194,17 +194,28 @@ type DaoEventKey struct {
 	Height, TxIndex, MsgIndex, Seq int64
 }
 
+// daoEventWhere is the one filter a DAO's history reads share, so the count
+// and the rows of a page can never disagree. Its arguments are the DAO id and
+// the keyset position ($2 to $5, nil for none).
+const daoEventWhere = ` WHERE dao_id = $1 AND ($2::bigint IS NULL OR (height, tx_index, msg_index, seq) < ($2, $3, $4, $5))`
+
 // DaoEvents returns up to limit events of DAO id, newest first, below before
 // when not nil.
 func (r *Explorer) DaoEvents(ctx context.Context, id int64, before *DaoEventKey, limit int) ([]DaoEvent, error) {
-	var h, t, m, s *int64
-	if before != nil {
-		h, t, m, s = &before.Height, &before.TxIndex, &before.MsgIndex, &before.Seq
-	}
+	return r.daoEventRows(ctx, id, before, 0, limit)
+}
+
+// DaoEventsPage returns up to limit events of DAO id, newest first, after
+// skipping offset of them.
+func (r *Explorer) DaoEventsPage(ctx context.Context, id int64, offset int64, limit int) ([]DaoEvent, error) {
+	return r.daoEventRows(ctx, id, nil, offset, limit)
+}
+
+func (r *Explorer) daoEventRows(ctx context.Context, id int64, before *DaoEventKey, offset int64, limit int) ([]DaoEvent, error) {
 	rows, err := r.db.Query(ctx, `SELECT height, tx_index, msg_index, seq, type, attrs, tx_hash, time
-		FROM explorer.dao_events
-		WHERE dao_id = $1 AND ($2::bigint IS NULL OR (height, tx_index, msg_index, seq) < ($2, $3, $4, $5))
-		ORDER BY height DESC, tx_index DESC, msg_index DESC, seq DESC LIMIT $6`, id, h, t, m, s, limit)
+		FROM explorer.dao_events`+daoEventWhere+`
+		ORDER BY height DESC, tx_index DESC, msg_index DESC, seq DESC LIMIT $6 OFFSET $7`,
+		append(daoEventArgs(id, before), limit, offset)...)
 	if err != nil {
 		return nil, fmt.Errorf("dao %d events: %w", id, err)
 	}
@@ -213,4 +224,23 @@ func (r *Explorer) DaoEvents(ctx context.Context, id int64, before *DaoEventKey,
 		err := row.Scan(&e.Height, &e.TxIndex, &e.MsgIndex, &e.Seq, &e.Type, &e.Attrs, &e.TxHash, &e.Time)
 		return e, err
 	})
+}
+
+// DaoEventsTotal returns the number of events of DAO id, whatever the page.
+func (r *Explorer) DaoEventsTotal(ctx context.Context, id int64) (int64, error) {
+	var n int64
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM explorer.dao_events`+daoEventWhere,
+		daoEventArgs(id, nil)...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("dao %d events total: %w", id, err)
+	}
+	return n, nil
+}
+
+// daoEventArgs returns the arguments of daoEventWhere.
+func daoEventArgs(id int64, before *DaoEventKey) []any {
+	var h, t, m, s *int64
+	if before != nil {
+		h, t, m, s = &before.Height, &before.TxIndex, &before.MsgIndex, &before.Seq
+	}
+	return []any{id, h, t, m, s}
 }

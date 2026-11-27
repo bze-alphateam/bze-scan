@@ -18,6 +18,10 @@ import (
 // daoProposalStatuses are the values of the status filter.
 var daoProposalStatuses = []string{"voting", "rejected", "executed", "execution_failed", "expired", "cancelled"}
 
+// daoActiveStatuses are the statuses the status alias "active" stands for:
+// the proposals still in play.
+var daoActiveStatuses = []string{"voting", "execution_failed"}
+
 // daoVoteOptions are the values of the option filter.
 var daoVoteOptions = []string{"yes", "no", "abstain"}
 
@@ -26,9 +30,15 @@ var daoVoteOptions = []string{"yes", "no", "abstain"}
 // repository.ErrNotFound.
 type DaoProposalReader interface {
 	Dao(ctx context.Context, id int64) (*repository.Dao, error)
-	DaoProposals(ctx context.Context, daoID int64, status *string, before *int64, limit int) ([]repository.DaoProposal, error)
+	DaoProposals(ctx context.Context, daoID int64, statuses []string, before *int64, limit int) ([]repository.DaoProposal, error)
+	DaoProposalsPage(ctx context.Context, daoID int64, statuses []string, offset int64, limit int) ([]repository.DaoProposal, error)
+	DaoProposalsTotal(ctx context.Context, daoID int64, statuses []string) (int64, error)
+	DaoProposalStatusCounts(ctx context.Context, daoID int64) (map[string]int64, error)
 	DaoProposal(ctx context.Context, id int64) (*repository.DaoProposal, int64, error)
 	DaoVotes(ctx context.Context, id int64, option *string, after *repository.DaoVoteKey, limit int) ([]repository.DaoVote, error)
+	DaoVotesPage(ctx context.Context, id int64, option *string, offset int64, limit int) ([]repository.DaoVote, error)
+	DaoVotesTotal(ctx context.Context, id int64, option *string) (int64, error)
+	DaoVoteOptionCounts(ctx context.Context, id int64) (map[string]int64, error)
 	DaoProposalsAcross(ctx context.Context, statuses []string, voting bool, before *int64, afterVoting *repository.OpenDaoProposalKey, limit int) ([]repository.DaoProposal, error)
 	DaoVotesByVoter(ctx context.Context, voter string, before *repository.VoterBallotKey, limit int) ([]repository.VoterBallot, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
@@ -51,8 +61,14 @@ func NewDaoProposalController(repo DaoProposalReader, live DaoState, now func() 
 	return &DaoProposalController{repo: repo, live: live, now: now}
 }
 
-// DaoProposals serves GET /api/v1/daos/{id}/proposals?status&cursor&limit,
-// newest first. A DAO the index does not know is a 404.
+// DaoProposals serves GET /api/v1/daos/{id}/proposals?status&cursor&page&limit.
+// status repeats (OR-ed) and takes the alias active (voting and
+// execution_failed). With cursor (or neither) the list is newest first. page
+// (1-based, not with cursor) answers numbered pages, active first (voting by
+// soonest voting_end, then execution_failed newest first, then every other
+// newest first), and adds total, the number of proposals the status filter
+// matches, and status_counts, the DAO's proposals per status whatever the
+// filter; next_cursor is then null. A DAO the index does not know is a 404.
 func (h *DaoProposalController) DaoProposals(c *echo.Context) error {
 	id, err := daoID(c)
 	if err != nil {
@@ -62,7 +78,7 @@ func (h *DaoProposalController) DaoProposals(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	st, err := oneOf(c, "status", daoProposalStatuses)
+	statuses, err := daoProposalStatusFilter(c)
 	if err != nil {
 		return err
 	}
@@ -74,17 +90,45 @@ func (h *DaoProposalController) DaoProposals(c *echo.Context) error {
 		}
 		before = &keys[0]
 	}
+	pageNo, err := parsePage(c)
+	if err != nil {
+		return err
+	}
+	if pageNo > 0 && before != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
+	}
 	ctx := c.Request().Context()
 	if _, err := h.repo.Dao(ctx, id); errors.Is(err, repository.ErrNotFound) {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("dao %d is not known", id))
 	} else if err != nil {
 		return err
 	}
-	rows, err := h.repo.DaoProposals(ctx, id, st, before, limit+1)
+	resp := dto.DaoProposalList{Items: make([]dto.DaoProposalSummary, 0, limit)}
+	if pageNo > 0 {
+		total, err := h.repo.DaoProposalsTotal(ctx, id, statuses)
+		if err != nil {
+			return err
+		}
+		counts, err := h.repo.DaoProposalStatusCounts(ctx, id)
+		if err != nil {
+			return err
+		}
+		rows, err := h.repo.DaoProposalsPage(ctx, id, statuses, (pageNo-1)*int64(limit), limit)
+		if err != nil {
+			return err
+		}
+		for _, p := range rows[:min(len(rows), limit)] {
+			resp.Items = append(resp.Items, dto.NewDaoProposalSummary(p))
+		}
+		resp.Total = &total
+		resp.StatusCounts = dto.ZeroFilledCounts(counts, daoProposalStatuses)
+		c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+		return c.JSON(http.StatusOK, resp)
+	}
+	rows, err := h.repo.DaoProposals(ctx, id, statuses, before, limit+1)
 	if err != nil {
 		return err
 	}
-	resp := dto.List[dto.DaoProposalSummary]{Items: make([]dto.DaoProposalSummary, 0, min(len(rows), limit))}
 	for i, p := range rows {
 		if i == limit {
 			next := dto.EncodeCursor(rows[i-1].ID)
@@ -95,6 +139,33 @@ func (h *DaoProposalController) DaoProposals(c *echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
 	return c.JSON(http.StatusOK, resp)
+}
+
+// daoProposalStatusFilter reads the repeatable status parameter of a DAO's
+// proposals: chain statuses or the alias active, deduplicated; nil for no
+// filter. An empty value is no filter, as it always was.
+func daoProposalStatusFilter(c *echo.Context) ([]string, error) {
+	var out []string
+	add := func(st string) {
+		if !slices.Contains(out, st) {
+			out = append(out, st)
+		}
+	}
+	for _, v := range c.QueryParams()["status"] {
+		switch {
+		case v == "":
+		case v == "active":
+			for _, st := range daoActiveStatuses {
+				add(st)
+			}
+		case slices.Contains(daoProposalStatuses, v):
+			add(v)
+		default:
+			return nil, echo.NewHTTPError(http.StatusBadRequest,
+				"status must be one of active, "+strings.Join(daoProposalStatuses, ", "))
+		}
+	}
+	return out, nil
 }
 
 // DaoProposal serves GET /api/v1/dao-proposals/{id}: the indexed proposal,
@@ -120,8 +191,11 @@ func (h *DaoProposalController) DaoProposal(c *echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewDaoProposal(*p, votes, weight, h.now()))
 }
 
-// DaoVotes serves GET /api/v1/dao-proposals/{id}/votes?option&cursor&limit:
-// heaviest effective weight first, then by voter.
+// DaoVotes serves GET /api/v1/dao-proposals/{id}/votes?option&cursor&page&limit:
+// heaviest effective weight first, then by voter. page (1-based, not with
+// cursor) answers numbered pages and adds total, the number of votes the
+// option filter matches, and option_counts, the ballots per option whatever
+// the filter; next_cursor is then null.
 func (h *DaoProposalController) DaoVotes(c *echo.Context) error {
 	id, err := daoID(c)
 	if err != nil {
@@ -141,6 +215,13 @@ func (h *DaoProposalController) DaoVotes(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
 		}
 	}
+	pageNo, err := parsePage(c)
+	if err != nil {
+		return err
+	}
+	if pageNo > 0 && after != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
+	}
 	ctx := c.Request().Context()
 	p, _, err := h.repo.DaoProposal(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
@@ -149,18 +230,38 @@ func (h *DaoProposalController) DaoVotes(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := h.repo.DaoVotes(ctx, id, option, after, limit+1)
-	if err != nil {
-		return err
-	}
-	resp := dto.DaoVoteList{Items: make([]dto.DaoVote, 0, min(len(rows), limit))}
-	for i, v := range rows {
-		if i == limit {
-			next := dto.EncodeDaoVoteCursor(rows[i-1])
-			resp.NextCursor = &next
-			break
+	resp := dto.DaoVoteList{Items: make([]dto.DaoVote, 0, limit)}
+	if pageNo > 0 {
+		total, err := h.repo.DaoVotesTotal(ctx, id, option)
+		if err != nil {
+			return err
 		}
-		resp.Items = append(resp.Items, dto.NewDaoVote(v))
+		counts, err := h.repo.DaoVoteOptionCounts(ctx, id)
+		if err != nil {
+			return err
+		}
+		rows, err := h.repo.DaoVotesPage(ctx, id, option, (pageNo-1)*int64(limit), limit)
+		if err != nil {
+			return err
+		}
+		for _, v := range rows[:min(len(rows), limit)] {
+			resp.Items = append(resp.Items, dto.NewDaoVote(v))
+		}
+		resp.Total = &total
+		resp.OptionCounts = dto.ZeroFilledCounts(counts, daoVoteOptions)
+	} else {
+		rows, err := h.repo.DaoVotes(ctx, id, option, after, limit+1)
+		if err != nil {
+			return err
+		}
+		for i, v := range rows {
+			if i == limit {
+				next := dto.EncodeDaoVoteCursor(rows[i-1])
+				resp.NextCursor = &next
+				break
+			}
+			resp.Items = append(resp.Items, dto.NewDaoVote(v))
+		}
 	}
 	if resp.WeightDenom, err = h.weightDenom(ctx, p.DaoID, p.DaoType); err != nil {
 		return err

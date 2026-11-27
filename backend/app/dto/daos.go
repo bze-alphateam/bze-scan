@@ -136,6 +136,10 @@ type Dao struct {
 	Live          DaoLive        `json:"live"`
 	Controller    *DaoController `json:"controller"`
 	Treasury      []Balance      `json:"treasury"`
+
+	// ProposalsTotal is the number of the DAO's proposals the index holds,
+	// the cleaned-up ones included (0 for a DAO only the chain has yet).
+	ProposalsTotal int64 `json:"proposals_total"`
 }
 
 // DaoLookups are the display data a DAO answer needs: the denoms and the
