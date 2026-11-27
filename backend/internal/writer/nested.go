@@ -27,21 +27,29 @@ import (
 
 // settledActionsSQL reads the executed proposals among $1 whose settle
 // transaction is indexed, with every other proposal the same transaction
-// executed, numbered by id within it (the seq range of its rows).
+// executed, numbered by id within it (the seq range of its rows), with the
+// proposal's DAO, the settle's hash and the index of the settle message that
+// ran it (0 when that transaction message is not stored, a settle run inside
+// a wrapper: its rows then sit at the start of the transaction).
 const settledActionsSQL = `WITH s AS (
 	SELECT DISTINCT settled_height, settled_tx_hash FROM explorer.dao_proposals
 	 WHERE id = ANY($1::bigint[]) AND status = 'executed' AND settled_tx_hash IS NOT NULL)
 	SELECT p.id, COALESCE(p.msgs::text, ''), t.height, t.tx_index, t.time,
-	       (row_number() OVER (PARTITION BY p.settled_height, p.settled_tx_hash ORDER BY p.id) - 1)::integer
+	       (row_number() OVER (PARTITION BY p.settled_height, p.settled_tx_hash ORDER BY p.id) - 1)::integer,
+	       COALESCE(p.dao_id, 0), t.hash,
+	       COALESCE((SELECT m.msg_index FROM explorer.messages m
+	                  WHERE m.height = t.height AND m.tx_index = t.tx_index AND m.type_url = '/bze.dao.MsgSettleProposal'
+	                    AND m.body ->> 'proposal_id' = p.id::text
+	                  ORDER BY m.msg_index LIMIT 1), 0)
 	  FROM explorer.dao_proposals p
 	  JOIN s ON s.settled_height = p.settled_height AND s.settled_tx_hash = p.settled_tx_hash
 	  JOIN explorer.transactions t ON t.height = p.settled_height AND t.hash = p.settled_tx_hash
 	 WHERE p.status = 'executed'
 	 ORDER BY p.id`
 
-// SettledProposalActions returns the PostFlush hook that writes the token_events
-// and validator_events rows of the messages the flush's executed DAO
-// proposals ran (see above), in the flush's mode: running it again rewrites
+// SettledProposalActions returns the PostFlush hook that writes the token_events,
+// validator_events and emergency_nested_actions rows of the messages the
+// flush's executed DAO proposals ran (see above), in the flush's mode: running it again rewrites
 // the same rows (transform.NestedActions numbers them from
 // transform.NestedSeqBase by the proposal's rank in its settle), so a reindex
 // or a second trigger changes nothing. The denoms and validators they change
@@ -84,12 +92,12 @@ func settledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush, log logrus
 		defer rows.Close()
 		for rows.Next() {
 			var (
-				id, height       int64
-				msgs             string
-				txIndex, ordinal int
-				at               time.Time
+				id, height, daoID          int64
+				msgs, hash                 string
+				txIndex, ordinal, msgIndex int
+				at                         time.Time
 			)
-			if err := rows.Scan(&id, &msgs, &height, &txIndex, &at, &ordinal); err != nil {
+			if err := rows.Scan(&id, &msgs, &height, &txIndex, &at, &ordinal, &daoID, &hash, &msgIndex); err != nil {
 				return err
 			}
 			if msgs == "" {
@@ -102,6 +110,9 @@ func settledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush, log logrus
 			}
 			all.TokenEvents = append(all.TokenEvents, ents.TokenEvents...)
 			all.ValidatorEvents = append(all.ValidatorEvents, ents.ValidatorEvents...)
+			all.NestedEmergencyActions = append(all.NestedEmergencyActions, transform.SettledEmergencyActions(json.RawMessage(msgs),
+				transform.SettledProposal{ID: id, DaoID: daoID, Height: height, TxIndex: txIndex, MsgIndex: msgIndex,
+					TxHash: hash, Time: at, Ordinal: ordinal})...)
 			for set, keys := range ents.Dirty {
 				for key := range keys {
 					f.Entities.Dirty.Mark(set, key)
@@ -114,7 +125,7 @@ func settledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush, log logrus
 	if err != nil {
 		return fmt.Errorf("settled proposal actions: %w", err)
 	}
-	if len(all.TokenEvents) == 0 && len(all.ValidatorEvents) == 0 {
+	if len(all.TokenEvents) == 0 && len(all.ValidatorEvents) == 0 && len(all.NestedEmergencyActions) == 0 {
 		return nil
 	}
 	tokenRows, err := tokenEventRows(top, all.TokenEvents)
@@ -133,7 +144,11 @@ func settledProposalActions(ctx context.Context, tx pgx.Tx, f *Flush, log logrus
 	if err != nil {
 		return err
 	}
-	for _, st := range slices.Concat(tokens, vals) {
+	nested, err := emergencyNestedStatements(top, all.NestedEmergencyActions, f.Mode)
+	if err != nil {
+		return err
+	}
+	for _, st := range slices.Concat(tokens, vals, nested) {
 		if err := runStatement(ctx, tx, st, &f.Inserted); err != nil {
 			return fmt.Errorf("settled proposal actions: %s: %w", st.table, err)
 		}

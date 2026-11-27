@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Emergency } from "@/api/types";
 
 import active from "../../test/fixtures/variants/emergency-active.json";
-import { bannerParts, bannerText, guardianDao, haltCountdown, haltReached, measureCount, tokenSwitches } from "./emergency";
+import { bannerParts, bannerText, guardianDao, haltCountdown, haltReached, measureCount, tokenSwitches, viaParts } from "./emergency";
 
 const e = active as Emergency;
 
@@ -41,6 +41,14 @@ describe("emergency render", () => {
     expect(guardianDao(g("Emergency key", "dao"))).toBeNull();
     expect(guardianDao(g(null, null))).toBeNull();
     expect(guardianDao(null)).toBeNull();
+  });
+
+  it("words the via of a nested action", () => {
+    expect(viaParts({ via: null })).toBeNull();
+    expect(viaParts({ via: { kind: "authz", grantee: "bze1hot" } })).toEqual({ text: "via authz by", address: "bze1hot" });
+    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: 9 } })).toEqual({ text: "via DAO #3", dao: 3, proposal: 9 });
+    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: null } })).toEqual({ text: "via DAO #3", dao: 3 });
+    expect(viaParts({ via: { kind: "dao", dao_id: null, proposal_id: 9 } })).toEqual({ text: "via a DAO" });
   });
 
   it("finds the switches of one token", () => {

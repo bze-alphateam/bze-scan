@@ -120,13 +120,45 @@ type EmergencyAction struct {
 	// ProposalID is the passed proposal that executed the action; null for
 	// the others.
 	ProposalID *int64 `json:"proposal_id"`
+	// Via is how a guardian action run inside another message reached the
+	// chain: through authz (a grantee's MsgExec) or a DAO (its admin's
+	// MsgAdminExecute, or an executed proposal); null for the others.
+	Via *EmergencyVia `json:"via"`
+}
+
+// EmergencyVia is the wrapper that ran a nested guardian action: Kind is
+// "authz", with Grantee the MsgExec's signer, or "dao", with DaoID and
+// ProposalID (the executed DAO proposal; null for a MsgAdminExecute).
+type EmergencyVia struct {
+	Kind       string  `json:"kind"`
+	Grantee    *string `json:"grantee,omitempty"`
+	DaoID      *int64  `json:"dao_id,omitempty"`
+	ProposalID *int64  `json:"proposal_id,omitempty"`
+}
+
+// MarshalJSON writes the fields of the kind: {"kind": "authz", "grantee"}
+// or {"kind": "dao", "dao_id", "proposal_id"}, the proposal null for a
+// MsgAdminExecute.
+func (v EmergencyVia) MarshalJSON() ([]byte, error) {
+	if v.Kind == "dao" {
+		return json.Marshal(struct {
+			Kind       string `json:"kind"`
+			DaoID      *int64 `json:"dao_id"`
+			ProposalID *int64 `json:"proposal_id"`
+		}{v.Kind, v.DaoID, v.ProposalID})
+	}
+	return json.Marshal(struct {
+		Kind    string  `json:"kind"`
+		Grantee *string `json:"grantee"`
+	}{v.Kind, v.Grantee})
 }
 
 // NewEmergencyAction maps a stored row; ok is false for a row of a kind the
 // action names do not cover. A block-level row and a passed proposal's
 // message are governance's (the proposal's signer is the governance
 // module); a transaction's message is the guardian's unless the governance
-// module signed it.
+// module signed it, and so is a nested one (its signer is the inner
+// message's, the guardian; the wrapper is in Via).
 func NewEmergencyAction(a repository.EmergencyAction) (EmergencyAction, bool) {
 	var action string
 	var ok bool
@@ -148,6 +180,10 @@ func NewEmergencyAction(a repository.EmergencyAction) (EmergencyAction, bool) {
 	case repository.EmergencyFromProposal:
 		out.By = "governance"
 		signer = govAddress
+	case repository.EmergencyFromNested:
+		t := a.TxHash
+		out.TxHash = &t
+		out.Via = newEmergencyVia(a)
 	default:
 		t := a.TxHash
 		out.TxHash = &t
@@ -159,6 +195,21 @@ func NewEmergencyAction(a repository.EmergencyAction) (EmergencyAction, bool) {
 		}
 	}
 	return out, true
+}
+
+// newEmergencyVia is the Via of a nested row; nil when the row names no
+// wrapper.
+func newEmergencyVia(a repository.EmergencyAction) *EmergencyVia {
+	if a.ViaKind == nil {
+		return nil
+	}
+	v := &EmergencyVia{Kind: *a.ViaKind}
+	if v.Kind == "dao" {
+		v.DaoID, v.ProposalID = a.DaoID, a.DaoProposalID
+	} else {
+		v.Grantee = a.Grantee
+	}
+	return v
 }
 
 // eventSigner reads who acted from the attributes of a guardian event: the

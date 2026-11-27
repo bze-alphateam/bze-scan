@@ -160,6 +160,7 @@ func (w *BatchWriter) Write(ctx context.Context, batch []*transform.Entities, mo
 		all.Swaps = append(all.Swaps, e.Swaps...)
 		all.IBCTransfers = append(all.IBCTransfers, e.IBCTransfers...)
 		all.EmergencyHalts = append(all.EmergencyHalts, e.EmergencyHalts...)
+		all.NestedEmergencyActions = append(all.NestedEmergencyActions, e.NestedEmergencyActions...)
 		all.Daos = append(all.Daos, e.Daos...)
 		all.DaoEvents = append(all.DaoEvents, e.DaoEvents...)
 		all.DaoProposals = append(all.DaoProposals, e.DaoProposals...)
