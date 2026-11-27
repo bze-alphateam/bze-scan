@@ -39,6 +39,11 @@ type fakeDaos struct {
 	pageCalls   int
 	totalCalls  int
 	totalFilter repository.DaoFilter
+
+	proposalCount  int64
+	countCalls     int
+	eventsTotal    int64
+	eventPageCalls int
 }
 
 func (f *fakeDaos) Daos(_ context.Context, filter repository.DaoFilter, before *int64, limit int) ([]repository.Dao, error) {
@@ -73,6 +78,21 @@ func (f *fakeDaos) Dao(_ context.Context, id int64) (*repository.Dao, error) {
 func (f *fakeDaos) DaoEvents(_ context.Context, _ int64, before *repository.DaoEventKey, limit int) ([]repository.DaoEvent, error) {
 	f.gotKey, f.gotLimit = before, limit
 	return f.events[:min(limit, len(f.events))], nil
+}
+
+func (f *fakeDaos) DaoEventsPage(_ context.Context, _ int64, offset int64, limit int) ([]repository.DaoEvent, error) {
+	f.eventPageCalls++
+	f.gotOffset, f.gotLimit = offset, limit
+	return f.events[:min(limit, len(f.events))], nil
+}
+
+func (f *fakeDaos) DaoEventsTotal(context.Context, int64) (int64, error) {
+	return f.eventsTotal, nil
+}
+
+func (f *fakeDaos) DaoProposalCount(context.Context, int64) (int64, error) {
+	f.countCalls++
+	return f.proposalCount, nil
 }
 
 func (f *fakeDaos) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
@@ -434,4 +454,76 @@ func TestDaosPageSetsTheNextCursorWhenMoreRowsFollow(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), `"next_cursor":"`+dto.EncodeCursor(2)+`"`)
 	assert.Equal(t, 3, f.gotLimit)
+}
+
+// The DAO page carries proposals_open (the list's definition) and
+// proposals_total, the indexed proposals of every status.
+func TestDaoPageCountsTheProposals(t *testing.T) {
+	row := indexedDao(2, "Stakers", "stake")
+	row.ProposalsOpen = 1
+	f := &fakeDaos{daos: []repository.Dao{row}, proposalCount: 9}
+	rec := get(t, daoServer(f, nil, nil), "/api/v1/daos/2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.countCalls)
+	d := decode[dto.Dao](t, rec)
+	assert.Equal(t, int64(1), d.ProposalsOpen)
+	assert.Equal(t, int64(9), d.ProposalsTotal)
+	assert.Contains(t, rec.Body.String(), `"proposals_total":9`)
+	assert.Contains(t, rec.Body.String(), `"proposals_open":1`)
+}
+
+// A DAO only the chain has yet has no indexed proposals: both counts are 0,
+// still present.
+func TestDaoPageOfADaoOnlyTheChainHasCountsNoProposals(t *testing.T) {
+	f := &fakeDaos{proposalCount: 5}
+	rec := get(t, daoServer(f, &fakeDaoState{live: map[uint64]*daostate.Live{2: liveStake()}}, &fakeTreasury{}), "/api/v1/daos/2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Zero(t, f.countCalls)
+	assert.Contains(t, rec.Body.String(), `"proposals_total":0`)
+	assert.Contains(t, rec.Body.String(), `"proposals_open":0`)
+}
+
+func TestDaoHistoryWithoutPageHasNoTotal(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, eventsTotal: 7}
+	f.events = []repository.DaoEvent{{Height: 50, Type: "EventDaoCreated", Attrs: []byte(`{}`), Time: time.Unix(5, 0)}}
+	rec := get(t, daoServer(f, nil, nil), "/api/v1/daos/2/history")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Zero(t, f.eventPageCalls)
+	assert.NotContains(t, rec.Body.String(), `"total"`)
+}
+
+func TestDaoHistoryPageReadsTheOffsetAndTheTotal(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, eventsTotal: 7, events: []repository.DaoEvent{
+		{Height: 90, TxIndex: -1, MsgIndex: -1, Seq: 3, Type: "EventAdminChanged", Attrs: []byte(`{}`), Time: time.Unix(9, 0)},
+		{Height: 80, Type: "EventDaoMetadataUpdated", Attrs: []byte(`{}`), Time: time.Unix(8, 0)},
+	}}
+	rec := get(t, daoServer(f, nil, nil), "/api/v1/daos/2/history?page=3&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.eventPageCalls)
+	assert.Equal(t, int64(4), f.gotOffset)
+	assert.Equal(t, 2, f.gotLimit, "numbered pages read no extra row")
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	page := decode[dto.PagedList[dto.DaoEvent]](t, rec)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, "EventAdminChanged", page.Items[0].Type)
+	require.NotNil(t, page.Total)
+	assert.Equal(t, int64(7), *page.Total)
+	assert.Nil(t, page.NextCursor, "numbered pages have no cursor")
+}
+
+func TestDaoHistoryPagePastTheEndIsEmptyWithTheRealTotal(t *testing.T) {
+	f := &fakeDaos{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, eventsTotal: 7}
+	rec := get(t, daoServer(f, nil, nil), "/api/v1/daos/2/history?page=9")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"total":7}`, rec.Body.String())
+}
+
+func TestDaoHistoryPageBadRequestsAndUnknownDao(t *testing.T) {
+	e := daoServer(&fakeDaos{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}}, nil, nil)
+	cursor := dto.EncodeDaoEventCursor(repository.DaoEventKey{Height: 80})
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos/2/history?page=1&cursor="+cursor).Code)
+	for _, page := range []string{"0", "-1", "abc", "1.5", "99999999999"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos/2/history?page="+page).Code, page)
+	}
+	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/daos/9/history?page=1").Code)
 }
