@@ -251,7 +251,9 @@ func TestDaoHistoryInNumberedPages(t *testing.T) {
 	indexTheDaos(t, e)
 	seedPagedDaoRows(t, e)
 	base := e.serveAPI(t)
-	key := func(ev dto.DaoEvent) string { return fmt.Sprintf("%d/%d/%d/%d", ev.Height, ev.TxIndex, ev.MsgIndex, ev.Seq) }
+	key := func(ev dto.DaoEvent) string {
+		return fmt.Sprintf("%d/%d/%d/%d", ev.Height, ev.TxIndex, ev.MsgIndex, ev.Seq)
+	}
 
 	var walked []string
 	cursor := ""
