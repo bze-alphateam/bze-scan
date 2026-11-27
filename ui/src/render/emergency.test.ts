@@ -46,8 +46,9 @@ describe("emergency render", () => {
   it("words the via of a nested action", () => {
     expect(viaParts({ via: null })).toBeNull();
     expect(viaParts({ via: { kind: "authz", grantee: "bze1hot" } })).toEqual({ text: "via authz by", address: "bze1hot" });
-    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: 9 } })).toEqual({ text: "via DAO #3", proposal: 9 });
-    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: null } })).toEqual({ text: "via DAO #3" });
+    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: 9 } })).toEqual({ text: "via DAO #3", dao: 3, proposal: 9 });
+    expect(viaParts({ via: { kind: "dao", dao_id: 3, proposal_id: null } })).toEqual({ text: "via DAO #3", dao: 3 });
+    expect(viaParts({ via: { kind: "dao", dao_id: null, proposal_id: 9 } })).toEqual({ text: "via a DAO" });
   });
 
   it("finds the switches of one token", () => {

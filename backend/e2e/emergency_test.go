@@ -4,6 +4,8 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -329,4 +332,44 @@ func TestEmergencyActionsThroughAuthzAndADao(t *testing.T) {
 	// A reindex numbers the nested rows the same: nothing moves.
 	require.NoError(t, w.Write(context.Background(), blocks, writer.ModeUpdate))
 	assert.Equal(t, list.Items, into[dto.List[dto.EmergencyAction]](t, fetch(t, base+"/emergency/actions")).Items)
+}
+
+// A settle that is not its transaction's first message: the proposal's
+// nested emergency row sits at the settle message's own index, read from the
+// stored transaction message (not the fallback 0).
+func TestSettledEmergencyActionsSitAtTheSettleMessage(t *testing.T) {
+	e := newSyncEnv(t)
+	pool, err := pgxpool.New(context.Background(), e.url)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	const h = int64(25_500_000)
+	halt, err := codectypes.NewAnyWithValue(&guardiantypes.MsgHaltTradingDenoms{Signer: daoTwo, Denoms: []string{"ubze"}})
+	require.NoError(t, err)
+	submit := daoTxBlock(t, h,
+		[]sdk.Msg{&daotypes.MsgSubmitProposal{Proposer: daoAdmin, DaoId: 2, Title: "Halt", Msgs: []*codectypes.Any{halt}}},
+		[][]node.Event{{daoSubmittedEvent("21", "2", "100", "1764666002", false)}})
+
+	// One transaction: a send (message 0), then the settle (message 1).
+	raw := v8RawTx(t,
+		&banktypes.MsgSend{FromAddress: daoMember, ToAddress: daoAdmin, Amount: sdk.NewCoins(sdk.NewInt64Coin("ubze", 1))},
+		&daotypes.MsgSettleProposal{Sender: daoMember, ProposalId: 21})
+	events := []node.Event{
+		rawDaoEvent("bze.dao.EventProposalExecuted", "1", "id", q("21"), "success", "true", "error", q("")),
+		rawDaoEvent("bze.dao.EventProposalSettled", "1", "id", q("21"), "status", q("EXECUTED"), "yes", q("60"),
+			"no", q("0"), "abstain", q("0"), "denominator", q("100"), "expedited_early", "false"),
+	}
+	settle, err := newTransformer(t).Transform(transform.Input{
+		Block: &node.Block{Height: h + 1, Time: time.Date(2026, 12, 1, 9, 0, 1, 0, time.UTC), Hash: fmt.Sprintf("%064X", h+1),
+			ProposerAddress: "AA", Raw: json.RawMessage(`{}`), Txs: []string{raw}},
+		Results: &node.BlockResults{Height: h + 1, TxsResults: []node.TxResult{{Events: events}}},
+		Commit:  &node.Commit{Height: h + 1},
+	})
+	require.NoError(t, err)
+	require.Len(t, settle.Messages, 2)
+
+	w := writer.NewBatchWriter(pool, writer.SettledProposalActions(nullLog()))
+	require.NoError(t, w.Write(context.Background(), []*transform.Entities{submit, settle}, writer.ModeInsert))
+	assert.Equal(t, []string{fmt.Sprintf("%d 0 1 1000 dao 2 21 /bze.guardian.v1.MsgHaltTradingDenoms", h+1)},
+		queryStrings(t, e.db, `SELECT concat_ws(' ', height, tx_index, msg_index, seq, via_kind, dao_id, proposal_id, type_url)
+			FROM explorer.emergency_nested_actions`))
 }

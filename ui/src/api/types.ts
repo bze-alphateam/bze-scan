@@ -1431,5 +1431,5 @@ export interface EmergencyAction {
   via: EmergencyVia | null;
 }
 
-/** The wrapper of a nested guardian action: a grantee's authz `MsgExec`, or a DAO (its admin, or one of its proposals). */
-export type EmergencyVia = { kind: "authz"; grantee: string } | { kind: "dao"; dao_id: number; proposal_id: number | null };
+/** The wrapper of a nested guardian action: a grantee's authz `MsgExec`, or a DAO (its admin, or one of its proposals); `dao_id` is null when the indexer could not read it. */
+export type EmergencyVia = { kind: "authz"; grantee: string } | { kind: "dao"; dao_id: number | null; proposal_id: number | null };

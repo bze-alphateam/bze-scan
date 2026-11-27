@@ -306,17 +306,19 @@ function ViaLine({ a }: { a: EmergencyAction }) {
           <Text as="span">{via.text}</Text>
           <AddressLink address={via.address!} noCopy fontSize="12px" />
         </>
+      ) : via.dao === undefined ? (
+        <Text as="span">{via.text}</Text>
       ) : (
         <>
           <Text as="span">via</Text>
           <Link asChild color="accent.fg">
-            <NextLink href={daoHref(a.via.dao_id)}>DAO #{a.via.dao_id}</NextLink>
+            <NextLink href={daoHref(via.dao)}>DAO #{via.dao}</NextLink>
           </Link>
           {via.proposal !== undefined && (
             <>
               <Text as="span">·</Text>
               <Link asChild color="accent.fg">
-                <NextLink href={daoProposalHref(a.via.dao_id, via.proposal)}>proposal #{via.proposal}</NextLink>
+                <NextLink href={daoProposalHref(via.dao, via.proposal)}>proposal #{via.proposal}</NextLink>
               </Link>
             </>
           )}

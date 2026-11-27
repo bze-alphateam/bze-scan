@@ -6,7 +6,7 @@
 -- validator_events) and writes one row per inner emergency message. Few
 -- rows, so not partitioned.
 
--- 25. Nested emergency actions.
+-- 20. Nested emergency actions (Database Schema section 20).
 CREATE TABLE explorer.emergency_nested_actions (
   height      BIGINT      NOT NULL,          -- the wrapper's transaction (a proposal's: its settle)
   tx_index    INTEGER     NOT NULL,

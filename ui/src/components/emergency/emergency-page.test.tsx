@@ -195,6 +195,18 @@ describe("EmergencyPage history", () => {
     expect(within(admin).queryByRole("link", { name: /proposal/ })).toBeNull();
   });
 
+  it("keeps a DAO row whose DAO is not known, linking no DAO or proposal", async () => {
+    const unknown: EmergencyAction[] = [{ ...rows[1], height: 220, via: { kind: "dao", dao_id: null, proposal_id: 9 } }];
+    renderWithProviders(<EmergencyPage />, { api: api(clear as Emergency, unknown) });
+    fireEvent.click(await screen.findByTestId("emergency-tab-history"));
+    const items = await screen.findAllByTestId("emergency-action");
+    expect(items).toHaveLength(1);
+    const via = within(items[0]).getByTestId("emergency-via");
+    expect(via).toHaveTextContent(/^via a DAO$/);
+    expect(via).not.toHaveTextContent("null");
+    expect(within(via).queryByRole("link")).toBeNull();
+  });
+
   it("shows no via line for a direct action", async () => {
     renderWithProviders(<EmergencyPage />, { api: api(clear as Emergency, rows) });
     fireEvent.click(await screen.findByTestId("emergency-tab-history"));

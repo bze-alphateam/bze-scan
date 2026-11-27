@@ -146,13 +146,15 @@ export function ownTitle(a: EmergencyAction): string {
 /**
  * The "via" line of a nested guardian action, in parts the row links:
  * "via authz by" and the grantee, or "via DAO #3" and, for a proposal,
- * "proposal #9". Null for a row the guardian or governance ran directly.
+ * "proposal #9"; plain "via a DAO", linking nothing, when the DAO is not
+ * known. Null for a row the guardian or governance ran directly.
  */
-export function viaParts(a: Pick<EmergencyAction, "via">): { text: string; address?: string; proposal?: number } | null {
+export function viaParts(a: Pick<EmergencyAction, "via">): { text: string; address?: string; dao?: number; proposal?: number } | null {
   const v = a.via;
   if (!v) return null;
   if (v.kind === "authz") return { text: "via authz by", address: v.grantee };
-  return v.proposal_id === null ? { text: `via DAO #${v.dao_id}` } : { text: `via DAO #${v.dao_id}`, proposal: v.proposal_id };
+  if (v.dao_id === null) return { text: "via a DAO" };
+  return v.proposal_id === null ? { text: `via DAO #${v.dao_id}`, dao: v.dao_id } : { text: `via DAO #${v.dao_id}`, dao: v.dao_id, proposal: v.proposal_id };
 }
 
 /** Where a history row leads: its proposal, its transaction, or its block. */
