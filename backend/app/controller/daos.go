@@ -28,6 +28,9 @@ type DaoReader interface {
 	DaosTotal(ctx context.Context, f repository.DaoFilter) (int64, error)
 	Dao(ctx context.Context, id int64) (*repository.Dao, error)
 	DaoEvents(ctx context.Context, id int64, before *repository.DaoEventKey, limit int) ([]repository.DaoEvent, error)
+	DaoEventsPage(ctx context.Context, id int64, offset int64, limit int) ([]repository.DaoEvent, error)
+	DaoEventsTotal(ctx context.Context, id int64) (int64, error)
+	DaoProposalCount(ctx context.Context, id int64) (int64, error)
 	Denoms(ctx context.Context, denoms []string) (map[string]repository.Denom, error)
 	Labels(ctx context.Context, addresses []string) (map[string]repository.Label, error)
 }
@@ -142,7 +145,8 @@ func (h *DaoController) Daos(c *echo.Context) error {
 }
 
 // Dao serves GET /api/v1/daos/{id}: the indexed row with the chain's DAO, its
-// controller and its treasury read live. A failed live read is a 200 with
+// controller and its treasury read live, and proposals_total, the number of
+// the DAO's proposals the index holds. A failed live read is a 200 with
 // "live": {"available": false}; the DAO is a 404 when the chain and the index
 // both lack it.
 func (h *DaoController) Dao(c *echo.Context) error {
@@ -157,6 +161,12 @@ func (h *DaoController) Dao(c *echo.Context) error {
 	}
 	if err != nil {
 		return err
+	}
+	var proposals int64
+	if row != nil {
+		if proposals, err = h.repo.DaoProposalCount(ctx, id); err != nil {
+			return err
+		}
 	}
 	var live *daostate.Live
 	if h.live != nil {
@@ -189,8 +199,10 @@ func (h *DaoController) Dao(c *echo.Context) error {
 	} else if lookups.Labels, err = h.repo.Labels(ctx, []string{row.Address}); err != nil {
 		return err
 	}
+	out := dto.NewDao(*row, live, treasury, lookups)
+	out.ProposalsTotal = proposals
 	c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
-	return c.JSON(http.StatusOK, dto.NewDao(*row, live, treasury, lookups))
+	return c.JSON(http.StatusOK, out)
 }
 
 // lookups reads the display data of the denoms and the addresses the live
@@ -226,10 +238,12 @@ func (h *DaoController) lookups(ctx context.Context, row *repository.Dao, live *
 	return lk, err
 }
 
-// DaoHistory serves GET /api/v1/daos/{id}/history?cursor&limit: the changes
-// made to a DAO (creation, admin handovers, rule, electorate and member
-// updates), newest first. A DAO the index has no rows of is an empty list
-// when the DAO exists, a 404 otherwise.
+// DaoHistory serves GET /api/v1/daos/{id}/history?cursor&page&limit: the
+// changes made to a DAO (creation, admin handovers, rule, electorate and
+// member updates), newest first. page (1-based, not with cursor) answers
+// numbered pages and adds total, the number of the DAO's events; next_cursor
+// is then null. A DAO the index has no rows of is an empty list when the DAO
+// exists, a 404 otherwise.
 func (h *DaoController) DaoHistory(c *echo.Context) error {
 	id, err := daoID(c)
 	if err != nil {
@@ -245,17 +259,40 @@ func (h *DaoController) DaoHistory(c *echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "cursor is not valid")
 		}
 	}
+	pageNo, err := parsePage(c)
+	if err != nil {
+		return err
+	}
+	if pageNo > 0 && before != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "use either page or cursor")
+	}
 	ctx := c.Request().Context()
 	if _, err := h.repo.Dao(ctx, id); errors.Is(err, repository.ErrNotFound) {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("dao %d is not known", id))
 	} else if err != nil {
 		return err
 	}
+	resp := dto.PagedList[dto.DaoEvent]{List: dto.List[dto.DaoEvent]{Items: make([]dto.DaoEvent, 0, limit)}}
+	if pageNo > 0 {
+		total, err := h.repo.DaoEventsTotal(ctx, id)
+		if err != nil {
+			return err
+		}
+		rows, err := h.repo.DaoEventsPage(ctx, id, (pageNo-1)*int64(limit), limit)
+		if err != nil {
+			return err
+		}
+		for _, e := range rows[:min(len(rows), limit)] {
+			resp.Items = append(resp.Items, dto.NewDaoEvent(e))
+		}
+		resp.Total = &total
+		c.Response().Header().Set(echo.HeaderCacheControl, CacheNoStore)
+		return c.JSON(http.StatusOK, resp)
+	}
 	rows, err := h.repo.DaoEvents(ctx, id, before, limit+1)
 	if err != nil {
 		return err
 	}
-	resp := dto.List[dto.DaoEvent]{Items: make([]dto.DaoEvent, 0, min(len(rows), limit))}
 	for i, e := range rows {
 		if i == limit {
 			prev := rows[i-1]

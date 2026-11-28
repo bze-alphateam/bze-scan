@@ -29,11 +29,11 @@ type fakeDaoProposals struct {
 	denoms    map[string]repository.Denom
 	err       error
 
-	gotStatus *string
-	gotBefore *int64
-	gotOption *string
-	gotAfter  *repository.DaoVoteKey
-	gotLimit  int
+	gotDaoStatuses []string
+	gotBefore      *int64
+	gotOption      *string
+	gotAfter       *repository.DaoVoteKey
+	gotLimit       int
 
 	ballots        []repository.VoterBallot
 	gotStatuses    []string
@@ -41,6 +41,18 @@ type fakeDaoProposals struct {
 	gotAfterVoting *repository.OpenDaoProposalKey
 	gotVoter       string
 	gotBallotKey   *repository.VoterBallotKey
+
+	total        int64
+	counts       map[string]int64
+	gotOffset    int64
+	pageCalls    int
+	totalCalls   int
+	countCalls   int
+	totalOption  *string
+	totalStatus  []string
+	cursorCalls  int
+	countsDaoID  int64
+	countsPropID int64
 }
 
 func (f *fakeDaoProposals) DaoProposalsAcross(_ context.Context, statuses []string, voting bool, before *int64,
@@ -63,9 +75,28 @@ func (f *fakeDaoProposals) Dao(_ context.Context, id int64) (*repository.Dao, er
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakeDaoProposals) DaoProposals(_ context.Context, _ int64, status *string, before *int64, limit int) ([]repository.DaoProposal, error) {
-	f.gotStatus, f.gotBefore, f.gotLimit = status, before, limit
+func (f *fakeDaoProposals) DaoProposals(_ context.Context, _ int64, statuses []string, before *int64, limit int) ([]repository.DaoProposal, error) {
+	f.cursorCalls++
+	f.gotDaoStatuses, f.gotBefore, f.gotLimit = statuses, before, limit
 	return f.proposals[:min(limit, len(f.proposals))], f.err
+}
+
+func (f *fakeDaoProposals) DaoProposalsPage(_ context.Context, _ int64, statuses []string, offset int64, limit int) ([]repository.DaoProposal, error) {
+	f.pageCalls++
+	f.gotDaoStatuses, f.gotOffset, f.gotLimit = statuses, offset, limit
+	return f.proposals[:min(limit, len(f.proposals))], f.err
+}
+
+func (f *fakeDaoProposals) DaoProposalsTotal(_ context.Context, _ int64, statuses []string) (int64, error) {
+	f.totalCalls++
+	f.totalStatus = statuses
+	return f.total, f.err
+}
+
+func (f *fakeDaoProposals) DaoProposalStatusCounts(_ context.Context, daoID int64) (map[string]int64, error) {
+	f.countCalls++
+	f.countsDaoID = daoID
+	return f.counts, f.err
 }
 
 func (f *fakeDaoProposals) DaoProposal(_ context.Context, id int64) (*repository.DaoProposal, int64, error) {
@@ -81,8 +112,27 @@ func (f *fakeDaoProposals) DaoProposal(_ context.Context, id int64) (*repository
 }
 
 func (f *fakeDaoProposals) DaoVotes(_ context.Context, _ int64, option *string, after *repository.DaoVoteKey, limit int) ([]repository.DaoVote, error) {
+	f.cursorCalls++
 	f.gotOption, f.gotAfter, f.gotLimit = option, after, limit
 	return f.votes[:min(limit, len(f.votes))], nil
+}
+
+func (f *fakeDaoProposals) DaoVotesPage(_ context.Context, _ int64, option *string, offset int64, limit int) ([]repository.DaoVote, error) {
+	f.pageCalls++
+	f.gotOption, f.gotOffset, f.gotLimit = option, offset, limit
+	return f.votes[:min(limit, len(f.votes))], nil
+}
+
+func (f *fakeDaoProposals) DaoVotesTotal(_ context.Context, _ int64, option *string) (int64, error) {
+	f.totalCalls++
+	f.totalOption = option
+	return f.total, nil
+}
+
+func (f *fakeDaoProposals) DaoVoteOptionCounts(_ context.Context, id int64) (map[string]int64, error) {
+	f.countCalls++
+	f.countsPropID = id
+	return f.counts, nil
 }
 
 func (f *fakeDaoProposals) Denoms(context.Context, []string) (map[string]repository.Denom, error) {
@@ -125,7 +175,7 @@ func TestDaoProposalsListNewestFirstPaged(t *testing.T) {
 
 	rec := get(t, e, "/api/v1/daos/2/proposals?limit=2&status=voting")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, "voting", *f.gotStatus)
+	assert.Equal(t, []string{"voting"}, f.gotDaoStatuses)
 	assert.Equal(t, 3, f.gotLimit, "one extra row tells there is a next page")
 	var list dto.List[dto.DaoProposalSummary]
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
@@ -302,4 +352,163 @@ func TestVoterBallotsBadRequests(t *testing.T) {
 		"/api/v1/dao-votes?voter=" + daoAdmin + "&cursor=@@", "/api/v1/dao-votes?voter=" + daoAdmin + "&limit=0"} {
 		assert.Equal(t, http.StatusBadRequest, get(t, e, path).Code, path)
 	}
+}
+
+// status repeats and takes the alias active (voting + execution_failed),
+// deduplicated; an empty value is no filter; an unknown one is a 400.
+func TestDaoProposalsStatusFilterRepeatsAndTakesActive(t *testing.T) {
+	f := &fakeDaoProposals{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}}
+	e := daoProposalServer(f, nil)
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"status=voting", []string{"voting"}},
+		{"status=active", []string{"voting", "execution_failed"}},
+		{"status=active&status=voting", []string{"voting", "execution_failed"}},
+		{"status=executed&status=active", []string{"executed", "voting", "execution_failed"}},
+		{"status=rejected&status=expired", []string{"rejected", "expired"}},
+		{"status=cancelled&status=cancelled", []string{"cancelled"}},
+		{"status=", nil},
+		{"", nil},
+		{"status=active&page=1", []string{"voting", "execution_failed"}},
+		{"status=execution_failed&status=voting", []string{"execution_failed", "voting"}},
+	} {
+		f.gotDaoStatuses = []string{"unset"}
+		rec := get(t, e, "/api/v1/daos/2/proposals?"+tc.query)
+		require.Equal(t, http.StatusOK, rec.Code, tc.query+": "+rec.Body.String())
+		assert.Equal(t, tc.want, f.gotDaoStatuses, tc.query)
+	}
+	for _, query := range []string{"status=passed", "status=voting&status=nope", "status=Active", "status=open"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos/2/proposals?"+query).Code, query)
+	}
+}
+
+func TestDaoProposalsWithoutPageAreTheCursorListUnchanged(t *testing.T) {
+	end := proposalNow.Add(time.Hour)
+	f := &fakeDaoProposals{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, total: 9}
+	f.counts = map[string]int64{"voting": 1}
+	f.proposals = []repository.DaoProposal{stakeProposal(9, "voting", end), stakeProposal(7, "executed", end)}
+	rec := get(t, daoProposalServer(f, nil), "/api/v1/daos/2/proposals?limit=1")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.cursorCalls)
+	assert.Zero(t, f.pageCalls)
+	assert.Zero(t, f.totalCalls)
+	assert.Zero(t, f.countCalls)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	assert.ElementsMatch(t, []string{"items", "next_cursor"}, keysOf(raw), "the cursor answer keeps its shape")
+}
+
+func TestDaoProposalsPageReadsTheOffsetTheTotalAndTheStatusCounts(t *testing.T) {
+	end := proposalNow.Add(time.Hour)
+	f := &fakeDaoProposals{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, total: 4}
+	f.counts = map[string]int64{"voting": 3, "execution_failed": 1, "executed": 8, "rejected": 3, "unknown": 5}
+	f.proposals = []repository.DaoProposal{stakeProposal(9, "voting", end), stakeProposal(4, "execution_failed", end)}
+	rec := get(t, daoProposalServer(f, nil), "/api/v1/daos/2/proposals?status=active&page=2&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.pageCalls)
+	assert.Zero(t, f.cursorCalls)
+	assert.Equal(t, int64(2), f.gotOffset)
+	assert.Equal(t, 2, f.gotLimit, "numbered pages read no extra row")
+	assert.Equal(t, []string{"voting", "execution_failed"}, f.totalStatus, "the total counts under the same filter")
+	assert.Equal(t, f.gotDaoStatuses, f.totalStatus)
+	assert.Equal(t, int64(2), f.countsDaoID)
+	assert.Equal(t, controller.CacheNoStore, rec.Header().Get(echo.HeaderCacheControl))
+	list := decode[dto.DaoProposalList](t, rec)
+	require.Len(t, list.Items, 2)
+	assert.Equal(t, int64(9), list.Items[0].ID)
+	require.NotNil(t, list.Total)
+	assert.Equal(t, int64(4), *list.Total)
+	assert.Nil(t, list.NextCursor, "numbered pages have no cursor")
+	assert.Equal(t, map[string]int64{"voting": 3, "rejected": 3, "executed": 8, "execution_failed": 1, "expired": 0,
+		"cancelled": 0}, list.StatusCounts, "every status, 0 included, nothing else")
+}
+
+func TestDaoProposalsPagePastTheEndIsEmptyWithTheRealTotal(t *testing.T) {
+	f := &fakeDaoProposals{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}, total: 3}
+	rec := get(t, daoProposalServer(f, nil), "/api/v1/daos/2/proposals?page=9")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"total":3,"status_counts":{"voting":0,"rejected":0,"executed":0,
+		"execution_failed":0,"expired":0,"cancelled":0}}`, rec.Body.String())
+}
+
+func TestDaoProposalsPageBadRequestsAndUnknownDao(t *testing.T) {
+	e := daoProposalServer(&fakeDaoProposals{daos: []repository.Dao{indexedDao(2, "Stakers", "stake")}}, nil)
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos/2/proposals?page=1&cursor="+dto.EncodeCursor(5)).Code)
+	for _, page := range []string{"0", "-1", "abc", "1.5", "99999999999"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/daos/2/proposals?page="+page).Code, page)
+	}
+	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/daos/5/proposals?page=1").Code)
+}
+
+func TestDaoVotesWithoutPageAreTheCursorListUnchanged(t *testing.T) {
+	f := &fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "voting", proposalNow)}, total: 3}
+	f.counts = map[string]int64{"yes": 3}
+	f.votes = []repository.DaoVote{{Voter: "bze1a", Option: "yes", Weight: "1", EffectiveWeight: "1"}}
+	rec := get(t, daoProposalServer(f, nil), "/api/v1/dao-proposals/9/votes")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.cursorCalls)
+	assert.Zero(t, f.pageCalls)
+	assert.Zero(t, f.totalCalls)
+	assert.Zero(t, f.countCalls)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	assert.ElementsMatch(t, []string{"items", "next_cursor", "weight_denom"}, keysOf(raw), "the cursor answer keeps its shape")
+}
+
+func TestDaoVotesPageReadsTheOffsetTheTotalAndTheOptionCounts(t *testing.T) {
+	f := &fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "voting", proposalNow)}, total: 7}
+	f.counts = map[string]int64{"yes": 5, "no": 7}
+	f.denoms = map[string]repository.Denom{}
+	f.votes = []repository.DaoVote{
+		{Voter: "bze1b", Option: "no", Weight: "300", EffectiveWeight: "300"},
+		{Voter: "bze1c", Option: "no", Weight: "1", EffectiveWeight: "0"},
+	}
+	e := daoProposalServer(f, &fakeDaoState{live: map[uint64]*daostate.Live{2: liveStake()}})
+	rec := get(t, e, "/api/v1/dao-proposals/9/votes?option=no&page=3&limit=2")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, f.pageCalls)
+	assert.Zero(t, f.cursorCalls)
+	assert.Equal(t, int64(4), f.gotOffset)
+	assert.Equal(t, 2, f.gotLimit, "numbered pages read no extra row")
+	assert.Equal(t, "no", *f.gotOption)
+	require.NotNil(t, f.totalOption)
+	assert.Equal(t, "no", *f.totalOption, "the total counts under the same option filter")
+	assert.Equal(t, int64(9), f.countsPropID)
+	list := decode[dto.DaoVoteList](t, rec)
+	require.Len(t, list.Items, 2)
+	assert.Equal(t, "300", list.Items[0].EffectiveWeight)
+	require.NotNil(t, list.Total)
+	assert.Equal(t, int64(7), *list.Total)
+	assert.Nil(t, list.NextCursor, "numbered pages have no cursor")
+	assert.Equal(t, map[string]int64{"yes": 5, "no": 7, "abstain": 0}, list.OptionCounts)
+	assert.Equal(t, &dto.WeightDenom{Denom: "ubze"}, list.WeightDenom, "the weight denom is still served")
+}
+
+func TestDaoVotesPagePastTheEndIsEmptyWithTheRealTotal(t *testing.T) {
+	f := &fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "voting", proposalNow)}, total: 2}
+	f.counts = map[string]int64{"yes": 2}
+	rec := get(t, daoProposalServer(f, nil), "/api/v1/dao-proposals/9/votes?page=4")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"items":[],"next_cursor":null,"weight_denom":null,"total":2,
+		"option_counts":{"yes":2,"no":0,"abstain":0}}`, rec.Body.String())
+}
+
+func TestDaoVotesPageBadRequestsAndUnknownProposal(t *testing.T) {
+	e := daoProposalServer(&fakeDaoProposals{proposals: []repository.DaoProposal{stakeProposal(9, "voting", proposalNow)}}, nil)
+	cursor := dto.EncodeDaoVoteCursor(repository.DaoVote{Voter: "bze1a", EffectiveWeight: "5"})
+	assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/dao-proposals/9/votes?page=1&cursor="+cursor).Code)
+	for _, page := range []string{"0", "-1", "abc", "1.5", "99999999999"} {
+		assert.Equal(t, http.StatusBadRequest, get(t, e, "/api/v1/dao-proposals/9/votes?page="+page).Code, page)
+	}
+	assert.Equal(t, http.StatusNotFound, get(t, e, "/api/v1/dao-proposals/8/votes?page=1").Code)
+}
+
+func keysOf(m map[string]json.RawMessage) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

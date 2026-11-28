@@ -52,7 +52,7 @@ e2e-down: ## Stop and remove the compose containers
 
 .PHONY: e2e
 e2e: e2e-up ## Run acceptance tests (starts PostgreSQL, runs tests, tears it down)
-	go test -tags=e2e -race -v -count=1 ./e2e/ ; ret=$$? ; $(MAKE) e2e-down ; exit $$ret
+	go test -tags=e2e -race -v -count=1 -timeout 20m ./e2e/ ; ret=$$? ; $(MAKE) e2e-down ; exit $$ret
 
 .PHONY: fixtures
 fixtures: ## Record node fixtures: make fixtures HEIGHTS="24998316 a..b" [BLOCKS="..."] [COMMITS="a..b"] [ABCI="47@23821225"] [VALSETS="23821226"] [CONSENSUS_STATE=1] [ORDERS="bze1…@25159796"] [ARCHIVE_RPC=...] [REST=...]
